@@ -7,14 +7,14 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['**/src/**/*.test.ts'],
-          exclude: ['**/node_modules/**'],
+          exclude: ['**/node_modules/**', '**/.claude/**'],
         },
       },
       {
         test: {
           name: 'e2e',
           include: ['**/*.e2e.test.ts'],
-          exclude: ['**/node_modules/**'],
+          exclude: ['**/node_modules/**', '**/.claude/**'],
           testTimeout: 60_000,
           hookTimeout: 60_000,
         },
