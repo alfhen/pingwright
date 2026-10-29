@@ -86,6 +86,25 @@ describe('buildEpochs', () => {
     expect(epochs[0]?.state.adUserData).toBe('denied');
   });
 
+  test('a two-signal default and a four-signal denied load-time update give one undecided epoch', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', { ad_storage: 'denied', analytics_storage: 'denied' }),
+      push(300, 'update', denied),
+    ]);
+    const epochs = buildEpochs([], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT, e.endT])).toEqual([['undecided', 0, null]]);
+    expect(epochs[0]?.state.adUserData).toBe('denied');
+  });
+
+  test('a load-time update that grants without a banner still starts an epoch', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', { ad_storage: 'denied', analytics_storage: 'denied' }),
+      push(300, 'update', granted),
+    ]);
+    const epochs = buildEpochs([], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([['undecided', 0], ['granted', 300]]);
+  });
+
   test('a load-time update repeating the default adds no epoch', () => {
     const modes = consentModeChanges([push(10, 'default', denied), push(100, 'update', denied)]);
     const epochs = buildEpochs([], modes, { startT: 0 });

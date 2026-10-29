@@ -95,6 +95,10 @@ export function buildEpochs(
   for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS, options.leadWindowMs ?? DEFAULT_GRACE_MS)) {
     const current = epochs[epochs.length - 1]!;
     const label = change.label;
+    if (current.label === 'undecided' && !change.decision && !Object.values(change.state).includes('granted')) {
+      current.state = change.state;
+      continue;
+    }
     const sameState = JSON.stringify(current.state) === JSON.stringify(change.state);
     if (sameState && (current.label === label || (current.label === 'undecided' && !change.decision))) continue;
     current.endT = change.t;
