@@ -37,8 +37,8 @@ const GCD_LETTERS: Record<string, ConsentValue> = {
 function parseGcd(gcd: string | undefined): ConsentValue[] | undefined {
   if (!gcd) return undefined;
   const letters = gcd.match(/[a-z]/g);
-  if (letters?.length !== 4) return undefined;
-  return letters.map((l) => GCD_LETTERS[l] ?? 'unknown');
+  if (!letters || letters.length < 4) return undefined;
+  return letters.slice(0, 4).map((l) => GCD_LETTERS[l] ?? 'unknown');
 }
 
 function pick(...values: (ConsentValue | undefined)[]): ConsentValue {
