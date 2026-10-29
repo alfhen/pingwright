@@ -68,5 +68,7 @@ test('library loads continue', () => {
     expect(isKnownVendorCollection({ url, resourceType: 'script' }), url).toBe(false);
   }
   expect(isKnownVendorCollection({ url: 'https://www.facebook.com/', resourceType: 'document' })).toBe(false);
+  expect(isKnownVendorCollection({ url: 'https://www.google.com/recaptcha/api2/reload?k=x', resourceType: 'xhr' })).toBe(false);
+  expect(isKnownVendorCollection({ url: 'https://www.google.com/maps/vt?pb=1', resourceType: 'image' })).toBe(false);
   expect(isKnownVendorCollection({ url: 'https://example.com/tr/', resourceType: 'fetch' })).toBe(false);
 });

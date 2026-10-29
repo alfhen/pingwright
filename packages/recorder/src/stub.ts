@@ -40,6 +40,7 @@ const LOADS = new Set(['script', 'stylesheet', 'font', 'document']);
 const VENDOR_HOST =
   /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com|googletagmanager\.com)$|^(www\.)?google\.com$/;
 const COLLECTION_PATH = /^\/(?:tr|pagead\/(?:viewthroughconversion|conversion|1p-[\w-]+)|rmkt|ccm|td)(?:\/|$)/;
+const SITE_FUNCTION_PATH = /^\/(?:recaptcha|maps|plugins|dialog|login)(?:\/|$)/;
 const LIBRARY_PATH = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
 
 /**
@@ -57,5 +58,6 @@ export function isKnownVendorCollection(req: Pick<Request, 'url' | 'resourceType
   if (!VENDOR_HOST.test(url.hostname)) return false;
   if (LIBRARY_PATH.test(url.pathname)) return false;
   if (COLLECTION_PATH.test(url.pathname)) return true;
+  if (SITE_FUNCTION_PATH.test(url.pathname)) return false;
   return !LOADS.has(req.resourceType);
 }

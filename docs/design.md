@@ -119,7 +119,7 @@ Every profile:
 
 | Mode | Behaviour |
 | --- | --- |
-| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect`, Meta `/tr`, Pinterest `/v3/`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
+| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect`, Meta `/tr`, Pinterest `/v3/`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
 | `server` | As `stub`, but requests to the configured server-container hosts pass through. Required for server-side tag reports, server-set cookies and the server preview header. |
 | `live` | Everything goes through. Test hits reach real vendor accounts. |
 
