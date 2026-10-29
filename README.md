@@ -51,7 +51,7 @@ pingwright run scenarios/undecided-visitor.yml --site https://staging.example.co
 
 ## Safe by default
 
-- **Test hits do not reach vendors unless you ask.** By default, scripts load normally, but known collection endpoints are recorded and answered locally. Use `--network server` to test a server container, or `--network live` to let everything through. Unknown destinations are let through and flagged in the report, so a broken setup cannot look compliant.
+- **Known collection endpoints are stubbed by default.** Scripts load normally, but requests to known collection endpoints are recorded and answered locally. Unknown destinations pass through and are flagged as `unknownDestination`, so test hits can still reach vendors that way. Pingwright lets them through because blocking by host would stop vendor scripts from loading and make a broken setup look compliant. Use `--network server` to test a server container, or `--network live` to let everything through.
 - **Fake identities.** Every run uses a generated test identity. Pingwright flags any email, phone number or hashed identifier in a recording that does not belong to that identity.
 - **No payments or log-ins.** These are always handoff steps for a person, who should use test accounts and test cards.
 - **You own the data.** Server-side reports go to a sink you run: a tunnel to your machine, or a small Worker in your own Cloudflare account. There is no Pingwright-hosted service.

@@ -24,7 +24,7 @@ Pingwright makes this checkable by a program: a coding agent, a CI job, or a per
 4. Express expected behaviour as data, and report pass or fail with evidence.
 5. Compare two runs per vendor and per event.
 6. Expose all of this to agents through MCP, with stable, structured results.
-7. Be safe by default: fake identities, no payments, no hosted service, and no surprise traffic to vendor accounts.
+7. Be safe by default: fake identities, no payments, no hosted service, and known collection endpoints stubbed. Unknown destinations still receive test hits, and every one is flagged (§5.3).
 
 **Non-goals**
 
@@ -102,7 +102,7 @@ Every profile:
 
 - Uses a fresh context per run.
 - Sends a normal browser user agent. Some consent banners treat headless user agents as bots and grant consent automatically, which silently invalidates a run. This is not an attempt to hide automation, and it does not hide `navigator.webdriver` or other signals. The real guard is the "banner shown" check (§7.1).
-- Needs no certificate trust and no browser flags in the default design, because reports go to a collector origin that Playwright answers itself (§9). If a setup needs a real local HTTPS collector instead, use a trusted local CA. `ignoreHTTPSErrors` applies to the whole browser context, not one origin, so it must not be used for this.
+- Needs no certificate trust and no browser flags in the default design, because reports go to a collector origin that Playwright answers itself (§9). A real local HTTPS collector is not available yet (§9). If one is added, it must use a trusted local CA: `ignoreHTTPSErrors` applies to the whole browser context, not one origin, so it must not be used for this.
 - Must run outside restrictive process sandboxes. Browsers fail to launch inside some agent command sandboxes.
 
 ### 5.2 Capture
@@ -252,7 +252,7 @@ Setup commands for the tunnel and the Worker are deferred until after the first 
 - **Sink reader.** Server reports are read from the configured sink with the sink's credentials.
 - **Correlation.** The run ID travels in a cookie and, for server-container hosts, in the signed run token header. It does not travel in URL parameters, which redirects and checkouts drop.
 - **Storage.** Each run is written to `runs/<id>.jsonl`. There is no fixed in-memory cap.
-- **Fallback.** Where the reserved origin cannot be intercepted, a local HTTPS collector with a trusted local CA can be used instead. That case may need Chrome's local-network flags. It is documented as a fallback, not the default.
+- **No fallback yet.** A local HTTPS listener could replace the reserved origin where interception does not work, but it is not available until its write authorization is defined. Browser-context isolation (above) does not protect a real listener, and a trusted local CA only authenticates the listener to the browser. It does not decide who may write. If the reserved origin cannot be intercepted on a platform, that platform is unsupported until then.
 
 ## 10. Platforms
 
@@ -326,7 +326,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 14. Risks and open questions
 
-1. **Collector origin interception** across sandboxed iframes, out-of-process iframes and workers **(verify)**. Fallback: local collector with a trusted CA.
+1. **Collector origin interception** across sandboxed iframes, out-of-process iframes and workers **(verify)**. There is no fallback yet: a local listener needs write authorization first (§9).
 2. **Dedicated worker capture (verify).** The startup self-test reports coverage.
 3. **Stubbing side effects:** retries on other transports, sites waiting on tag callbacks **(verify)**.
 4. **Server template signature APIs (verify).**
