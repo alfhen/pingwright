@@ -84,7 +84,8 @@ function mergeChanges(
 
 /**
  * The first epoch is `undecided`; a Consent Mode default sets its state but is not a decision.
- * Defaults after the first decision are ignored: gtag gives an update precedence over a later
+ * The first decision is the first banner action or Consent Mode update, whichever is earlier.
+ * Defaults after it are ignored: gtag gives an update precedence over a later
  * default within one document, and the recording carries no document identity to tell a new
  * page's default from a pixel iframe's. A default with a `region` list is ignored.
  * Each banner action defines a window [t - lead, tEnd + after]. Consent Mode updates inside it
