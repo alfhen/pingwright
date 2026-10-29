@@ -122,3 +122,48 @@ test.each([
 test('a plain /data without dtdc is not a hit', () => {
   expect(decodeRequest(req(`${HOST}/data?x=1`))).toEqual([]);
 });
+
+test('/data without dtdc is a collection endpoint through the loader', () => {
+  const direct = req(`${HOST}/data?tid=G-PWTEST0001&cid=1111111111.2222222222`);
+  expect(isCollectionEndpoint(direct)).toBe(false);
+  const wrapped = disguised('/data?tid=G-PWTEST0001&cid=1111111111.2222222222&event=purchase');
+  expect(isCollectionEndpoint(wrapped)).toBe(true);
+  expect(decodeRequest(wrapped)[0]).toMatchObject({ vendor: 'sgtm', event: 'purchase' });
+});
+
+test('/data with v and event parameters is a collection endpoint', () => {
+  const r = req(`${HOST}/data?v=2&event=purchase&tid=G-PWTEST0001`);
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'sgtm', event: 'purchase' });
+});
+
+test('/data?dtdc= with a non-base64 or non-object value is not a hit', () => {
+  for (const v of ['x', 'not*base64!', b64('plain text'), b64('[1]'), b64('{}')]) {
+    const r = req(`https://shop.example.com/data?dtdc=${encodeURIComponent(v)}`);
+    expect(decodeRequest(r)).toEqual([]);
+    expect(isCollectionEndpoint(r)).toBe(false);
+  }
+});
+
+test('a Stape data-client POST through the loader is stubbed and decoded (#46 field test)', () => {
+  const r = req(`${HOST}/pwstape?pk=${encodeURIComponent(b64('/data?v=2&event=page_viewed'))}`, {
+    method: 'POST',
+    postData: JSON.stringify({ page_location: PAGE }),
+  });
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'sgtm', event: 'page_viewed', page: PAGE });
+});
+
+test('reads event and page from a JSON POST body on /data', () => {
+  const r = req(`${HOST}/data`, {
+    method: 'POST',
+    postData: JSON.stringify({ event_name: 'purchase', page_location: PAGE, page_hostname: 'localhost' }),
+  });
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)[0]).toMatchObject({
+    vendor: 'sgtm',
+    event: 'purchase',
+    page: PAGE,
+    params: { page_hostname: 'localhost' },
+  });
+});

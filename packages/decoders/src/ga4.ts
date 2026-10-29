@@ -11,7 +11,7 @@ function parseUrl(url: string): URL | undefined {
 
 function isGa4Collect(req: Request): boolean {
   const url = parseUrl(req.url);
-  return url?.pathname === '/g/collect' && url.searchParams.get('v') === '2';
+  return url?.pathname.endsWith('/g/collect') === true && url.searchParams.get('v') === '2';
 }
 
 function gcsValue(flag: string | undefined): ConsentValue {
@@ -35,10 +35,8 @@ const GCD_LETTERS: Record<string, ConsentValue> = {
 
 /** Order in the string: ad_storage, analytics_storage, ad_user_data, ad_personalization. */
 function parseGcd(gcd: string | undefined): ConsentValue[] | undefined {
-  if (!gcd) return undefined;
-  const letters = gcd.match(/[a-z]/g);
-  if (!letters || letters.length < 4) return undefined;
-  return letters.slice(0, 4).map((l) => GCD_LETTERS[l] ?? 'unknown');
+  if (!gcd || gcd.length < 9) return undefined;
+  return [2, 4, 6, 8].map((i) => GCD_LETTERS[gcd[i]!] ?? 'unknown');
 }
 
 function pick(...values: (ConsentValue | undefined)[]): ConsentValue {

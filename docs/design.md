@@ -161,7 +161,7 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 | `pinterest` | `ct.pinterest.com`: `event`, `tid`, `pd` presence. |
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
 | `tiktok`, `criteo`, `snapchat`, `linkedin` | Later. |
-| `sgtm-data-client` | Requests to a server container's data client path (`/data`): event name, decoded `dtdc` payload (page location, page hostname). |
+| `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` or `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. |
 | `stape-custom-loader` | Stape's custom loader disguises paths as `/<id>?<key>=<base64>`. This decoder base64-decodes the real path and query, then passes the request to the other decoders. |
 
 **`gcs` meaning.** The value has the form `G1xy`: `x` is `ad_storage`, `y` is `analytics_storage`, `1` is granted and `0` is denied. So `G100` is both denied and `G111` is both granted. `gcd` carries more detail, including `ad_user_data` and `ad_personalization`, and whether each value was a default or an update. The decoder keeps the raw values beside the normalised ones.
