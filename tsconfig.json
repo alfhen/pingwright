@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["packages/*/src", "fixtures/*/src", "e2e", "*.config.ts"]
+}

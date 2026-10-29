@@ -1,0 +1,7 @@
+node_modules
+dist
+runs/
+.claude/
+*.tgz
+test-results
+coverage
