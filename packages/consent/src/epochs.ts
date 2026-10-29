@@ -44,6 +44,13 @@ interface Change {
   decision: boolean;
 }
 
+/** The latest banner at or before the update, else the earliest one just after it. */
+function closestBanner(banners: readonly BannerEvent[], t: number, pairWindowMs: number, leadWindowMs: number): number {
+  const before = banners.findLastIndex((b) => b.t <= t && t - b.t <= pairWindowMs);
+  if (before >= 0) return before;
+  return banners.findIndex((b) => b.t > t && b.t - t <= leadWindowMs);
+}
+
 function mergeChanges(
   banners: readonly BannerEvent[],
   updates: readonly ConsentModeChange[],
@@ -53,10 +60,7 @@ function mergeChanges(
   const unpaired = [...banners].sort((a, b) => a.t - b.t);
   const changes: Change[] = [];
   for (const update of updates) {
-    const i = unpaired.findIndex((b) => {
-      const lag = update.t - b.t;
-      return (lag >= 0 ? lag <= pairWindowMs : -lag <= leadWindowMs);
-    });
+    const i = closestBanner(unpaired, update.t, pairWindowMs, leadWindowMs);
     const banner = i >= 0 ? unpaired.splice(i, 1)[0] : undefined;
     const label = banner ? labelOf(stateOf(banner.action)) : labelOf(update.state);
     if (banner && banner.t < update.t) changes.push({ t: banner.t, source: 'banner', state: update.state, label, decision: true });

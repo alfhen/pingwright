@@ -42,6 +42,8 @@ interface FrameState {
   shownT: number | null;
   /** An action used up the popup report; the banner must be detected again before the next answer. */
   acted: boolean;
+  /** When autoconsent's detection last started in this frame; 0 until the content script has initialised. */
+  detectT: number;
   resultSeq: number;
   result: boolean | null;
 }
@@ -51,6 +53,7 @@ export class ConsentDriver {
   readonly #listeners = new Set<() => void>();
   readonly #rules: string;
   readonly #config: string;
+  readonly #detectWindowMs: number;
 
   constructor(options: ConsentOptions) {
     const extra = [
@@ -60,6 +63,7 @@ export class ConsentDriver {
     // Extra rules go first so a user rule wins over a bundled rule for the same banner.
     const rules: Rule[] = [...extra, ...bundledRules()];
     this.#rules = JSON.stringify({ autoconsent: rules });
+    this.#detectWindowMs = (options.detectRetries ?? 10) * 500 + 1000;
     this.#config = JSON.stringify({
       enabled: true,
       autoAction: null,
@@ -81,7 +85,15 @@ export class ConsentDriver {
     const state = this.#state(frame);
     switch (msg.type) {
       case 'init':
-        this.#frames.set(frame, { detected: false, cmp: null, shownT: null, acted: false, resultSeq: 0, result: null });
+        this.#frames.set(frame, {
+          detected: false,
+          cmp: null,
+          shownT: null,
+          acted: false,
+          detectT: Date.now(),
+          resultSeq: 0,
+          result: null,
+        });
         await frame
           .evaluate(`autoconsentReceiveMessage({ type: 'initResp', config: ${this.#config}, rules: ${this.#rules} })`)
           .catch(() => {});
@@ -117,7 +129,7 @@ export class ConsentDriver {
   #state(frame: Frame): FrameState {
     let state = this.#frames.get(frame);
     if (!state) {
-      state = { detected: false, cmp: null, shownT: null, acted: false, resultSeq: 0, result: null };
+      state = { detected: false, cmp: null, shownT: null, acted: false, detectT: 0, resultSeq: 0, result: null };
       this.#frames.set(frame, state);
     }
     return state;
@@ -150,14 +162,18 @@ export class ConsentDriver {
     return best?.frame;
   }
 
-  // Autoconsent reports a popup once per document and ignores a reopened banner. Running its
-  // detection again (rules are already loaded, so none are sent) reports a banner that is open now.
+  // Autoconsent reports a popup once per document and gives up looking after its detection
+  // retries. Running detection again (rules are already loaded, so none are sent) reports a
+  // banner that opened later, or that was reopened after an action.
   async #redetect(frames: Frame[]): Promise<void> {
+    const now = Date.now();
     await Promise.all(
       frames.map(async (frame) => {
         const state = this.#frames.get(frame);
-        if (!state?.acted) return;
+        if (!state?.detectT || state.shownT != null) return;
+        if (!state.acted && now - state.detectT < this.#detectWindowMs) return;
         state.acted = false;
+        state.detectT = now;
         await frame
           .evaluate(`autoconsentReceiveMessage({ type: 'initResp', config: ${this.#config}, rules: null })`)
           .catch(() => {});
@@ -165,10 +181,19 @@ export class ConsentDriver {
     );
   }
 
+  async #waitForBanner(frames: () => Frame[], timeoutMs: number): Promise<Frame | undefined> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      await this.#redetect(frames());
+      const remaining = deadline - Date.now();
+      const found = await this.#waitUntil(() => this.#shownFrame(frames), Math.max(0, Math.min(remaining, 1000)));
+      if (found || remaining <= 1000) return found;
+    }
+  }
+
   async answer(target: Page | BrowserContext, action: BannerAction, timeoutMs: number): Promise<BannerResult> {
     const frames = () => ('frames' in target ? target.frames() : target.pages().flatMap((p) => p.frames()));
-    await this.#redetect(frames());
-    const shownFrame = await this.#waitUntil(() => this.#shownFrame(frames), timeoutMs);
+    const shownFrame = await this.#waitForBanner(frames, timeoutMs);
     if (!shownFrame) {
       const detected = frames().map((f) => this.#frames.get(f)).filter((s) => s?.detected);
       return {

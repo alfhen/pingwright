@@ -102,6 +102,34 @@ describe('buildEpochs', () => {
     ]);
   });
 
+  test('an accept with no update followed by a quick reject is not paired with the reject update', () => {
+    const modes = consentModeChanges([push(10, 'default', denied), push(2510, 'update', denied)]);
+    const epochs = buildEpochs(
+      [
+        { t: 1000, action: 'accept' },
+        { t: 2500, action: 'reject' },
+      ],
+      modes,
+      { startT: 0 },
+    );
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['granted', 1000],
+      ['denied', 2500],
+    ]);
+    expect(epochs[1]?.state.analytics).toBe('granted');
+  });
+
+  test('a reject paired with a granting update keeps the banner label and the update state', () => {
+    const modes = consentModeChanges([push(10, 'default', denied), push(1010, 'update', granted)]);
+    const epochs = buildEpochs([{ t: 1000, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['denied', 1000],
+    ]);
+    expect(epochs[1]?.state.analytics).toBe('granted');
+  });
+
   test('a two-signal accept is one epoch from the banner event', () => {
     const v1 = { ad_storage: 'denied', analytics_storage: 'denied' };
     const modes = consentModeChanges([

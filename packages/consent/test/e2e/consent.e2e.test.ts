@@ -131,6 +131,21 @@ test('accept, reopen the banner, then reject', async () => {
   await context.close();
 });
 
+test('accept, navigate, wait, reopen, then reject', async () => {
+  const context = await newContext();
+  await installConsent(context);
+  const page = await context.newPage();
+  await page.goto(site.url);
+  expect((await answerBanner(page, 'accept')).result).toBe('ok');
+  await page.goto(new URL('/products/fake-tee', site.url).href);
+  await page.waitForTimeout(7000);
+  await page.click('#pw-cookie-settings');
+  expect(await page.locator('#pw-consent-banner').isVisible()).toBe(true);
+  expect(await answerBanner(page, 'reject', { timeoutMs: 5000 })).toMatchObject({ shown: true, result: 'ok' });
+  expect(await storedChoice(context)).toBe('reject');
+  await context.close();
+}, 30_000);
+
 test('a second answer without reopening the banner gives banner not shown', async () => {
   const context = await newContext();
   await installConsent(context);
