@@ -96,6 +96,7 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
   }
 
   const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
+  const vacuous = rule.before ? vacuousBeforeConsent(rule, ctx) : undefined;
   const ids = hits.map((h) => h.id);
   const found = `found ${hits.length} matching hit${hits.length === 1 ? '' : 's'}${narrowed.length ? ` (${total} before narrowing)` : ''}`;
 
@@ -103,13 +104,13 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
     return {
       pass: hits.length === 0,
       evidence: ids,
-      message: hits.length === 0 ? `Expected no matching hits${where}, found none.` : `Expected no matching hits${where}, ${found}.`,
+      message: (hits.length === 0 ? `Expected no matching hits${where}, found none.` : `Expected no matching hits${where}, ${found}.`) + (vacuous ? ` ${vacuous}` : ''),
     };
   }
 
   const count = rule.count ?? { op: '>=' as const, n: 1 };
   let pass = countHolds(count, hits.length);
-  let message = `Expected ${describeCount(count)} matching hits${where}, ${found}.`;
+  let message = `Expected ${describeCount(count)} matching hits${where}, ${found}.${vacuous ? ` ${vacuous}` : ''}`;
   if (pass && rule.hashesMatch) {
     const check = checkHashes(hits, ctx);
     pass = check.pass;
@@ -117,6 +118,22 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
     return { pass, evidence: check.evidence, message };
   }
   return { pass, evidence: ids, message };
+}
+
+/**
+ * Before consent, a non-Google hit takes the undecided epoch's state, so a granted or denied filter
+ * cannot match it when that state does not say so.
+ */
+function vacuousBeforeConsent(rule: Rule, ctx: Context): string | undefined {
+  const vendors = rule.filter.vendor;
+  if (!vendors || vendors.some((v) => GOOGLE_VENDORS.has(v))) return undefined;
+  const state = ctx.epochs[0]?.state;
+  const blocked = consentFields.filter((f) => {
+    const want = rule.filter.consent[f];
+    return want !== undefined && (state?.[f] ?? 'unknown') !== want;
+  });
+  if (!blocked.length) return undefined;
+  return `This rule cannot match: before consent, ${vendors.join(', ')} hits take the undecided state, where ${blocked.join(', ')} is not ${rule.filter.consent[blocked[0]!]}.`;
 }
 
 function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
@@ -159,18 +176,24 @@ function hostOf(url: string): string {
   }
 }
 
+type Placeable = Pick<ConsentEpoch, 'startT'> & Partial<Pick<ConsentEpoch, 'state' | 'label'>>;
+
+function grants(e: Placeable | undefined): boolean {
+  return !e?.state || consentFields.some((f) => e.state![f] === 'granted');
+}
+
 /**
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
- * epoch, since tags may fire on the consent update itself.
+ * epoch, since tags may fire on the consent update itself. That does not hold for a withdraw: a
+ * hit before it was sent while consent was still granted. A hit before the first epoch belongs to
+ * none, unless that epoch is undecided, which is what the visitor was before it.
  */
-export function epochForHit<E extends Pick<ConsentEpoch, 'startT'>>(
-  epochs: readonly E[],
-  t: number,
-  graceMs = DEFAULT_GRACE_MS,
-): E | undefined {
+export function epochForHit<E extends Placeable>(epochs: readonly E[], t: number, graceMs = DEFAULT_GRACE_MS): E | undefined {
   let found: E | undefined;
   epochs.forEach((e, i) => {
-    const start = i === 0 ? -Infinity : e.startT - graceMs;
+    const prev = epochs[i - 1];
+    const withdraw = prev !== undefined && grants(prev) && !grants(e);
+    const start = i === 0 ? (e.label === 'undecided' ? -Infinity : e.startT) : withdraw ? e.startT : e.startT - graceMs;
     if (t >= start) found = e;
   });
   return found;
@@ -181,16 +204,15 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
 }
 
 /**
- * Google hits state their own consent for every field they carry; every other field, and every other
- * vendor, takes the state of the epoch the hit falls in.
+ * A Google hit that carries any consent states its own consent, and a field it does not carry stays
+ * unknown. Every other hit takes the state of the epoch it falls in.
  */
 function effectiveConsent(hit: Hit, ctx: Context): ConsentState {
   const epoch = epochOf(hit, ctx);
   const base = epoch?.state;
-  const own = GOOGLE_VENDORS.has(hit.vendor);
+  const own = GOOGLE_VENDORS.has(hit.vendor) && consentFields.some((f) => hit.consent[f] !== 'unknown');
   const pick = (f: ConsentField): ConsentValue => {
-    const carried = hit.consent[f];
-    if (own && carried !== 'unknown') return carried;
+    if (own) return hit.consent[f];
     return base ? base[f] : 'unknown';
   };
   return {

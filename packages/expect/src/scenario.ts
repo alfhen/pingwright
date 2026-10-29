@@ -1,4 +1,5 @@
 import type { ConsentValue, NetworkMode, RequestOutcome } from '@pingwright/core';
+import { vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
 
 export type ConsentField = 'analytics' | 'ads' | 'adUserData' | 'adPersonalization';
@@ -67,6 +68,8 @@ export interface Scenario {
   steps: Step[];
   expect: { must: Rule[]; mustNot: Rule[] };
   options: ScenarioOptions;
+  /** Problems that do not stop the scenario from running. */
+  warnings: string[];
 }
 
 export class ScenarioError extends Error {
@@ -177,6 +180,7 @@ export function parseScenario(text: string): Scenario {
   if (start) checkVars(start, ['start']);
 
   const steps: Step[] = [];
+  const warnings: string[] = [];
   const stepLabels = new Set<string>(['start']);
   if (raw.steps !== undefined) {
     if (!Array.isArray(raw.steps)) fail(['steps'], 'must be a list');
@@ -233,8 +237,11 @@ export function parseScenario(text: string): Scenario {
         }
         const fields: Record<string, string> = {};
         for (const [sel, v] of Object.entries(value)) {
-          if (typeof v === 'string' && v) fields[sel] = v;
-          else fail([...path, kind, sel], 'must be a non-empty string');
+          if (typeof v === 'string' && v) {
+            fields[sel] = v;
+            const kind = looksLikeRealData(v);
+            if (kind) warnings.push(`line ${lineOf([...path, 'fill', sel])}: steps[${i}].fill.${sel}: looks like a real ${kind}; fill uses the run identity, so do not write personal data in a scenario`);
+          } else fail([...path, kind, sel], 'must be a non-empty string');
         }
         add({ kind, value: fields });
         return;
@@ -322,7 +329,10 @@ export function parseScenario(text: string): Scenario {
         if (v !== true) fail(p, 'must be true');
         else if (kind === 'mustNot') fail(p, 'is only valid under must');
         else rule.hashesMatch = true;
-      } else if (k === 'vendor' || k === 'event' || k === 'transport' || k === 'host') {
+      } else if (k === 'vendor') {
+        const l = list(k, v, [...vendorKeys]);
+        if (l) filter.vendor = l;
+      } else if (k === 'event' || k === 'transport' || k === 'host') {
         const l = list(k, v);
         if (l) filter[k] = l;
       } else if (k === 'outcome') {
@@ -390,11 +400,22 @@ export function parseScenario(text: string): Scenario {
   }
 
   if (issues.length) throw new ScenarioError(issues);
-  return { start, vars, steps, expect: expectOut, options };
+  return { start, vars, steps, expect: expectOut, options, warnings };
 }
 
 export function validEpochSelector(selector: string): boolean {
   if (['undecided', 'granted', 'denied'].includes(selector)) return true;
   const m = /^(\w+)=(\w+)$/.exec(selector);
   return !!m && consentFields.includes(m[1] as ConsentField) && CONSENT_VALUES.includes(m[2]!);
+}
+
+const RESERVED_EMAIL_DOMAIN = /(?:^|\.)(?:example\.(?:com|net|org)|[^.]+\.(?:test|invalid|example|localhost))$/i;
+
+function looksLikeRealData(value: string): 'email' | 'phone' | undefined {
+  const email = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/.exec(value.trim());
+  if (email) return RESERVED_EMAIL_DOMAIN.test(email[1]!) ? undefined : 'email';
+  if (!/^\+?[\d\s().-]{7,}$/.test(value.trim())) return undefined;
+  const digits = value.replace(/\D/g, '');
+  if (digits.length >= 7 && !/55501\d\d$/.test(digits)) return 'phone';
+  return undefined;
 }

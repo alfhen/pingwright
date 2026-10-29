@@ -141,3 +141,17 @@ test('step labels: written, default, duplicate and checked by after', () => {
   expect(parseScenario('start: /\nexpect:\n  must:\n    - { vendor: ga4, after: start }\n').expect.must).toHaveLength(1);
   expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: visit-1 }\n').expect.must).toHaveLength(1);
 });
+
+test('rejects an unknown vendor name', () => {
+  expect(() => parseScenario('start: /\nexpect:\n  mustNot:\n    - { vendor: gaa4 }')).toThrow(/"gaa4" is not valid/);
+  expect(() => parseScenario('start: /\nexpect:\n  must:\n    - { vendor: [ga4, sgtm, google-ads, meta] }')).not.toThrow();
+});
+
+test('warns when a fill value looks like a real email or phone', () => {
+  const warn = (value: string) => parseScenario(`start: /\nsteps:\n  - fill: { "#f": "${value}" }`).warnings;
+  expect(warn('jane.doe@gmail.com')).toHaveLength(1);
+  expect(warn('+1 415 867 5309')).toHaveLength(1);
+  expect(warn('jane@example.com')).toEqual([]);
+  expect(warn('+12015550123')).toEqual([]);
+  expect(warn('hello')).toEqual([]);
+});
