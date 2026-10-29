@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Thank you</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/collections/all">All products</a> <a href="/cart">Cart</a></nav>
+<h1>Thank you</h1>
+<p id="order">Order fixture-order-0001</p>
+<script>
+  // Deliberate defect: user_id is set whatever the consent state.
+  gtag('set', 'user_id', 'fixture-user-0001');
+  gtag('event', 'purchase', {
+    transaction_id: 'fixture-order-0001',
+    currency: 'USD',
+    value: 19,
+    items: [{ item_id: 'fake-tee', item_name: 'Fake tee', price: 19, quantity: 1 }],
+  });
+  fbq('track', 'Purchase', { value: 19, currency: 'USD' });
+  gtag('event', 'conversion', {
+    send_to: 'AW-000000001/fake-label',
+    value: 19,
+    currency: 'USD',
+    transaction_id: 'fixture-order-0001',
+  });
+</script>
+</body>
+</html>

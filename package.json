@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
-    "e2e": "vitest run --project e2e"
+    "e2e": "vitest run --project e2e",
+    "fixture": "node fixtures/site/src/serve.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
