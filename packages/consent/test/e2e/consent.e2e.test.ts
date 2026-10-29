@@ -125,7 +125,7 @@ test('accept, reopen the banner, then reject', async () => {
       { t: accepted.t, tEnd: accepted.tEnd, action: 'accept' },
       { t: rejected.t, tEnd: rejected.tEnd, action: 'reject' },
     ],
-    consentModeChanges(recorded),
+    consentModeChanges(recorded, accepted.t),
     { startT },
   );
   const updates = consentModeChanges(recorded).filter((c) => c.command === 'update');
@@ -265,7 +265,7 @@ test('answerBanner installs late on a loaded page and keeps its options', async 
   await context.close();
 });
 
-test('timeoutMs bounds the action wait', async () => {
+test('timeoutMs sets how long the action may take', async () => {
   const context = await newContext();
   await installConsent(context, {
     ruleFiles: [fileURLToPath(new URL('./slow-long-rule.json', import.meta.url))],
@@ -273,10 +273,24 @@ test('timeoutMs bounds the action wait', async () => {
   });
   const page = await context.newPage();
   await page.goto(site.url);
-  const began = Date.now();
-  const result = await answerBanner(page, 'accept', { timeoutMs: 3000 });
-  expect(Date.now() - began).toBeLessThan(8000);
+  const result = await answerBanner(page, 'accept', { timeoutMs: 15_000 });
+  expect(result).toMatchObject({ result: 'ok', action: 'accept' });
+  expect(result.tEnd - result.t).toBeGreaterThan(6500);
+  expect(await storedChoice(context)).toBe('accept');
+  await context.close();
+}, 40_000);
+
+test('timeoutMs ends a rule that runs longer', async () => {
+  const context = await newContext();
+  await installConsent(context, {
+    ruleFiles: [fileURLToPath(new URL('./slow-long-rule.json', import.meta.url))],
+    fixtureRules: false,
+  });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const result = await answerBanner(page, 'accept', { timeoutMs: 2000 });
   expect(result).toMatchObject({ result: 'failed', note: 'autoconsent reported no successful result' });
+  expect(result.tEnd - result.t).toBeLessThan(4500);
   await context.close();
 }, 30_000);
 

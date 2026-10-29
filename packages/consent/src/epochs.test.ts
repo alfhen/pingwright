@@ -235,6 +235,16 @@ describe('buildEpochs', () => {
     expect(epochs.map((e) => e.label)).toEqual(['undecided', action === 'accept' ? 'granted' : 'denied']);
   });
 
+  test('a default after a banner decision with no update does not reach later states', () => {
+    const modes = consentModeChanges(
+      [push(10, 'default', denied), push(5000, 'default', { analytics_storage: 'granted' }), push(20000, 'update', { ad_storage: 'granted' })],
+      1000,
+    );
+    expect(modes.map((c) => c.t)).toEqual([10, 20000]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1010, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.at(-1)?.state.analytics).toBe('denied');
+  });
+
   test('an accept sent as several updates is one epoch with the last state', () => {
     const modes = consentModeChanges([
       push(10, 'default', denied),

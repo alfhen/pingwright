@@ -30,7 +30,11 @@ export function contentScriptSource(): string {
   return readFileSync(join(dirname(entry), 'autoconsent.playwright.js'), 'utf8');
 }
 
-/** Extra rules replace bundled rules of the same name; autoconsent itself ignores rule order. */
+/**
+ * An extra rule replaces the bundled JSON rule of the same name; autoconsent itself ignores rule order.
+ * Code-based CMPs (such as Cybotcookiebot) are not in the JSON and cannot be replaced by name: give
+ * the rule another name and list the CMP in `disabledCmps`.
+ */
 export function mergeRules(extra: readonly Rule[], bundled: readonly Rule[]): Rule[] {
   const names = new Set(extra.map((rule) => rule.name));
   return [...extra, ...bundled.filter((rule) => !names.has(rule.name))];

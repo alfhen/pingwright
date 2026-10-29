@@ -318,7 +318,7 @@ export class Recorder {
   private buildConsentEpochs(): ConsentEpoch[] {
     // The page's consent state comes from its main frame. A gtag call in an embedded frame has its own state.
     const mainFrameEvents = this.dataLayerEvents.filter((e) => this.mainFrameEventIds.has(e.id));
-    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents), { startT: this.run.startedAt });
+    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents, Math.min(...this.bannerEvents.map((b) => b.t))), { startT: this.run.startedAt });
     return drafts.map((epoch) => ({
       type: 'consentEpoch',
       id: newId('consentEpoch'),
