@@ -56,24 +56,24 @@ describe('hashes', () => {
 
 describe('scan', () => {
   it('flags a foreign email, plain, URL-encoded and inside base64', () => {
-    expect(scan('em=jane@real-shop.dk', id)).toEqual([{ kind: 'email', value: 'jane@real-shop.dk' }]);
-    expect(scan('em=jane%40real-shop.dk', id)).toEqual([{ kind: 'email', value: 'jane@real-shop.dk' }]);
-    const encoded = encodeURIComponent(b64('{"email":"jane@real-shop.dk"}'));
-    expect(scan(`dtdc=${encoded}`, id).map((m) => m.value)).toContain('jane@real-shop.dk');
+    expect(scan('em=jane@shop.example.net', id)).toEqual([{ kind: 'email', value: 'jane@shop.example.net' }]);
+    expect(scan('em=jane%40shop.example.net', id)).toEqual([{ kind: 'email', value: 'jane@shop.example.net' }]);
+    const encoded = encodeURIComponent(b64('{"email":"jane@shop.example.net"}'));
+    expect(scan(`dtdc=${encoded}`, id).map((m) => m.value)).toContain('jane@shop.example.net');
   });
 
   it('flags a foreign email in a disguised Stape /data hit with a percent-encoded dtdc', () => {
     for (let i = 0; i < 50; i++) {
-      const json = JSON.stringify({ event_name: 'page_view', page_title: 'Shop?>'.repeat(i % 5 + 1), email: 'jane@real-shop.dk' });
+      const json = JSON.stringify({ event_name: 'page_view', page_title: 'Shop?>'.repeat(i % 5 + 1), email: 'jane@shop.example.net' });
       const inner = `/data?v=2&dtdc=${encodeURIComponent(b64(json))}`;
       const outer = `https://sgtm.localhost/abc123?k=${encodeURIComponent(b64(inner))}`;
-      expect(scan(outer, id).map((x) => x.value), `case ${i}`).toContain('jane@real-shop.dk');
+      expect(scan(outer, id).map((x) => x.value), `case ${i}`).toContain('jane@shop.example.net');
     }
   });
 
   it('flags a foreign phone and a foreign hash', () => {
     expect(scan('ph=+4512345678', id)).toEqual([{ kind: 'phone', value: '+4512345678' }]);
-    const foreign = sha256('someone@real-shop.dk').hex;
+    const foreign = sha256('someone@shop.example.net').hex;
     expect(scan(`ud[em]=${foreign}`, id)).toEqual([{ kind: 'hash', value: foreign }]);
   });
 
@@ -120,8 +120,8 @@ describe('scan', () => {
 
   it('finds an encoded foreign email next to a stray percent sign', () => {
     const id = createIdentity(42);
-    const found = scan('note=10%&em=jane%40real-shop.dk', id);
-    expect(found).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
+    const found = scan('note=10%&em=jane%40shop.example.net', id);
+    expect(found).toContainEqual({ kind: 'email', value: 'jane@shop.example.net' });
   });
 
   it('does not flag the own email next to escapes or plus-spaces', () => {
@@ -136,22 +136,22 @@ describe('scan', () => {
   });
 
   it('reports a foreign email once with a clean value', () => {
-    const jane = { kind: 'email', value: 'jane@real-shop.dk' };
-    expect(scan('d=%22jane@real-shop.dk%22', id)).toEqual([jane]);
-    expect(scan('dt=Order+for+jane@real-shop.dk', id)).toEqual([jane]);
+    const jane = { kind: 'email', value: 'jane@shop.example.net' };
+    expect(scan('d=%22jane@shop.example.net%22', id)).toEqual([jane]);
+    expect(scan('dt=Order+for+jane@shop.example.net', id)).toEqual([jane]);
   });
 
   it('finds a foreign email in base64 after path segments', () => {
-    const payload = Buffer.from('{"email":"jane@real-shop.dk"}').toString('base64url');
+    const payload = Buffer.from('{"email":"jane@shop.example.net"}').toString('base64url');
     for (const url of [`https://collector.pingwright.invalid/r/${payload}`, `/data/${payload}`]) {
-      expect(scan(url, id), url).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
+      expect(scan(url, id), url).toContainEqual({ kind: 'email', value: 'jane@shop.example.net' });
     }
   });
 
   it('finds a foreign email in base64 JSON with non-ASCII text', () => {
-    const json = JSON.stringify({ page_title: 'Ærøskøbing Østergård', email: 'jane@real-shop.dk' });
+    const json = JSON.stringify({ page_title: 'Ærøskøbing Østergård', email: 'jane@shop.example.net' });
     const found = scan(`dtdc=${Buffer.from(json, 'utf8').toString('base64')}`, id);
-    expect(found).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
+    expect(found).toContainEqual({ kind: 'email', value: 'jane@shop.example.net' });
   });
 
   it('does not flag Meta-normalised own name and city hashes across seeds', () => {
@@ -163,5 +163,94 @@ describe('scan', () => {
         .join('&');
       expect(scan(text, id), `seed ${seed}`).toEqual([]);
     }
+  });
+});
+
+describe('scan fixes', () => {
+  const foreign = sha256('someone@shop.example.net');
+  const jane = { kind: 'email', value: 'jane@shop.example.net' };
+
+  it('finds base64 glued to text (#27)', () => {
+    const payload = Buffer.from('{"email":"jane@shop.example.net"}').toString('base64url');
+    for (const text of [`x=v_${payload}`, `x=v-${payload}`, `x=ab${payload}`, `x=a${payload}`, `x=abc${payload}`]) {
+      expect(scan(text, id), text).toContainEqual(jane);
+    }
+    expect(scan(`x=v_${Buffer.from('nothing to see here').toString('base64url')}`, id)).toEqual([]);
+  });
+
+  it('flags foreign base64 and base64url hashes and not the own ones (#29)', () => {
+    expect(scan(`em=tv.1~em.${foreign.base64url}`, id)).toEqual([{ kind: 'hash', value: foreign.base64url }]);
+    expect(scan(`em=${encodeURIComponent(foreign.base64)}`, id)).toEqual([{ kind: 'hash', value: foreign.base64 }]);
+    const own = [hashEmail(id.email), hashPhone(id.phone)].flatMap((h) => [h.base64, h.base64url]);
+    expect(scan(own.join('&em='), id)).toEqual([]);
+  });
+
+  it('does not flag 43-character tokens that are not hashes (#29)', () => {
+    const text = [
+      'slug=this-is-a-long-lowercase-slug-for-an-article-x',
+      `ulid=${newId('hit')}${newId('hit')}`.slice(0, 60),
+      'gcd=13l3l3l3l1l1l3l3l3l3l1l1l3l3l3l3l1l1l3l3l3l3l1l1&gcs=G111',
+      'cid=1234567890.1730200000',
+      'assets=logo@2x.png',
+    ].join('&');
+    expect(scan(text, id)).toEqual([]);
+  });
+
+  it('flags formatted international phone numbers and compares by number (#30)', () => {
+    for (const text of ['ph=+44 20 7946 0958', 'ph=+45 12 34 56 78', 'ph=%2B45+12+34+56+78', 'ph=+45-12-34-56-78']) {
+      expect(scan(text, id), text).toHaveLength(1);
+      expect(scan(text, id)[0]?.kind).toBe('phone');
+    }
+    const spaced = id.phone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '+1 $1 $2 $3');
+    expect(scan(`ph=${spaced}`, id)).toEqual([]);
+  });
+
+  it('does not read a form-encoded plus-space before a number as a phone (#31)', () => {
+    expect(scan('dt=Order+100012345&en=purchase', id)).toEqual([]);
+    expect(scan('dt=order_+100012345', id)).toEqual([]);
+    expect(scan('ts=1730200000+12345678', id)).toEqual([]);
+  });
+
+  it('picks assigned area codes only (#33)', () => {
+    const bad = new Set([211, 311, 411, 511, 611, 711, 811, 911, 290, 398]);
+    for (let seed = 0; seed < 300; seed++) {
+      expect(bad.has(Number(createIdentity(seed).phone.slice(2, 5)))).toBe(false);
+    }
+  });
+
+  it('scans long token runs in linear time (#34)', () => {
+    const started = performance.now();
+    scan('a'.repeat(200_000), id);
+    scan(`${'a.'.repeat(50_000)}@`, id);
+    scan('a-'.repeat(50_000), id);
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(scan(`${'a'.repeat(100_000)} em=jane@shop.example.net`, id)).toContainEqual(jane);
+  });
+
+  it('keeps the tag of a plus-addressed foreign email (#35)', () => {
+    const found = scan('em=jane+shop@shop.example.net', id);
+    expect(found).toContainEqual({ kind: 'email', value: 'jane+shop@shop.example.net' });
+    expect(scan(`dt=Order+${id.email}`, id)).toEqual([]);
+  });
+
+  it('does not flag random ids and hashed client ids under identifier keys (#114)', () => {
+    const random = sha256('random-controller').hex;
+    for (const key of ['uid', 'user_id', 'external_id', 'client_id_hash', 'controllerId']) {
+      expect(scan(`${key}=${random}`, id), key).toEqual([]);
+      expect(scan(JSON.stringify({ [key]: random }), id), key).toEqual([]);
+    }
+    expect(scan(`uid=${foreign.base64url}`, id)).toEqual([]);
+  });
+
+  it('still flags the same hashes under identity keys and with no key (#114)', () => {
+    expect(scan(`em=${foreign.hex}`, id)).toEqual([{ kind: 'hash', value: foreign.hex }]);
+    expect(scan(`ud[em]=${foreign.hex}`, id)).toHaveLength(1);
+    expect(scan(JSON.stringify({ user_data: { em: foreign.hex } }), id)).toHaveLength(1);
+    expect(scan(`uid=1&em=${foreign.hex}`, id)).toHaveLength(1);
+    expect(scan(foreign.hex, id)).toHaveLength(1);
+  });
+
+  it('keeps the country option as a label only (#32)', () => {
+    expect(createIdentity(1, { country: 'DK' }).phone).toMatch(/^\+1/);
   });
 });

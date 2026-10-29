@@ -19,13 +19,17 @@ export interface HashForms {
   base64url: string;
 }
 
+// Assigned geographic codes only: N11 service codes and unassigned codes fail phone validation at some checkouts.
+const US_AREA_CODES = [201, 202, 206, 212, 213, 214, 305, 312, 404, 415, 512, 602, 617, 702, 718, 808];
+
+/** Only the label `country` follows the option; address, zip and phone stay US-shaped. */
 export function createIdentity(seed: number, options: { country?: string } = {}): Identity {
   const faker = new Faker({ locale: [en_US, en, base] });
   faker.seed(seed);
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
   const tag = faker.string.alphanumeric({ length: 4, casing: 'lower' });
-  const area = faker.number.int({ min: 201, max: 989 });
+  const area = faker.helpers.arrayElement(US_AREA_CODES);
   // 555-0100 to 555-0199 is reserved for fictional use.
   const line = faker.number.int({ min: 100, max: 199 });
   return {
@@ -76,11 +80,36 @@ export interface LeakMatch {
 }
 
 const MAX_DEPTH = 3;
-const EMAIL = /[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
+// The lookbehind keeps a long run of local-part characters from being retried at every offset.
+const EMAIL = /(?<![a-z0-9._+-])[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
 // Asset names such as logo@2x.png look like emails.
 const FILE_EXTENSION = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|js|mjs|json|map|woff2?|ttf|otf|eot|wasm|webm)$/i;
-const PHONE = /(?<![A-Za-z0-9+])\+\d{8,15}(?!\d)|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
+const PHONE = /(?<![\w+])\+(?=\d)\d(?:[ .+-]?\d){7,14}(?!\d)|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
 const HASH = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
+// Keys whose values are random or hashed client identifiers, not personal data.
+const NON_PERSONAL_HASH_KEYS = new Set([
+  'uid',
+  'user_id',
+  'userid',
+  'external_id',
+  'externalid',
+  'client_id',
+  'clientid',
+  'client_id_hash',
+  'clientidhash',
+  'cid',
+  'controllerid',
+  'controller_id',
+  'visitor_id',
+  'visitorid',
+  'device_id',
+  'deviceid',
+  'session_id',
+  'sessionid',
+  'anonymous_id',
+  'anonymousid',
+]);
+const KEY_BEFORE_VALUE = /([\w.[\]-]+)["']?\s*[=:]\s*["']?$/;
 const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
 
 function tryUrlDecode(text: string): string | undefined {
@@ -119,13 +148,30 @@ function hasUrlEscapes(text: string): boolean {
   return decoded !== undefined && decoded !== text;
 }
 
+function isNonPersonalKey(text: string, index: number): boolean {
+  const key = KEY_BEFORE_VALUE.exec(text.slice(Math.max(0, index - 64), index))?.[1];
+  if (!key) return false;
+  return NON_PERSONAL_HASH_KEYS.has(key.toLowerCase().replace(/[[\]]/g, '_').replace(/^_+|_+$/g, ''));
+}
+
+// A prefix glued to the value shifts the base64 alignment, so each piece is also tried from offsets 1 to 3.
 function* base64Candidates(text: string): Generator<string> {
   for (const token of text.match(BASE64_TOKEN) ?? []) {
-    yield token;
-    if (token.includes('/')) {
-      for (const piece of token.split('/')) if (piece.length >= 12) yield piece;
+    const pieces = new Set([token]);
+    for (const sep of ['/', '_', '-']) {
+      if (token.includes(sep)) for (const piece of token.split(sep)) if (piece.length >= 12) pieces.add(piece);
+    }
+    for (const piece of pieces) {
+      yield piece;
+      for (let offset = 1; offset <= 3; offset++) if (piece.length - offset >= 12) yield piece.slice(offset);
     }
   }
+}
+
+function isDigestToken(token: string): boolean {
+  const bare = token.replace(/=+$/, '');
+  if (bare.length !== 43 || !/[a-z]/.test(bare) || !/[A-Z]/.test(bare) || !/\d/.test(bare)) return false;
+  return Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length === 32;
 }
 
 // Only base64 decoding spends depth; URL decoding is cheap and a disguised Stape URL layers it between base64 steps.
@@ -163,6 +209,11 @@ function ownValues(identity: Identity) {
     hashes.add(sha256(lower).hex);
     hashes.add(sha256(lower.replace(/[^\p{L}\p{N}]/gu, '')).hex);
   }
+  for (const hex of [...hashes]) {
+    const bytes = Buffer.from(hex, 'hex');
+    hashes.add(bytes.toString('base64').replace(/=+$/, ''));
+    hashes.add(bytes.toString('base64url'));
+  }
   return { email, phoneDigits: phone.slice(1), hashes };
 }
 
@@ -179,14 +230,21 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     for (const raw of hasUrlEscapes(variant) ? [] : (variant.match(EMAIL) ?? [])) {
       // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
       const m = raw.slice(raw.lastIndexOf('+') + 1);
-      if (m.includes('@') && !FILE_EXTENSION.test(m) && normalizeEmail(m) !== own.email) add('email', m);
+      if (!m.includes('@') || FILE_EXTENSION.test(m) || normalizeEmail(m) === own.email) continue;
+      add('email', m);
+      // One '+' is either a form-encoded space or a plus-address tag, so both readings are reported.
+      if (raw !== m && raw.indexOf('+') === raw.lastIndexOf('+') && !raw.startsWith('+')) add('email', raw);
     }
     for (const m of variant.match(PHONE) ?? []) {
       const digits = m.replace(/\D/g, '');
       if (digits !== own.phoneDigits && digits !== own.phoneDigits.slice(1)) add('phone', m);
     }
-    for (const m of variant.match(HASH) ?? []) {
-      if (!own.hashes.has(m.toLowerCase())) add('hash', m.toLowerCase());
+    for (const m of variant.matchAll(HASH)) {
+      if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
+    }
+    for (const m of variant.matchAll(BASE64_TOKEN)) {
+      const bare = m[0].replace(/=+$/, '');
+      if (isDigestToken(m[0]) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) add('hash', m[0]);
     }
   }
   return [...found.values()];
