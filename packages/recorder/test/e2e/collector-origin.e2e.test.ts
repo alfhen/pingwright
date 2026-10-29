@@ -26,9 +26,9 @@ const html = (body: string) => `<!doctype html><meta charset="utf-8"><title>t</t
 
 const post = (path: string) => `fetch('${COLLECTOR_ORIGIN}${path}', { method: 'POST', body: 'x' }).catch(() => {});`;
 
-// A request sent while a sandboxed srcdoc iframe is still loading bypasses context.route
-// (ERR_NAME_NOT_RESOLVED). Sending 100 ms after load is usually captured; under load a single send was
-// missed, so the script repeats every 300 ms and the tests wait for the first one that arrives.
+// A request a sandboxed srcdoc iframe sends during load, and under machine load up to about a second
+// after it, bypasses context.route (ERR_NAME_NOT_RESOLVED, no request event). These tests check that the
+// collector origin is reachable and routed, so the script repeats every 300 ms until one send is captured.
 const sandboxedSrcdoc = (script: string) =>
   `<iframe sandbox="allow-scripts" srcdoc="${`<script>addEventListener('load', () => { const send = () => { ${script} }; setTimeout(send, 100); setInterval(send, 300); });</script>`.replaceAll('"', '&quot;')}"></iframe>`;
 

@@ -34,13 +34,15 @@ interface Sent {
 }
 
 function vendorOf(url: URL): Sent['vendor'] {
-  if (url.hostname.endsWith('google-analytics.com') && url.pathname === '/g/collect' && url.searchParams.get('cid') !== FIXTURE_PIXEL_CID) return 'ga4';
+  if (url.pathname === '/g/collect' && url.searchParams.get('cid') !== FIXTURE_PIXEL_CID) return 'ga4';
   if (url.pathname === '/ccm/collect' || url.pathname.startsWith('/pagead/')) return 'ads';
   return 'other';
 }
 
-function eventOf(url: URL, postData: string | null) {
-  return url.searchParams.get('en') ?? new URLSearchParams(postData ?? '').get('en');
+function eventsOf(url: URL, postData: string | null): (string | null)[] {
+  const lines = (postData ?? '').split('\n').filter((line) => line !== '');
+  if (lines.length === 0) return [url.searchParams.get('en')];
+  return lines.map((line) => new URLSearchParams(line).get('en') ?? url.searchParams.get('en'));
 }
 
 async function probe(variant: Variant) {
@@ -71,14 +73,16 @@ async function probe(variant: Variant) {
     if (!COLLECTION.test(r.url())) return;
     collectionRequests++;
     const url = new URL(r.url());
-    sent.push({ vendor: vendorOf(url), path: url.pathname, method: r.method(), type: r.resourceType(), event: eventOf(url, r.postData()), at: Date.now() });
+    for (const event of eventsOf(url, r.postData())) {
+      sent.push({ vendor: vendorOf(url), path: url.pathname, method: r.method(), type: r.resourceType(), event, at: Date.now() });
+    }
   });
   await context.route(COLLECTION, async (route) => {
     routedCollection++;
     const request = route.request();
     const url = new URL(request.url());
     if (variant === 'no-content-after-2s') await new Promise((resolve) => setTimeout(resolve, 2000));
-    answered.push({ vendor: vendorOf(url), event: eventOf(url, request.postData()), at: Date.now() });
+    for (const event of eventsOf(url, request.postData())) answered.push({ vendor: vendorOf(url), event, at: Date.now() });
     if (variant === 'abort') {
       await route.abort('failed');
       return;
@@ -117,6 +121,12 @@ test('GA4 sends each event once as POST fetch and event_callback does not wait f
     const ga4Events = ga4.map((s) => s.event).sort();
     expect(ga4Events, `${variant}: GA4 sent each event once`).toEqual(['page_view', EVENT]);
     expect(new Set(ga4.map((s) => `${s.method} ${s.type}`)), `${variant}: GA4 transport`).toEqual(new Set(['POST fetch']));
+
+    const other = sent.filter((s) => s.vendor === 'other');
+    expect(
+      other.every((s) => s.path === '/tr/' || s.path === '/g/collect'),
+      `${variant}: only Meta /tr/ and the fixture pixel's own /g/collect hit fall outside GA4 and Ads, got ${JSON.stringify(other.map((s) => s.path))}`,
+    ).toBe(true);
 
     const ads = sent.filter((s) => s.vendor === 'ads');
     const adsTransports = new Set(ads.map((s) => `${s.method} ${s.type}`));
