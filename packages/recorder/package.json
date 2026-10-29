@@ -3,5 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" }
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@pingwright/core": "workspace:*",
+    "@pingwright/decoders": "workspace:*",
+    "playwright": "1.64.1"
+  },
+  "devDependencies": {
+    "@pingwright/fixture-site": "workspace:*"
+  }
 }
