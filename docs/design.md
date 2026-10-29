@@ -111,7 +111,7 @@ Every profile:
 - Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading, which are usually neither routed nor reported (§9), and sends from `pagehide` or `visibilitychange`, which the page answers itself in stub mode (§5.3).
 - Service workers: Playwright reports and routes their requests on the context, in Chromium only. Requests to update a service worker's own script cannot be routed. Option: `serviceWorkers: 'block'`.
 - Dedicated workers: capture of requests to the collector origin is proven in Chromium (§9), from a worker on the page and from a worker inside a sandboxed iframe. Capture of other worker traffic is not tested.
-- A startup self-test loads a routed page at `https://selftest.pingwright.invalid/`. The page, a sandboxed iframe and a dedicated worker each send a report to the collector origin. The run states its capture coverage: `{page, iframe, dedicatedWorker, serviceWorker: 'chromium-only'}`. Self-test reports are not stored. The self-test does not probe early iframe requests, because they cannot be observed (§5.3).
+- A startup self-test loads a routed page at `https://selftest.pingwright.invalid/`. The page, a sandboxed iframe and a dedicated worker each send a report to the collector origin. The run states its capture coverage: `{page, iframe, dedicatedWorker, serviceWorker: 'chromium-only'}`. Self-test reports are not stored. The self-test does not probe early iframe requests: a probe cannot tell a request that bypassed capture from one that was never sent (§5.3).
 - An init script hooks `dataLayer.push` and records each push with a timestamp on the shared clock (§7.3).
 - Checkpoints run at the end of each step and after each consent action.
 

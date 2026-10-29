@@ -136,7 +136,7 @@ test('a collection request sent while a sandboxed srcdoc iframe loads is either 
   const { records } = await visit('/early-srcdoc', 'stub');
   const recorded = collectionRequests({ records } as RunResult).filter((q) => q.url.includes('en=early'));
   const reachedServer = serverSaw.filter((u) => u.includes('en=early'));
-  console.info(`early srcdoc request: ${recorded.length > 0 ? 'routed and stubbed' : 'not routed, not reported'}`);
+  console.info(`early srcdoc request: recorded outcomes ${JSON.stringify(recorded.map((q) => q.outcome))}, reached server ${reachedServer.length}`);
   if (recorded.length > 0) {
     expect(recorded.map((q) => q.outcome)).toEqual(['stubbed']);
     expect(reachedServer).toEqual([]);
