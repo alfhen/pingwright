@@ -10,7 +10,7 @@
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "node scripts/build.ts",
-    "prepare": "node scripts/prepare.ts",
+    "prepare": "node scripts/build.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
