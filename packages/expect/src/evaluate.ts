@@ -254,7 +254,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     if (raw) unhashed.push(hit.id);
   }
   if (unhashed.length) {
-    return { pass: false, evidence: wrong, message: `Email or phone sent unhashed in ${unhashed.length} hit(s).` };
+    return { pass: false, evidence: unhashed, message: `Email or phone sent unhashed in ${unhashed.length} hit(s).` };
   }
   if (wrong.length) {
     return { pass: false, evidence: wrong, message: `Hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };

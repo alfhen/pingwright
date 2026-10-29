@@ -118,3 +118,8 @@ test('reports every problem at once', () => {
   })();
   expect(err.issues).toHaveLength(2);
 });
+
+test('boolean ids filters mean present and absent', () => {
+  const s = parseScenario('start: /\nexpect:\n  mustNot:\n    - { vendor: ga4, ids.user_id: true, ids.client_id: false }');
+  expect(s.expect.mustNot[0]!.filter.ids).toEqual({ user_id: 'present', client_id: 'absent' });
+});

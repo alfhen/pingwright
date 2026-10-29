@@ -294,7 +294,9 @@ export function parseScenario(text: string): Scenario {
         else if (typeof v === 'string' && CONSENT_VALUES.includes(v)) filter.consent[field] = v as ConsentValue;
         else fail(p, `must be one of ${CONSENT_VALUES.join(', ')}`);
       } else if (k.startsWith('ids.')) {
-        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') filter.ids[k.slice(4)] = String(v);
+        if (v === true) filter.ids[k.slice(4)] = 'present';
+        else if (v === false) filter.ids[k.slice(4)] = 'absent';
+        else if (typeof v === 'string' || typeof v === 'number') filter.ids[k.slice(4)] = String(v);
         else fail(p, 'must be present, absent or a value');
       } else if (k.startsWith('params.')) {
         if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') filter.params[k.slice(7)] = String(v);
