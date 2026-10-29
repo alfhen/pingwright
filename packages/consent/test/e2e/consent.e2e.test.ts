@@ -111,6 +111,7 @@ test('accept, reopen the banner, then reject', async () => {
   await page.goto(site.url);
   const accepted = await answerBanner(page, 'accept');
   expect(accepted.result).toBe('ok');
+  expect(accepted.t).toBeGreaterThanOrEqual(startT);
   await page.click('#pw-cookie-settings');
   expect(await page.locator('#pw-consent-banner').isVisible()).toBe(true);
   const rejected = await answerBanner(page, 'reject');
@@ -131,6 +132,11 @@ test('accept, reopen the banner, then reject', async () => {
   expect(updates.map((u) => u.state.analytics)).toEqual(['granted', 'denied']);
   expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
   expect(epochs[0]?.state.analytics).toBe('denied');
+  expect(epochs.map((e) => e.source)).toEqual(['start', 'consentMode', 'consentMode']);
+  expect(epochs[1]?.startT).toBe(updates[0]!.t);
+  expect(epochs[2]?.startT).toBe(updates[1]!.t);
+  expect(epochs[1]?.state.analytics).toBe('granted');
+  expect(epochs[2]?.state.analytics).toBe('denied');
   await context.close();
 });
 
@@ -219,6 +225,7 @@ test('a HeadlessChrome user agent gives banner not shown', async () => {
   const page = await context.newPage();
   await page.goto(site.url);
   await expect.poll(() => driver.isRunningIn(page.mainFrame())).toBe(true);
+  await expect.poll(async () => (await answerBanner(page, 'none', { timeoutMs: 100 })).detected).toBe(true);
   for (const action of ['accept', 'reject', 'none'] as const) {
     const result = await answerBanner(page, action, { timeoutMs: 2000 });
     expect(result).toMatchObject({ shown: false, result: 'banner not shown', action });
@@ -244,5 +251,23 @@ test('a multi-step rule starts the epoch at the Consent Mode update, not at the 
   const banner = { t: accepted.t, tEnd: accepted.tEnd, action: 'accept' } as const;
   const granted = buildEpochs([banner], consentModeChanges(recorded), { startT }).find((e) => e.label === 'granted')!;
   expect(Math.abs(granted.startT - update.t)).toBeLessThan(100);
+  await context.close();
+});
+
+test('answerBanner installs late on a loaded page and keeps its options', async () => {
+  const context = await newContext();
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const result = await answerBanner(page, 'accept', { detectRetries: 3 });
+  expect(result).toMatchObject({ detected: true, shown: true, result: 'ok' });
+  expect(await storedChoice(context)).toBe('accept');
+  await expect(answerBanner(page, 'none', { detectRetries: 5 })).rejects.toThrow(/detectRetries/);
+  await context.close();
+});
+
+test('banner not shown says when autoconsent never ran', async () => {
+  const context = await newContext();
+  const result = await answerBanner(context, 'accept', { timeoutMs: 500 });
+  expect(result).toMatchObject({ result: 'banner not shown', note: 'autoconsent did not start in any frame' });
   await context.close();
 });

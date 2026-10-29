@@ -1,3 +1,4 @@
+import type { DataLayerEvent } from '@pingwright/core';
 import { describe, expect, test } from 'vitest';
 import { consentModeChanges, type ConsentPush } from './consent-mode.ts';
 import { buildEpochs, epochsForHit } from './epochs.ts';
@@ -32,6 +33,31 @@ describe('consentModeChanges', () => {
       [20, 'update'],
     ]);
     expect(changes[1]?.state).toEqual({ analytics: 'granted', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
+  });
+
+  test('ignores a region-scoped default', () => {
+    const changes = consentModeChanges([
+      push(1, 'default', { ...denied, region: ['DK', 'SE'] } as unknown as Record<string, string>),
+      push(2, 'default', { analytics_storage: 'granted' }),
+    ]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.state.ads).toBe('unknown');
+    expect(changes[0]?.state.analytics).toBe('granted');
+  });
+
+  test('accepts full dataLayer event records', () => {
+    const record: DataLayerEvent = {
+      type: 'dataLayerEvent',
+      id: 'dle_1' as DataLayerEvent['id'],
+      runId: 'run_1' as DataLayerEvent['runId'],
+      stepId: null,
+      t: 5,
+      event: null,
+      gtmUniqueEventId: null,
+      args: ['consent', 'default', denied],
+      isConsentCommand: true,
+    };
+    expect(consentModeChanges([record])[0]?.state.analytics).toBe('denied');
   });
 
   test('treats missing signals as unknown', () => {
@@ -298,5 +324,37 @@ describe('labelOf', () => {
     const modes = consentModeChanges([push(1000, 'update', { analytics_storage: 'granted', ad_storage: 'granted' })]);
     const epochs = buildEpochs([], modes, { startT: 0 });
     expect(epochs.at(-1)?.label).toBe('granted');
+  });
+});
+
+describe('later Consent Mode defaults', () => {
+  const changes = (...pushes: ConsentPush[]) => consentModeChanges(pushes);
+
+  test('a later default denying consent after an accept starts a denied epoch', () => {
+    const epochs = buildEpochs(
+      [{ t: 1000, tEnd: 1010, action: 'accept' }],
+      changes(push(10, 'default', denied), push(1005, 'update', granted), push(3000, 'default', denied)),
+      { startT: 0 },
+    );
+    expect(epochs.map((e) => [e.label, e.source, e.startT])).toEqual([
+      ['undecided', 'start', 0],
+      ['granted', 'consentMode', 1005],
+      ['denied', 'consentMode', 3000],
+    ]);
+  });
+
+  test('a later default is not paired with a banner window', () => {
+    const epochs = buildEpochs(
+      [{ t: 1000, tEnd: 1010, action: 'accept' }],
+      changes(push(10, 'default', denied), push(1500, 'default', denied)),
+      { startT: 0 },
+    );
+    expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
+  });
+
+  test('several defaults before the first decision merge into the undecided state', () => {
+    const epochs = buildEpochs([], changes(push(10, 'default', { analytics_storage: 'denied' }), push(20, 'default', { ad_storage: 'denied' })), { startT: 0 });
+    expect(epochs).toHaveLength(1);
+    expect(epochs[0]?.state).toMatchObject({ analytics: 'denied', ads: 'denied' });
   });
 });

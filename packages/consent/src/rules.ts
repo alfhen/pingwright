@@ -29,3 +29,9 @@ export function contentScriptSource(): string {
   const entry = require.resolve('@duckduckgo/autoconsent');
   return readFileSync(join(dirname(entry), 'autoconsent.playwright.js'), 'utf8');
 }
+
+/** Extra rules replace bundled rules of the same name; autoconsent itself ignores rule order. */
+export function mergeRules(extra: readonly Rule[], bundled: readonly Rule[]): Rule[] {
+  const names = new Set(extra.map((rule) => rule.name));
+  return [...extra, ...bundled.filter((rule) => !names.has(rule.name))];
+}

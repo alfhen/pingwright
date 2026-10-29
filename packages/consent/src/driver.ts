@@ -1,5 +1,5 @@
 import type { BrowserContext, Frame, Page } from 'playwright';
-import { bundledRules, contentScriptSource, fixtureRulesPath, readRuleFile, type Rule } from './rules.ts';
+import { bundledRules, contentScriptSource, fixtureRulesPath, mergeRules, readRuleFile } from './rules.ts';
 
 export type BannerAction = 'accept' | 'reject' | 'none';
 
@@ -9,14 +9,20 @@ export interface BannerResult {
   cmp: string | null;
   action: BannerAction;
   result: 'ok' | 'failed' | 'banner not shown';
-  /** Epoch milliseconds, taken just before the action is sent, or when the wait ended for `none` and failures. */
+  /** Why the result is not `ok`, when known. */
+  note?: string;
+  /** Epoch milliseconds on the page clock when the action reached the page, or when the wait ended for `none` and failures. */
   t: number;
   /** Epoch milliseconds, taken when the action's result arrived. Equals `t` for `none` and failures. */
   tEnd: number;
 }
 
 export interface ConsentOptions {
-  /** Rule files to load besides the bundled rules and the fixture-site rules. */
+  /**
+   * Rule files to load besides the bundled rules and the fixture-site rules. A rule with the name of a
+   * bundled rule replaces it. A rule with another name for the same banner does not take priority;
+   * turn the bundled one off with `disabledCmps`.
+   */
   ruleFiles?: string[];
   /** Load rules/fixture-site.json. Default true. */
   fixtureRules?: boolean;
@@ -69,7 +75,7 @@ export class ConsentDriver {
       ...(options.fixtureRules === false ? [] : readRuleFile(fixtureRulesPath)),
       ...(options.ruleFiles ?? []).flatMap(readRuleFile),
     ];
-    const rules: Rule[] = [...extra, ...bundledRules()];
+    const rules = mergeRules(extra, bundledRules());
     this.#rules = JSON.stringify({ autoconsent: rules });
     this.#detectWindowMs = (options.detectRetries ?? 10) * 500 + 1000;
     this.#config = JSON.stringify({
@@ -114,6 +120,7 @@ export class ConsentDriver {
         await frame
           .evaluate(`autoconsentReceiveMessage({ type: 'initResp', config: ${this.#config}, rules: ${this.#rules} })`)
           .catch(() => {});
+        this.#notify();
         return;
       case 'cmpDetected':
         state.detected = true;
@@ -140,6 +147,10 @@ export class ConsentDriver {
       default:
         return;
     }
+    this.#notify();
+  }
+
+  #notify(): void {
     for (const listener of this.#listeners) listener();
   }
 
@@ -213,6 +224,7 @@ export class ConsentDriver {
     const shownFrame = await this.#waitForBanner(frames, timeoutMs);
     if (!shownFrame) {
       const now = Date.now();
+      const running = frames().some((f) => this.isRunningIn(f));
       const detected = frames().map((f) => this.#frames.get(f)).filter((s) => s?.detected);
       return {
         detected: detected.length > 0,
@@ -220,6 +232,7 @@ export class ConsentDriver {
         cmp: detected[0]?.cmp ?? null,
         action,
         result: 'banner not shown',
+        ...(running ? {} : { note: 'autoconsent did not start in any frame' }),
         t: now,
         tEnd: now,
       };
@@ -229,18 +242,32 @@ export class ConsentDriver {
     if (action === 'none') return { ...base, result: 'ok', t: state.shownT ?? Date.now(), tEnd: state.shownT ?? Date.now() };
 
     const before = state.resultSeq;
-    const t = Date.now();
     state.shownT = null;
     state.acted = true;
     // Autoconsent keeps its detected CMP after a first action, so a later message can act again.
     const message = action === 'accept' ? 'optIn' : 'optOut';
+    let t: number;
     try {
-      await shownFrame.evaluate(`autoconsentReceiveMessage({ type: '${message}' })`);
+      t = (await shownFrame.evaluate(
+        `(() => { autoconsentReceiveMessage({ type: '${message}' }); return performance.timeOrigin + performance.now(); })()`,
+      )) as number;
     } catch {
-      return { ...base, result: 'failed', t, tEnd: t };
+      const failedT = Date.now();
+      return { ...base, result: 'failed', note: 'the action could not be sent to the page', t: failedT, tEnd: failedT };
     }
-    const reported = await this.#waitUntil(() => (state.resultSeq > before ? state.result : undefined), 5000);
-    return { ...base, result: reported ? 'ok' : 'failed', t, tEnd: Date.now() };
+    // A navigation replaces the frame's state, so read it afresh and stop waiting once it changes.
+    const reported = await this.#waitUntil(() => {
+      const current = this.#frames.get(shownFrame);
+      if (current !== state) return false;
+      return state.resultSeq > before ? state.result : undefined;
+    }, timeoutMs);
+    return {
+      ...base,
+      result: reported ? 'ok' : 'failed',
+      ...(reported ? {} : { note: 'autoconsent reported no successful result' }),
+      t,
+      tEnd: Date.now(),
+    };
   }
 }
 

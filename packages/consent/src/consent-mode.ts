@@ -1,6 +1,9 @@
 import type { ConsentState, ConsentValue, DataLayerEvent } from '@pingwright/core';
 
-/** A recorded dataLayer event; consent commands look like `['consent', 'update', { analytics_storage: 'granted' }]`. */
+/**
+ * A recorded dataLayer event, or any object with its `t` and `args`. Consent commands look like
+ * `['consent', 'update', { analytics_storage: 'granted' }]`.
+ */
 export type ConsentPush = Pick<DataLayerEvent, 't' | 'args'>;
 
 export interface ConsentModeChange {
@@ -36,6 +39,8 @@ export function consentModeChanges(pushes: readonly ConsentPush[]): ConsentModeC
     const [name, command, signals] = push.args;
     if (name !== 'consent' || (command !== 'default' && command !== 'update')) continue;
     if (typeof signals !== 'object' || signals === null) continue;
+    // A region-scoped default applies to visitors elsewhere than the test machine may be; it is not the global state.
+    if (command === 'default' && 'region' in signals) continue;
     const next = { ...state };
     for (const [signal, field] of Object.entries(signalToField)) {
       if (signal in signals) next[field] = toValue((signals as Record<string, unknown>)[signal]);
