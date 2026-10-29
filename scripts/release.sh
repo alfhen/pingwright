@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: scripts/release.sh [--no-tag] <version>
-# Builds a release commit with dist/ on a detached HEAD and tags it v<version>.
+# Builds a release commit with dist/ (and no build script) on a detached HEAD and tags it v<version>.
 # The commit is reachable only from its tag and is never merged to main.
 set -euo pipefail
 
@@ -43,8 +43,10 @@ pnpm build
 identity=(-c "user.name=${GIT_AUTHOR_NAME:-Pingwright Release}" -c "user.email=${GIT_AUTHOR_EMAIL:-release@example.com}")
 
 git checkout -q --detach
-git add -f dist
-git "${identity[@]}" commit -q -m "Release v$version" -- dist
+# npm runs a nested install for git dependencies whose scripts include build, which races with the outer global install.
+npm pkg delete scripts.build
+git add -f dist package.json
+git "${identity[@]}" commit -q -m "Release v$version" -- dist package.json
 
 if [ "$tag" = 1 ]; then
   git "${identity[@]}" tag -a "v$version" -m "Release v$version"

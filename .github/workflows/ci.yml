@@ -61,7 +61,10 @@ jobs:
       - name: Install from the release commit
         run: |
           tmp2=$(mktemp -d)
-          npm i -g --install-links --prefix "$tmp2" "git+file://$RELEASE_CLONE#HEAD"
+          cache=$(mktemp -d)
+          npm i -g --install-links --cache "$cache" --prefix "$tmp2" "git+file://$RELEASE_CLONE#HEAD"
+          # A second log means npm ran a nested git dep install.
+          test "$(ls "$cache/_logs" | wc -l)" = 1
           "$tmp2/bin/pingwright" --version
           echo "GIT_BIN=$tmp2/bin/pingwright" >> "$GITHUB_ENV"
       - run: $PW_BIN install-browser
