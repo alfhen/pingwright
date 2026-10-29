@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { README_QUICKSTART_SCENARIO, README_SCENARIO } from './readme-scenario.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';
@@ -154,4 +155,18 @@ test('warns when a fill value looks like a real email or phone', () => {
   expect(warn('jane@example.com')).toEqual([]);
   expect(warn('+12015550123')).toEqual([]);
   expect(warn('hello')).toEqual([]);
+  expect(warn('2026-10-29')).toEqual([]);
+  expect(warn('4242 4242 4242 4242')).toEqual([]);
+});
+
+test('does not warn on the repo checkout scenarios', () => {
+  for (const f of ['checkout.yml', 'checkout-reject.yml']) {
+    const text = readFileSync(new URL(`../../../e2e/scenarios/${f}`, import.meta.url), 'utf8');
+    expect(parseScenario(text).warnings).toEqual([]);
+  }
+});
+
+test('skips card and password fields when warning about real data', () => {
+  const text = 'start: /\nsteps:\n  - fill: { "#card-number": "4155550123", "#password": "415-867-5309" }';
+  expect(parseScenario(text).warnings).toEqual([]);
 });

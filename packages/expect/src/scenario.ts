@@ -239,7 +239,7 @@ export function parseScenario(text: string): Scenario {
         for (const [sel, v] of Object.entries(value)) {
           if (typeof v === 'string' && v) {
             fields[sel] = v;
-            const kind = looksLikeRealData(v);
+            const kind = SECRET_FIELD.test(sel) ? undefined : looksLikeRealData(v);
             if (kind) warnings.push(`line ${lineOf([...path, 'fill', sel])}: steps[${i}].fill.${sel}: looks like a real ${kind}; fill uses the run identity, so do not write personal data in a scenario`);
           } else fail([...path, kind, sel], 'must be a non-empty string');
         }
@@ -411,11 +411,14 @@ export function validEpochSelector(selector: string): boolean {
 
 const RESERVED_EMAIL_DOMAIN = /(?:^|\.)(?:example\.(?:com|net|org)|[^.]+\.(?:test|invalid|example|localhost))$/i;
 
+const SECRET_FIELD = /card|cvc|cvv|iban|password|cc-/i;
+const PHONE_SHAPE = /^(?:\+\d{8,15}|\+?[\d\s]*\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\+?\d{0,3}[-.\s]?\d{3}[-.\s]\d{3}[-.\s]\d{4})$/;
+
 function looksLikeRealData(value: string): 'email' | 'phone' | undefined {
   const email = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/.exec(value.trim());
   if (email) return RESERVED_EMAIL_DOMAIN.test(email[1]!) ? undefined : 'email';
-  if (!/^\+?[\d\s().-]{7,}$/.test(value.trim())) return undefined;
-  const digits = value.replace(/\D/g, '');
-  if (digits.length >= 7 && !/55501\d\d$/.test(digits)) return 'phone';
-  return undefined;
+  const text = value.trim();
+  if (!PHONE_SHAPE.test(text)) return undefined;
+  const digits = text.replace(/\D/g, '');
+  return !/55501\d\d$/.test(digits) ? 'phone' : undefined;
 }
