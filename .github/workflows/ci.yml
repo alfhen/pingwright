@@ -52,10 +52,12 @@ jobs:
           "$tmp/bin/pingwright" --version
           echo "PW_BIN=$tmp/bin/pingwright" >> "$GITHUB_ENV"
       - name: Install from git
+        # A local install: npm 10 leaves a dangling link for `npm i -g <git url>` when the package has a prepare script.
         run: |
           tmp2=$(mktemp -d)
-          npm i -g --prefix "$tmp2" "git+file://$PWD"
-          "$tmp2/bin/pingwright" --version
+          cd "$tmp2" && npm init -y > /dev/null
+          npm i "git+file://$GITHUB_WORKSPACE"
+          ./node_modules/.bin/pingwright --version
       - run: $PW_BIN install-browser
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
