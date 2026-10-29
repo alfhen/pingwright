@@ -180,6 +180,17 @@ describe('payment and log-in guard', () => {
     expect(card).toBe('');
   });
 
+  test('an evaluate step cannot send a card number it just set', async () => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: PAGE }));
+    const script = "const c = document.getElementById('cc'); c.value = '4242424242424242'; fetch('/pay', { method: 'POST', body: c.value })";
+    const error = await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - evaluate: "${script}"\n`)).then(() => undefined, (e: unknown) => e);
+    const { records } = await recorder.close();
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/payments and log-ins must be handoff steps/i);
+    expect(JSON.stringify(records.requests)).not.toContain('4242424242424242');
+  });
+
   test('an evaluate step may set an ordinary field', async () => {
     const { error } = await play(`start: /\nsteps:\n  - evaluate: "document.getElementById('name').value = 'x'"\n`, 'shop.example.com');
     expect(error).toBeUndefined();
@@ -266,6 +277,29 @@ describe('handoff', () => {
     expect(after.postData).toContain('secret-after');
     expect(JSON.stringify(records.requests)).not.toContain('secret-during');
   });
+});
+
+test('a send queued while the page unloads during a handoff does not keep typed values', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+  const parsed = parseScenario('start: /\nsteps:\n  - handoff: Log in\n  - checkpoint: after\n');
+  await playScenario(recorder, parsed, {
+    print: () => undefined,
+    handoffResolver: async () => {
+      const page = recorder.context.pages()[0]!;
+      await page
+        .evaluate(() => {
+          addEventListener('pagehide', () => navigator.sendBeacon('/api/form', 'password=secret-during'));
+          location.href = '/?done';
+        })
+        .catch(() => undefined);
+      await page.waitForURL(/done/);
+    },
+  });
+  const { records } = await recorder.close();
+  const beacon = records.requests.find((r) => r.url.endsWith('/api/form'))!;
+  expect(beacon.initiator).toBe('unload');
+  expect(beacon.postData).toBe('[redacted]');
+  expect(beacon.redacted).toBe('handoff');
 });
 
 test('a failed request records why it failed', async () => {

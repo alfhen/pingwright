@@ -122,7 +122,7 @@ export class Recorder {
   private readonly checkpoints: Checkpoint[] = [];
   private readonly bannerEvents: BannerEvent[] = [];
   private currentStepId: Id<'stp'> | null = null;
-  private handoffActive = false;
+  private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
 
   private constructor(
@@ -252,8 +252,8 @@ export class Recorder {
   }
 
   /** A person is typing during a handoff, so only requests that decode as tracking hits keep their body and query. */
-  private redactForHandoff(record: Request): Request {
-    if (!this.handoffActive) return record;
+  private redactForHandoff(record: Request, at = Date.now()): Request {
+    if (!this.duringHandoff(at)) return record;
     if (isCollectionEndpoint(record) || isKnownVendorCollection(record) || decodeRequest(record).length > 0) return record;
     return {
       ...record,
@@ -263,15 +263,23 @@ export class Recorder {
     };
   }
 
-  /** While true, new requests that are not tracking hits are stored without their typed values. */
+  private duringHandoff(at: number): boolean {
+    return this.handoffWindows.some((w) => at >= w.from && (w.to === null || at <= w.to));
+  }
+
+  /** Requests sent while a handoff is active, including unload sends queued then and replayed later, are stored without their typed values. */
   setHandoff(active: boolean): void {
-    this.handoffActive = active;
+    if (active) this.handoffWindows.push({ from: Date.now(), to: null });
+    else {
+      const open = this.handoffWindows.find((w) => w.to === null);
+      if (open) open.to = Date.now();
+    }
   }
 
   private recordUnloadSend(payload: UnloadSendPayload): void {
     if (this.closed || this.unloadKeys.has(payload.key)) return;
     this.unloadKeys.add(payload.key);
-    const record: Request = {
+    let record: Request = {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
@@ -286,6 +294,7 @@ export class Recorder {
       postData: payload.postData === null ? null : payload.postData.slice(0, MAX_POST_DATA),
       outcome: 'stubbed',
     };
+    record = this.redactForHandoff(record, payload.queuedAt);
     this.routed.add(record.id);
     this.unloadRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });

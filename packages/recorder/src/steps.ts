@@ -2,7 +2,7 @@ import { createInterface } from 'node:readline/promises';
 import { createIdentity, type Identity, type Step as StepRecord } from '@pingwright/core';
 import type { Scenario, Step } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
-import { HANDOFF_REQUIRED, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
+import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
 export type ConsentAnswer = Extract<Step, { kind: 'consent' }>['value'];
@@ -156,17 +156,43 @@ async function sensitiveFieldsOf(page: Page): Promise<{ frame: Frame; index: num
   return found;
 }
 
-/** An evaluate step is no way around the guard: a sensitive field it changed on a hosted site is cleared and the step fails. */
+/**
+ * An evaluate step is no way around the guard. Card and password fields in hosted frames refuse
+ * writes while the script runs, so a value never reaches the site. The after-check is a backstop.
+ * A script that redefines the setters itself, or writes through execCommand or setRangeText, is not stopped.
+ */
 async function evaluateGuarded(page: Page, script: string): Promise<void> {
+  const hosted = page.frames().filter((frame) => !isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));
+  const trapped: Frame[] = [];
+  for (const frame of hosted) {
+    if (await frame.evaluate(SENSITIVE_WRITE_TRAP).then(() => true, () => false)) trapped.push(frame);
+  }
   const before = await sensitiveFieldsOf(page);
-  await page.evaluate(script);
+  let scriptError: unknown;
+  try {
+    await page.evaluate(script);
+  } catch (error) {
+    scriptError = error;
+  }
+  let blocked = false;
+  for (const frame of trapped) {
+    const hit = await frame
+      .evaluate(() => {
+        const trap = (window as unknown as { __pingwrightTrap: { state: { blocked: boolean }; release: () => void } }).__pingwrightTrap;
+        trap.release();
+        return trap.state.blocked;
+      })
+      .catch(() => false);
+    blocked ||= hit;
+  }
   const changed = (await sensitiveFieldsOf(page)).filter(
     (field) => field.value !== '' && before.find((b) => b.frame === field.frame && b.index === field.index)?.value !== field.value,
   );
   for (const { frame, index } of changed) {
     await frame.evaluate((i) => ((document.querySelectorAll('input, textarea')[i] as HTMLInputElement).value = ''), index).catch(() => undefined);
   }
-  if (changed.length > 0) throw new Error(`the script set a card or password field. ${HANDOFF_REQUIRED}`);
+  if (blocked || changed.length > 0) throw new Error(`the script set a card or password field. ${HANDOFF_REQUIRED}`);
+  if (scriptError) throw scriptError;
 }
 
 async function waitForCart(recorder: Recorder, record: StepRecord, options: PlayOptions): Promise<void> {

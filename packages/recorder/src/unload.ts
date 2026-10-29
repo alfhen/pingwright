@@ -8,6 +8,7 @@ export interface UnloadSendPayload {
   resourceType: 'ping' | 'fetch';
   postData: string | null;
   frameUrl: string;
+  queuedAt: number;
 }
 
 /**
@@ -46,6 +47,7 @@ export const unloadInitScript = `(() => {
       resourceType,
       postData,
       frameUrl: location.href,
+      queuedAt: Date.now(),
     };
     save([...load(), entry]);
     deliver(entry);
