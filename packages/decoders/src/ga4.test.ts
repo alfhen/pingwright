@@ -115,6 +115,23 @@ test('gcd with defaults and updates', () => {
   });
 });
 
+test('gcd with five letters, as gtag sends it', () => {
+  const [granted] = decodeRequest(collect(`${BASE}&en=purchase&gcd=13r3r3r2r5l1`));
+  expect(granted?.consent).toMatchObject({
+    ads: 'granted',
+    analytics: 'granted',
+    adUserData: 'granted',
+    adPersonalization: 'granted',
+  });
+  const [denied] = decodeRequest(collect(`${BASE}&en=purchase&gcd=13p3p3p2p5l1`));
+  expect(denied?.consent).toMatchObject({
+    ads: 'denied',
+    analytics: 'denied',
+    adUserData: 'denied',
+    adPersonalization: 'denied',
+  });
+});
+
 test('gcs wins over gcd for ads and analytics', () => {
   const [hit] = decodeRequest(collect(`${BASE}&en=x&gcs=G100&gcd=13r3r3r3r5`));
   expect(hit?.consent).toMatchObject({ ads: 'denied', analytics: 'denied', adUserData: 'granted' });
