@@ -351,10 +351,17 @@ function pathOf(url: string): string {
 // Content-addressed assets are named /<sha256>.<ext>. That name cannot be told apart from a hashed id used as a
 // pixel file name (design §13), so only that exact segment shape is skipped; the rest of the path is still scanned.
 const ASSET_TYPES = new Set(['image', 'script', 'stylesheet', 'font', 'media']);
-const HASH_FILE_SEGMENT = /\/[0-9a-f]{64}\.[a-z0-9]{1,5}(?=$|[/?#])/gi;
+const HASH_FILE_SEGMENT = /\/[0-9a-f]{64}\.[a-z0-9]{1,5}(?=$|\/)/gi;
 
 function scannedUrl(request: Request): string {
-  return ASSET_TYPES.has(request.resourceType) ? request.url.replace(HASH_FILE_SEGMENT, '/') : request.url;
+  if (!ASSET_TYPES.has(request.resourceType)) return request.url;
+  try {
+    const url = new URL(request.url);
+    url.pathname = url.pathname.replace(HASH_FILE_SEGMENT, '/');
+    return url.href;
+  } catch {
+    return request.url;
+  }
 }
 
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
