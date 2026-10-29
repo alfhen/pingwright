@@ -66,7 +66,7 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
    - Acceptance: synthetic fixtures for init, pagevisit, addtocart and checkout, and a Pinterest rule that fails in an e2e run.
 
 4. **Stub known tracker hosts that have no decoder.** In 0.1, `stub` mode lets every vendor without a decoder through. The field test showed this with Pinterest: real hits reached it, and no rule could name it. A decoder fixes one vendor at a time. This item fixes the leak for all of them.
-   - In `stub` mode, the recorder also stubs data-carrying requests that are not script, stylesheet, font or document loads, to hosts on a list of known tracker hosts. The list is curated in the repo under MIT, with a source link per entry. DuckDuckGo Tracker Radar (design §16) is CC BY-NC-SA 4.0, so Pingwright can't ship it, but a user can load a local copy as an extra list. Library loads still pass, so vendor scripts run.
+   - In `stub` mode, the recorder also stubs data-carrying requests that are not script, stylesheet, font or document loads, to hosts on a list of known tracker hosts. The list is curated in the repo under MIT, with a source link per entry. DuckDuckGo Tracker Radar (design §16) is CC BY-NC-SA 4.0, so Pingwright can't ship it or derive entries from it. Library loads still pass, so vendor scripts run.
    - These requests are recorded with `outcome: stubbed` and the tracker's name, even with no decoder.
    - A host-based rule can name them, for example `{ host: ct.pinterest.com, before: consent }`.
    - Acceptance: a fixture page sends a pixel request to a listed tracker host that has no decoder. The request is `stubbed`, a host rule matches it, and its script load still passes.

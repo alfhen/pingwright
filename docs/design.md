@@ -361,7 +361,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 ## 15. Milestones
 
 1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output.
-2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
+2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. Withdrawal epochs and the field-test fixes ship first, in 0.1.0. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
 5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
@@ -397,7 +397,7 @@ Where the code in 0.1 differs from the design above:
 | --- | --- |
 | [EDPS website-evidence-collector](https://github.com/EU-EDPS/website-evidence-collector) | Open source. Records cookies and beacons, including before consent. Pingwright adds vendor decoding, expectations, diffs and tag reports. |
 | [DuckDuckGo autoconsent](https://github.com/duckduckgo/autoconsent) | Used by Pingwright for banners. |
-| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | A source for classifying unknown destinations. Its data is CC BY-NC-SA 4.0, so Pingwright does not ship it. A user can load a local copy as an extra tracker list. |
+| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | A source for classifying unknown destinations. Its data is CC BY-NC-SA 4.0 (non-commercial), so Pingwright neither ships it nor derives entries from it. |
 | Playwright MCP | Gives agents raw browser and network access. Pingwright adds decoding and assertions on top. |
 | Snowplow Micro | The same idea for Snowplow trackers only. |
 | ObservePoint, DataTrue, Trackingplan | Commercial auditing and monitoring. |
