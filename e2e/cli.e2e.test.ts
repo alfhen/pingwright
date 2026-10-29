@@ -154,6 +154,9 @@ test('a mustNot meta before consent rule fails on the fixture pixel', async () =
 test('usage errors exit 2', async () => {
   expect((await runCli(['run'])).code).toBe(2);
   expect((await runCli(['run', scenario('undecided')])).stderr).toContain('--site is required');
+  const undeclared = await runCli(['run', scenario('undecided'), '--site', site.url, '--var', 'nope=1']);
+  expect(undeclared.code).toBe(2);
+  expect(undeclared.stderr).toContain('not declared');
   expect((await runCli(['run', 'missing.yml', '--site', site.url])).code).toBe(2);
 });
 
