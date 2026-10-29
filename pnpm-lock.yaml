@@ -17,6 +17,9 @@ importers:
       playwright:
         specifier: 1.64.1
         version: 1.64.1
+      tldts:
+        specifier: 7.4.18
+        version: 7.4.18
       yaml:
         specifier: 2.9.1
         version: 2.9.1
@@ -111,6 +114,9 @@ importers:
       playwright:
         specifier: 1.64.1
         version: 1.64.1
+      tldts:
+        specifier: 7.4.18
+        version: 7.4.18
     devDependencies:
       '@pingwright/fixture-site':
         specifier: workspace:*
@@ -1052,6 +1058,10 @@ packages:
 
   tldts-experimental@7.4.18:
     resolution: {integrity: sha512-IErxVvjgDme6GfcjahlKkVpjgrtvOIzUs8oSc9vftTjFen8/R+oKlBlJ1jIY/ffVo/eYAZVzf3he/aBC304PyQ==}
+
+  tldts@7.4.18:
+    resolution: {integrity: sha512-somxA8xKAUzlAxl0TX/jMSYIbRNFIVGnI96pVGJPeMc5BsHmfVXn6mOJT6U++ELnl04eGfzpfcEuZe8WiASkXg==}
+    hasBin: true
 
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
@@ -2032,6 +2042,10 @@ snapshots:
   tldts-core@7.4.18: {}
 
   tldts-experimental@7.4.18:
+    dependencies:
+      tldts-core: 7.4.18
+
+  tldts@7.4.18:
     dependencies:
       tldts-core: 7.4.18
 

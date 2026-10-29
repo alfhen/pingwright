@@ -52,6 +52,8 @@ export interface RecorderOptions {
   /** The site under test. Requests to other hosts can be flagged as unknown destinations. */
   site: string;
   scenario?: string;
+  /** Hosts or `*.domain` wildcards treated as first party besides the site's registrable domain. */
+  firstPartyHosts?: string[];
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
@@ -382,6 +384,7 @@ export class Recorder {
       runId: this.runId,
       networkMode: this.options.networkMode,
       siteUrl: this.options.site,
+      firstPartyHosts: this.options.firstPartyHosts,
       requests,
       hits,
       routedRequestIds: this.routed,

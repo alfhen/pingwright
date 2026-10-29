@@ -1,4 +1,4 @@
-import { parseCli, UsageError, USAGE } from './args.ts';
+import { parseCli, RUN_USAGE, UsageError, USAGE } from './args.ts';
 import { installBrowser } from './install-browser.ts';
 import { runCommand, type Io } from './run.ts';
 import { readVersion } from './version.ts';
@@ -17,7 +17,7 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         io.stdout(`${readVersion()}\n`);
         return 0;
       case 'help':
-        io.stdout(USAGE);
+        io.stdout(command.topic === 'run' ? RUN_USAGE : USAGE);
         return 0;
       case 'install-browser':
         return (await installBrowser()) === 0 ? 0 : 2;

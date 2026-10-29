@@ -181,6 +181,7 @@ export interface Result {
 
 export type FlagKind =
   | 'unknownDestination'
+  | 'firstPartySubdomain'
   | 'possibleRealData'
   | 'sandboxPageUrl'
   | 'stubBypass'

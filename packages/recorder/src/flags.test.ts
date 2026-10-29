@@ -1,6 +1,6 @@
 import { newId, type Hit, type Request } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { buildFlags, isUnknownDestination } from './flags.ts';
+import { buildFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
 
 function req(url: string, over: Partial<Request> = {}): Request {
   return {
@@ -98,4 +98,53 @@ test('live mode never flags stubBypass', () => {
 
 test('an unrouted library load is not a stubBypass', () => {
   expect(bypassFlags(req('https://connect.facebook.net/en_US/fbevents.js', { resourceType: 'script' }), 'stub')).toEqual([]);
+});
+
+const data = (host: string) => req(`https://${host}/p?x=1`);
+const classify = (host: string, site: string, firstPartyHosts: string[] = []) => {
+  const scope = { siteHost: site, firstPartyHosts };
+  return isUnknownDestination(data(host), scope) ? 'unknown' : isFirstPartySubdomain(data(host), scope) ? 'subdomain' : 'none';
+};
+
+test.each([
+  ['the exact site host', 'www.shop.example.com', 'www.shop.example.com', 'none'],
+  ['a sibling subdomain', 'sgtm.shop.example.com', 'www.shop.example.com', 'subdomain'],
+  ['the apex of the site', 'shop.example.com', 'www.shop.example.com', 'subdomain'],
+  ['another registrable domain', 'tracker.example.net', 'www.shop.example.com', 'unknown'],
+  ['a lookalike suffix', 'shop.example.com.evil.net', 'www.shop.example.com', 'unknown'],
+  ['a co.uk subdomain', 'cdn.shop.co.uk', 'www.shop.co.uk', 'subdomain'],
+  ['another site under co.uk', 'other.co.uk', 'www.shop.co.uk', 'unknown'],
+  ['a private-suffix neighbour', 'other.github.io', 'me.github.io', 'unknown'],
+  ['an IP host other than the site', '127.0.0.1', 'localhost', 'unknown'],
+  ['another IP', '10.0.0.2', '10.0.0.1', 'unknown'],
+  ['a localhost subdomain', 'a.localhost', 'localhost', 'unknown'],
+])('first party: %s', (_name, host, site, expected) => {
+  expect(classify(host, site)).toBe(expected);
+});
+
+test('firstPartyHosts: exact hosts and wildcards are first party and still visible', () => {
+  const hosts = ['i.guim.co.uk', '*.shopifycdn.com'];
+  expect(classify('i.guim.co.uk', 'www.shop.example.com', hosts)).toBe('subdomain');
+  expect(classify('img.shopifycdn.com', 'www.shop.example.com', hosts)).toBe('subdomain');
+  expect(classify('a.b.shopifycdn.com', 'www.shop.example.com', hosts)).toBe('subdomain');
+  expect(classify('shopifycdn.com', 'www.shop.example.com', hosts)).toBe('unknown');
+  expect(classify('x.guim.co.uk', 'www.shop.example.com', hosts)).toBe('unknown');
+});
+
+test('a first-party subdomain request becomes firstPartySubdomain, not unknownDestination', () => {
+  const request = req('https://sgtm.shop.example.com/collect', { resourceType: 'fetch', method: 'POST' });
+  const flags = buildFlags({
+    runId: request.runId,
+    networkMode: 'stub',
+    siteUrl: 'https://www.shop.example.com/',
+    requests: [request],
+    hits: [],
+    routedRequestIds: new Set([request.id]),
+  });
+  expect(flags.map((f) => [f.kind, f.recordIds[0]])).toEqual([['firstPartySubdomain', request.id]]);
+});
+
+test('first-party subdomain requests that cannot carry data are not flagged', () => {
+  const script = req('https://cdn.shop.example.com/a.js?v=1', { resourceType: 'script' });
+  expect(isFirstPartySubdomain(script, { siteHost: 'www.shop.example.com' })).toBe(false);
 });
