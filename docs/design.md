@@ -374,7 +374,7 @@ Where the code in 0.1 differs from the design above:
 - **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`. The rule for what is flagged is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
-- **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes, with or without a `prepare` script. `pnpm pack` and a tarball also work (`docs/cli.md`).
+- **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes. Only release tags carry a built `dist/`, so install from a tag, not a branch (`docs/release.md`). `pnpm pack` and a tarball also work (`docs/cli.md`).
 - **Consent answers are `accept`, `reject`, `none` and `withdraw`.** Named choices are not supported. Only the Google Consent Mode probe exists; TCF, GPP and Shopify probes are not built.
 - **Network modes are `stub` and `live`.** `server` mode is not built.
 - **Commands are `run`, `install-browser` and `--version`.** `diff`, `report` and the MCP server are not built.

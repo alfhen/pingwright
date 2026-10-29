@@ -62,7 +62,7 @@ npm i -g --install-links github:alfhen/pingwright#v0.1.0-rc.1
 pingwright install-browser
 ```
 
-Node 22 or later. `--install-links` is needed: without it, npm 10 links the global package to a temporary clone that it then deletes. The other option is a tarball: run `pnpm pack` in a checkout and `npm i -g ./pingwright-<version>.tgz`. See [docs/cli.md](docs/cli.md).
+Node 22 or later. `--install-links` is needed: without it, npm 10 links the global package to a temporary clone that it then deletes. Install from a release tag only: tags carry a built `dist/`, branches such as main do not. The other option is a tarball: run `pnpm pack` in a checkout and `npm i -g ./pingwright-<version>.tgz`. See [docs/cli.md](docs/cli.md).
 
 ## Quick start
 

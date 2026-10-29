@@ -3,12 +3,20 @@
 ## Install
 
 ```bash
-pnpm pack                          # in a checkout, after pnpm install
-npm i -g ./pingwright-<version>.tgz
+npm i -g --install-links github:alfhen/pingwright#v<version>
 pingwright install-browser
 ```
 
-To install from git, use `npm i -g --install-links github:alfhen/pingwright#<tag>`. npm runs the `prepare` script, which builds `dist/`. Without `--install-links`, npm 10 links the global package to its temporary clone and then deletes the clone, so the command is left broken. This happens even when the package has no `prepare` script. The tarball above is the other option.
+`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes.
+
+Or build a tarball in a checkout and install that:
+
+```bash
+pnpm install && pnpm build && pnpm pack
+npm i -g ./pingwright-<version>.tgz
+```
+
+Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 `install-browser` runs the Playwright CLI that ships with Pingwright, so the Chromium revision matches.
 
