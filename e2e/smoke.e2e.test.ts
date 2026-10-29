@@ -29,26 +29,29 @@ test('Chromium launches with no flags and never identifies as HeadlessChrome', a
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
 
-  const browser = await chromium.launch({ channel: 'chromium' });
   try {
-    const context = await browser.newContext({ userAgent: chromeUserAgent(browser.version()) });
-    const page = await context.newPage();
-    await page.goto(`http://127.0.0.1:${port}/`);
-    const { ua, brands } = await page.evaluate(() => ({
-      ua: navigator.userAgent,
-      brands: JSON.stringify(
-        (navigator as Navigator & { userAgentData?: { brands: unknown } }).userAgentData?.brands,
-      ),
-    }));
-    const hints = seenClientHints.join(' ');
-    expect(ua).toContain('Chrome/');
-    expect(ua).not.toContain('HeadlessChrome');
-    expect(brands).toContain('Chromium');
-    expect(brands).not.toContain('HeadlessChrome');
-    expect(hints).toContain('Chromium');
-    expect(hints).not.toContain('HeadlessChrome');
+    const browser = await chromium.launch({ channel: 'chromium' });
+    try {
+      const context = await browser.newContext({ userAgent: chromeUserAgent(browser.version()) });
+      const page = await context.newPage();
+      await page.goto(`http://127.0.0.1:${port}/`);
+      const { ua, brands } = await page.evaluate(() => ({
+        ua: navigator.userAgent,
+        brands: JSON.stringify(
+          (navigator as Navigator & { userAgentData?: { brands: unknown } }).userAgentData?.brands,
+        ),
+      }));
+      const hints = seenClientHints.join(' ');
+      expect(ua).toContain('Chrome/');
+      expect(ua).not.toContain('HeadlessChrome');
+      expect(brands).toContain('Chromium');
+      expect(brands).not.toContain('HeadlessChrome');
+      expect(hints).toContain('Chromium');
+      expect(hints).not.toContain('HeadlessChrome');
+    } finally {
+      await browser.close();
+    }
   } finally {
-    await browser.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });
