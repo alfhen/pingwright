@@ -11,6 +11,8 @@ export interface BannerResult {
   result: 'ok' | 'failed' | 'banner not shown';
   /** Epoch milliseconds, taken just before the action is sent, or when the wait ended for `none` and failures. */
   t: number;
+  /** Epoch milliseconds, taken when the action's result arrived. Equals `t` for `none` and failures. */
+  tEnd: number;
 }
 
 export interface ConsentOptions {
@@ -211,6 +213,7 @@ export class ConsentDriver {
     const frames = () => ('frames' in target ? target.frames() : target.pages().flatMap((p) => p.frames()));
     const shownFrame = await this.#waitForBanner(frames, timeoutMs);
     if (!shownFrame) {
+      const now = Date.now();
       const detected = frames().map((f) => this.#frames.get(f)).filter((s) => s?.detected);
       return {
         detected: detected.length > 0,
@@ -218,12 +221,13 @@ export class ConsentDriver {
         cmp: detected[0]?.cmp ?? null,
         action,
         result: 'banner not shown',
-        t: Date.now(),
+        t: now,
+        tEnd: now,
       };
     }
     const state = this.#state(shownFrame);
     const base = { detected: true, shown: true, cmp: state.cmp, action };
-    if (action === 'none') return { ...base, result: 'ok', t: state.shownT ?? Date.now() };
+    if (action === 'none') return { ...base, result: 'ok', t: state.shownT ?? Date.now(), tEnd: state.shownT ?? Date.now() };
 
     const before = state.resultSeq;
     const t = Date.now();
@@ -234,10 +238,10 @@ export class ConsentDriver {
     try {
       await shownFrame.evaluate(`autoconsentReceiveMessage({ type: '${message}' })`);
     } catch {
-      return { ...base, result: 'failed', t };
+      return { ...base, result: 'failed', t, tEnd: t };
     }
     const reported = await this.#waitUntil(() => (state.resultSeq > before ? state.result : undefined), 5000);
-    return { ...base, result: reported ? 'ok' : 'failed', t };
+    return { ...base, result: reported ? 'ok' : 'failed', t, tEnd: Date.now() };
   }
 }
 

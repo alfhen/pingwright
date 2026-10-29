@@ -121,8 +121,8 @@ test('accept, reopen the banner, then reject', async () => {
   const recorded = await pushes(page);
   const epochs = buildEpochs(
     [
-      { t: accepted.t, action: 'accept' },
-      { t: rejected.t, action: 'reject' },
+      { t: accepted.t, tEnd: accepted.tEnd, action: 'accept' },
+      { t: rejected.t, tEnd: rejected.tEnd, action: 'reject' },
     ],
     consentModeChanges(recorded),
     { startT },
@@ -224,5 +224,25 @@ test('a HeadlessChrome user agent gives banner not shown', async () => {
     expect(result).toMatchObject({ shown: false, result: 'banner not shown', action });
   }
   expect(await storedChoice(context)).toBe('accept');
+  await context.close();
+});
+
+test('a multi-step rule starts the epoch at the Consent Mode update, not at the start of the action', async () => {
+  const context = await newContext();
+  await installConsent(context, {
+    ruleFiles: [fileURLToPath(new URL('./slow-rule.json', import.meta.url))],
+    fixtureRules: false,
+  });
+  const page = await context.newPage();
+  const startT = Date.now();
+  await page.goto(site.url);
+  const accepted = await answerBanner(page, 'accept');
+  expect(accepted.result).toBe('ok');
+  const recorded = await pushes(page);
+  const update = consentModeChanges(recorded).find((c) => c.command === 'update')!;
+  expect(update.t - accepted.t).toBeGreaterThan(700);
+  const banner = { t: accepted.t, tEnd: accepted.tEnd, action: 'accept' } as const;
+  const granted = buildEpochs([banner], consentModeChanges(recorded), { startT }).find((e) => e.label === 'granted')!;
+  expect(Math.abs(granted.startT - update.t)).toBeLessThan(100);
   await context.close();
 });

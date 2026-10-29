@@ -4,7 +4,10 @@ import { unknownConsent, type ConsentModeChange } from './consent-mode.ts';
 export type EpochLabel = 'undecided' | 'granted' | 'denied' | 'mixed';
 
 export interface BannerEvent {
+  /** When the action started. */
   t: number;
+  /** When the action finished. An update between `t` and `tEnd` starts the epoch at the update. */
+  tEnd?: number;
   action: 'accept' | 'reject';
 }
 
@@ -63,10 +66,11 @@ function mergeChanges(
     const i = closestBanner(unpaired, update.t, pairWindowMs, leadWindowMs);
     const banner = i >= 0 ? unpaired.splice(i, 1)[0] : undefined;
     const label = banner ? labelOf(stateOf(banner.action)) : labelOf(update.state);
-    if (banner && banner.t < update.t) changes.push({ t: banner.t, source: 'banner', state: update.state, label, decision: true });
+    const bannerT = banner ? (banner.tEnd ?? banner.t) : 0;
+    if (banner && bannerT < update.t) changes.push({ t: bannerT, source: 'banner', state: update.state, label, decision: true });
     else changes.push({ t: update.t, source: 'consentMode', state: update.state, label, decision: banner !== undefined });
   }
-  for (const b of unpaired) changes.push({ t: b.t, source: 'banner', state: stateOf(b.action), label: labelOf(stateOf(b.action)), decision: true });
+  for (const b of unpaired) changes.push({ t: b.tEnd ?? b.t, source: 'banner', state: stateOf(b.action), label: labelOf(stateOf(b.action)), decision: true });
   return changes.sort((a, b) => a.t - b.t);
 }
 
@@ -82,8 +86,9 @@ export function buildEpochs(
   options: EpochOptions,
 ): EpochDraft[] {
   const sorted = [...modeChanges].sort((a, b) => a.t - b.t);
-  const initial = sorted.find((c) => c.command === 'default')?.state ?? unknownConsent;
   const updates = sorted.filter((c) => c.command === 'update');
+  const firstDecisionT = Math.min(updates[0]?.t ?? Infinity, ...banners.map((b) => b.t));
+  const initial = sorted.findLast((c) => c.command === 'default' && c.t < firstDecisionT)?.state ?? unknownConsent;
   const epochs: EpochDraft[] = [
     { startT: options.startT, endT: null, source: 'start', state: initial, label: 'undecided' },
   ];

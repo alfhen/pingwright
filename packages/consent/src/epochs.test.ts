@@ -66,6 +66,26 @@ describe('buildEpochs', () => {
     ]);
   });
 
+  test('an update during a multi-step action starts the epoch at the update', () => {
+    const modes = consentModeChanges([push(10, 'default', denied), push(1900, 'update', granted)]);
+    const epochs = buildEpochs([{ t: 1100, tEnd: 1905, action: 'accept' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT, e.source])).toEqual([
+      ['undecided', 0, 'start'],
+      ['granted', 1900, 'consentMode'],
+    ]);
+  });
+
+  test('split defaults and an all-denied load-time update give one undecided epoch', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', { ad_storage: 'denied', analytics_storage: 'denied' }),
+      push(11, 'default', { ad_user_data: 'denied', ad_personalization: 'denied' }),
+      push(300, 'update', denied),
+    ]);
+    const epochs = buildEpochs([], modes, { startT: 0 });
+    expect(epochs.map((e) => e.label)).toEqual(['undecided']);
+    expect(epochs[0]?.state.adUserData).toBe('denied');
+  });
+
   test('a load-time update repeating the default adds no epoch', () => {
     const modes = consentModeChanges([push(10, 'default', denied), push(100, 'update', denied)]);
     const epochs = buildEpochs([], modes, { startT: 0 });
