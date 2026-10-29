@@ -51,12 +51,19 @@ jobs:
           npm i -g --prefix "$tmp" ./pingwright-*.tgz
           "$tmp/bin/pingwright" --version
           echo "PW_BIN=$tmp/bin/pingwright" >> "$GITHUB_ENV"
-      - name: Install from git
-        # --install-links: with npm 10, a plain global git install leaves a dangling link when the package has a prepare script.
+      - name: Build a release commit
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          clone=$(mktemp -d)
+          git clone -q "$GITHUB_WORKSPACE" "$clone"
+          (cd "$clone" && scripts/release.sh --no-tag "$version")
+          echo "RELEASE_CLONE=$clone" >> "$GITHUB_ENV"
+      - name: Install from the release commit
         run: |
           tmp2=$(mktemp -d)
-          npm i -g --install-links --prefix "$tmp2" "git+file://$GITHUB_WORKSPACE"
+          npm i -g --install-links --prefix "$tmp2" "git+file://$RELEASE_CLONE#HEAD"
           "$tmp2/bin/pingwright" --version
+          echo "GIT_BIN=$tmp2/bin/pingwright" >> "$GITHUB_ENV"
       - run: $PW_BIN install-browser
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
@@ -67,19 +74,21 @@ jobs:
           pnpm fixture > fixture.log 2>&1 &
           for i in $(seq 1 30); do grep -q '^shop:' fixture.log && break; sleep 1; done
           url=$(sed -n 's/^shop: *//p' fixture.log)
-          set +e
-          "$PW_BIN" run e2e/scenarios/reject.yml --site "$url" --out "$RUNNER_TEMP/runs" --json > summary.json
-          code=$?
-          set -e
+          for bin in "$PW_BIN" "$GIT_BIN"; do
+            set +e
+            "$bin" run e2e/scenarios/reject.yml --site "$url" --out "$RUNNER_TEMP/runs" --json > summary.json
+            code=$?
+            set -e
+            # The fixture's sandboxed pixel makes the built-in sandbox check fail, so exit 1 is expected.
+            # The other expectations must pass, which shows the packaged CLI recorded and decoded hits.
+            test "$code" = 1
+            node -e '
+              const s = JSON.parse(require("fs").readFileSync("summary.json", "utf8"));
+              const failed = s.results.filter((r) => !r.pass).map((r) => r.expectation);
+              const ok = JSON.stringify(failed) === JSON.stringify(["builtin: sandboxPageUrl"])
+                && s.hits.ga4 && s.hits.ga4.add_to_cart > 0 && s.hits.meta
+                && require("fs").existsSync(s.path);
+              if (!ok) { console.error(JSON.stringify(s, null, 2)); process.exit(1); }
+            '
+          done
           kill %1
-          # The fixture's sandboxed pixel makes the built-in sandbox check fail, so exit 1 is expected.
-          # The other expectations must pass, which shows the packaged CLI recorded and decoded hits.
-          test "$code" = 1
-          node -e '
-            const s = JSON.parse(require("fs").readFileSync("summary.json", "utf8"));
-            const failed = s.results.filter((r) => !r.pass).map((r) => r.expectation);
-            const ok = JSON.stringify(failed) === JSON.stringify(["builtin: sandboxPageUrl"])
-              && s.hits.ga4 && s.hits.ga4.add_to_cart > 0 && s.hits.meta
-              && require("fs").existsSync(s.path);
-            if (!ok) { console.error(JSON.stringify(s, null, 2)); process.exit(1); }
-          '
