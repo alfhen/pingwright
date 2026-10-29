@@ -83,11 +83,13 @@ const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
 
 function tryUrlDecode(text: string): string | undefined {
   if (!/%[0-9a-f]{2}/i.test(text)) return undefined;
-  try {
-    return decodeURIComponent(text);
-  } catch {
-    return undefined;
-  }
+  return text.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run;
+    }
+  });
 }
 
 // Random bytes seldom decode to mostly printable text, so this keeps ULIDs and hashes out.
@@ -127,7 +129,12 @@ function ownValues(identity: Identity) {
     identity.zip,
     identity.country,
   ];
-  for (const field of fields) hashes.add(sha256(field.trim().toLowerCase()).hex);
+  // Vendors such as Meta strip spaces and punctuation before hashing names and cities.
+  for (const field of fields) {
+    const lower = field.trim().toLowerCase();
+    hashes.add(sha256(lower).hex);
+    hashes.add(sha256(lower.replace(/[^\p{L}\p{N}]/gu, '')).hex);
+  }
   return { email, phoneDigits: phone.slice(1), hashes };
 }
 

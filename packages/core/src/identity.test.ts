@@ -97,4 +97,21 @@ describe('scan', () => {
     ].join('&');
     expect(scan(text, id)).toEqual([]);
   });
+
+  it('finds an encoded foreign email next to a stray percent sign', () => {
+    const id = createIdentity(42);
+    const found = scan('note=10%&em=jane%40real-shop.dk', id);
+    expect(found).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
+  });
+
+  it('does not flag Meta-normalised own name and city hashes across seeds', () => {
+    const strip = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (let seed = 0; seed < 200; seed++) {
+      const id = createIdentity(seed);
+      const text = [id.firstName, id.lastName, id.city, id.zip, id.country]
+        .map((v) => sha256(strip(v)).hex)
+        .join('&');
+      expect(scan(text, id), `seed ${seed}`).toEqual([]);
+    }
+  });
 });
