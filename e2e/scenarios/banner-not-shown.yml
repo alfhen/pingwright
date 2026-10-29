@@ -1,0 +1,4 @@
+start: /
+steps:
+  - consent: none
+options: { seed: 1, consentTimeout: 2s, allowUnknownDestination: true }

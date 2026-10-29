@@ -1,0 +1,12 @@
+start: /products/fake-tee
+steps:
+  - consent: accept
+  - addToCart: "#add-to-cart"
+  - wait: 8s
+expect:
+  must:
+    - { vendor: ga4, event: add_to_cart, consent.analytics: granted, in: epoch(granted) }
+    - { vendor: meta, event: AddToCart, in: epoch(granted) }
+  mustNot:
+    - { vendor: ga4, event: add_to_cart, consent.analytics: denied }
+options: { seed: 1, allowUnknownDestination: true }
