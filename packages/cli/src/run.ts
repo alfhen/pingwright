@@ -34,6 +34,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io.stderr(`${args.scenario} is not a valid scenario:\n${error.issues.map((i) => `  ${i}`).join('\n')}\n`);
     return 2;
   }
+  for (const warning of parsed.warnings) io.stderr(`Warning: ${warning}\n`);
   parsed.vars = { ...parsed.vars, ...args.vars };
 
   const networkMode = args.network ?? parsed.options.network ?? 'stub';

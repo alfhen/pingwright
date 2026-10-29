@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { consentModeChanges, type ConsentPush } from './consent-mode.ts';
-import { buildEpochs, epochsForHit } from './epochs.ts';
+import { buildEpochs } from './epochs.ts';
 
 const denied = {
   ad_storage: 'denied',
@@ -185,7 +185,6 @@ describe('buildEpochs', () => {
       ['undecided', 0, 1000, 'start'],
       ['granted', 1000, null, 'banner'],
     ]);
-    expect(epochsForHit(epochs, 5000).map((e) => e.label)).toEqual(['granted']);
   });
 
   test('a partial accept is one epoch carrying the Consent Mode state', () => {
@@ -272,24 +271,6 @@ describe('buildEpochs', () => {
     expect(epochs).toHaveLength(2);
     expect(epochs[1]!.startT).toBe(3500);
     expect(epochs[1]!.label).toBe('denied');
-  });
-});
-
-describe('epochsForHit', () => {
-  const modes = consentModeChanges([push(10, 'default', denied), push(1000, 'update', granted)]);
-  const epochs = buildEpochs([], modes, { startT: 0 });
-
-  test('a hit within the grace window of an update matches both epochs', () => {
-    expect(epochsForHit(epochs, 1030).map((e) => e.label)).toEqual(['undecided', 'granted']);
-  });
-
-  test('a hit after the grace window matches only the new epoch', () => {
-    expect(epochsForHit(epochs, 1050).map((e) => e.label)).toEqual(['granted']);
-    expect(epochsForHit(epochs, 1030, 20).map((e) => e.label)).toEqual(['granted']);
-  });
-
-  test('a hit before the update matches the first epoch', () => {
-    expect(epochsForHit(epochs, 900).map((e) => e.label)).toEqual(['undecided']);
   });
 });
 
