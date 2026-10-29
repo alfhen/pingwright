@@ -84,7 +84,7 @@ Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the g
 4. `pingwright run scenario.yml --site https://staging.example.com`
 5. Read the summary, and the full record in `runs/run_<id>.jsonl`.
 
-`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys in 0.1 are `ga4`, `google-ads`, `meta` and `sgtm`. A misspelt or unsupported vendor matches nothing, so a `mustNot` rule on it passes.
+`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys in 0.1 are `ga4`, `google-ads`, `meta` and `sgtm`. A scenario that names any other vendor is rejected when it is parsed.
 
 Stub mode is the default: known collection endpoints are recorded and answered locally. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run unless the scenario sets `options: { allowUnknownDestination: true }`. Any host other than the exact `--site` host counts as third party, including `www` and other subdomains and CDN images with query strings, so a first run on a real site usually flags many requests. The example above allows them, and the summary still lists them. A request sent while a sandboxed `srcdoc` iframe is loading can escape stubbing and recording (see [design §5.3](docs/design.md)). Use `--network live` to let everything through. In 0.1, Pingwright decodes GA4, Google Ads, Meta and Stape traffic. Hits to other vendors, such as Pinterest, Microsoft UET or TikTok, are not stubbed: they pass through and can only show up as `unknownDestination` flags.
 

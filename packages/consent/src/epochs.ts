@@ -22,7 +22,7 @@ export interface EpochOptions {
   leadWindowMs?: number;
 }
 
-export const DEFAULT_GRACE_MS = 50;
+export const DEFAULT_LEAD_WINDOW_MS = 50;
 const DEFAULT_PAIR_WINDOW_MS = 2000;
 
 export function labelOf(state: ConsentState): EpochLabel {
@@ -103,7 +103,7 @@ export function buildEpochs(
   const epochs: EpochDraft[] = [
     { startT: options.startT, endT: null, source: 'start', state: initial, label: 'undecided' },
   ];
-  for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS, options.leadWindowMs ?? DEFAULT_GRACE_MS)) {
+  for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS, options.leadWindowMs ?? DEFAULT_LEAD_WINDOW_MS)) {
     const current = epochs[epochs.length - 1]!;
     const label = change.label;
     if (current.label === 'undecided' && !change.decision && !Object.values(change.state).includes('granted')) {
@@ -117,16 +117,4 @@ export function buildEpochs(
     epochs.push({ startT: change.t, endT: null, source: change.source, state: change.state, label });
   }
   return epochs;
-}
-
-/**
- * The epochs a non-Google hit may be judged by. A hit within the grace window after an epoch
- * starts also matches the epoch before it, because tags can fire on the update event itself.
- */
-export function epochsForHit(epochs: readonly EpochDraft[], t: number, graceMs = DEFAULT_GRACE_MS): EpochDraft[] {
-  const i = epochs.findLastIndex((e) => e.startT <= t);
-  if (i < 0) return [];
-  const found = [epochs[i]!];
-  if (i > 0 && t - epochs[i]!.startT < graceMs) found.unshift(epochs[i - 1]!);
-  return found;
 }

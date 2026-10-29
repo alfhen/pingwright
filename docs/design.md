@@ -84,7 +84,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 
 `consent` on a `Hit` is normalised to `{analytics, ads, adUserData, adPersonalization}`, each `granted`, `denied` or `unknown`, plus the raw vendor value. Only Google hits carry consent in the hit itself. For other vendors, every value is `unknown`, and expectations fall back to the consent epoch the hit falls in.
 
-`ids` records whether an identifier was present (`user_id`, `client_id`, hashed email, click IDs), and for hashed identity fields, whether it matches the run's fake identity (§13).
+`ids` records whether an identifier was present (`user_id`, `client_id`, hashed email, click IDs), and for hashed identity fields, whether it matches the run's fake identity (§13). `HitIds` has an optional `hashes[name]: { present, matchesIdentity }` shape for hashed identity fields. The 0.1 decoders still report hashed fields as presence booleans.
 
 A `Hit` links to a `TagReport` only as a **probable** link: same `gtmUniqueEventId` where available, otherwise the same event within a short time window. Links carry `confidence: probable`.
 

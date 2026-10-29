@@ -34,6 +34,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io.stderr(`${args.scenario} is not a valid scenario:\n${error.issues.map((i) => `  ${i}`).join('\n')}\n`);
     return 2;
   }
+  for (const warning of parsed.warnings) io.stderr(`Warning: ${warning}\n`);
   const undeclared = Object.keys(args.vars).filter((name) => !(name in parsed.vars));
   if (undeclared.length) {
     io.stderr(`--var ${undeclared.join(', ')} not declared in the scenario's vars. --var only overrides declared variables.\n`);
