@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRun, type Hit, type Request, type RunRecords } from '@pingwright/core';
-import { decoders, isCollectionEndpoint, isSandboxPageUrl } from '@pingwright/decoders';
+import { isCollectionEndpoint, isSandboxPageUrl } from '@pingwright/decoders';
 import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { recordVisit, type RunResult } from '../../src/index.ts';
@@ -33,7 +33,6 @@ afterAll(async () => {
 });
 
 const url = (r: Request) => new URL(r.url);
-const hasDecoder = (name: string) => decoders.some((d) => d.name === name);
 const isMetaTr = (r: Request) => /(^|\.)facebook\.com$/.test(url(r).hostname) && /^\/tr\/?$/.test(url(r).pathname);
 const isAdsCollect = (r: Request) =>
   /(^|\.)(googleadservices|doubleclick|googlesyndication)\.com$|^(www\.)?google\.com$/.test(url(r).hostname) &&
@@ -44,6 +43,11 @@ describe('stub mode on the fixture site', () => {
     const collection = records.requests.filter(isCollectionEndpoint);
     expect(collection.length).toBeGreaterThanOrEqual(2);
     expect(collection.filter((r) => r.outcome === 'passed')).toEqual([]);
+  });
+
+  test('no request to a known vendor collection path is passed or failed', () => {
+    const vendor = records.requests.filter((r) => isCollectionEndpoint(r) || isMetaTr(r) || isAdsCollect(r));
+    expect(vendor.filter((r) => r.outcome === 'passed' || r.outcome === 'failed')).toEqual([]);
   });
 
   test('GA4 collection requests are stubbed and answered locally', () => {
@@ -60,9 +64,8 @@ describe('stub mode on the fixture site', () => {
     const ads = records.requests.filter(isAdsCollect);
     expect(meta.length).toBeGreaterThan(0);
     expect(ads.length).toBeGreaterThan(0);
-    // The decoders may not be in the registry yet. Without them these requests cannot be recognised as collection endpoints.
-    if (hasDecoder('meta')) expect(meta.filter((r) => r.outcome === 'passed')).toEqual([]);
-    if (hasDecoder('google-ads')) expect(ads.filter((r) => r.outcome === 'passed')).toEqual([]);
+    expect(meta.filter((r) => r.outcome !== 'stubbed')).toEqual([]);
+    expect(ads.filter((r) => r.outcome !== 'stubbed')).toEqual([]);
   });
 
   test('scripts and pages load normally', () => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { stubResponse } from './stub.ts';
+import { isKnownVendorCollection, stubResponse } from './stub.ts';
 
 test('fetch, xhr and ping get 204 with CORS that echoes the origin and allows credentials', () => {
   for (const resourceType of ['fetch', 'xhr', 'ping']) {
@@ -29,4 +29,17 @@ test('requested headers are allowed', () => {
     headers: { origin: 'https://a.example.com', 'access-control-request-headers': 'content-type' },
   });
   expect(stub.headers['access-control-allow-headers']).toBe('content-type');
+});
+
+test('Meta and Ads collection paths are recognised without decoders', () => {
+  for (const url of [
+    'https://www.facebook.com/tr/?id=100000000000001',
+    'https://pagead2.googlesyndication.com/ccm/collect?x=1',
+    'https://www.googleadservices.com/pagead/conversion/1/',
+    'https://stats.g.doubleclick.net/pagead/viewthroughconversion/1/',
+  ]) {
+    expect(isKnownVendorCollection({ url })).toBe(true);
+  }
+  expect(isKnownVendorCollection({ url: 'https://www.facebook.com/' })).toBe(false);
+  expect(isKnownVendorCollection({ url: 'https://example.com/tr/' })).toBe(false);
 });

@@ -30,7 +30,7 @@ import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags } from './flags.ts';
 import { runSelfTest } from './selftest.ts';
-import { stubResponse } from './stub.ts';
+import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { chromeUserAgent } from './user-agent.ts';
 
 export const PINGWRIGHT_VERSION = '0.0.0';
@@ -223,7 +223,7 @@ export class Recorder {
   private async handleRoute(route: Route): Promise<void> {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
-    if (record && this.options.networkMode === 'stub' && isCollectionEndpoint(record)) {
+    if (record && this.options.networkMode === 'stub' && (isCollectionEndpoint(record) || isKnownVendorCollection(record))) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });

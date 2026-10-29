@@ -29,3 +29,22 @@ export function stubResponse(req: Pick<Request, 'resourceType' | 'headers'>): St
   }
   return { status: 204, headers: cors };
 }
+
+/**
+ * Collection paths of vendors whose decoders may not be registered. Stub mode must never let these leave the
+ * machine, whatever the registry holds.
+ */
+export function isKnownVendorCollection(req: Pick<Request, 'url'>): boolean {
+  let u: URL;
+  try {
+    u = new URL(req.url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname;
+  if (/(^|\.)facebook\.com$/.test(host)) return /^\/tr\/?$/.test(u.pathname);
+  if (/(^|\.)(googleadservices|doubleclick|googlesyndication)\.(com|net)$|^(www\.)?google\.com$/.test(host)) {
+    return /^\/(ccm\/collect|pagead\/)/.test(u.pathname);
+  }
+  return false;
+}
