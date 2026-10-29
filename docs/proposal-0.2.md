@@ -37,16 +37,19 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
 
 1. **GTM override per run, including custom loaders** (moved forward from 0.3, design §8.2).
    - `--gtm-override <file>` takes the JSON in §8.2: container, `gtmAuth`, `gtmPreview`, and optional `expectedTags`.
+   - 0.2 stores `expectedTags` in the record but does not evaluate it. "Did not fire" needs the web tag-firing reporter, which stays in 0.3.
    - The recorder matches the container request at `www.googletagmanager.com/gtm.js`, as §8.2 says. It also matches a configurable loader pattern, so a site that loads GTM through a custom loader can be tested. One option is to replace the loader response with the preview build from `www.googletagmanager.com`. Another is to pass the preview values through the loader, if the loader forwards them **(verify)**. Either option loses what the loader adds beyond fetching the container, and the run record must say so.
-   - The override applies to the run only, and the record stores it as `gtmOverride`.
-   - Acceptance: the fixture site serves two container builds. One run with the override and one without show different hits.
+   - The override applies to the run only, and the record stores it as `gtmOverride`. `gtmAuth` is a credential for the preview build, so the record stores it as `"[redacted]"`. The same rule applies to `gtm_auth` in any recorded request URL. Design §13 adds `gtmAuth` to "Secrets are always redacted".
+   - Acceptance: the fixture site serves two container builds. One run with the override and one without show different hits. This is tested twice: once with a direct `gtm.js` load, and once with a load through a Stape-style custom loader. The record of the loader run states what the loader would have added. No JSONL line contains the `gtmAuth` value.
 
 2. **`pingwright diff <a> <b>`** (design §15, already planned for 0.2).
    - The diff groups hits by consent epoch label, then vendor, then event.
-   - It reports hits that were added or removed, and hits whose consent or IDs changed (for example `gcs` G100 → G111, or `user_id` present → absent).
+   - It pairs hits across the two runs by a match key: epoch label, vendor, event and step label. Inside one key, it pairs hits in time order: the first with the first, the second with the second. An unpaired hit is reported as added or removed.
+   - For each pair, it reports a change in consent (for example `gcs` G100 → G111) or in ID presence (for example `user_id` present → absent).
+   - Pairing by order is a heuristic. A scenario that sends the same event a different number of times in one step can pair the wrong hits. The output says which keys had different counts, so a reader can check them.
    - It also reports changes in flags per host and kind.
    - Text and `--json` output. Exit 0 always. A diff is a report, not a check.
-   - Acceptance: a diff of two fixture runs shows a known added hit and a known consent change.
+   - Acceptance: a diff of two fixture runs shows a known added hit, a known removed hit and a known consent change on a paired hit.
 
 3. **`pinterest` decoder** (design §15, already planned for 0.2).
    - Decodes `ct.pinterest.com/v3/` and `/user/` requests: event, `tid`, page (`ad.loc`), event ID, and hashed `em` presence.
@@ -57,8 +60,17 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
    - #46: decode Stape data-client POST requests (JSON body, event in the query string), and stub them. In 0.1 they reach the real server container.
    - #114: `possibleRealData` must not flag random IDs or hashed client IDs.
    - #112: subdomains of the site are not third party by default.
+   - Acceptance:
+     - #46: a fixture page sends a Stape-style `POST /data` with a JSON body through a custom loader. The run makes a `sgtm` hit with the event name, and the request has `outcome: stubbed`.
+     - #114: a fixture page sends a random 64-character hex ID and a hashed client ID in non-identity fields. `possibleRealData` passes. A SHA-256 of an email that is not the run identity, sent as `em`, still fails it.
+     - #112: a request to a subdomain of `--site` is not flagged as `unknownDestination`. A request to a different registrable domain still is.
 
-5. **Withdrawal epochs** (#119). Label a denied epoch that follows a granted epoch as `withdrawn`, and accept `epoch(withdrawn)` in rules. Withdrawal is where trigger-group setups break.
+5. **Withdrawal epochs** (#119). Withdrawal is where trigger-group setups break.
+   - `withdrawn` is a label, not a new consent state. A denied epoch that follows a granted epoch gets the label `withdrawn`. Its state stays `denied`.
+   - `in: epoch(denied)` keeps its meaning from design §7.3: it matches by state, so it matches withdrawn epochs too.
+   - A new selector, `in: epoch(label=<label>)`, matches by label. `label` is a reserved name, so it can't be mistaken for a consent field such as `analytics`.
+   - `diff` groups by label, so a withdrawn epoch is not compared with a first reject.
+   - Acceptance: in an accept-then-withdraw fixture run, the last epoch has state `denied` and label `withdrawn`. A Meta hit sent after withdrawal fails `mustNot: { vendor: meta, in: epoch(label=withdrawn) }`. The same hit fails `mustNot: { vendor: meta, in: epoch(denied) }`. In a reject-only run, `epoch(label=withdrawn)` matches nothing.
 
 ### 3.2 Should have
 
@@ -94,11 +106,11 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
   1. Run the four scenarios against the published container.
   2. Run them again with `--gtm-override` for a changed workspace.
   3. `pingwright diff` each pair, and read the change per consent state.
-  4. Fail on rules such as "GA4 page_view fires while undecided at G100 with no `user_id`" and "no Meta or Pinterest hit in `epoch(denied)` or `epoch(withdrawn)`".
+  4. Fail on rules such as "GA4 page_view fires while undecided at G100 with no `user_id`" and "no Meta or Pinterest hit in `epoch(denied)`". That rule covers both a reject and a withdrawal.
 - On a real storefront, the built-in checks fail only for real findings.
 
 ## 6. Open questions
 
 - Do Stape custom loaders forward `gtm_auth` and `gtm_preview` to the container request? If they do, the override can keep the loader in place.
-- Should `diff` match hits by event order, or only compare counts per group? Counts are simpler and probably enough for 0.2.
+- Is pairing by time order inside a match key good enough for `diff`, or do some vendors need a stronger key, such as an event ID that stays the same across runs?
 - Is a Pinterest decoder enough, or does 0.2 need a generic decoder for "pixel-style GET with an event parameter", so new vendors become rules without new code?
