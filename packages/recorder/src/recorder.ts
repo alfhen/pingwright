@@ -40,7 +40,7 @@ import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 
-export const PINGWRIGHT_VERSION = '0.0.0';
+export const PINGWRIGHT_VERSION = '0.1.0-rc.1';
 export const MAX_POST_DATA = 64 * 1024;
 
 const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);

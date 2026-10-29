@@ -42,7 +42,7 @@ e2e/                      end-to-end scenarios against the fixture site
 
 `core` is not in the README table. Decoders, recorder, consent and expect all share the record types, so they live in one small package. The README table is updated to match.
 
-Workspace packages are private. The root package `pingwright` bundles them with esbuild into `dist/`. Its runtime dependencies are only external packages (Playwright, autoconsent, yaml, Faker and similar). So `pnpm pack` at the root gives an installable tarball, and `npm i -g --install-links github:alfhen/pingwright#<tag>` works through (npm 10 needs `--install-links` for a global install from the repo) the root `prepare` script.
+Workspace packages are private. The root package `pingwright` bundles them with esbuild into `dist/`. Its runtime dependencies are only external packages (Playwright, autoconsent, yaml, Faker and similar). So `pnpm pack` at the root gives an installable tarball, and `npm i -g --install-links github:alfhen/pingwright#<tag>` works through the root `prepare` script. npm 10 needs `--install-links` for a global install from git, with or without a `prepare` script.
 
 ## Rules for every PR
 
@@ -60,21 +60,21 @@ Arrows show dependencies. PRs in the same wave touch different packages and can 
 
 ### Wave 1
 
-**P01 Workspace scaffold and CI.**
+**P01 Workspace scaffold and CI.** (done, #3)
 Root `package.json`, `pnpm-workspace.yaml`, shared `tsconfig`, ESLint flat config, Vitest config, `.gitignore` (including `.claude/`), empty `core` package with one test. CI workflow: install, lint, typecheck, unit tests, then an e2e job that installs Chromium and runs `pnpm e2e`.
 Acceptance: `pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test && pnpm e2e` passes locally and in CI.
 
 ### Wave 2 (after P01)
 
-**P02 Collector origin verification (§9).** → P01
+**P02 Collector origin verification (§9).** (done, #16) → P01
 A Playwright test, with no Pingwright code yet, that answers `https://collector.pingwright.invalid/` through `context.route` and proves capture from: the page, `sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe, a sandboxed cross-site iframe (out of process), and a worker inside a sandboxed iframe. It also loads a page under a public-looking origin and shows that a sandboxed iframe there still reaches the collector. Updates design §5.2, §9 and §14 with the results.
 Acceptance: the test passes on Chromium 1.64.1 with no browser flags.
 
-**P03 Core records.** → P01
+**P03 Core records.** (done, #11) → P01
 ULID IDs with type prefixes, record types from §4, the shared clock helpers, and a JSONL run store that writes `runs/<id>.jsonl` and reads it back.
 Acceptance: unit tests for ID format and order, clock conversion, and a JSONL round trip.
 
-**P04 Fixture site.** → P01
+**P04 Fixture site.** (done, #21) → P01
 `fixtures/site`: a static shop served on `localhost` at a random port. Two more servers on `127.0.0.1` act as a mock server container and an unknown third-party host. `localhost` and `127.0.0.1` are different sites, so these requests are cross-site. It has:
 - a consent banner with accept, reject and a "cookie settings" link that reopens it. It grants consent itself, without showing, when the user agent contains `HeadlessChrome`.
 - Consent Mode defaults (denied) and updates on choice.
@@ -87,51 +87,51 @@ Acceptance: a smoke e2e that loads each page with raw Playwright, stubs Google a
 
 ### Wave 3
 
-**P05 Decoder interface and GA4.** → P03
+**P05 Decoder interface and GA4.** (done, #25) → P03
 `match`, `decode → Hit[]`, `isCollectionEndpoint`. GA4: `en`, `ep.*`, `epn.*`, `tid`, `cid`, `uid` presence, `dl` as page, batched POST bodies (one event per line), `gcs` and `gcd` normalised to `{analytics, ads, adUserData, adPersonalization}` with raw values kept. Page URL check flags sandbox paths.
 Acceptance: unit tests from synthetic fixture requests, including a three-event batch, `G100`, `G111` and a `gcd` string.
 
-**P06 Fake identity.** → P03
+**P06 Fake identity.** (done, #37) → P03
 Seeded identity with Faker (name, email, phone, address, country), normalisation and SHA-256 forms for email and phone, and a leak scanner that finds emails, phones and hashes in decoded text that do not belong to the identity (`possibleRealData`).
 Acceptance: the same seed gives the same identity; known hashes match; a foreign email inside a base64 value is flagged.
 
 ### Wave 4
 
-**P07 Meta and Google Ads decoders.** → P05
+**P07 Meta and Google Ads decoders.** (done, #43) → P05
 Meta `/tr` GET and POST: `ev`, `id`, `eid`, hashed `ud[*]`. Google Ads: conversion and remarketing pings on googleadservices, doubleclick, googlesyndication and google.com, including `/ccm/collect`.
 Acceptance: unit tests from synthetic fixture requests.
 
-**P08 Stape custom loader and sgtm data client.** → P05
+**P08 Stape custom loader and sgtm data client.** (done, #47) → P05
 Decode `/<id>?<key>=<base64>` to the real path and query, then hand off to the other decoders. Decode `/data` and its base64 `dtdc` payload (event name, `page_location`, `page_hostname`).
 Acceptance: unit tests for `/g/collect`, `/data` and `/gtag/js` disguised paths; `/gtag/js` is not a collection endpoint.
 
-**P09 Recorder capture and network modes.** → P02, P03, P04, P05
+**P09 Recorder capture and network modes.** (done, #55) → P02, P03, P04, P05
 Chromium launch with a normal Chrome user agent. A fresh context per run. Context-level request and response capture into `Request` and `Response` records. `stub` answers decoder collection endpoints with 204 or a 1×1 GIF and records `outcome: stubbed`. `live` passes everything. Unknown third-party destinations are flagged `unknownDestination`. Collector origin route with schema validation and `invalidReport` records. Init script hooks `dataLayer.push` on the shared clock. Startup self-test reports capture coverage. Verifies the stubbing side effects in §5.3 and updates the design doc.
 Acceptance: e2e against the fixture site: no collection request passes in `stub`; the unknown destination is flagged; collector reports are recorded; coverage lists page, iframe and worker.
 
-**P10 Consent package.** → P03, P04
+**P10 Consent package.** (done, #66) → P03, P04
 autoconsent driver for a Playwright context: `accept`, `reject`, `none`. Bundled rules plus extra rules from a file, with a rule for the fixture banner. `none` waits for the banner and fails with "banner not shown" if none appears. Consent Mode probe from recorded dataLayer pushes. Epoch builder on the shared clock with a 50 ms grace window.
 Acceptance: e2e against the fixture banner for accept, reject and none; a `HeadlessChrome` user agent gives "banner not shown"; unit tests for epochs, including accept then withdraw.
 
-**P11 Expectations.** → P03, P05
+**P11 Expectations.** (done, #56) → P03, P05
 Scenario YAML parsing with clear errors. Filters: `vendor`, `event`, `consent.*`, `ids.*`, `page`, `transport`, `host`, `outcome`, `params.*`. Rules: `must`, `mustNot`, `count`, `before: consent`, `in: epoch(<state>)`, `after: <step>`, `identity.hashesMatch`. Built-in checks: `unknownDestination`, sandbox page URL, `possibleRealData`. `Result` records with evidence IDs.
 Acceptance: unit tests on synthetic records for every rule and filter, including `ids.user_id` per consent state.
 
 ### Wave 5
 
-**P12 Steps.** → P06, P09
+**P12 Steps.** (done, #84) → P06, P09
 `visit`, `click`, `fill` (from the identity), `wait`, `addToCart` (selector), `evaluate`, `checkpoint` (cookies), `handoff`, and a `consent` step that calls the consent package. `Step` records. Payment and password fields can be filled only on loopback hosts, which in practice means the fixture site. On any other host they must be `handoff` steps (design §5.4).
 Acceptance: e2e: full fixture checkout through the fake payment form with an explicit delivery country; filling a card field on a non-loopback host fails.
 
 ### Wave 6
 
-**P13 Consent in runs.** → P10, P12
+**P13 Consent in runs.** (done, #92) → P10, P12
 Wire the consent step and epochs into runs. `ConsentEpoch` records, and Google hits judged by their own consent values.
 Acceptance: e2e for undecided, accept, reject and accept then withdraw: epochs, and consent on each hit.
 
 ### Wave 7
 
-**P14 CLI and package.** → P07, P08, P11, P13
+**P14 CLI and package.** (done, #99) → P07, P08, P11, P13
 `pingwright run <scenario> --site <url> [--network stub|live] [--out runs] [--seed n] [--headed] [--autoconsent-rules file]`. Terminal summary, JSONL output, exit code 1 on any failed expectation. Root bundle and `pnpm pack`.
 Acceptance: e2e scenario files in `e2e/scenarios/` for undecided, accept, reject, accept then withdraw, banner not shown, and checkout, run through the CLI. They assert hits, consent per hit, epochs, unknown-destination flagging and `ids.user_id` per consent state. A CI step packs the tarball, installs it into a temp prefix and runs a scenario with it.
 
@@ -142,6 +142,8 @@ README status and quick start. Design doc: every (verify) claim in 0.1 scope res
 Acceptance: docs build nothing; a reviewer checks every 0.1 (verify) claim has a result.
 
 Then tag `v0.1.0-rc.1` on main. No npm publish and no GitHub release.
+
+Extra fix, outside the plan: #76 made the srcdoc iframe test in the recorder stable.
 
 ## (verify) claims
 

@@ -52,7 +52,7 @@ jobs:
           "$tmp/bin/pingwright" --version
           echo "PW_BIN=$tmp/bin/pingwright" >> "$GITHUB_ENV"
       - name: Install from git
-        # --install-links: with npm 10, a plain global git install leaves a dangling link when the package has a prepare script.
+        # --install-links: with npm 10, a plain global git install links to a temporary clone that npm then deletes.
         run: |
           tmp2=$(mktemp -d)
           npm i -g --install-links --prefix "$tmp2" "git+file://$GITHUB_WORKSPACE"

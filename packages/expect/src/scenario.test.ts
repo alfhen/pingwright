@@ -1,6 +1,12 @@
 import { expect, test } from 'vitest';
-import { README_SCENARIO } from './readme-scenario.ts';
+import { README_QUICKSTART_SCENARIO, README_SCENARIO } from './readme-scenario.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';
+
+test('parses the README quick start scenario', () => {
+  const s = parseScenario(README_QUICKSTART_SCENARIO);
+  expect(s.steps[0]).toMatchObject({ kind: 'consent' });
+  expect(s.expect.mustNot[0]).toMatchObject({ before: 'consent' });
+});
 
 function errorOf(text: string): string {
   try {

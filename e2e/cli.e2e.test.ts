@@ -160,5 +160,5 @@ test('usage errors exit 2', async () => {
 test('--version prints the root package version', async () => {
   const r = await runCli(['--version']);
   expect(r.code).toBe(0);
-  expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  expect(r.stdout.trim()).toBe('0.1.0-rc.1');
 });

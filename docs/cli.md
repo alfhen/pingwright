@@ -8,7 +8,7 @@ npm i -g ./pingwright-<version>.tgz
 pingwright install-browser
 ```
 
-To install from git, use `npm i -g --install-links github:alfhen/pingwright#<tag>`. npm runs the `prepare` script, which builds `dist/`. Without `--install-links`, npm 10 leaves a broken link for a global git install of a package that has a `prepare` script.
+To install from git, use `npm i -g --install-links github:alfhen/pingwright#<tag>`. npm runs the `prepare` script, which builds `dist/`. Without `--install-links`, npm 10 links the global package to its temporary clone and then deletes the clone, so the command is left broken. This happens even when the package has no `prepare` script. The tarball above is the other option.
 
 `install-browser` runs the Playwright CLI that ships with Pingwright, so the Chromium revision matches.
 
