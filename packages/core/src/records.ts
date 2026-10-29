@@ -160,6 +160,7 @@ export interface Result {
   expectation: string;
   pass: boolean;
   evidence: string[];
+  message?: string;
 }
 
 export type FlagKind =
