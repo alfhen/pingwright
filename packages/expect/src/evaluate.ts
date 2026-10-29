@@ -186,7 +186,7 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
  */
 function effectiveConsent(hit: Hit, ctx: Context): ConsentState {
   const epoch = epochOf(hit, ctx);
-  const base = epoch && epoch.label !== 'undecided' ? epoch.state : undefined;
+  const base = epoch?.state;
   const own = GOOGLE_VENDORS.has(hit.vendor);
   const pick = (f: ConsentField): ConsentValue => {
     const carried = hit.consent[f];

@@ -369,3 +369,9 @@ test('epoch(denied) judges a non-Google hit by the label when a reject is follow
   const y = 'expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }';
   expect(rule(y, [hit({ vendor: 'meta', t: 2000 }), ...recs]).pass).toBe(false);
 });
+
+test('consent field filters use the state recorded for an undecided epoch', () => {
+  const undecidedDenied: EvalEpoch = { ...epoch(0, null, 'undecided'), state: denied };
+  const q = `expect:\n  must:\n    - { vendor: meta, consent.analytics: denied }`;
+  expect(rule(q, [hit({ vendor: 'meta', t: 500 }), undecidedDenied]).pass).toBe(true);
+});

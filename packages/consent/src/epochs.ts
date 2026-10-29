@@ -26,9 +26,9 @@ export const DEFAULT_GRACE_MS = 50;
 const DEFAULT_PAIR_WINDOW_MS = 2000;
 
 export function labelOf(state: ConsentState): EpochLabel {
-  const values = Object.values(state);
-  if (values.every((v) => v === 'granted')) return 'granted';
-  if (values.every((v) => v === 'denied')) return 'denied';
+  const known = Object.values(state).filter((v) => v !== 'unknown');
+  if (known.length > 0 && known.every((v) => v === 'granted')) return 'granted';
+  if (known.length > 0 && known.every((v) => v === 'denied')) return 'denied';
   return 'mixed';
 }
 
