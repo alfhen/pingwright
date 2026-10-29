@@ -42,7 +42,7 @@ e2e/                      end-to-end scenarios against the fixture site
 
 `core` is not in the README table. Decoders, recorder, consent and expect all share the record types, so they live in one small package. The README table is updated to match.
 
-Workspace packages are private. The root package `pingwright` bundles them with esbuild into `dist/`. Its runtime dependencies are only external packages (Playwright, autoconsent, yaml, Faker and similar). So `pnpm build && pnpm pack` at the root gives an installable tarball, and `npm i -g --install-links github:alfhen/pingwright#<tag>` works from a release tag, which carries a built `dist/` (see `docs/release.md`). npm 10 needs `--install-links` for a global install from git.
+Workspace packages are private. The root package `pingwright` bundles them with esbuild into `dist/`. Its runtime dependencies are only external packages (Playwright, autoconsent, yaml, Faker and similar). So `pnpm install && pnpm build && pnpm pack` at the root gives an installable tarball, and `npm i -g --install-links github:alfhen/pingwright#<tag>` works from a release tag, which carries a built `dist/` (see `docs/release.md`). npm 10 needs `--install-links` for a global install from git.
 
 ## Rules for every PR
 
