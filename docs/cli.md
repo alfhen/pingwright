@@ -3,9 +3,12 @@
 ## Install
 
 ```bash
-npm i -g github:alfhen/pingwright#<tag>
+pnpm pack                          # in a checkout, after pnpm install
+npm i -g ./pingwright-<version>.tgz
 pingwright install-browser
 ```
+
+`npm i github:alfhen/pingwright#<tag>` into a project also works: npm runs the `prepare` script, which builds `dist/`. With npm 10, `npm i -g <git url>` leaves a broken link for any package that has a `prepare` script, so use the tarball for a global install.
 
 `install-browser` runs the Playwright CLI that ships with Pingwright, so the Chromium revision matches.
 
