@@ -27,6 +27,26 @@ function page(path: string): string | undefined {
         fetch('/api?x=1', { method: 'POST', headers: { authorization: 'Bearer secret-token' }, body: 'a'.repeat(100000) });
         new Worker(URL.createObjectURL(new Blob(["fetch('${origin}/from-worker')"], { type: 'text/javascript' })));
       </script>`;
+    case '/worker-collect':
+      return `<script>
+        new Worker(URL.createObjectURL(new Blob(["fetch('${origin}${COLLECT('worker')}', { method: 'POST', body: 'x' })"], { type: 'text/javascript' })));
+      </script>`;
+    case '/redirect':
+      return `<script>fetch('${origin}/redirect-to-collect', { mode: 'no-cors' });</script>`;
+    case '/collector-get':
+      return `<script>new Image().src = 'https://collector.pingwright.invalid/pixel.gif?source=get-pixel';</script>`;
+    case '/frame-consent':
+      return `<script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('consent', 'default', { ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+      </script><iframe src="/frame-consent-inner"></iframe>`;
+    case '/frame-consent-inner':
+      return `<script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('consent', 'update', { ad_storage: 'granted', analytics_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
+      </script>`;
     case '/sw':
       return `<script>navigator.serviceWorker.register('/sw.js');</script>`;
     case '/early-srcdoc': {
@@ -54,6 +74,10 @@ beforeAll(async () => {
     const path = new URL(req.url ?? '/', 'http://x').pathname;
     serverSaw.push(req.url ?? '');
     const html = page(path);
+    if (path === '/redirect-to-collect') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('redirected')}` }).end();
+      return;
+    }
     if (path === '/sw.js') {
       res.setHeader('content-type', 'text/javascript');
       res.end(`self.addEventListener('install', (e) => { e.waitUntil(fetch('http://127.0.0.1:${port}/from-sw')); });`);
@@ -123,6 +147,42 @@ test('authorization is redacted, post data is capped, and dedicated worker reque
   expect(api?.postData).toHaveLength(64 * 1024);
   const worker = records.requests.find((q) => q.url.endsWith('/from-worker'));
   expect(worker?.outcome).toBe('passed');
+});
+
+test('a collection request from a dedicated worker is stubbed and never reaches the server', async () => {
+  const { records } = await visit('/worker-collect', 'stub');
+  const requests = collectionRequests({ records } as RunResult).filter((q) => q.url.includes('en=worker'));
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ outcome: 'stubbed' });
+  expect(serverSaw.filter((u) => u.includes('en=worker'))).toEqual([]);
+  expect(records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+// Playwright routes only the first URL of a redirect chain, so the hop reaches the local server and must be flagged.
+test('a collection request reached by a redirect is flagged stubBypass in stub mode and not in live mode', async () => {
+  const stub = await visit('/redirect', 'stub');
+  const hop = collectionRequests(stub).find((q) => q.url.includes('en=redirected'));
+  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'passed' });
+  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass').flatMap((f) => f.recordIds)).toContain(hop!.id);
+  const live = await visit('/redirect', 'live');
+  expect(live.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+test('a GET to the collector origin is kept as an invalid report', async () => {
+  const { records } = await visit('/collector-get', 'stub');
+  expect(records.invalidReports).toHaveLength(1);
+  expect(records.invalidReports[0]).toMatchObject({ error: 'GET request, reports must be POST' });
+  expect(records.invalidReports[0]!.body).toContain('/pixel.gif?source=get-pixel');
+  expect(records.collectorReports).toEqual([]);
+});
+
+test('a consent update from an iframe is recorded but does not start a consent epoch', async () => {
+  const { records } = await visit('/frame-consent', 'stub');
+  const updates = records.dataLayerEvents.filter((e) => e.isConsentCommand && e.args[1] === 'update');
+  expect(updates).toHaveLength(1);
+  expect(records.consentEpochs.map((e) => e.label)).not.toContain('granted');
+  expect(records.consentEpochs.every((e) => e.state.analytics !== 'granted')).toBe(true);
 });
 
 test('service worker requests are recorded without a frame', async () => {

@@ -2,7 +2,6 @@ import {
   newId,
   nodeNow,
   RunWriter,
-  readRun,
   type CaptureCoverage,
   type Checkpoint,
   type CheckpointCookie,
@@ -35,7 +34,7 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags } from './flags.ts';
-import { runSelfTest } from './selftest.ts';
+import { runSelfTest, SELFTEST_SOURCE_PREFIX } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
@@ -99,6 +98,7 @@ export class Recorder {
   private readonly routed = new Set<string>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
+  private readonly mainFrameEventIds = new Set<string>();
   private readonly collectorReports: (CollectorReport | InvalidReport)[] = [];
   private readonly pending = new Set<Promise<unknown>>();
   private readonly steps: Step[] = [];
@@ -152,9 +152,11 @@ export class Recorder {
       identity: null,
       coverage: selfTest.coverage,
     };
-    await context.exposeBinding(DATALAYER_BINDING, (_source, payload: DataLayerPayload) => {
+    await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);
-      if (event) this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
+      if (!event) return;
+      this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
+      if (source.frame === source.page.mainFrame()) this.mainFrameEventIds.add(event.id);
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
@@ -172,6 +174,8 @@ export class Recorder {
 
   private storeReport(parsed: ParsedReport, body: string, t: number): void {
     if (this.closed) return;
+    // The self-test page keeps sending until it is closed, so a late report can arrive after the handler swap.
+    if (parsed.ok && parsed.source.startsWith(SELFTEST_SOURCE_PREFIX)) return;
     if (parsed.ok) {
       this.collectorReports.push({
         type: 'collectorReport',
@@ -307,7 +311,9 @@ export class Recorder {
   }
 
   private buildConsentEpochs(): ConsentEpoch[] {
-    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(this.dataLayerEvents), { startT: this.run.startedAt });
+    // The page's consent state comes from its main frame. A gtag call in an embedded frame has its own state.
+    const mainFrameEvents = this.dataLayerEvents.filter((e) => this.mainFrameEventIds.has(e.id));
+    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents), { startT: this.run.startedAt });
     return drafts.map((epoch) => ({
       type: 'consentEpoch',
       id: newId('consentEpoch'),
@@ -369,11 +375,28 @@ export class Recorder {
     const hits: Hit[] = requests.flatMap((r) => decodeRequest(r));
     const flags = buildFlags({
       runId: this.runId,
+      networkMode: this.options.networkMode,
       siteUrl: this.options.site,
       requests,
       hits,
       routedRequestIds: this.routed,
     });
+    const consentEpochs = this.buildConsentEpochs();
+    const records: RunRecords = {
+      run: this.run,
+      steps: this.steps,
+      requests,
+      responses: this.responses,
+      hits,
+      dataLayerEvents: this.dataLayerEvents,
+      tagReports: [],
+      consentEpochs,
+      checkpoints: this.checkpoints,
+      results: [],
+      flags,
+      collectorReports: this.collectorReports.filter((r): r is CollectorReport => r.type === 'collectorReport'),
+      invalidReports: this.collectorReports.filter((r): r is InvalidReport => r.type === 'invalidReport'),
+    };
     const writer = await RunWriter.create(this.options.outDir, this.run);
     try {
       for (const record of [
@@ -383,7 +406,7 @@ export class Recorder {
         ...this.responses,
         ...hits,
         ...this.dataLayerEvents,
-        ...this.buildConsentEpochs(),
+        ...consentEpochs,
         ...this.collectorReports,
         ...flags,
       ]) {
@@ -392,7 +415,7 @@ export class Recorder {
     } finally {
       await writer.close();
     }
-    return { path: writer.path, records: await readRun(writer.path) };
+    return { path: writer.path, records };
   }
 }
 
