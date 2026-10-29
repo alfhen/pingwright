@@ -1,0 +1,23 @@
+{
+  "name": "pingwright",
+  "version": "0.0.0",
+  "description": "Agent-first testing for website tracking and consent.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "packageManager": "pnpm@10.34.7",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "e2e": "vitest run --project e2e"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "eslint": "10.12.0",
+    "playwright": "1.64.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.4"
+  }
+}
