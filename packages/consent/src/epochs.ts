@@ -111,7 +111,8 @@ export function buildEpochs(
       continue;
     }
     const sameState = JSON.stringify(current.state) === JSON.stringify(change.state);
-    if (sameState && (current.label === label || (current.label === 'undecided' && !change.decision))) continue;
+    if (!change.decision && sameState) continue;
+    if (sameState && current.label === label) continue;
     current.endT = change.t;
     epochs.push({ startT: change.t, endT: null, source: change.source, state: change.state, label });
   }

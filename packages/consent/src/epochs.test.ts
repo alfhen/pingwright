@@ -193,6 +193,18 @@ describe('buildEpochs', () => {
     expect(epochs[1]?.state).toEqual({ analytics: 'granted', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
   });
 
+  test.each(['accept', 'reject'] as const)('a two-signal %s re-sent outside the window adds no epoch', (action) => {
+    const signals = { ad_storage: action === 'accept' ? 'granted' : 'denied', analytics_storage: action === 'accept' ? 'granted' : 'denied' };
+    const modes = consentModeChanges([
+      push(10, 'default', { ad_storage: 'denied', analytics_storage: 'denied' }),
+      push(1030, 'update', signals),
+      push(8000, 'default', { ad_storage: 'denied', analytics_storage: 'denied' }),
+      push(8001, 'update', signals),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1040, action }], modes, { startT: 0 });
+    expect(epochs.map((e) => e.label)).toEqual(['undecided', action === 'accept' ? 'granted' : 'denied']);
+  });
+
   test('an accept sent as several updates is one epoch with the last state', () => {
     const modes = consentModeChanges([
       push(10, 'default', denied),
