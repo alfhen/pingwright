@@ -129,11 +129,12 @@ Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, 
 
 **Unknown destination rule.** A request is flagged `unknownDestination` when its host is not the site's host, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
 
-**Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js on the fixture site with consent denied (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF, a 204 delayed by 2 seconds and an aborted request:
+**Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js on the fixture site with consent denied (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds. An aborted request is described below.
 
-- GA4 sent each event once, as a `POST` through `fetch` to `/g/collect`. It did not retry on another transport, such as an image or a beacon.
-- A gtag `event_callback` fired in under 1.5 s of the `gtag('event')` call (the test's bound), without waiting for any response; with the delayed stub it fired before the stub answered. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
-- GA4 sent events other than `page_view` several seconds after the call.
+- GA4 sent each event once (`page_view`, `view_item`), as a `POST` through `fetch` to `/g/collect`. It did not retry on another transport, such as an image or a beacon.
+- A gtag `event_callback` fired within 1.5 s of the GA4 hit being sent, without waiting for any response; with the delayed stub it fired before the stub answered. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
+- GA4 with consent denied did not send a `gtag('event')` called a few seconds after load (an `add_to_cart`) to `/g/collect` within 30 s, although the Google Ads hit for it was sent at once. The test therefore measures an event the site sends at load.
+- When the request is aborted, GA4 still sent each event once as `POST` through `fetch`, but the Google Ads hits (`/ccm/collect`) were retried as `GET` image requests.
 
 Other vendors were not tested in 0.1.
 

@@ -6,6 +6,8 @@ import { chromeUserAgent, stubResponse } from '../../src/index.ts';
 // Real gtag.js for the fake GA4 and Ads IDs, with consent denied by the fixture's default. Only script and
 // library loads leave the machine: every collection request is answered by a route in this file.
 const COLLECTION = /\/(?:g|ccm)\/collect|\/pagead\/|facebook\.com\/tr/;
+const FIXTURE_PIXEL_CID = '3333333333.4444444444';
+const EVENT = 'view_item';
 
 type Variant = 'no-content' | 'gif' | 'no-content-after-2s' | 'abort';
 
@@ -23,6 +25,7 @@ afterAll(async () => {
 });
 
 interface Sent {
+  vendor: 'ga4' | 'ads' | 'other';
   path: string;
   method: string;
   type: string;
@@ -30,70 +33,102 @@ interface Sent {
   at: number;
 }
 
+function vendorOf(url: URL): Sent['vendor'] {
+  if (url.hostname.endsWith('google-analytics.com') && url.pathname === '/g/collect' && url.searchParams.get('cid') !== FIXTURE_PIXEL_CID) return 'ga4';
+  if (url.pathname === '/ccm/collect' || url.pathname.startsWith('/pagead/')) return 'ads';
+  return 'other';
+}
+
+function eventOf(url: URL, postData: string | null) {
+  return url.searchParams.get('en') ?? new URLSearchParams(postData ?? '').get('en');
+}
+
 async function probe(variant: Variant) {
   const context = await browser.newContext({ userAgent: chromeUserAgent(browser.version()) });
+  // The site's own view_item call gets a callback, so the test measures gtag's callback for a real GA4 hit.
+  await context.addInitScript((event) => {
+    const w = window as unknown as Record<string, unknown>;
+    let wrapped: unknown;
+    Object.defineProperty(window, 'gtag', {
+      configurable: true,
+      get: () => wrapped,
+      set: (original: (...a: unknown[]) => void) => {
+        wrapped = function (this: unknown, ...a: unknown[]) {
+          if (a[0] === 'event' && a[1] === event) {
+            w.__calledAt = Date.now();
+            a[2] = { ...(a[2] as object), event_callback: () => (w.__callbackAt = Date.now()), event_timeout: 6000 };
+          }
+          return original.apply(this, a);
+        };
+      },
+    });
+  }, EVENT);
   const sent: Sent[] = [];
-  const answered: { event: string | null; at: number }[] = [];
+  const answered: { vendor: Sent['vendor']; event: string | null; at: number }[] = [];
   let collectionRequests = 0;
   let routedCollection = 0;
   context.on('request', (r) => {
     if (!COLLECTION.test(r.url())) return;
     collectionRequests++;
     const url = new URL(r.url());
-    const event = url.searchParams.get('en') ?? new URLSearchParams(r.postData() ?? '').get('en');
-    if (/^\/(?:g|ccm)\/collect$/.test(url.pathname)) sent.push({ path: url.pathname, method: r.method(), type: r.resourceType(), event, at: Date.now() });
+    sent.push({ vendor: vendorOf(url), path: url.pathname, method: r.method(), type: r.resourceType(), event: eventOf(url, r.postData()), at: Date.now() });
   });
   await context.route(COLLECTION, async (route) => {
     routedCollection++;
     const request = route.request();
     const url = new URL(request.url());
-    const event = url.searchParams.get('en') ?? new URLSearchParams(request.postData() ?? '').get('en');
     if (variant === 'no-content-after-2s') await new Promise((resolve) => setTimeout(resolve, 2000));
+    answered.push({ vendor: vendorOf(url), event: eventOf(url, request.postData()), at: Date.now() });
     if (variant === 'abort') {
-      answered.push({ event, at: Date.now() });
       await route.abort('failed');
       return;
     }
     const stub = stubResponse(
       variant === 'gif' ? { resourceType: 'image', headers: request.headers() } : { resourceType: 'fetch', headers: request.headers() },
     );
-    answered.push({ event, at: Date.now() });
     await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
   });
   const page = await context.newPage();
   await page.goto(`${site.url}/products/fake-tee`);
-  await page.waitForTimeout(1500);
-  const called = await page.evaluate(() => {
-    const w = window as unknown as { gtag: (...a: unknown[]) => void; callbackAt?: number };
-    const calledAt = Date.now();
-    w.gtag('event', 'callback_probe', {
-      event_callback: () => {
-        w.callbackAt = Date.now();
-      },
-      event_timeout: 6000,
-    });
-    return calledAt;
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const done = await page.evaluate(() => (window as unknown as { __callbackAt?: number }).__callbackAt !== undefined);
+    if (done && sent.some((s) => s.vendor === 'ga4' && s.event === EVENT)) break;
+    await page.waitForTimeout(100);
+  }
+  // Time for a retry on another transport to show up.
+  await page.waitForTimeout(2500);
+  const times = await page.evaluate(() => {
+    const w = window as unknown as { __calledAt?: number; __callbackAt?: number };
+    return { calledAt: w.__calledAt ?? null, callbackAt: w.__callbackAt ?? null };
   });
-  // GA4 sends events other than page_view several seconds after the call.
-  await page.waitForTimeout(8000);
-  const callbackAt = await page.evaluate(() => (window as unknown as { callbackAt?: number }).callbackAt ?? null);
   await context.close();
-  return { sent, answered, called, callbackAt, collectionRequests, routedCollection };
+  return { sent, answered, ...times, collectionRequests, routedCollection };
 }
 
-test('GA4 does not retry on another transport, and event_callback does not wait for any response, for every stub', async () => {
+test('GA4 sends each event once as POST fetch and event_callback does not wait for the answer, for every stub', async () => {
   const variants: Variant[] = ['no-content', 'gif', 'no-content-after-2s', 'abort'];
   const results = await Promise.all(variants.map((v) => probe(v)));
-  results.forEach(({ sent, answered, called, callbackAt, collectionRequests, routedCollection }, i) => {
+  results.forEach(({ sent, answered, calledAt, callbackAt, collectionRequests, routedCollection }, i) => {
     const variant = variants[i]!;
     expect(routedCollection, `${variant}: every collection request was routed`).toBe(collectionRequests);
-    expect(sent.map((s) => s.event), variant).toContain('callback_probe');
-    expect(new Set(sent.filter((s) => s.path === '/g/collect').map((s) => `${s.method} ${s.type}`)), variant).toEqual(new Set(['POST fetch']));
+
+    const ga4 = sent.filter((s) => s.vendor === 'ga4');
+    const ga4Events = ga4.map((s) => s.event).sort();
+    expect(ga4Events, `${variant}: GA4 sent each event once`).toEqual(['page_view', EVENT]);
+    expect(new Set(ga4.map((s) => `${s.method} ${s.type}`)), `${variant}: GA4 transport`).toEqual(new Set(['POST fetch']));
+
+    const ads = sent.filter((s) => s.vendor === 'ads');
+    const adsTransports = new Set(ads.map((s) => `${s.method} ${s.type}`));
+    if (variant === 'abort') expect(adsTransports, 'an aborted Ads hit is retried as an image').toEqual(new Set(['POST fetch', 'GET image']));
+    else expect(adsTransports, `${variant}: Ads transport`).toEqual(new Set(['POST fetch']));
+
+    expect(calledAt, variant).not.toBeNull();
     expect(callbackAt, variant).not.toBeNull();
-    const probeHit = sent.find((s) => s.event === 'callback_probe')!;
-    const probeAnswer = answered.find((a) => a.event === 'callback_probe')!;
-    expect(probeHit.at, `${variant}: the hit is sent after the call`).toBeGreaterThanOrEqual(called);
-    expect(callbackAt! - called, variant).toBeLessThan(1500);
-    if (variant === 'no-content-after-2s') expect(callbackAt!, 'callback before the delayed answer').toBeLessThan(probeAnswer.at);
+    const hit = ga4.find((s) => s.event === EVENT)!;
+    const answer = answered.find((a) => a.vendor === 'ga4' && a.event === EVENT)!;
+    expect(hit.at, `${variant}: the hit is sent after the call`).toBeGreaterThanOrEqual(calledAt!);
+    expect(callbackAt! - hit.at, `${variant}: callback within 1.5 s of the hit`).toBeLessThan(1500);
+    if (variant === 'no-content-after-2s') expect(callbackAt!, 'callback before the delayed answer').toBeLessThan(answer.at);
   });
 });
