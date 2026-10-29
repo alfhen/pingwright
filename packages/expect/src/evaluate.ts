@@ -219,8 +219,8 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
 
-const EMAIL_PARAM = /^(?:em|ud\[em\]|sha256_email_address)$/;
-const PHONE_PARAM = /^(?:ph|ud\[ph\]|sha256_phone_number)$/;
+const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address)$/;
+const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number)$/;
 
 function allForms(h: HashForms): string[] {
   return [h.hex, h.base64, h.base64url];
@@ -232,19 +232,28 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const emailHashes = new Set(allForms(hashEmail(identity.email)));
   const phone = hashPhone(identity.phone);
   const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
+  const plain = new Set([identity.email.toLowerCase(), identity.phone.toLowerCase(), identity.phone.replace(/\D/g, '')]);
   const withHash: string[] = [];
   const wrong: string[] = [];
+  const unhashed: string[] = [];
   for (const hit of hits) {
     let seen = false;
     let bad = false;
+    let raw = false;
     for (const [name, value] of Object.entries(hit.params)) {
       const known = EMAIL_PARAM.test(name) ? emailHashes : PHONE_PARAM.test(name) ? phoneHashes : undefined;
-      if (!known || !LOOKS_HASHED.test(value)) continue;
+      if (!known || !value) continue;
       seen = true;
-      if (!known.has(value)) bad = true;
+      if (known.has(value)) continue;
+      bad = true;
+      if (plain.has(value.trim().toLowerCase())) raw = true;
     }
     if (seen) withHash.push(hit.id);
     if (bad) wrong.push(hit.id);
+    if (raw) unhashed.push(hit.id);
+  }
+  if (unhashed.length) {
+    return { pass: false, evidence: wrong, message: `Email or phone sent unhashed in ${unhashed.length} hit(s).` };
   }
   if (wrong.length) {
     return { pass: false, evidence: wrong, message: `Hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
@@ -254,8 +263,6 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   }
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
-
-const LOOKS_HASHED = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/;
 
 function builtInChecks(
   records: readonly Input[],

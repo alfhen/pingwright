@@ -249,6 +249,13 @@ test('identity.hashesMatch', () => {
   } });
   expect(ev([digitsPhone]).pass).toBe(true);
   expect(ev([hit({ vendor: 'meta', params: { 'ud[ph]': hashEmail('15550000000').hex } })]).pass).toBe(false);
+  const plain = ev([good, hit({ vendor: 'meta', params: { 'ud[em]': identity.email } })]);
+  expect(plain.pass).toBe(false);
+  expect(plain.message).toContain('unhashed');
+  expect(ev([hit({ vendor: 'meta', params: { hashedPhone: identity.phone } })]).message).toContain('unhashed');
+  expect(ev([good, hit({ vendor: 'meta', params: { 'ud[em]': em.hex.toUpperCase() } })]).pass).toBe(false);
+  expect(ev([good, hit({ vendor: 'meta', params: { 'ud[em]': 'a'.repeat(40) } })]).pass).toBe(false);
+  expect(ev([hit({ vendor: 'meta', params: { hashedEmail: em.hex } })]).pass).toBe(true);
 });
 
 test('built-in unknownDestination fails with evidence unless allowed', () => {
