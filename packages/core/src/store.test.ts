@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { newId } from './ids.ts';
-import type { Flag, Hit, Request, Run } from './records.ts';
-import { RunWriter, readRun } from './store.ts';
+import { createIdentity } from './identity.ts';
+import type { ConsentEpoch, Flag, Hit, Request, Run, Step } from './records.ts';
+import { RunWriter, readRun, runFilePath } from './store.ts';
 
 let dir: string;
 beforeEach(async () => {
@@ -124,4 +125,81 @@ test('reader reports the line of a non-object JSON record', async () => {
   const path = join(dir, 'scalar.jsonl');
   await writeFile(path, JSON.stringify(makeRun()) + '\nnull\n');
   await expect(readRun(path)).rejects.toThrow(':2: record must be a JSON object');
+});
+
+test('a step or consent epoch written again keeps the last record in the first position', async () => {
+  const run = makeRun();
+  const writer = await RunWriter.create(dir, run);
+  const a = newId('step');
+  const b = newId('step');
+  const step = (id: Step['id'], endedAt: number | null): Step => ({
+    type: 'step',
+    id,
+    runId: run.id,
+    index: 0,
+    label: 'load',
+    startedAt: 1,
+    endedAt,
+  });
+  await writer.append(step(a, null));
+  await writer.append(step(b, 5));
+  await writer.append(step(a, 9));
+  const cep = newId('consentEpoch');
+  const epoch = (endT: number | null): ConsentEpoch => ({
+    type: 'consentEpoch',
+    id: cep,
+    runId: run.id,
+    startT: 1,
+    endT,
+    source: 'banner',
+    label: 'undecided',
+    state: { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' },
+  });
+  await writer.append(epoch(null));
+  await writer.append(epoch(7));
+  await writer.close();
+  const loaded = await readRun(writer.path);
+  expect(loaded.steps.map((s) => [s.id, s.endedAt])).toEqual([
+    [a, 9],
+    [b, 5],
+  ]);
+  expect(loaded.consentEpochs.map((e) => e.endT)).toEqual([7]);
+});
+
+test('runFilePath rejects a run id that is not a run id', () => {
+  expect(() => runFilePath(dir, '../x')).toThrow('invalid run id');
+  expect(() => runFilePath(dir, newId('step'))).toThrow('invalid run id');
+  expect(runFilePath(dir, newId('run'))).toMatch(/\.jsonl$/);
+});
+
+test('RunWriter.create rejects a run with a bad id', async () => {
+  const run = { ...makeRun(), id: '../x' as Run['id'] };
+  await expect(RunWriter.create(dir, run)).rejects.toThrow('invalid run id');
+});
+
+test('reader skips a cut-off last line but rejects a bad line in the middle', async () => {
+  const run = makeRun();
+  const req = makeRequest(run, 1);
+  const cut = join(dir, 'cut.jsonl');
+  await writeFile(cut, [JSON.stringify(run), JSON.stringify(req), '{"type":"requ'].join('\n'));
+  const loaded = await readRun(cut);
+  expect(loaded.requests).toEqual([req]);
+
+  const mid = join(dir, 'mid.jsonl');
+  await writeFile(mid, [JSON.stringify(run), '{"type":"requ', JSON.stringify(req)].join('\n') + '\n');
+  await expect(readRun(mid)).rejects.toThrow(':2: invalid JSON');
+
+  const first = join(dir, 'first.jsonl');
+  await writeFile(first, '{"type":"ru');
+  await expect(readRun(first)).rejects.toThrow(':1: invalid JSON');
+});
+
+test('Run.identity accepts an Identity', () => {
+  const run: Run = { ...makeRun(), identity: createIdentity(1) };
+  expect(run.identity?.seed).toBe(1);
+});
+
+test('Hit.ids can carry hashed identity fields', () => {
+  const ids: Hit['ids'] = { user_id: true, hashes: { em: { present: true, matchesIdentity: false } } };
+  expect(JSON.parse(JSON.stringify(ids))).toEqual(ids);
 });
