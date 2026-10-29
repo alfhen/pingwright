@@ -76,7 +76,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params` |
 | `DataLayerEvent` | `id` (`dle_…`), `runId`, `stepId`, `t`, `event`, `gtmUniqueEventId`, `args` (the pushed arguments, JSON-safe), `isConsentCommand` |
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
-| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3) |
+| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied` or `mixed`) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
 | `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `evidence[]` (record IDs) |
 
@@ -133,11 +133,11 @@ Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, 
 
 - GA4 sent each event once, as a `POST` through `fetch`. It did not retry on another transport, such as an image or a beacon.
 - A gtag `event_callback` fired in under 1.5 s of the `gtag('event')` call (the test's bound), without waiting for any response. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
-- GA4 sent events other than `page_view` several seconds after the call.
+- GA4 sent events other than `page_view` several seconds after the call (seen in a probe, not asserted by the test).
 
 Other vendors were not tested in 0.1.
 
-**Unload-time sends (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1, Chromium neither routes nor reports requests a page sends from `pagehide` or `visibilitychange` (probe: `sendBeacon` and `fetch` with `keepalive` to a local server and to the collector origin; the server received them and `context.on('request')` saw none). Binding calls from those handlers are lost too. Real gtag.js sends a GA4 `fetch` with `keepalive` at that moment on every same-tab navigation, so without a fix stub mode would leak it. In `stub` mode the init script therefore answers `sendBeacon` and `fetch` with `keepalive` locally while the page is hidden or unloading. It queues each one in `sessionStorage` until the binding call is acknowledged, and the next same-origin document in the tab, or `close()`, replays the queue. These requests are recorded with `initiator: unload` and `outcome: stubbed`. Limits: every unload-time beacon is swallowed, not only collection endpoints. A send is unrecorded, though still not sent, if the tab navigates to another origin, or comes from a sandboxed iframe without `allow-same-origin`. Other transports used during unload (image, XHR) are not covered. Test: `network-modes.e2e.test.ts`.
+**Unload-time sends.** The findings in this paragraph come from one-off probes on Chromium 156.0.8078.4 with Playwright 1.64.1. Only the workaround is covered by a test. Chromium neither routes nor reports requests a page sends from `pagehide` or `visibilitychange` (`sendBeacon` and `fetch` with `keepalive` to a local server and to the collector origin; the server received them and `context.on('request')` saw none). Binding calls from those handlers are lost too. In a probe, real gtag.js sent a GA4 `fetch` with `keepalive` at that moment on every same-tab navigation, so without a fix stub mode would leak it. In `stub` mode the init script therefore answers `sendBeacon` and `fetch` with `keepalive` locally while the page is hidden or unloading. It queues each one in `sessionStorage` until the binding call is acknowledged, and the next same-origin document in the tab, or `close()`, replays the queue. These requests are recorded with `initiator: unload` and `outcome: stubbed`. Limits: every unload-time beacon is swallowed, not only collection endpoints. A send is unrecorded, though still not sent, if the tab navigates to another origin, or comes from a sandboxed iframe without `allow-same-origin`. Other transports used during unload (image, XHR) are not covered. Test of the workaround: `network-modes.e2e.test.ts`.
 
 **Limit: early iframe requests.** A request sent while a sandboxed `srcdoc` iframe is loading is usually not routed, so it is not stubbed and reaches the network. It is then also not reported by `context.on('request')`. Locally on Chromium 156.0.8078.4 with Playwright 1.64.1 this happened in 5 of 5 runs of `network-modes.e2e.test.ts` (the srcdoc test). On CI the same request was once routed and stubbed, so the outcome depends on timing. The test accepts either outcome and logs which one it saw. The recorder cannot record or flag such a request, so a collection hit sent this way can leave the machine unrecorded in `stub` mode. The recorder still flags any collection request it sees but did not route as `stubBypass`.
 
@@ -197,6 +197,8 @@ For `consent: none`, Pingwright asserts that a banner was detected and shown, th
 - **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. A run can have several epochs, for example accept and then withdraw.
 - **Google hits** are judged by the consent value inside the hit (`gcs`, `gcd`), not by timing. This handles hits that were queued before an update and sent after it.
 - **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself.
+
+`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what rules read: `before: consent` and `epoch(granted)` or `epoch(denied)` on non-Google hits use it.
 
 Rules: `before: consent` means "in the first epoch, while the state is undecided". `in: epoch(<state>)` matches hits in any epoch with that state.
 
@@ -382,6 +384,11 @@ Where the code in 0.1 differs from the design above:
 - **Rules are `must`, `mustNot`, `count`, `before`, `in`, `after` and `identity.hashesMatch`.** `tags.mustFire` and `tags.mustNotFire` need the GTM reporters, which are not built. The `TagReport` record type exists and no 0.1 code writes it.
 - **Chromium only.** There is no Firefox or WebKit profile. Playwright's Firefox does not start on the macOS used for development.
 - **Decoders are `ga4`, `google-ads`, `meta`, `sgtm-data-client` and `stape-custom-loader`.** `pinterest` and `microsoft-uet` are not built.
+- **`Run.containerVersions` is always `{}`.** No GTM reporter fills it.
+- **`Checkpoint.consentState` is always `null`.** Checkpoints record cookies only.
+- **`addToCart` is a selector click.** There is no platform adapter.
+- **Hits are not linked to `TagReport`s.** No `TagReport` is written (see the rules item above).
+- **There is no run ID cookie and no run token.** Server-side correlation by run ID does not exist.
 - **Verification used Chromium 156.0.8078.4 and Playwright 1.64.1.** Other versions are untested.
 
 ## 16. Related tools

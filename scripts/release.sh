@@ -40,7 +40,10 @@ fi
 pnpm install --frozen-lockfile
 pnpm build
 
-identity=(-c "user.name=${GIT_AUTHOR_NAME:-Pingwright Release}" -c "user.email=${GIT_AUTHOR_EMAIL:-release@example.com}")
+if [ -z "${GIT_AUTHOR_NAME:-$(git config user.name || true)}" ] || [ -z "${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}" ]; then
+  echo "refusing: no git identity. Set user.name and user.email, or GIT_AUTHOR_NAME and GIT_AUTHOR_EMAIL." >&2
+  exit 1
+fi
 
 git checkout -q --detach
 # npm runs a nested install for git dependencies whose scripts include build, which races with the outer global install.
