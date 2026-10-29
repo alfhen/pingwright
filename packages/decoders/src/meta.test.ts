@@ -81,3 +81,48 @@ test('matches facebook.com/tr only; scripts are not collection endpoints', () =>
     expect(isCollectionEndpoint(req(u))).toBe(false);
   }
 });
+
+test('keeps every ud[*] field as a param and id', () => {
+  const r = req('https://www.facebook.com/tr', {
+    method: 'POST',
+    resourceType: 'fetch',
+    postData: q({
+      id: '100000000000001',
+      ev: 'Purchase',
+      'ud[em]': HASH,
+      'ud[fn]': 'c'.repeat(64),
+      'ud[ln]': 'd'.repeat(64),
+      'ud[zp]': 'e'.repeat(64),
+    }),
+  });
+  const [hit] = decodeRequest(r);
+  expect(hit?.ids).toEqual({ hashedEmail: true, fn: true, ln: true, zp: true });
+  expect(hit?.params).toMatchObject({ hashedEmail: HASH, fn: 'c'.repeat(64), ln: 'd'.repeat(64), zp: 'e'.repeat(64) });
+});
+
+test('decodes a multipart sendBeacon body', () => {
+  const boundary = '----fbBoundary123';
+  const field = (name: string, value: string) =>
+    `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+  const r = req('https://www.facebook.com/tr/', {
+    method: 'POST',
+    resourceType: 'ping',
+    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+    postData:
+      field('id', '100000000000001') +
+      field('ev', 'Purchase') +
+      field('dl', PAGE) +
+      field('cd[value]', '19.5') +
+      field('ud[em]', HASH) +
+      field('ud[fn]', 'c'.repeat(64)) +
+      `--${boundary}--\r\n`,
+  });
+  const [hit] = decodeRequest(r);
+  expect(hit).toMatchObject({
+    event: 'Purchase',
+    page: PAGE,
+    transport: 'beacon',
+    ids: { hashedEmail: true, fn: true },
+    params: { pixelId: '100000000000001', value: '19.5', hashedEmail: HASH },
+  });
+});

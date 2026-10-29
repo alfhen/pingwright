@@ -10,6 +10,8 @@ export interface Summary {
   results: { expectation: string; pass: boolean; message: string | undefined; evidence: string[] }[];
 }
 
+const EVIDENCE_CAP = 5;
+
 export function countHits(hits: RunRecords['hits']): Summary['hits'] {
   const out: Summary['hits'] = {};
   for (const hit of hits) {
@@ -54,9 +56,11 @@ export function formatSummary(summary: Summary): string {
   lines.push('Expectations');
   for (const r of summary.results) {
     lines.push(`  ${r.pass ? 'PASS' : 'FAIL'} ${r.expectation}`);
-    if (!r.pass) {
-      if (r.message) lines.push(`       ${r.message}`);
-      if (r.evidence.length) lines.push(`       evidence: ${r.evidence.join(', ')}`);
+    if (!r.pass && r.message) lines.push(`       ${r.message}`);
+    if (r.evidence.length) {
+      const shown = r.evidence.slice(0, EVIDENCE_CAP);
+      const more = r.evidence.length - shown.length;
+      lines.push(`       evidence: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`);
     }
   }
   const failed = summary.results.filter((r) => !r.pass).length;

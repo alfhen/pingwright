@@ -12,10 +12,30 @@ function isMetaTr(req: Request): boolean {
   }
 }
 
+function multipartFields(body: string, boundary: string): [string, string][] {
+  const fields: [string, string][] = [];
+  for (const part of body.split(`--${boundary}`)) {
+    const split = /\r?\n\r?\n/.exec(part);
+    if (!split) continue;
+    const name = /content-disposition:[^\r\n]*?\bname="([^"]*)"/i.exec(part.slice(0, split.index))?.[1];
+    if (name === undefined) continue;
+    fields.push([name, part.slice(split.index + split[0].length).replace(/\r?\n$/, '')]);
+  }
+  return fields;
+}
+
+function bodyFields(req: Request): Iterable<[string, string]> {
+  const body = req.postData ?? '';
+  const contentType = Object.entries(req.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? '';
+  const m = /multipart\/form-data;.*?boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
+  const boundary = m?.[1] ?? m?.[2];
+  return boundary ? multipartFields(body, boundary) : new URLSearchParams(body);
+}
+
 function allParams(req: Request): URLSearchParams {
   const merged = new URLSearchParams(new URL(req.url).search);
   if (req.method === 'POST' && req.postData) {
-    for (const [k, v] of new URLSearchParams(req.postData)) merged.set(k, v);
+    for (const [k, v] of bodyFields(req)) merged.set(k, v);
   }
   return merged;
 }
@@ -37,15 +57,13 @@ export const meta: Decoder = {
       const cd = /^cd\[(.+)\]$/.exec(k);
       if (cd?.[1]) params[cd[1]] = v;
     }
-    const em = p.get('ud[em]');
-    if (em) {
-      ids.hashedEmail = true;
-      params.hashedEmail = em;
-    }
-    const ph = p.get('ud[ph]');
-    if (ph) {
-      ids.hashedPhone = true;
-      params.hashedPhone = ph;
+    const udNames: Record<string, string> = { em: 'hashedEmail', ph: 'hashedPhone' };
+    for (const [k, v] of p) {
+      const ud = /^ud\[(.+)\]$/.exec(k);
+      if (!ud?.[1] || v === '') continue;
+      const name = udNames[ud[1]] ?? ud[1];
+      ids[name] = true;
+      params[name] = v;
     }
     return [
       {

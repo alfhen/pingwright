@@ -112,8 +112,10 @@ function leaked(w: Watch): string[] {
 }
 
 test('a visitor accepts, buys, and every tracking request is seen and stubbed', async () => {
-  const context = await browser.newContext({ userAgent: chromeUserAgent(browser.version()) });
+  const context = await browser.newContext({ userAgent: chromeUserAgent(browser.version()), locale: 'sv-SE' });
   const w = await watch(context);
+  const scriptErrors: string[] = [];
+  context.on('weberror', (e) => scriptErrors.push(e.error().message));
   const page = await context.newPage();
   await page.goto(`${site.url}/products/fake-tee`);
   await page.locator('#pw-consent-banner').waitFor({ state: 'visible' });
@@ -121,7 +123,15 @@ test('a visitor accepts, buys, and every tracking request is seen and stubbed', 
   await page.click('#add-to-cart');
   // GA4 sends non-page_view events a few seconds late and drops them on navigation.
   await expect.poll(() => shopGa4Events(w), { timeout: 15_000 }).toContain('add_to_cart');
-  await page.goto(`${site.url}/checkout`);
+  for (const path of ['/', '/collections/all']) {
+    await page.goto(`${site.url}${path}`);
+    await page.locator('#pw-web-pixel').waitFor({ state: 'attached' });
+  }
+  await page.goto(`${site.url}/cart`);
+  expect(await page.locator('#cart-count').textContent()).toBe('1 item(s)');
+  await page.click('#checkout-link');
+  await page.waitForURL('**/checkout');
+  expect(await page.locator('#country').inputValue()).toBe('SE');
   await page.fill('#email', 'pat@example.com');
   await page.fill('#first-name', 'Pat');
   await page.fill('#last-name', 'Example');
@@ -129,9 +139,11 @@ test('a visitor accepts, buys, and every tracking request is seen and stubbed', 
   await page.fill('#address1', '1 Example Street');
   await page.fill('#city', 'Exampleville');
   await page.fill('#zip', '00000');
-  await page.selectOption('#country', 'US');
+  await page.selectOption('#country', 'GB');
   await page.click('#continue');
   await page.waitForURL('**/checkout/payment');
+  const stored = await page.evaluate(() => sessionStorage.getItem('pw_checkout'));
+  expect(JSON.parse(stored ?? '{}')).toMatchObject({ country: 'GB' });
   await page.fill('#card-number', '4242 4242 4242 4242');
   await page.fill('#card-expiry', '12/34');
   await page.fill('#card-cvc', '123');
@@ -168,8 +180,10 @@ test('a visitor accepts, buys, and every tracking request is seen and stubbed', 
 
   const report = w.collectorBodies.map((b) => JSON.parse(b) as Record<string, string>);
   expect(report.some((r) => r.source === 'fixture-pixel' && r.href?.includes('/web-pixels@'))).toBe(true);
-  const sandboxHit = ga4.find((u) => u.hostname === 'region1.google-analytics.com');
+  const sandboxHit = ga4.find(isSandboxHit);
+  expect(sandboxHit?.hostname).toBe('region1.google-analytics.com');
   expect(sandboxHit?.searchParams.get('dl')).toContain('/web-pixels@0.0.0-fixture/sandbox/');
+  expect(scriptErrors).toEqual([]);
 
   expect(w.seen.some((u) => u.origin === site.thirdPartyUrl && u.pathname === '/unknown-pixel')).toBe(true);
   expect(leaked(w)).toEqual([]);

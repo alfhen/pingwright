@@ -17,3 +17,5 @@ export function decodeRequest(req: Request, newHitId?: NewHitId): Hit[] {
 export function isCollectionEndpoint(req: Request): boolean {
   return decoders.some((d) => d.isCollectionEndpoint(req));
 }
+
+export const vendorKeys: readonly string[] = ['ga4', 'google-ads', 'meta', 'sgtm'];

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { README_QUICKSTART_SCENARIO, README_SCENARIO } from './readme-scenario.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';
@@ -140,4 +141,32 @@ test('step labels: written, default, duplicate and checked by after', () => {
   expect(errorOf('start: /\nsteps:\n  - { visit: /a, label: start }\n')).toContain('duplicate step label "start"');
   expect(parseScenario('start: /\nexpect:\n  must:\n    - { vendor: ga4, after: start }\n').expect.must).toHaveLength(1);
   expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: visit-1 }\n').expect.must).toHaveLength(1);
+});
+
+test('rejects an unknown vendor name', () => {
+  expect(() => parseScenario('start: /\nexpect:\n  mustNot:\n    - { vendor: gaa4 }')).toThrow(/"gaa4" is not valid/);
+  expect(() => parseScenario('start: /\nexpect:\n  must:\n    - { vendor: [ga4, sgtm, google-ads, meta] }')).not.toThrow();
+});
+
+test('warns when a fill value looks like a real email or phone', () => {
+  const warn = (value: string) => parseScenario(`start: /\nsteps:\n  - fill: { "#f": "${value}" }`).warnings;
+  expect(warn('jane.doe@gmail.com')).toHaveLength(1);
+  expect(warn('+1 415 867 5309')).toHaveLength(1);
+  expect(warn('jane@example.com')).toEqual([]);
+  expect(warn('+12015550123')).toEqual([]);
+  expect(warn('hello')).toEqual([]);
+  expect(warn('2026-10-29')).toEqual([]);
+  expect(warn('4242 4242 4242 4242')).toEqual([]);
+});
+
+test('does not warn on the repo checkout scenarios', () => {
+  for (const f of ['checkout.yml', 'checkout-reject.yml']) {
+    const text = readFileSync(new URL(`../../../e2e/scenarios/${f}`, import.meta.url), 'utf8');
+    expect(parseScenario(text).warnings).toEqual([]);
+  }
+});
+
+test('skips card and password fields when warning about real data', () => {
+  const text = 'start: /\nsteps:\n  - fill: { "#card-number": "4155550123", "#password": "415-867-5309" }';
+  expect(parseScenario(text).warnings).toEqual([]);
 });

@@ -10,7 +10,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
+import { epochForHit, evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 import { README_SCENARIO } from './readme-scenario.ts';
 
@@ -118,8 +118,8 @@ test('vendor, event, transport, params and page filters', () => {
   const recs = [a, b];
   const pass = (f: string) => rule(`expect:\n  must:\n    - ${f}`, recs).pass;
   expect(pass('{ vendor: ga4 }')).toBe(true);
-  expect(pass('{ vendor: [meta, tiktok] }')).toBe(true);
-  expect(pass('{ vendor: pinterest }')).toBe(false);
+  expect(pass('{ vendor: [meta, sgtm] }')).toBe(true);
+  expect(pass('{ vendor: sgtm }')).toBe(false);
   expect(pass('{ event: purchase }')).toBe(true);
   expect(pass('{ event: [nope, Purchase] }')).toBe(true);
   expect(pass('{ transport: beacon }')).toBe(true);
@@ -150,7 +150,7 @@ test('counts', () => {
   expect(c('<3')).toBe(false);
   expect(c('3')).toBe(true);
   expect(c('0')).toBe(false);
-  expect(rule(`expect:\n  must:\n    - { vendor: tiktok, count: "0" }`, recs).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { vendor: sgtm, count: "0" }`, recs).pass).toBe(true);
 });
 
 test('before: consent covers other vendors in the first undecided epoch only', () => {
@@ -161,6 +161,11 @@ test('before: consent covers other vendors in the first undecided epoch only', (
   const r = rule(q, [early, late, ...UNDECIDED_THEN_ACCEPT]);
   expect(r.pass).toBe(false);
   expect(r.evidence).toEqual([early.hit.id]);
+});
+
+test('before: consent with a granted filter is flagged when the first epoch is decided', () => {
+  const r = rule(`expect:\n  mustNot:\n    - { vendor: meta, consent.analytics: granted, before: consent }`, [epoch(1000, null, granted)]);
+  expect(r.message).toContain('cannot match');
 });
 
 test('before: consent is false for a later undecided epoch', () => {
@@ -412,4 +417,51 @@ test('consent field filters use the state recorded for an undecided epoch', () =
   const undecidedDenied: EvalEpoch = { ...epoch(0, null, 'undecided'), state: denied };
   const q = `expect:\n  must:\n    - { vendor: meta, consent.analytics: denied }`;
   expect(rule(q, [hit({ vendor: 'meta', t: 500 }), undecidedDenied]).pass).toBe(true);
+});
+
+test('a hit before a decided first epoch belongs to no epoch', () => {
+  const decided = epoch(1000, null, granted);
+  const early = hit({ vendor: 'meta', t: 500 });
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(granted) }', [early, decided]).pass).toBe(true);
+  expect(rule('expect:\n  must:\n    - { vendor: meta, before: consent }', [early, decided]).pass).toBe(true);
+  expect(epochForHit([decided], 500)).toBeUndefined();
+  expect(epochForHit([epoch(1000, null, 'undecided')], 500)?.label).toBe('undecided');
+});
+
+test('a Google hit with gcs but no gcd leaves the other fields unknown', () => {
+  const gcsOnly = hit({ consent: { ...allUnknown, analytics: 'granted', ads: 'granted' }, t: 2000 });
+  const q = (field: string) => `expect:\n  must:\n    - { vendor: ga4, consent.${field}: granted }`;
+  expect(rule(q('analytics'), [gcsOnly, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+  expect(rule(q('adUserData'), [gcsOnly, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(false);
+  const bare = hit({ t: 2000 });
+  expect(rule(q('adUserData'), [bare, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+});
+
+test('grace window does not move a hit before a withdraw into the denied epoch', () => {
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 5000, granted), epoch(5000, null, denied)];
+  const beforeWithdraw = hit({ vendor: 'meta', t: 4980 });
+  const afterWithdraw = hit({ vendor: 'meta', t: 5010 });
+  const q = 'expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }';
+  expect(rule(q, [beforeWithdraw, ...epochs]).pass).toBe(true);
+  const r = rule(q, [afterWithdraw, ...epochs]);
+  expect(r.pass).toBe(false);
+  expect(r.evidence).toEqual([afterWithdraw.hit.id]);
+});
+
+test('before: consent with a consent filter that cannot match says so', () => {
+  const recs = [hit({ vendor: 'meta', t: 10 }), epoch(0, null, 'undecided')];
+  const r = rule('expect:\n  mustNot:\n    - { vendor: meta, consent.analytics: granted, before: consent }', recs);
+  expect(r.pass).toBe(true);
+  expect(r.message).toContain('This rule cannot match');
+  const ok = rule('expect:\n  mustNot:\n    - { vendor: meta, before: consent }', recs);
+  expect(ok.message).not.toContain('cannot match');
+  const google = rule('expect:\n  mustNot:\n    - { vendor: ga4, consent.analytics: granted, before: consent }', recs);
+  expect(google.message).not.toContain('cannot match');
+});
+
+test('a phone hash in an email field does not match', () => {
+  const ph = hashPhone(identity.phone);
+  const q = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, identity.hashesMatch: true }');
+  const swapped = hit({ vendor: 'meta', params: { em: ph.hex } });
+  expect(evaluate([swapped.hit, swapped.req] as never, q, { identity })[0]!.pass).toBe(false);
 });

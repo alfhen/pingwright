@@ -41,6 +41,22 @@ test('formats failures with message and evidence, and the record path', () => {
   expect(text.trimEnd().endsWith('Record: runs/run_1.jsonl')).toBe(true);
 });
 
+test('shows evidence for passing expectations, capped', () => {
+  const ids = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7'];
+  const summary: Summary = {
+    runId: 'run_1',
+    path: 'p.jsonl',
+    pass: true,
+    hits: {},
+    epochs: [],
+    flags: [],
+    results: [{ expectation: 'must: a', pass: true, message: 'ok', evidence: ids }],
+  };
+  const text = formatSummary(summary);
+  expect(text).toContain('evidence: h1, h2, h3, h4, h5 and 2 more');
+  expect(text).not.toContain('h6');
+});
+
 test('main prints the version and exits 2 on a usage error', async () => {
   const out: string[] = [];
   const err: string[] = [];
