@@ -5,7 +5,7 @@ import { readRun, type Hit, type Request, type RunRecords } from '@pingwright/co
 import { isCollectionEndpoint, isSandboxPageUrl } from '@pingwright/decoders';
 import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { recordVisit, type RunResult } from '../../src/index.ts';
+import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts';
 
 let site: FixtureSite;
 let outDir: string;
@@ -132,7 +132,23 @@ describe('stub mode on the fixture site', () => {
     const total = Object.entries(records).reduce((n, [key, value]) => n + (key === 'run' ? 1 : (value as unknown[]).length), 0);
     expect(lines).toHaveLength(total);
     expect(JSON.parse(lines[0]!)).toMatchObject({ type: 'run', id: records.run.id });
+    const parsed = lines.map((line) => JSON.parse(line) as { id: string });
+    const inMemory = [records.run, ...Object.values(records).filter(Array.isArray).flat()] as { id: string }[];
+    expect(parsed.map((r) => r.id).sort()).toEqual(inMemory.map((r) => r.id).sort());
+    for (const record of inMemory) expect(parsed.find((r) => r.id === record.id)).toEqual(JSON.parse(JSON.stringify(record)));
     expect(await readRun(result.path)).toEqual(records);
     expect(result.path).toBe(join(outDir, `${records.run.id}.jsonl`));
   });
+});
+
+test('a self-test report that arrives after start-up is not stored', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+  const page = await recorder.visit(`${site.url}/`);
+  await page.evaluate(() =>
+    navigator.sendBeacon('https://collector.pingwright.invalid/report', JSON.stringify({ source: 'selftest:page' })),
+  );
+  await recorder.wait(500);
+  const { records: late } = await recorder.close();
+  expect(late.collectorReports.filter((r) => r.source.startsWith('selftest:'))).toEqual([]);
+  expect(late.invalidReports).toEqual([]);
 });

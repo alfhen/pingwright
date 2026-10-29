@@ -30,6 +30,12 @@ export function parseCollectorBody(body: string | null): ParsedReport {
   return { ok: true, source, payload };
 }
 
+/** What the handler gets for a request that is not a POST: the method and URL, so the hit is not lost. */
+export function parseCollectorRequest(method: string, url: string, body: string | null): { parsed: ParsedReport; body: string } {
+  if (method === 'POST') return { parsed: parseCollectorBody(body), body: body ?? '' };
+  return { parsed: { ok: false, error: `${method} request, reports must be POST` }, body: url };
+}
+
 export type CollectorHandler = (parsed: ParsedReport, body: string, t: number) => void;
 
 /**
@@ -43,9 +49,10 @@ export async function routeCollector(
 ): Promise<void> {
   await context.route(`${COLLECTOR_ORIGIN}/**`, async (route) => {
     const request = route.request();
-    if (request.method() === 'POST') {
-      const body = request.postData() ?? '';
-      handler()(parseCollectorBody(body), body, now());
+    // A preflight is the browser's own request, not a report.
+    if (request.method() !== 'OPTIONS') {
+      const { parsed, body } = parseCollectorRequest(request.method(), request.url(), request.postData());
+      handler()(parsed, body, now());
     }
     await route.fulfill({ status: 204, headers: corsHeaders(request.headers()) });
   });
