@@ -108,7 +108,7 @@ Every profile:
 ### 5.2 Capture
 
 - All hooks are on the browser context: `context.on('request')`, `context.on('response')` and `context.route`. Page-level hooks miss service-worker traffic.
-- Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading. Those are neither routed nor reported (§9).
+- Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading, which are neither routed nor reported (§9), and sends from `pagehide` or `visibilitychange`, which the page answers itself in stub mode (§5.3).
 - Service workers: Playwright reports and routes their requests on the context, in Chromium only. Requests to update a service worker's own script cannot be routed. Option: `serviceWorkers: 'block'`.
 - Dedicated workers: capture of requests to the collector origin is proven in Chromium (§9), from a worker on the page and from a worker inside a sandboxed iframe. Capture of other worker traffic is not tested.
 - A startup self-test loads a routed page at `https://selftest.pingwright.invalid/`. The page, a sandboxed iframe and a dedicated worker each send a report to the collector origin. The run states its capture coverage: `{page, iframe, dedicatedWorker, serviceWorker: 'chromium-only'}`. Self-test reports are not stored. The self-test does not probe early iframe requests, because they cannot be observed (§5.3).
@@ -136,6 +136,8 @@ Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, 
 - GA4 sent events other than `page_view` several seconds after the call.
 
 Other vendors were not tested.
+
+**Unload-time sends.** Chromium neither routes nor reports requests a page sends from `pagehide` or `visibilitychange` (probe: `sendBeacon` and `fetch` with `keepalive` to a local server and to the collector origin; the server received them and `context.on('request')` saw none). Binding calls from those handlers are lost too. Real gtag.js sends a GA4 `fetch` with `keepalive` at that moment on every same-tab navigation, so without a fix stub mode would leak it. In `stub` mode the init script therefore answers `sendBeacon` and `fetch` with `keepalive` locally while the page is hidden or unloading. It queues each one in `sessionStorage` until the binding call is acknowledged, and the next same-origin document in the tab, or `close()`, replays the queue. These requests are recorded with `initiator: unload` and `outcome: stubbed`. Limits: every unload-time beacon is swallowed, not only collection endpoints. A send is unrecorded, though still not sent, if the tab navigates to another origin, or comes from a sandboxed iframe without `allow-same-origin`. Other transports used during unload (image, XHR) are not covered. Test: `network-modes.e2e.test.ts`.
 
 **Limit: early iframe requests.** A request sent while a sandboxed `srcdoc` iframe is loading is not routed, so it is not stubbed and reaches the network. It is also not reported by `context.on('request')` (3 of 3 runs, `network-modes.e2e.test.ts`). The recorder cannot record or flag such a request, so a collection hit sent this way can leave the machine unrecorded in `stub` mode. The recorder still flags any collection request it sees but did not route as `stubBypass`.
 
@@ -343,6 +345,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 1. **Collector origin interception.** Proven in Chromium for the sources listed in §9, once the sandboxed iframe has loaded. Open: requests sent during sandboxed `srcdoc` iframe load are not routed or seen, and reach the network; Firefox and WebKit are untested. There is no fallback yet: a local listener needs write authorization first (§9).
 2. **Early iframe requests can escape stub mode and capture.** A tracking hit fired while a sandboxed `srcdoc` iframe loads is not recorded and is not stubbed (§9). P09 confirmed that `context.on('request')` does not see these requests either (§5.3), so the recorder cannot detect them from the network. Open: block or rewrite `srcdoc` iframes, or detect them in the page.
+   Unload-time sends are handled in the page in stub mode, with the limits in §5.3.
 3. **Dedicated worker capture.** Verified for the collector origin in Chromium (§5.2). The startup self-test still reports coverage per run.
 4. **Stubbing side effects.** Verified for GA4 in Chromium (§5.3). Other vendors are untested.
 5. **Server template signature APIs (verify).**

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { recordVisit, type RunResult } from '../../src/index.ts';
+import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts';
 
 let server: Server;
 let port: number;
@@ -33,6 +33,17 @@ function page(path: string): string | undefined {
       const inner = `<script>fetch('${origin}${COLLECT('early')}', { mode: 'no-cors' });</script>`;
       return `<iframe sandbox="allow-scripts" srcdoc="${inner.replaceAll('"', '&quot;')}"></iframe>`;
     }
+    case '/unload':
+      return `<a href="/next">next</a><script>
+        const send = (tag) => {
+          navigator.sendBeacon('${origin}${COLLECT('beacon-')}' + tag, 'x');
+          fetch('${origin}${COLLECT('keepalive-')}' + tag, { method: 'POST', body: 'x', keepalive: true });
+        };
+        addEventListener('pagehide', () => send('pagehide'));
+        addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') send('hidden'); });
+      </script>`;
+    case '/next':
+      return '<p>next</p>';
     default:
       return undefined;
   }
@@ -125,4 +136,27 @@ test('a collection request sent while a sandboxed srcdoc iframe loads is neither
   const { records } = await visit('/early-srcdoc', 'stub');
   expect(collectionRequests({ records } as RunResult)).toEqual([]);
   expect(serverSaw.filter((u) => u.includes('en=early'))).toHaveLength(1);
+});
+
+test('stub mode answers collection requests sent while the page unloads on same-tab navigation', async () => {
+  serverSaw = [];
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `http://localhost:${port}` });
+  try {
+    const page = await recorder.visit(`http://localhost:${port}/unload`);
+    await page.click('a');
+    await page.waitForURL('**/next');
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const { records } = await recorder.close();
+  expect(serverSaw.filter((u) => u.startsWith('/g/collect'))).toEqual([]);
+  const sent = collectionRequests({ records } as RunResult);
+  expect(sent.length).toBeGreaterThanOrEqual(4);
+  expect(sent.every((q) => q.outcome === 'stubbed')).toBe(true);
+  for (const tag of ['beacon-pagehide', 'keepalive-pagehide', 'beacon-hidden', 'keepalive-hidden']) {
+    expect(sent.some((q) => q.url.includes(`en=${tag}`))).toBe(true);
+  }
+  expect(records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });

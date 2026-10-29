@@ -31,6 +31,7 @@ import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type
 import { buildFlags } from './flags.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
+import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 
 export const PINGWRIGHT_VERSION = '0.0.0';
@@ -82,6 +83,8 @@ export class Recorder {
   private clockOffset = 0;
   private collectorHandler: CollectorHandler = () => undefined;
   private readonly requests = new Map<PwRequest, Request>();
+  private readonly unloadRequests: Request[] = [];
+  private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
@@ -139,6 +142,10 @@ export class Recorder {
       if (event) this.dataLayerEvents.push(event);
     });
     await context.addInitScript(dataLayerInitScript);
+    if (this.options.networkMode === 'stub') {
+      await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
+      await context.addInitScript(unloadInitScript);
+    }
     context.on('request', (request) => void this.recordFor(request));
     context.on('requestfailed', (request) => {
       const record = this.recordFor(request);
@@ -202,6 +209,29 @@ export class Recorder {
     return record;
   }
 
+  private recordUnloadSend(payload: UnloadSendPayload): void {
+    if (this.closed || this.unloadKeys.has(payload.key)) return;
+    this.unloadKeys.add(payload.key);
+    const record: Request = {
+      type: 'request',
+      id: newId('request'),
+      runId: this.runId,
+      stepId: null,
+      t: nodeNow(),
+      method: payload.method,
+      url: payload.url,
+      resourceType: payload.resourceType,
+      frameUrl: payload.frameUrl,
+      initiator: 'unload',
+      headers: {},
+      postData: payload.postData === null ? null : payload.postData.slice(0, MAX_POST_DATA),
+      outcome: 'stubbed',
+    };
+    this.routed.add(record.id);
+    this.unloadRequests.push(record);
+    this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
+  }
+
   private async recordResponse(response: PwResponse): Promise<void> {
     const record = this.recordFor(response.request());
     if (!record) return;
@@ -242,13 +272,22 @@ export class Recorder {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private async flushUnloadQueues(): Promise<void> {
+    const script = `window.${UNLOAD_FLUSH}?.()`;
+    for (const page of this.context.pages()) {
+      await page.evaluate(script).catch(() => undefined);
+    }
+    await this.wait(50);
+  }
+
   /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
   async close(): Promise<RunResult> {
+    if (this.options.networkMode === 'stub') await this.flushUnloadQueues();
     this.closed = true;
     await this.browser.close();
     await Promise.allSettled([...this.pending]);
 
-    const requests = [...this.requests.values()];
+    const requests = [...this.requests.values(), ...this.unloadRequests];
     const hits: Hit[] = requests.flatMap((r) => decodeRequest(r));
     const flags = buildFlags({
       runId: this.runId,
