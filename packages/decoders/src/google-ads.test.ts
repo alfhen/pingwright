@@ -85,9 +85,10 @@ test('rmkt/collect and googlesyndication pings', () => {
 test('ccm/collect on google.com and doubleclick uses en and tid', () => {
   for (const host of ['www.google.com', 'ad.doubleclick.net']) {
     const [hit] = decodeRequest(
-      req(`https://${host}/ccm/collect?tid=AW-000000001&en=page_view&dl=${enc(PAGE)}&gcs=G111`, {
+      req(`https://${host}/ccm/collect?tid=AW-000000009&en=query_event&dl=${enc('http://query.example')}&gcs=G111`, {
         method: 'POST',
         resourceType: 'fetch',
+        postData: `tid=AW-000000001&en=page_view&dl=${enc(PAGE)}`,
       }),
     );
     expect(hit).toMatchObject({
@@ -112,6 +113,15 @@ test('ad.doubleclick.net ccm/s/collect is a collection endpoint', () => {
     params: { conversionId: '000000001' },
     consent: { ads: 'granted', analytics: 'granted' },
   });
+});
+
+test('country-specific google hosts are matched for 1p hops', () => {
+  for (const host of ['www.google.co.uk', 'www.google.de', 'www.google.com.au']) {
+    const r = req(`https://${host}/pagead/1p-user-list/000000001/?label=l`);
+    expect(isCollectionEndpoint(r)).toBe(true);
+    expect(decodeRequest(r)).toHaveLength(1);
+  }
+  expect(isCollectionEndpoint(req('https://www.google.de/search?q=x'))).toBe(false);
 });
 
 test('each redirect hop is its own request and hit', () => {

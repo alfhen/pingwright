@@ -14,8 +14,10 @@ const PINGS = [
 
 const REMARKETING = /^\/(?:pagead\/(?:viewthroughconversion|1p-user-list)|rmkt\/collect|ccm\/(?:s\/)?collect)(?:\/|$)/;
 
+const GOOGLE_REGIONAL = /^(?:[a-z0-9-]+\.)*google\.(?:com?\.)?[a-z]{2}$/;
+
 function hostMatches(host: string): boolean {
-  return ADS_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  return GOOGLE_REGIONAL.test(host) || ADS_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
 function pingPath(req: Request): { url: URL; id: string | undefined } | undefined {
