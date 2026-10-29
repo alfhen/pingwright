@@ -108,7 +108,7 @@ Every profile:
 ### 5.2 Capture
 
 - All hooks are on the browser context: `context.on('request')`, `context.on('response')` and `context.route`. Page-level hooks miss service-worker traffic.
-- Covered: the page and all frames, including sandboxed iframes.
+- Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading. Those are neither routed nor reported (§9).
 - Service workers: Playwright reports and routes their requests on the context, in Chromium only. Requests to update a service worker's own script cannot be routed. Option: `serviceWorkers: 'block'`.
 - Dedicated workers: capture of requests to the collector origin is proven in Chromium (§9), from a worker on the page and from a worker inside a sandboxed iframe. Capture of other worker traffic is not yet tested.
 - A startup self-test sends a beacon from a page, an iframe and a dedicated worker, and reports which ones were captured. A run states its capture coverage.
@@ -249,7 +249,7 @@ Setup commands for the tunnel and the Worker are deferred until after the first 
 - **Collector origin.** The platform bridge and the web reporter post to a reserved origin, `https://collector.pingwright.invalid/`. The recorder answers these requests itself through `context.route`. No DNS lookup, private address, certificate or browser flag is involved, so Chrome's local-network checks do not apply.
   - **Verified** on Chromium 156.0.8078.4 with Playwright 1.64.1, no browser flags (`packages/recorder/test/e2e/collector-origin.e2e.test.ts`). `context.route` answers the collector origin, and `context.on('request')` sees it, from: page `fetch`, `navigator.sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe (`sandbox="allow-scripts"`), a sandboxed cross-site iframe (top page on `localhost`, iframe on `127.0.0.1`, so out of process), and a worker inside a sandboxed iframe. It also works from a sandboxed iframe on a page served as `https://shop.pingwright.test/` through `context.route`. Firefox and WebKit were not tested.
   - **Direct fetch.** From that same public-looking page, a sandboxed iframe's `fetch` to `http://localhost:<port>` fails and the server is never reached. This was the same in every run. A local listener would not work there.
-  - **Early requests.** A request sent while a sandboxed `srcdoc` iframe is still loading was not routed and failed with `ERR_NAME_NOT_RESOLVED`. Requests sent 100 ms after load (20 ms in a probe) were captured. The recorder must not rely on reports sent during iframe load.
+  - **Early requests.** A request sent while a sandboxed `srcdoc` iframe is still loading is neither routed nor reported by `context.on('request')`. This holds for every destination, not only the collector. In probes the collector request failed with `ERR_NAME_NOT_RESOLVED` (5 of 5 runs). A request to a local server (`/g/collect?early`) with a stubbing route in place was not routed and reached the server (3 of 3 runs). Requests sent 100 ms after load (20 ms in a probe) were captured. The recorder must not rely on reports sent during iframe load, and in stub mode such a request can leave the machine unrecorded.
 - **Authorisation.** Because the requests never leave the browser context, nothing outside the test browser can write to the run store. The run ID is a label, not a credential.
 - **Validation.** Every incoming report is checked against a schema. Invalid reports are kept as `invalidReport` records, not dropped silently.
 - **Sink reader.** Server reports are read from the configured sink with the sink's credentials.
@@ -329,14 +329,15 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 14. Risks and open questions
 
-1. **Collector origin interception.** Verified in Chromium for sandboxed iframes, out-of-process iframes and workers (§9). Open: requests sent during sandboxed `srcdoc` iframe load are not routed; Firefox and WebKit are untested. There is no fallback yet: a local listener needs write authorization first (§9).
-2. **Dedicated worker capture.** Verified for the collector origin in Chromium (§5.2). The startup self-test still reports coverage per run.
-3. **Stubbing side effects:** retries on other transports, sites waiting on tag callbacks **(verify)**.
-4. **Server template signature APIs (verify).**
-5. **Web template sending permission (verify).**
-6. **Custom loaders.** Swapping the container script loses loader-specific behaviour (§8.2).
-7. **Banner bot detection** changes over time. Guard: the "banner shown" check.
-8. **Scope.** Many vendors and banners exist. Decoders are plugins, and banner handling is delegated to autoconsent.
+1. **Collector origin interception.** Proven in Chromium for the sources listed in §9, once the sandboxed iframe has loaded. Open: requests sent during sandboxed `srcdoc` iframe load are not routed or seen, and reach the network; Firefox and WebKit are untested. There is no fallback yet: a local listener needs write authorization first (§9).
+2. **Early iframe requests can escape stub mode and capture.** A tracking hit fired while a sandboxed `srcdoc` iframe loads is not recorded and is not stubbed (§9). P09 must handle or detect this, for example by blocking or rewriting `srcdoc` iframes, and the self-test should include an early-request probe.
+3. **Dedicated worker capture.** Verified for the collector origin in Chromium (§5.2). The startup self-test still reports coverage per run.
+4. **Stubbing side effects:** retries on other transports, sites waiting on tag callbacks **(verify)**.
+5. **Server template signature APIs (verify).**
+6. **Web template sending permission (verify).**
+7. **Custom loaders.** Swapping the container script loses loader-specific behaviour (§8.2).
+8. **Banner bot detection** changes over time. Guard: the "banner shown" check.
+9. **Scope.** Many vendors and banners exist. Decoders are plugins, and banner handling is delegated to autoconsent.
 
 ## 15. Milestones
 
