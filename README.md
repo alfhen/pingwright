@@ -33,6 +33,8 @@ Pingwright is built so that a coding agent, a CI job or a person can answer thes
 ```yaml
 # scenarios/undecided-visitor.yml
 start: /products/{product}
+vars:
+  product: fake-tee
 steps:
   - consent: none          # the banner must appear, and gets no answer
   - wait: 4s

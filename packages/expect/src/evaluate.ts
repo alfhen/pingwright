@@ -176,7 +176,10 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
 function stateMatches(state: ConsentState | 'undecided', selector: string): boolean {
   if (state === 'undecided') return selector === 'undecided';
   if (selector === 'undecided') return false;
-  if (selector === 'granted' || selector === 'denied') return consentFields.every((f) => state[f] === selector);
+  if (selector === 'granted' || selector === 'denied') {
+    const known = consentFields.map((f) => state[f]).filter((v) => v !== 'unknown');
+    return known.length > 0 && known.every((v) => v === selector);
+  }
   const [field, value] = selector.split('=') as [ConsentField, ConsentValue];
   return state[field] === value;
 }

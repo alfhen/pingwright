@@ -256,3 +256,22 @@ test('results carry the run id and ids with a prefix', () => {
   expect(r!.id.startsWith('rsl_')).toBe(true);
   expect(r!.expectation).toContain('vendor');
 });
+
+const partialGranted = { analytics: 'granted', ads: 'granted', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} } as const;
+const partialDenied = { analytics: 'denied', ads: 'denied', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} } as const;
+const mixed = { analytics: 'granted', ads: 'denied', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} } as const;
+
+test('epoch(granted) matches hits and epochs that leave some fields unknown', () => {
+  const y = 'expect:\n  must:\n    - { in: epoch(granted) }';
+  expect(rule(y, [hit({ consent: partialGranted })]).pass).toBe(true);
+  expect(rule(y, [hit({ vendor: 'meta', t: 10 }), epoch(0, null, partialGranted)]).pass).toBe(true);
+  expect(rule(y, [hit({ consent: mixed })]).pass).toBe(false);
+  expect(rule(y, [hit({ consent: allUnknown })]).pass).toBe(false);
+});
+
+test('epoch(denied) matches hits and epochs that leave some fields unknown', () => {
+  const y = 'expect:\n  must:\n    - { in: epoch(denied) }';
+  expect(rule(y, [hit({ consent: partialDenied })]).pass).toBe(true);
+  expect(rule(y, [hit({ vendor: 'meta', t: 10 }), epoch(0, null, partialDenied)]).pass).toBe(true);
+  expect(rule(y, [hit({ consent: mixed })]).pass).toBe(false);
+});
