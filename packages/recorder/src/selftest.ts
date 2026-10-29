@@ -8,7 +8,14 @@ import type { BrowserContext } from 'playwright';
 import type { CollectorHandler } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 
-const SOURCES = { page: 'selftest:page', iframe: 'selftest:iframe', dedicatedWorker: 'selftest:worker' } as const;
+/** Reports from sources with this prefix belong to the self-test, whenever they arrive. */
+export const SELFTEST_SOURCE_PREFIX = 'selftest:';
+
+const SOURCES = {
+  page: `${SELFTEST_SOURCE_PREFIX}page`,
+  iframe: `${SELFTEST_SOURCE_PREFIX}iframe`,
+  dedicatedWorker: `${SELFTEST_SOURCE_PREFIX}worker`,
+} as const;
 
 const RESEND_MS = 200;
 

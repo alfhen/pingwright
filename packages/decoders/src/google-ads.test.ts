@@ -124,14 +124,50 @@ test('country-specific google hosts are matched for 1p hops', () => {
   expect(isCollectionEndpoint(req('https://www.google.de/search?q=x'))).toBe(false);
 });
 
-test('each redirect hop is its own request and hit', () => {
-  const first = req('https://www.googleadservices.com/pagead/conversion/000000001/?label=l');
-  const second = req('https://www.google.com/pagead/1p-conversion/000000001/?label=l');
-  const a = decodeRequest(first);
-  const b = decodeRequest(second);
-  expect(a).toHaveLength(1);
-  expect(b).toHaveLength(1);
-  expect(a[0]?.requestId).not.toBe(b[0]?.requestId);
+test.each([
+  ['viewthroughconversion', 'https://googleads.g.doubleclick.net/pagead/viewthroughconversion/000000001/?random=1&gcs=G100', 'remarketing'],
+  ['1p-user-list', 'https://www.google.com/pagead/1p-user-list/000000001/?random=1&gcs=G100', 'remarketing'],
+  ['1p-conversion', 'https://www.google.com/pagead/1p-conversion/000000001/?label=fake-label', 'conversion'],
+  ['ccTLD', 'https://www.google.de/pagead/1p-user-list/000000001/?random=1', 'remarketing'],
+])('decodes the %s hop as one hit', (_name, url, event) => {
+  const hits = decodeRequest(req(url));
+  expect(hits).toHaveLength(1);
+  expect(hits[0]).toMatchObject({ vendor: 'google-ads', event, params: { conversionId: '000000001' } });
+});
+
+test('reads user id and order id from rmkt and conversion pings', () => {
+  const [rmkt] = decodeRequest(
+    req('https://www.google.com/rmkt/collect/000000001/0?userId=fake-user-1&oid=order-1&gcs=G100'),
+  );
+  expect(rmkt?.ids).toMatchObject({ user_id: true });
+  expect(rmkt?.params).toMatchObject({ transaction_id: 'order-1' });
+  const [conv] = decodeRequest(
+    req('https://www.googleadservices.com/pagead/1p-conversion/000000001/?label=l&userId=fake-user-1&oid=order-2'),
+  );
+  expect(conv?.ids).toMatchObject({ user_id: true });
+  expect(conv?.params).toMatchObject({ transaction_id: 'order-2' });
+});
+
+test('reads uid and ep/epn params from /ccm/collect', () => {
+  const [hit] = decodeRequest(
+    req(
+      'https://www.google.com/ccm/collect?en=purchase&tid=AW-000000001&uid=fake-user-1&ep.transaction_id=T-1&epn.value=19.5&ep.currency=USD&gcs=G111',
+    ),
+  );
+  expect(hit?.ids).toMatchObject({ user_id: true });
+  expect(hit?.params).toMatchObject({ transaction_id: 'T-1', value: '19.5', currency: 'USD' });
+});
+
+test('no user id means no user_id flag', () => {
+  const [hit] = decodeRequest(req('https://www.google.com/ccm/collect?en=page_view&tid=AW-000000001'));
+  expect(hit?.ids).not.toHaveProperty('user_id');
+});
+
+test('googletagmanager.com/td is a collection endpoint but not a hit', () => {
+  const r = req('https://www.googletagmanager.com/td?id=G-PWTEST0001&dl=http%3A%2F%2Flocalhost%3A3000%2F');
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)).toEqual([]);
+  expect(isCollectionEndpoint(req('https://example.com/td?id=G-PWTEST0001'))).toBe(false);
 });
 
 test('script loads and other paths are not collection endpoints', () => {

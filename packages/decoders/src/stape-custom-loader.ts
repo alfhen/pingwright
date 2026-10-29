@@ -32,18 +32,18 @@ export function createStapeCustomLoader(inner: readonly Decoder[]): Decoder {
     name: 'stape-custom-loader',
     match(req) {
       const real = unwrapStapeLoader(req);
-      return real !== undefined && inner.some((d) => d.match(real));
+      return real !== undefined && inner.some((d) => d.match(real, true));
     },
     isCollectionEndpoint(req) {
       const real = unwrapStapeLoader(req);
-      return real !== undefined && inner.some((d) => d.isCollectionEndpoint(real));
+      return real !== undefined && inner.some((d) => d.isCollectionEndpoint(real, true));
     },
     decode(req: Request, newHitId: NewHitId = defaultHitId): Hit[] {
       const real = unwrapStapeLoader(req);
       if (!real) return [];
       return inner
-        .filter((d) => d.match(real))
-        .flatMap((d) => d.decode(real, newHitId))
+        .filter((d) => d.match(real, true))
+        .flatMap((d) => d.decode(real, newHitId, true))
         .map((hit) => ({ ...hit, transport: `${hit.transport} via ${STAPE_LOADER_TRANSPORT}` }));
     },
   };

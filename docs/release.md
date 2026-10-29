@@ -4,7 +4,7 @@ Releases are git tags. Each tag points at a commit that carries a built `dist/`.
 
 1. Bump `version` in `package.json` and merge the change to main.
 2. Check out main at the merge commit, with a clean tree.
-3. Run `scripts/release.sh <version>`. It builds, then commits `dist/` and a `package.json` without the `build` script on a detached HEAD and creates the annotated tag `v<version>`.
+3. Run `scripts/release.sh <version>`. It builds, then commits `dist/` and a `package.json` without the `build` script on a detached HEAD and creates the annotated tag `v<version>`. The commit and tag use the maintainer's identity (`user.name` and `user.email`, or `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`). The committer and tagger default to the same identity unless `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` are set. The script stops if none is set.
 4. Push the tag with the command the script prints: `git push origin v<version>`.
 
 The script refuses to run if the tree is dirty, HEAD is not origin/main, or `package.json` does not match `<version>`. It does not push and it does not create a GitHub release.

@@ -1,6 +1,6 @@
 # Pingwright
 
-Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, reports which tags fired, and checks the result against what you expect.
+Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Reports of which tags fired are planned.
 
 > **Status: 0.1 release candidate (`0.1.0-rc.1`).** 0.1 plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
@@ -19,7 +19,7 @@ Tracking setups break quietly. A trigger change lets a pixel fire before consent
 Pingwright is built so that a coding agent, a CI job or a person can answer these questions with one command and get structured results:
 
 - What did the site send to each vendor, before and after the visitor's consent choice?
-- Which tags fired for each event, and which expected tags did not?
+- Which tags fired for each event, and which expected tags did not? (Planned, not built in 0.1.)
 - Does an unpublished GTM workspace behave as intended, before you publish it? (Not built yet.)
 
 ## What it does
@@ -28,7 +28,7 @@ Pingwright is built so that a coding agent, a CI job or a person can answer thes
 2. **Records requests** from the page and from all iframes, including sandboxed iframes such as Shopify custom pixels. Capture from service workers works in Chromium only, and requests to the collector origin from dedicated workers are captured too. Each run reports which sources it covered.
 3. **Decodes hits.** Vendor plugins turn raw requests into readable hits: GA4 events and consent state, Google Ads, Meta and Stape server-container traffic. Pinterest and Microsoft UET are not built yet.
 4. **Reports tag firing (not built yet).** An optional GTM template reports which tags fired or failed for each event, in the web container and the server container. Agents get this without a Google sign-in. Given the container's tag list, Pingwright also reports which expected tags did not fire.
-5. **Checks expectations.** Each scenario lists what must and must not happen, for example "no Pinterest request before consent" or "GA4 hits after a reject carry no user ID". Pingwright reports pass or fail, with the evidence.
+5. **Checks expectations.** Each scenario lists what must and must not happen, for example "no Meta request before consent" or "GA4 hits after a reject carry no user ID". Pingwright reports pass or fail, with the evidence. A rule on a vendor without a 0.1 decoder, such as Pinterest, matches nothing and passes vacuously.
 6. **Checks hashing.** Because Pingwright knows the fake identity it typed, it can check that the hashed email and phone sent to Google and Meta are correct.
 7. **Compares runs (not built yet).** `pingwright diff` shows what changed per vendor and per event between two runs, for example before and after a GTM change.
 
@@ -84,7 +84,7 @@ Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the g
 4. `pingwright run scenario.yml --site https://staging.example.com`
 5. Read the summary, and the full record in `runs/run_<id>.jsonl`.
 
-`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys in 0.1 are `ga4`, `google-ads`, `meta` and `sgtm`. A misspelt or unsupported vendor matches nothing, so a `mustNot` rule on it passes.
+`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys in 0.1 are `ga4`, `google-ads`, `meta` and `sgtm`. A scenario that names any other vendor is rejected when it is parsed.
 
 Stub mode is the default: known collection endpoints are recorded and answered locally. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run unless the scenario sets `options: { allowUnknownDestination: true }`. Any host other than the exact `--site` host counts as third party, including `www` and other subdomains and CDN images with query strings, so a first run on a real site usually flags many requests. The example above allows them, and the summary still lists them. A request sent while a sandboxed `srcdoc` iframe is loading can escape stubbing and recording (see [design §5.3](docs/design.md)). Use `--network live` to let everything through. In 0.1, Pingwright decodes GA4, Google Ads, Meta and Stape traffic. Hits to other vendors, such as Pinterest, Microsoft UET or TikTok, are not stubbed: they pass through and can only show up as `unknownDestination` flags.
 
@@ -117,7 +117,7 @@ Pingwright will not change GTM containers or sign in to Google. An agent that ed
 
 ## Related tools
 
-- **EDPS website-evidence-collector** records cookies and beacons, including before consent. Pingwright adds vendor decoding, expectations, diffs and tag reports.
+- **EDPS website-evidence-collector** records cookies and beacons, including before consent. Pingwright adds vendor decoding and expectations. Diffs and tag reports are planned.
 - **DuckDuckGo autoconsent** handles consent banners. Pingwright uses it.
 - **Snowplow Micro** does local, assertable event collection for Snowplow trackers.
 - **ObservePoint**, **DataTrue** and **Trackingplan** are commercial services for tag auditing and monitoring.

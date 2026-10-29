@@ -37,19 +37,27 @@ if [ "$current" != "$version" ]; then
   exit 1
 fi
 
+name="${GIT_AUTHOR_NAME:-$(git config user.name || true)}"
+email="${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}"
+if [ -z "$name" ] || [ -z "$email" ]; then
+  echo "refusing: no git identity. Set user.name and user.email, or GIT_AUTHOR_NAME and GIT_AUTHOR_EMAIL." >&2
+  exit 1
+fi
+# git guesses a missing committer or tagger from the hostname, so pin all of them.
+export GIT_AUTHOR_NAME="$name" GIT_AUTHOR_EMAIL="$email"
+export GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-$name}" GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-$email}"
+
 pnpm install --frozen-lockfile
 pnpm build
-
-identity=(-c "user.name=${GIT_AUTHOR_NAME:-Pingwright Release}" -c "user.email=${GIT_AUTHOR_EMAIL:-release@example.com}")
 
 git checkout -q --detach
 # npm runs a nested install for git dependencies whose scripts include build, which races with the outer global install.
 npm pkg delete scripts.build
 git add -f dist package.json
-git "${identity[@]}" commit -q -m "Release v$version" -- dist package.json
+git commit -q -m "Release v$version" -- dist package.json
 
 if [ "$tag" = 1 ]; then
-  git "${identity[@]}" tag -a "v$version" -m "Release v$version"
+  git tag -a "v$version" -m "Release v$version"
   echo "Tagged v$version. Publish it with:"
   echo "  git push origin v$version"
 else
