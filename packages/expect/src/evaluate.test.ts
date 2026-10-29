@@ -9,7 +9,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { evaluate, type EvalEpoch } from './evaluate.ts';
+import { evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 import { README_SCENARIO } from './readme-scenario.ts';
 
@@ -341,4 +341,15 @@ test('the identity is read from the Run record', () => {
   const foreign = hit({}, { postData: Buffer.from('{"em":"someone.else@example.com"}').toString('base64') });
   const rs = evaluate([runRecord, foreign.hit, foreign.req] as never, parseScenario('start: /'));
   expect(rs.find((r) => r.expectation === 'builtin: possibleRealData')!.pass).toBe(false);
+});
+
+test('placeHitsInEpochs skips Google hits and puts a hit in the grace window in the new epoch', () => {
+  const epoch = (startT: number): EvalEpoch => ({ type: 'consentEpoch', id: newId('consentEpoch'), runId, startT, endT: null, source: 'test', state: 'undecided' });
+  const epochs = [epoch(0), epoch(1000)];
+  const late = { vendor: 'meta', t: 960 } as Hit;
+  const early = { vendor: 'meta', t: 900 } as Hit;
+  const placed = placeHitsInEpochs([late, early, { vendor: 'ga4', t: 2000 } as Hit], epochs, 50);
+  expect(placed.size).toBe(2);
+  expect(placed.get(late)).toBe(epochs[1]);
+  expect(placed.get(early)).toBe(epochs[0]);
 });

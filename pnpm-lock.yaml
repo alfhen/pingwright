@@ -68,6 +68,9 @@ importers:
 
   packages/recorder:
     dependencies:
+      '@pingwright/consent':
+        specifier: workspace:*
+        version: link:../consent
       '@pingwright/core':
         specifier: workspace:*
         version: link:../core

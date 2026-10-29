@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline/promises';
+import { answerBanner } from '@pingwright/consent';
 import { createIdentity, type Identity, type Step as StepRecord } from '@pingwright/core';
 import type { Scenario, Step } from '@pingwright/expect';
 import type { Page } from 'playwright';
@@ -10,12 +11,17 @@ export type ConsentAnswer = Extract<Step, { kind: 'consent' }>['value'];
 export interface ConsentContext {
   recorder: Recorder;
   page: Page;
+  timeoutMs?: number;
 }
 
 export type ConsentHandler = (answer: ConsentAnswer, context: ConsentContext) => Promise<void>;
 
-export const unwiredConsentHandler: ConsentHandler = () => {
-  throw new Error('consent step not wired');
+/** `withdraw` is a rejection; the scenario reopens the banner itself first. */
+export const bannerConsentHandler: ConsentHandler = async (answer, { recorder, page, timeoutMs }) => {
+  const result = await answerBanner(page, answer === 'withdraw' ? 'reject' : answer, { timeoutMs });
+  if (result.result === 'banner not shown') throw new Error('banner not shown');
+  if (result.result === 'failed') throw new Error(`consent ${answer} failed`);
+  recorder.recordBanner(result);
 };
 
 export interface PlayOptions {
@@ -139,7 +145,7 @@ async function runStep(
       await recorder.checkpoint(step.value, record);
       return;
     case 'consent':
-      await (options.consent ?? unwiredConsentHandler)(step.value, { recorder, page });
+      await (options.consent ?? bannerConsentHandler)(step.value, { recorder, page, timeoutMs: scenario.options.consentTimeout });
       return;
     case 'handoff': {
       const print = options.print ?? ((text: string) => process.stdout.write(`${text}\n`));

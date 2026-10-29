@@ -19,8 +19,7 @@ import {
 import { isSandboxPageUrl } from '@pingwright/decoders';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario } from './scenario.ts';
 
-/** A consent epoch as the evaluator reads it. Unlike the core record, its state may be `undecided`. */
-export type EvalEpoch = Omit<ConsentEpoch, 'state'> & { state: ConsentState | 'undecided' };
+export type EvalEpoch = ConsentEpoch;
 
 export interface EvaluateOptions {
   identity?: Identity;
@@ -164,13 +163,21 @@ function hostOf(url: string): string {
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
  * epoch, since tags may fire on the consent update itself.
  */
-function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
-  let found: EvalEpoch | undefined;
-  ctx.epochs.forEach((e, i) => {
-    const start = i === 0 ? -Infinity : e.startT - ctx.grace;
-    if (hit.t >= start) found = e;
+export function epochForHit<E extends Pick<ConsentEpoch, 'startT'>>(
+  epochs: readonly E[],
+  t: number,
+  graceMs = DEFAULT_GRACE_MS,
+): E | undefined {
+  let found: E | undefined;
+  epochs.forEach((e, i) => {
+    const start = i === 0 ? -Infinity : e.startT - graceMs;
+    if (t >= start) found = e;
   });
   return found;
+}
+
+function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
+  return epochForHit(ctx.epochs, hit.t, ctx.grace);
 }
 
 /**
@@ -355,4 +362,14 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     });
   }
   return out;
+}
+
+/** Places each non-Google hit in the epoch `evaluate` would judge it by. Google hits carry their own consent. */
+export function placeHitsInEpochs(
+  hits: readonly Hit[],
+  epochs: readonly ConsentEpoch[],
+  graceMs = DEFAULT_GRACE_MS,
+): Map<Hit, ConsentEpoch | undefined> {
+  const sorted = [...epochs].sort((a, b) => a.startT - b.startT);
+  return new Map(hits.filter((h) => !GOOGLE_VENDORS.has(h.vendor)).map((h) => [h, epochForHit(sorted, h.t, graceMs)]));
 }

@@ -101,13 +101,14 @@ describe('full fixture checkout', () => {
   });
 });
 
-test('the default consent handler fails the step and the run is still written', async () => {
+test('a failing consent handler fails the step and the run is still written', async () => {
   const parsed = parseScenario('start: /\nsteps:\n  - consent: accept\n');
-  const error = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed }).catch((e: unknown) => e);
+  const consent = () => Promise.reject(new Error('handler failed'));
+  const error = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed, consent }).catch((e: unknown) => e);
   expect(error).toBeInstanceOf(StepError);
-  expect((error as StepError).message).toContain('consent step not wired');
+  expect((error as StepError).message).toContain('handler failed');
   const failed = (error as StepError).run!.records.steps.find((s) => s.label === 'consent-1');
-  expect(failed?.error).toBe('consent step not wired');
+  expect(failed?.error).toBe('handler failed');
 });
 
 test('handoff prints the reminder and waits for the resolver', async () => {

@@ -136,7 +136,8 @@ export interface ConsentEpoch {
   startT: number;
   endT: number | null;
   source: string;
-  state: ConsentState;
+  /** `undecided` until the visitor has answered; after that the Consent Mode state, which may be mixed. */
+  state: ConsentState | 'undecided';
 }
 
 export interface CheckpointCookie {

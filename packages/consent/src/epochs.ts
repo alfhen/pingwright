@@ -12,7 +12,7 @@ export interface BannerEvent {
 }
 
 /** A ConsentEpoch without its record identity, plus the label that `epoch(<state>)` matches. */
-export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId'> & { label: EpochLabel };
+export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId' | 'state'> & { state: ConsentState; label: EpochLabel };
 
 export interface EpochOptions {
   /** Start of the run on the shared clock. */
