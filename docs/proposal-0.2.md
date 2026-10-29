@@ -81,14 +81,18 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
      - #112: a request to a subdomain of `--site` is not flagged as `unknownDestination`. A request to a different registrable domain still is.
 
 6. **Withdrawal epochs** (#119). Withdrawal is where trigger-group setups break.
-   - `withdrawn` is a label, not a new consent state. A denied epoch that follows a granted epoch gets the label `withdrawn`. Its state stays `denied`.
-   - `ConsentEpoch.label` already exists and today holds values such as `denied` and `mixed`. For a withdrawal, `withdrawn` replaces `denied` as the label. The state keeps the consent values.
-   - A mixed epoch that follows a granted epoch is a partial withdrawal. It gets the label `withdrawn` too, and its state shows which signals were denied.
-   - Every withdrawal gets the label, so in granted, denied, granted, denied both denied epochs are `withdrawn`.
+   - `withdrawn` is a label, not a new consent state. Withdrawal is defined per signal: an epoch gets the label `withdrawn` when it denies at least one signal that any earlier epoch in the run granted. Its state keeps the consent values, for example `denied` or `mixed`.
+   - `ConsentEpoch.label` already exists and today holds values such as `denied` and `mixed`. For a withdrawal, `withdrawn` replaces that label.
+   - The rule covers every way back from a grant:
+     - granted then denied;
+     - granted then mixed (a partial withdrawal);
+     - mixed then denied, for example a visitor who accepts only analytics and then rejects everything;
+     - granted, mixed, then denied, where both later epochs are `withdrawn`;
+     - granted, denied, granted, denied, where both denied epochs are `withdrawn`.
    - `in: epoch(denied)` keeps its meaning from design §7.3: it matches by state, so it matches withdrawn epochs too.
    - A new selector, `in: epoch(label=<label>)`, matches by label. `label` is a reserved name, so it can't be mistaken for a consent field such as `analytics`.
    - `diff` groups by label, so a withdrawn epoch is not compared with a first reject.
-   - Acceptance: in an accept-then-withdraw fixture run, the last epoch has state `denied` and label `withdrawn`. A Meta hit sent after withdrawal fails `mustNot: { vendor: meta, in: epoch(label=withdrawn) }`. The same hit fails `mustNot: { vendor: meta, in: epoch(denied) }`. In a reject-only run, `epoch(label=withdrawn)` matches nothing.
+   - Acceptance: in an accept-then-withdraw fixture run, the last epoch has state `denied` and label `withdrawn`. A Meta hit sent after withdrawal fails `mustNot: { vendor: meta, in: epoch(label=withdrawn) }`. The same hit fails `mustNot: { vendor: meta, in: epoch(denied) }`. In a reject-only run, `epoch(label=withdrawn)` matches nothing. Unit tests cover each sequence in the list above, including mixed then denied.
 
 ### 3.2 Should have
 
