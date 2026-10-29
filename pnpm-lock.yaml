@@ -29,6 +29,19 @@ importers:
 
   fixtures/site: {}
 
+  packages/consent:
+    dependencies:
+      '@duckduckgo/autoconsent':
+        specifier: 16.51.0
+        version: 16.51.0
+      '@pingwright/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@pingwright/fixture-site':
+        specifier: workspace:*
+        version: link:../../fixtures/site
+
   packages/core:
     dependencies:
       '@faker-js/faker':
@@ -53,7 +66,21 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
-  packages/recorder: {}
+  packages/recorder:
+    dependencies:
+      '@pingwright/core':
+        specifier: workspace:*
+        version: link:../core
+      '@pingwright/decoders':
+        specifier: workspace:*
+        version: link:../decoders
+      playwright:
+        specifier: 1.64.1
+        version: 1.64.1
+    devDependencies:
+      '@pingwright/fixture-site':
+        specifier: workspace:*
+        version: link:../../fixtures/site
 
 packages:
 
@@ -62,6 +89,9 @@ packages:
 
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
+
+  '@duckduckgo/autoconsent@16.51.0':
+    resolution: {integrity: sha512-fBV7MqJa5WeFyucuFMcYgQVs1ksqCovwEU1cGvHC5r9KdAe1rw+pb6X6JZWdZ7WjqfX4shREp4e9bUg/Ofo+wQ==}
 
   '@eslint-community/eslint-utils@4.10.1':
     resolution: {integrity: sha512-cuadcxVFE8sDK6iWJbs8Sn0av2Nrh2QSGQhVlBW9AaAHqHwjWsZHT8LJ4hFGPh7ASBV2deFdM7H/DPjulmh8rg==}
@@ -713,6 +743,12 @@ packages:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
+  tldts-core@7.4.18:
+    resolution: {integrity: sha512-KI2PKvCmvQI/xD6ypPqkU0i7oxNXR/O58RLRaHR4svsgVUQ2JE/XC8BtMbG6PSehD27I8sZJRcC1ASnCy6lp3g==}
+
+  tldts-experimental@7.4.18:
+    resolution: {integrity: sha512-IErxVvjgDme6GfcjahlKkVpjgrtvOIzUs8oSc9vftTjFen8/R+oKlBlJ1jIY/ffVo/eYAZVzf3he/aBC304PyQ==}
+
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
     engines: {node: '>=18.12'}
@@ -861,6 +897,10 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
+
+  '@duckduckgo/autoconsent@16.51.0':
+    dependencies:
+      tldts-experimental: 7.4.18
 
   '@eslint-community/eslint-utils@4.10.1(eslint@10.12.0)':
     dependencies:
@@ -1438,6 +1478,12 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
+
+  tldts-core@7.4.18: {}
+
+  tldts-experimental@7.4.18:
+    dependencies:
+      tldts-core: 7.4.18
 
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:

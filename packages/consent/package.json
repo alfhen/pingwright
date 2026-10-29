@@ -1,0 +1,14 @@
+{
+  "name": "@pingwright/consent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@duckduckgo/autoconsent": "16.51.0",
+    "@pingwright/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@pingwright/fixture-site": "workspace:*"
+  }
+}

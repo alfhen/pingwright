@@ -16,6 +16,13 @@ export interface HitConsent extends ConsentState {
 export type NetworkMode = 'stub' | 'server' | 'live';
 export type RequestOutcome = 'passed' | 'stubbed' | 'failed';
 
+export interface CaptureCoverage {
+  page: boolean;
+  iframe: boolean;
+  dedicatedWorker: boolean;
+  serviceWorker: 'chromium-only';
+}
+
 export interface Run {
   type: 'run';
   id: Id<'run'>;
@@ -28,6 +35,7 @@ export interface Run {
   gtmOverride: string | null;
   containerVersions: Record<string, string>;
   identity: Record<string, unknown> | null;
+  coverage?: CaptureCoverage;
 }
 
 export interface Step {
@@ -94,6 +102,8 @@ export interface DataLayerEvent {
   t: number;
   event: string | null;
   gtmUniqueEventId: number | null;
+  /** The pushed arguments, JSON-safe. A gtag() call is its argument list; any other push is `[item]`. */
+  args: unknown[];
   isConsentCommand: boolean;
 }
 
@@ -153,7 +163,12 @@ export interface Result {
   message?: string;
 }
 
-export type FlagKind = 'unknownDestination' | 'possibleRealData' | 'sandboxPageUrl' | (string & {});
+export type FlagKind =
+  | 'unknownDestination'
+  | 'possibleRealData'
+  | 'sandboxPageUrl'
+  | 'stubBypass'
+  | (string & {});
 
 export interface Flag {
   type: 'flag';
