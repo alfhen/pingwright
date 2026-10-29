@@ -218,11 +218,11 @@ test('after: <step label>', () => {
   const step: Step = { type: 'step', id: newId('step'), runId, index: 0, label: 'accept', startedAt: 900, endedAt: 1000 };
   const before = hit({ vendor: 'meta', t: 950 });
   const after = hit({ vendor: 'meta', t: 1500 });
-  const q = `expect:\n  must:\n    - { vendor: meta, after: accept }`;
+  const q = `steps:\n  - { consent: accept, label: accept }\nexpect:\n  must:\n    - { vendor: meta, after: accept }`;
   const r = rule(q, [step, before, after]);
   expect(r.pass).toBe(true);
   expect(r.evidence).toEqual([after.hit.id]);
-  const none = rule(`expect:\n  mustNot:\n    - { vendor: meta, after: accept }`, [step, before]);
+  const none = rule(`steps:\n  - { consent: accept, label: accept }\nexpect:\n  mustNot:\n    - { vendor: meta, after: accept }`, [step, before]);
   expect(none.pass).toBe(true);
   const missing = rule(q, [before]);
   expect(missing.pass).toBe(false);

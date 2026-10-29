@@ -4,16 +4,20 @@ import {
   RunWriter,
   readRun,
   type CaptureCoverage,
+  type Checkpoint,
+  type CheckpointCookie,
   type CollectorReport,
   type DataLayerEvent,
   type Hit,
   type Id,
+  type Identity,
   type InvalidReport,
   type NetworkMode,
   type Request,
   type Response,
   type Run,
   type RunRecords,
+  type Step,
 } from '@pingwright/core';
 import { decodeRequest, isCollectionEndpoint } from '@pingwright/decoders';
 import {
@@ -90,6 +94,9 @@ export class Recorder {
   private readonly dataLayerEvents: DataLayerEvent[] = [];
   private readonly collectorReports: (CollectorReport | InvalidReport)[] = [];
   private readonly pending = new Set<Promise<unknown>>();
+  private readonly steps: Step[] = [];
+  private readonly checkpoints: Checkpoint[] = [];
+  private currentStepId: Id<'stp'> | null = null;
   private closed = false;
 
   private constructor(
@@ -139,7 +146,7 @@ export class Recorder {
     };
     await context.exposeBinding(DATALAYER_BINDING, (_source, payload: DataLayerPayload) => {
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);
-      if (event) this.dataLayerEvents.push(event);
+      if (event) this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
     });
     await context.addInitScript(dataLayerInitScript);
     if (this.options.networkMode === 'stub') {
@@ -194,7 +201,7 @@ export class Recorder {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
-      stepId: null,
+      stepId: this.currentStepId,
       t: nodeNow(),
       method: request.method(),
       url: request.url(),
@@ -216,7 +223,7 @@ export class Recorder {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
-      stepId: null,
+      stepId: this.currentStepId,
       t: nodeNow(),
       method: payload.method,
       url: payload.url,
@@ -262,6 +269,52 @@ export class Recorder {
     await route.continue();
   }
 
+  get site(): string {
+    return this.options.site;
+  }
+
+  setIdentity(identity: Identity): void {
+    this.run.identity = { ...identity };
+    this.run.identitySeed = identity.seed;
+  }
+
+  /** Requests, hits and dataLayer events recorded from now on carry this step's id, until the next step begins. */
+  beginStep(label: string, index: number): Step {
+    const step: Step = { type: 'step', id: newId('step'), runId: this.runId, index, label, startedAt: nodeNow(), endedAt: null };
+    this.steps.push(step);
+    this.currentStepId = step.id;
+    return step;
+  }
+
+  endStep(step: Step, error?: string): void {
+    step.endedAt = nodeNow();
+    if (error !== undefined) step.error = error;
+  }
+
+  async checkpoint(label: string, step: Step | null): Promise<Checkpoint> {
+    const host = new URL(this.options.site).hostname;
+    const cookies: CheckpointCookie[] = (await this.context.cookies()).map((c) => {
+      const domain = c.domain.replace(/^\./, '');
+      return {
+        name: c.name,
+        domain: c.domain,
+        expires: c.expires > 0 ? c.expires * 1000 : null,
+        firstParty: host === domain || host.endsWith(`.${domain}`),
+      };
+    });
+    const checkpoint: Checkpoint = {
+      type: 'checkpoint',
+      id: newId('checkpoint'),
+      runId: this.runId,
+      stepId: step?.id ?? this.currentStepId,
+      label,
+      consentState: null,
+      cookies,
+    };
+    this.checkpoints.push(checkpoint);
+    return checkpoint;
+  }
+
   async visit(url: string): Promise<Page> {
     const page = await this.context.newPage();
     await page.goto(url, { waitUntil: 'load' });
@@ -300,6 +353,8 @@ export class Recorder {
     try {
       for (const record of [
         ...requests,
+        ...this.steps,
+        ...this.checkpoints,
         ...this.responses,
         ...hits,
         ...this.dataLayerEvents,

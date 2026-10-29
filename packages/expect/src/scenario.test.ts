@@ -80,7 +80,7 @@ test('rejects an unknown step and a multi-key step', () => {
 });
 
 test('rejects a bad duration, consent answer and network', () => {
-  expect(errorOf(`start: /\nsteps:\n  - wait: soon\n`)).toContain('steps[0].wait');
+  expect(errorOf(`start: /\nsteps:\n  - wait: [soon]\n`)).toContain('steps[0].wait');
   expect(errorOf(`start: /\nsteps:\n  - consent: maybe\n`)).toContain('steps[0].consent');
   expect(errorOf(`start: /\noptions:\n  network: fast\n`)).toMatch(/line 3: options\.network/);
 });
@@ -110,7 +110,7 @@ test('reports YAML syntax errors with a line', () => {
 test('reports every problem at once', () => {
   const err = (() => {
     try {
-      parseScenario(`start: /\nsteps:\n  - dance: 1\n  - wait: x\n`);
+      parseScenario(`start: /\nsteps:\n  - dance: 1\n  - wait: [x]\n`);
     } catch (e) {
       return e as ScenarioError;
     }
@@ -122,4 +122,16 @@ test('reports every problem at once', () => {
 test('boolean ids filters mean present and absent', () => {
   const s = parseScenario('start: /\nexpect:\n  mustNot:\n    - { vendor: ga4, ids.user_id: true, ids.client_id: false }');
   expect(s.expect.mustNot[0]!.filter.ids).toEqual({ user_id: 'present', client_id: 'absent' });
+});
+
+test('step labels: written, default, duplicate and checked by after', () => {
+  const s = parseScenario('start: /\nsteps:\n  - visit: /cart\n    label: cart\n  - click: "#go"\n  - wait: "#x"\n');
+  expect(s.steps.map((x) => x.label)).toEqual(['cart', 'click-2', 'wait-3']);
+  expect(s.steps[2]).toMatchObject({ kind: 'wait', value: { selector: '#x' } });
+  expect(parseScenario('start: /\nsteps:\n  - checkpoint: end\n').steps[0]!.label).toBe('end');
+  expect(errorOf('start: /\nsteps:\n  - { visit: /a, label: x }\n  - { visit: /b, label: x }\n')).toContain('duplicate step label "x"');
+  expect(errorOf('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: nope }\n')).toMatch(/is not a step label.*visit-1/);
+  expect(errorOf('start: /\nsteps:\n  - { visit: /a, label: start }\n')).toContain('duplicate step label "start"');
+  expect(parseScenario('start: /\nexpect:\n  must:\n    - { vendor: ga4, after: start }\n').expect.must).toHaveLength(1);
+  expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: visit-1 }\n').expect.must).toHaveLength(1);
 });

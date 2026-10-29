@@ -35,6 +35,7 @@ export interface Run {
   gtmOverride: string | null;
   containerVersions: Record<string, string>;
   identity: Record<string, unknown> | null;
+  identitySeed?: number;
   coverage?: CaptureCoverage;
 }
 
@@ -46,6 +47,8 @@ export interface Step {
   label: string;
   startedAt: number;
   endedAt: number | null;
+  /** Why the step failed. Absent when it passed. */
+  error?: string;
 }
 
 export interface Request {
