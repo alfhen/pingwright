@@ -145,6 +145,15 @@ test('/data?dtdc= with a non-base64 or non-object value is not a hit', () => {
   }
 });
 
+test('a Stape data-client POST through the loader is stubbed and decoded (#46 field test)', () => {
+  const r = req(`${HOST}/pwstape?pk=${encodeURIComponent(b64('/data?v=2&event=page_viewed'))}`, {
+    method: 'POST',
+    postData: JSON.stringify({ page_location: PAGE }),
+  });
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'sgtm', event: 'page_viewed', page: PAGE });
+});
+
 test('reads event and page from a JSON POST body on /data', () => {
   const r = req(`${HOST}/data`, {
     method: 'POST',
