@@ -324,6 +324,19 @@ test('possibleRealData ignores hashes in asset paths but scans their queries', (
   expect(find(evaluate([tracked.req], parseScenario('start: /'), { identity })).pass).toBe(false);
 });
 
+test('possibleRealData still finds emails, base64 payloads and phones in pixel paths', () => {
+  const payload = Buffer.from('{"em":"someone.else@example.com"}').toString('base64url');
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  for (const url of [
+    'https://px.tracker.example/u/someone.else@example.com/p.gif',
+    `https://px.tracker.example/c/${payload}/p.gif`,
+    'https://px.tracker.example/t/+15550199999/p.gif',
+  ]) {
+    const pixel = hit({}, { url, resourceType: 'image' });
+    expect(find(evaluate([pixel.req], parseScenario('start: /'), { identity })).pass, url).toBe(false);
+  }
+});
+
 test('possibleRealData still scans script-type conversion hits', () => {
   const sha = 'cd'.repeat(32);
   const ads = hit({ vendor: 'google-ads', event: 'conversion' }, { url: `https://www.googleadservices.com/pagead/conversion/AW-000000001/?em=${sha}`, resourceType: 'script' });

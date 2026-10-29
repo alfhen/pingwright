@@ -325,7 +325,7 @@ Every result includes record IDs, the run ID and the step label. Errors say what
 
 **Hash checks.** Because the run knows its identity, it can check that vendors received the right hashes. For example, the hashed email in GA4 `user_data` or in Meta's `em` should equal the SHA-256 of the normalised fake email. A mismatch points at broken hashing or normalisation.
 
-**Leak detection instead of masking.** Pingwright does not try to mask personal data. It flags it. Any email, phone number or hashed identifier in a recording that does not come from the run's identity is reported as `possibleRealData`, with the request and step. Detection runs after decoding (base64, URL encoding), so encoded values are found too.
+**Leak detection instead of masking.** Pingwright does not try to mask personal data. It flags it. Any email, phone number or hashed identifier in a recording that does not come from the run's identity is reported as `possibleRealData`, with the request and step. Detection runs after decoding (base64, URL encoding), so encoded values are found too. One gap: in image, script, stylesheet, font and media requests, a path segment of the form `/<64 hex>.<ext>` is not checked, because content-addressed assets use that name. A hashed identifier sent as a pixel file name in that form is therefore not flagged.
 
 Real data can still appear through:
 

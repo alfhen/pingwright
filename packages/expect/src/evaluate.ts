@@ -348,16 +348,13 @@ function pathOf(url: string): string {
   }
 }
 
-// Asset paths carry content hashes and names like logo@2x.png; a hit on an asset request travels in its query or body.
+// Content-addressed assets are named /<sha256>.<ext>. That name cannot be told apart from a hashed id used as a
+// pixel file name (design §13), so only that exact segment shape is skipped; the rest of the path is still scanned.
 const ASSET_TYPES = new Set(['image', 'script', 'stylesheet', 'font', 'media']);
+const HASH_FILE_SEGMENT = /\/[0-9a-f]{64}\.[a-z0-9]{1,5}(?=$|[/?#])/gi;
 
 function scannedUrl(request: Request): string {
-  if (!ASSET_TYPES.has(request.resourceType)) return request.url;
-  try {
-    return new URL(request.url).search;
-  } catch {
-    return request.url;
-  }
+  return ASSET_TYPES.has(request.resourceType) ? request.url.replace(HASH_FILE_SEGMENT, '/') : request.url;
 }
 
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {

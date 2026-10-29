@@ -78,7 +78,7 @@ export interface LeakMatch {
 const MAX_DEPTH = 3;
 const EMAIL = /[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
 // Asset names such as logo@2x.png look like emails.
-const FILE_EXTENSION = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|js|mjs|json|map|woff2?|ttf|otf|mp4|webm|mp3)$/i;
+const FILE_EXTENSION = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|js|mjs|json|map|woff2?|ttf|otf|eot|wasm|webm)$/i;
 const PHONE = /(?<![A-Za-z0-9+])\+\d{8,15}(?!\d)|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
 const HASH = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
 const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
