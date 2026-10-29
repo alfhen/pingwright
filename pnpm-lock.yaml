@@ -31,6 +31,12 @@ importers:
 
   packages/core: {}
 
+  packages/decoders:
+    dependencies:
+      '@pingwright/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/recorder: {}
 
 packages:
