@@ -20,14 +20,21 @@ function chromeUserAgent(browserVersion: string, product = 'Chrome'): string {
 
 const collectorOrigin = 'https://collector.pingwright.invalid';
 
-function isCollection(url: URL): boolean {
-  if (['localhost', '127.0.0.1'].includes(url.hostname) || url.origin === collectorOrigin) return false;
-  const isMeta = /(^|\.)(facebook\.com|facebook\.net)$/.test(url.hostname);
-  return (
-    /\/(g\/collect|ccm\/collect|pagead\/|td\/)/.test(url.pathname) ||
-    (isMeta && /^\/tr\/?$/.test(url.pathname)) ||
-    /googleads|doubleclick/.test(url.hostname)
-  );
+function isLoopback(url: URL): boolean {
+  return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname);
+}
+
+function isOffMachine(url: URL): boolean {
+  return /^https?:$/.test(url.protocol) && !isLoopback(url) && url.origin !== collectorOrigin;
+}
+
+// Only script loads may reach the network. Every other off-machine request is answered locally.
+function isAllowedScriptLoad(url: URL): boolean {
+  if (url.hostname === 'www.googletagmanager.com') return url.pathname === '/gtag/js';
+  if (url.hostname === 'connect.facebook.net') {
+    return /\/fbevents\.js$/.test(url.pathname) || url.pathname.startsWith('/signals/config/');
+  }
+  return false;
 }
 
 let site: FixtureSite;
@@ -46,25 +53,28 @@ afterAll(async () => {
 interface Watch {
   seen: URL[];
   stubbed: Set<string>;
+  allowed: Set<string>;
   collectorBodies: string[];
   bodies: Map<string, string[]>;
 }
 
 async function watch(context: BrowserContext): Promise<Watch> {
-  const w: Watch = { seen: [], stubbed: new Set(), collectorBodies: [], bodies: new Map() };
+  const w: Watch = { seen: [], stubbed: new Set(), allowed: new Set(), collectorBodies: [], bodies: new Map() };
   context.on('request', (request) => {
     const url = new URL(request.url());
     w.seen.push(url);
     const body = request.postData();
     if (body) w.bodies.set(request.url(), [...(w.bodies.get(request.url()) ?? []), body]);
   });
-  await context.route(
-    (url) => isCollection(url),
-    (route) => {
-      w.stubbed.add(route.request().url());
-      return route.fulfill({ status: 204 });
-    },
-  );
+  await context.route(isOffMachine, (route) => {
+    const url = new URL(route.request().url());
+    if (isAllowedScriptLoad(url)) {
+      w.allowed.add(url.href);
+      return route.continue();
+    }
+    w.stubbed.add(url.href);
+    return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+  });
   await context.route(`${collectorOrigin}/**`, (route) => {
     const body = route.request().postData();
     if (body) w.collectorBodies.push(body);
@@ -84,12 +94,21 @@ function ga4Hits(w: Watch): URL[] {
     .filter((u) => u.pathname === '/g/collect' && u.searchParams.get('tid') === 'G-PWTEST0001');
 }
 
-function ga4Events(w: Watch): string[] {
-  return ga4Hits(w).flatMap((u) => eventNames(u, w.bodies.get(u.href) ?? []));
+function isSandboxHit(u: URL): boolean {
+  return (u.searchParams.get('dl') ?? '').includes('/web-pixels@');
 }
 
-function unstubbedCollection(w: Watch): string[] {
-  return w.seen.filter((u) => isCollection(u) && !w.stubbed.has(u.href)).map((u) => u.href);
+function shopGa4Events(w: Watch): string[] {
+  return ga4Hits(w)
+    .filter((u) => !isSandboxHit(u))
+    .flatMap((u) => eventNames(u, w.bodies.get(u.href) ?? []));
+}
+
+// Independent of the route predicate: a request that left the machine without being stubbed or allowlisted.
+function leaked(w: Watch): string[] {
+  return w.seen
+    .filter((u) => isOffMachine(u) && !w.stubbed.has(u.href) && !w.allowed.has(u.href))
+    .map((u) => u.href);
 }
 
 test('a visitor accepts, buys, and every tracking request is seen and stubbed', async () => {
@@ -101,7 +120,7 @@ test('a visitor accepts, buys, and every tracking request is seen and stubbed', 
   await page.click('#pw-accept');
   await page.click('#add-to-cart');
   // GA4 sends non-page_view events a few seconds late and drops them on navigation.
-  await expect.poll(() => ga4Events(w), { timeout: 15_000 }).toContain('add_to_cart');
+  await expect.poll(() => shopGa4Events(w), { timeout: 15_000 }).toContain('add_to_cart');
   await page.goto(`${site.url}/checkout`);
   await page.fill('#email', 'pat@example.com');
   await page.fill('#first-name', 'Pat');
@@ -118,11 +137,11 @@ test('a visitor accepts, buys, and every tracking request is seen and stubbed', 
   await page.fill('#card-cvc', '123');
   await page.click('#pay');
   await page.waitForURL('**/thank-you');
-  await expect.poll(() => ga4Events(w), { timeout: 15_000 }).toContain('purchase');
+  await expect.poll(() => shopGa4Events(w), { timeout: 15_000 }).toContain('purchase');
 
   const stubbed = [...w.stubbed].map((u) => new URL(u));
   const ga4 = ga4Hits(w);
-  const events = ga4Events(w);
+  const events = shopGa4Events(w);
   expect(events).toContain('page_view');
   expect(events).toContain('purchase');
   expect(events).toContain('add_to_cart');
@@ -153,7 +172,7 @@ test('a visitor accepts, buys, and every tracking request is seen and stubbed', 
   expect(sandboxHit?.searchParams.get('dl')).toContain('/web-pixels@0.0.0-fixture/sandbox/');
 
   expect(w.seen.some((u) => u.origin === site.thirdPartyUrl && u.pathname === '/unknown-pixel')).toBe(true);
-  expect(unstubbedCollection(w)).toEqual([]);
+  expect(leaked(w)).toEqual([]);
   await context.close();
 });
 
@@ -168,6 +187,6 @@ test('a HeadlessChrome user agent never sees the banner', async () => {
   expect(await page.locator('#pw-consent-banner').isVisible()).toBe(false);
   const cookies = await context.cookies(site.url);
   expect(cookies.find((c) => c.name === 'pw_consent')?.value).toBe('accept');
-  expect(unstubbedCollection(w)).toEqual([]);
+  expect(leaked(w)).toEqual([]);
   await context.close();
 });
