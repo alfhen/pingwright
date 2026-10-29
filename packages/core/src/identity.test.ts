@@ -200,6 +200,21 @@ describe('scan fixes', () => {
     expect(scan(`x=sessionprefixvalue_${plain}_trailingsuffixvalue`, id)).toEqual([]);
   });
 
+  it('finds base64 before an unseparated suffix of any length (#27)', () => {
+    const payload = Buffer.from('{"email":"jane@shop.example.net"}').toString('base64url');
+    for (const suffix of ['qrstuvw', 'qrstuvwx', 'qrstuvwxyzabcdef', 'qrstuvwxyzabcdefghijkl']) {
+      expect(scan(`x=${payload}${suffix}`, id), suffix).toContainEqual(jane);
+    }
+    const random = Buffer.from('3f9a0c7e51b2d84a6f13c0e9a7b5d2418e6c0f93', 'hex').toString('base64url');
+    expect(scan(`x=${random}qrstuvwxyzabcdefghijkl`, id)).toEqual([]);
+  });
+
+  it('still finds short base64 values of 8 to 11 bytes', () => {
+    expect(scan(`ph=${b64('+4512345678')}`, id).length).toBeGreaterThan(0);
+    expect(scan(`ph=${b64('jo@shop.dk')}`, id).length).toBeGreaterThan(0);
+    expect(scan(`ph=${b64('a@shop.dk')}`, id).length).toBeGreaterThan(0);
+  });
+
   it('does not flag base64 text that happens to be 32 bytes long (#29)', () => {
     const path = '/gtag/js?id=G-PWTEST0001&l=dl123';
     expect(Buffer.from(path)).toHaveLength(32);

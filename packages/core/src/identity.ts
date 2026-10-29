@@ -132,6 +132,7 @@ function tryUrlDecode(text: string): string | undefined {
 
 const utf8Lenient = new TextDecoder('utf-8');
 const EDGE = 4;
+const MIN_BYTES_FOR_EDGES = 12;
 
 // Random bytes seldom decode to mostly valid text, so this keeps ULIDs and hashes out. Junk glued to either
 // end of a payload decodes to a few stray bytes there, so the first and last few characters are not counted.
@@ -139,7 +140,7 @@ function tryBase64Decode(token: string): string | undefined {
   const bytes = Buffer.from(token.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
   if (bytes.length < 8) return undefined;
   const text = utf8Lenient.decode(bytes);
-  const inner = [...text].slice(EDGE, -EDGE);
+  const inner = bytes.length >= MIN_BYTES_FOR_EDGES ? [...text].slice(EDGE, -EDGE) : [...text];
   if (inner.length < 4) return undefined;
   let control = 0;
   for (const ch of inner) {
@@ -209,6 +210,12 @@ function* base64Decodes(text: string): Generator<string> {
       for (let offset = 4; offset <= MAX_UNSEPARATED_PREFIX + 3; offset++) {
         const decoded = attempt(piece.slice(offset));
         if (decoded !== undefined) yield decoded;
+      }
+      for (let offset = 0; offset <= 3; offset++) {
+        for (let trim = EDGE; trim <= MAX_UNSEPARATED_PREFIX + 3; trim++) {
+          const decoded = attempt(piece.slice(offset, piece.length - trim));
+          if (decoded !== undefined) yield decoded;
+        }
       }
     }
   }
