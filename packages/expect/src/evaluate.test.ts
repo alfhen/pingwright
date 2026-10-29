@@ -163,6 +163,11 @@ test('before: consent covers other vendors in the first undecided epoch only', (
   expect(r.evidence).toEqual([early.hit.id]);
 });
 
+test('before: consent with a granted filter is flagged when the first epoch is decided', () => {
+  const r = rule(`expect:\n  mustNot:\n    - { vendor: meta, consent.analytics: granted, before: consent }`, [epoch(1000, null, granted)]);
+  expect(r.message).toContain('cannot match');
+});
+
 test('before: consent is false for a later undecided epoch', () => {
   const recs = [epoch(0, 100, 'undecided'), epoch(100, 200, granted), epoch(200, null, 'undecided')];
   expect(rule(`expect:\n  mustNot:\n    - { vendor: meta, before: consent }`, [hit({ vendor: 'meta', t: 300 }), ...recs]).pass).toBe(true);

@@ -127,7 +127,8 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
 function vacuousBeforeConsent(rule: Rule, ctx: Context): string | undefined {
   const vendors = rule.filter.vendor;
   if (!vendors || vendors.some((v) => GOOGLE_VENDORS.has(v))) return undefined;
-  const state = ctx.epochs[0]?.state;
+  const first = ctx.epochs[0];
+  const state = first?.label === 'undecided' ? first.state : undefined;
   const blocked = consentFields.filter((f) => {
     const want = rule.filter.consent[f];
     return want !== undefined && (state?.[f] ?? 'unknown') !== want;
