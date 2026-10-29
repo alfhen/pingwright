@@ -39,6 +39,7 @@ interface Change {
   t: number;
   source: 'banner' | 'consentMode';
   state: ConsentState;
+  label: EpochLabel;
   /** Backed by a banner event, so it is a visitor decision even when the state does not change. */
   decision: boolean;
 }
@@ -52,16 +53,16 @@ function mergeChanges(
   const unpaired = [...banners].sort((a, b) => a.t - b.t);
   const changes: Change[] = [];
   for (const update of updates) {
-    const label = labelOf(update.state);
     const i = unpaired.findIndex((b) => {
       const lag = update.t - b.t;
-      return labelOf(stateOf(b.action)) === label && (lag >= 0 ? lag <= pairWindowMs : -lag <= leadWindowMs);
+      return (lag >= 0 ? lag <= pairWindowMs : -lag <= leadWindowMs);
     });
     const banner = i >= 0 ? unpaired.splice(i, 1)[0] : undefined;
-    if (banner && banner.t < update.t) changes.push({ t: banner.t, source: 'banner', state: update.state, decision: true });
-    else changes.push({ t: update.t, source: 'consentMode', state: update.state, decision: banner !== undefined });
+    const label = banner ? labelOf(stateOf(banner.action)) : labelOf(update.state);
+    if (banner && banner.t < update.t) changes.push({ t: banner.t, source: 'banner', state: update.state, label, decision: true });
+    else changes.push({ t: update.t, source: 'consentMode', state: update.state, label, decision: banner !== undefined });
   }
-  for (const b of unpaired) changes.push({ t: b.t, source: 'banner', state: stateOf(b.action), decision: true });
+  for (const b of unpaired) changes.push({ t: b.t, source: 'banner', state: stateOf(b.action), label: labelOf(stateOf(b.action)), decision: true });
   return changes.sort((a, b) => a.t - b.t);
 }
 
@@ -84,7 +85,7 @@ export function buildEpochs(
   ];
   for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS, options.leadWindowMs ?? DEFAULT_GRACE_MS)) {
     const current = epochs[epochs.length - 1]!;
-    const label = labelOf(change.state);
+    const label = change.label;
     const sameState = JSON.stringify(current.state) === JSON.stringify(change.state);
     if (sameState && (current.label === label || (current.label === 'undecided' && !change.decision))) continue;
     current.endT = change.t;

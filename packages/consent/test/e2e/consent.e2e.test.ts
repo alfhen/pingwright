@@ -148,6 +148,7 @@ test('a rule with an eval step detects and acts', async () => {
   await context.addInitScript(`window.Cookiebot = { hasResponse: false, dialog: { visible: true } };`);
   await installConsent(context, {
     fixtureRules: false,
+    disabledCmps: ['Cybotcookiebot'],
     ruleFiles: [fileURLToPath(new URL('./eval-rule.json', import.meta.url))],
   });
   const page = await context.newPage();
@@ -155,6 +156,22 @@ test('a rule with an eval step detects and acts', async () => {
   const result = await answerBanner(page, 'reject');
   expect(result).toMatchObject({ detected: true, shown: true, cmp: 'pingwright-eval-test', result: 'ok' });
   expect(await storedChoice(context)).toBe('reject');
+  await context.close();
+});
+
+test('a rule whose eval step fails gives banner not shown', async () => {
+  const context = await newContext();
+  await context.addInitScript(`window.Cookiebot = { hasResponse: false, dialog: { visible: false } };`);
+  await installConsent(context, {
+    fixtureRules: false,
+    disabledCmps: ['Cybotcookiebot'],
+    ruleFiles: [fileURLToPath(new URL('./eval-rule.json', import.meta.url))],
+  });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const result = await answerBanner(page, 'reject', { timeoutMs: 2000 });
+  expect(result).toMatchObject({ shown: false, result: 'banner not shown' });
+  expect(await storedChoice(context)).toBeUndefined();
   await context.close();
 });
 

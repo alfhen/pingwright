@@ -20,6 +20,8 @@ export interface ConsentOptions {
   fixtureRules?: boolean;
   /** How many times autoconsent retries CMP detection. */
   detectRetries?: number;
+  /** Names of autoconsent rules to turn off. */
+  disabledCmps?: string[];
 }
 
 export interface AnswerOptions extends ConsentOptions {
@@ -61,7 +63,7 @@ export class ConsentDriver {
     this.#config = JSON.stringify({
       enabled: true,
       autoAction: null,
-      disabledCmps: [],
+      disabledCmps: options.disabledCmps ?? [],
       enablePrehide: false,
       enableCosmeticRules: false,
       detectRetries: options.detectRetries ?? 10,

@@ -102,6 +102,30 @@ describe('buildEpochs', () => {
     ]);
   });
 
+  test('a two-signal accept is one epoch from the banner event', () => {
+    const v1 = { ad_storage: 'denied', analytics_storage: 'denied' };
+    const modes = consentModeChanges([
+      push(10, 'default', v1),
+      push(1030, 'update', { ad_storage: 'granted', analytics_storage: 'granted' }),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, action: 'accept' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT, e.endT, e.source])).toEqual([
+      ['undecided', 0, 1000, 'start'],
+      ['granted', 1000, null, 'banner'],
+    ]);
+    expect(epochsForHit(epochs, 5000).map((e) => e.label)).toEqual(['granted']);
+  });
+
+  test('a partial accept is one epoch carrying the Consent Mode state', () => {
+    const modes = consentModeChanges([push(10, 'default', denied), push(1020, 'update', { analytics_storage: 'granted' })]);
+    const epochs = buildEpochs([{ t: 1000, action: 'accept' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT, e.endT])).toEqual([
+      ['undecided', 0, 1000],
+      ['granted', 1000, null],
+    ]);
+    expect(epochs[1]?.state).toEqual({ analytics: 'granted', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
+  });
+
   test('a banner event without a Consent Mode update still starts an epoch', () => {
     const epochs = buildEpochs([{ t: 500, action: 'accept' }], [], { startT: 0 });
     expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted']);
