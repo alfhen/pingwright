@@ -21,28 +21,41 @@ export function corsHeaders(headers: Record<string, string>): Record<string, str
   return out;
 }
 
-/** A 1x1 GIF for images, 204 for everything else. */
+/** A 1x1 GIF for images, an empty script or page for those loads, 204 for everything else. */
 export function stubResponse(req: Pick<Request, 'resourceType' | 'headers'>): StubResponse {
   const cors = corsHeaders(req.headers);
-  if (req.resourceType === 'image') {
-    return { status: 200, headers: { ...cors, 'content-type': 'image/gif', 'cache-control': 'no-store' }, body: GIF };
+  switch (req.resourceType) {
+    case 'image':
+      return { status: 200, headers: { ...cors, 'content-type': 'image/gif', 'cache-control': 'no-store' }, body: GIF };
+    case 'script':
+      return { status: 200, headers: { ...cors, 'content-type': 'application/javascript', 'cache-control': 'no-store' }, body: Buffer.alloc(0) };
+    case 'document':
+      return { status: 200, headers: { ...cors, 'content-type': 'text/html', 'cache-control': 'no-store' }, body: Buffer.alloc(0) };
+    default:
+      return { status: 204, headers: cors };
   }
-  return { status: 204, headers: cors };
 }
 
 const LOADS = new Set(['script', 'stylesheet', 'font', 'document']);
+const VENDOR_HOST =
+  /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$|^(www\.)?google\.com$/;
+const COLLECTION_PATH = /^\/(?:tr|pagead\/(?:viewthroughconversion|conversion|1p-[\w-]+)|rmkt|ccm|td)(?:\/|$)/;
+const LIBRARY_PATH = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
 
 /**
- * Anything but a script, stylesheet, font or document sent to Google ad hosts or Meta. Stub mode must never let
- * these leave the machine, whatever the decoder registry holds.
+ * Requests to Google ad hosts or Meta that must be stubbed whatever the decoder registry holds. Collection paths
+ * count for every resource type, because gtag.js sends Ads hits as script requests. Only library loads and other
+ * non-collection loads continue.
  */
 export function isKnownVendorCollection(req: Pick<Request, 'url' | 'resourceType'>): boolean {
-  if (LOADS.has(req.resourceType)) return false;
-  let host: string;
+  let url: URL;
   try {
-    host = new URL(req.url).hostname;
+    url = new URL(req.url);
   } catch {
     return false;
   }
-  return /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$|^(www\.)?google\.com$/.test(host);
+  if (!VENDOR_HOST.test(url.hostname)) return false;
+  if (LIBRARY_PATH.test(url.pathname)) return false;
+  if (COLLECTION_PATH.test(url.pathname)) return true;
+  return !LOADS.has(req.resourceType);
 }

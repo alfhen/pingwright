@@ -21,9 +21,9 @@ afterAll(async () => {
 });
 
 const VENDOR_HOST = /(^|\.)(facebook\.com|facebook\.net|google\.com|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$/;
-const LOADS = new Set(['script', 'stylesheet', 'font', 'document']);
+const LIBRARY = /\/(gtag\/js|fbevents\.js|signals\/config\/[^/?]*)(\?|$)/;
 
-test('with consent accepted, no request to Meta or Google ad hosts leaves the machine except loads', async () => {
+test('with consent accepted, every Meta and Google ad request except library loads is stubbed', async () => {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   await recorder.context.addCookies([{ name: 'pw_consent', value: 'accept', url: site.url }]);
   await recorder.visit(`${site.url}/`);
@@ -31,7 +31,8 @@ test('with consent accepted, no request to Meta or Google ad hosts leaves the ma
   await recorder.wait(5000);
   const { records } = await recorder.close();
 
-  const vendor = records.requests.filter((r) => VENDOR_HOST.test(new URL(r.url).hostname) && !LOADS.has(r.resourceType));
+  const vendor = records.requests.filter((r) => VENDOR_HOST.test(new URL(r.url).hostname) && !LIBRARY.test(r.url));
   expect(vendor.length).toBeGreaterThan(0);
-  expect(vendor.filter((r) => r.outcome !== 'stubbed').map((r) => `${r.outcome} ${r.method} ${r.url}`)).toEqual([]);
+  expect(vendor.filter((r) => r.outcome !== 'stubbed').map((r) => `${r.outcome} ${r.resourceType} ${r.method} ${r.url}`)).toEqual([]);
+  expect(vendor.some((r) => r.resourceType === 'script' && r.url.includes('/pagead/viewthroughconversion/'))).toBe(true);
 });

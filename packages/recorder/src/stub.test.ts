@@ -31,18 +31,42 @@ test('requested headers are allowed', () => {
   expect(stub.headers['access-control-allow-headers']).toBe('content-type');
 });
 
-test('Meta and Google ad hosts are recognised without decoders, except for loads', () => {
+test('scripts and documents get an empty 200', () => {
+  const script = stubResponse({ resourceType: 'script', headers: {} });
+  expect(script.status).toBe(200);
+  expect(script.headers['content-type']).toBe('application/javascript');
+  expect(script.body?.length).toBe(0);
+  const doc = stubResponse({ resourceType: 'document', headers: {} });
+  expect(doc.status).toBe(200);
+  expect(doc.headers['content-type']).toBe('text/html');
+  expect(doc.body?.length).toBe(0);
+});
+
+test('Meta and Google ad collection paths are stubbed for every resource type', () => {
   for (const url of [
     'https://www.facebook.com/tr/?id=100000000000001',
     'https://pagead2.googlesyndication.com/ccm/collect?x=1',
     'https://www.googleadservices.com/pagead/conversion/1/',
-    'https://stats.g.doubleclick.net/pagead/viewthroughconversion/1/',
+    'https://googleads.g.doubleclick.net/pagead/viewthroughconversion/000000001/?en=purchase',
+    'https://www.google.com/pagead/1p-user-list/000000001/?x=1',
     'https://www.google.com/rmkt/collect/000000001/?en=purchase',
     'https://ad.doubleclick.net/ccm/s/collect?fmt=8',
+    'https://td.doubleclick.net/td/rul/000000001',
   ]) {
-    expect(isKnownVendorCollection({ url, resourceType: 'fetch' })).toBe(true);
+    for (const resourceType of ['fetch', 'image', 'script', 'document']) {
+      expect(isKnownVendorCollection({ url, resourceType }), `${resourceType} ${url}`).toBe(true);
+    }
   }
-  expect(isKnownVendorCollection({ url: 'https://connect.facebook.net/en_US/fbevents.js', resourceType: 'script' })).toBe(false);
+});
+
+test('library loads continue', () => {
+  for (const url of [
+    'https://connect.facebook.net/en_US/fbevents.js',
+    'https://connect.facebook.net/signals/config/100000000000001?v=2',
+    'https://www.googleadservices.com/gtag/js?id=AW-000000001',
+  ]) {
+    expect(isKnownVendorCollection({ url, resourceType: 'script' }), url).toBe(false);
+  }
   expect(isKnownVendorCollection({ url: 'https://www.facebook.com/', resourceType: 'document' })).toBe(false);
   expect(isKnownVendorCollection({ url: 'https://example.com/tr/', resourceType: 'fetch' })).toBe(false);
 });
