@@ -62,6 +62,15 @@ describe('scan', () => {
     expect(scan(`dtdc=${encoded}`, id).map((m) => m.value)).toContain('jane@real-shop.dk');
   });
 
+  it('flags a foreign email in a disguised Stape /data hit with a percent-encoded dtdc', () => {
+    for (let i = 0; i < 50; i++) {
+      const json = JSON.stringify({ event_name: 'page_view', page_title: 'Shop?>'.repeat(i % 5 + 1), email: 'jane@real-shop.dk' });
+      const inner = `/data?v=2&dtdc=${encodeURIComponent(b64(json))}`;
+      const outer = `https://sgtm.localhost/abc123?k=${encodeURIComponent(b64(inner))}`;
+      expect(scan(outer, id).map((x) => x.value), `case ${i}`).toContain('jane@real-shop.dk');
+    }
+  });
+
   it('flags a foreign phone and a foreign hash', () => {
     expect(scan('ph=+4512345678', id)).toEqual([{ kind: 'phone', value: '+4512345678' }]);
     const foreign = sha256('someone@real-shop.dk').hex;

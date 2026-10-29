@@ -126,14 +126,17 @@ function* base64Candidates(text: string): Generator<string> {
   }
 }
 
-function* variants(text: string, depth = 0): Generator<string> {
+// Only base64 decoding spends depth; URL decoding is cheap and a disguised Stape URL layers it between base64 steps.
+function* variants(text: string, depth = 0, seen = new Set<string>()): Generator<string> {
+  if (seen.has(text)) return;
+  seen.add(text);
   yield text;
-  if (depth >= MAX_DEPTH) return;
   const url = tryUrlDecode(text);
-  if (url !== undefined && url !== text) yield* variants(url, depth + 1);
+  if (url !== undefined && url !== text) yield* variants(url, depth, seen);
+  if (depth >= MAX_DEPTH) return;
   for (const token of base64Candidates(text)) {
     const decoded = tryBase64Decode(token);
-    if (decoded !== undefined) yield* variants(decoded, depth + 1);
+    if (decoded !== undefined) yield* variants(decoded, depth + 1, seen);
   }
 }
 
