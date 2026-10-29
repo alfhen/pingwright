@@ -118,14 +118,17 @@ test('accept, reopen the banner, then reject', async () => {
   expect(await storedChoice(context)).toBe('reject');
   expect(await page.locator('#pw-consent-banner').isVisible()).toBe(false);
 
+  const recorded = await pushes(page);
   const epochs = buildEpochs(
     [
       { t: accepted.t, action: 'accept' },
       { t: rejected.t, action: 'reject' },
     ],
-    consentModeChanges(await pushes(page)),
+    consentModeChanges(recorded),
     { startT },
   );
+  const updates = consentModeChanges(recorded).filter((c) => c.command === 'update');
+  expect(updates.map((u) => u.state.analytics)).toEqual(['granted', 'denied']);
   expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
   expect(epochs[0]?.state.analytics).toBe('denied');
   await context.close();
@@ -190,11 +193,32 @@ test('a rule whose eval step fails gives banner not shown', async () => {
   await context.close();
 });
 
-test('a HeadlessChrome user agent gives banner not shown', async () => {
-  const context = await newContext('HeadlessChrome');
-  await installConsent(context);
+test('answerBanner works on a page loaded before any install', async () => {
+  const context = await newContext();
   const page = await context.newPage();
   await page.goto(site.url);
+  const result = await answerBanner(page, 'accept');
+  expect(result).toMatchObject({ detected: true, shown: true, action: 'accept', result: 'ok' });
+  expect(await storedChoice(context)).toBe('accept');
+  await context.close();
+});
+
+test('answerBanner rejects options that differ from the installed ones', async () => {
+  const context = await newContext();
+  await installConsent(context, { detectRetries: 3 });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  await expect(answerBanner(page, 'none', { detectRetries: 5 })).rejects.toThrow(/detectRetries/);
+  await expect(answerBanner(page, 'none', { detectRetries: 3 })).resolves.toMatchObject({ result: 'ok' });
+  await context.close();
+});
+
+test('a HeadlessChrome user agent gives banner not shown', async () => {
+  const context = await newContext('HeadlessChrome');
+  const driver = await installConsent(context);
+  const page = await context.newPage();
+  await page.goto(site.url);
+  await expect.poll(() => driver.isRunningIn(page.mainFrame())).toBe(true);
   for (const action of ['accept', 'reject', 'none'] as const) {
     const result = await answerBanner(page, action, { timeoutMs: 2000 });
     expect(result).toMatchObject({ shown: false, result: 'banner not shown', action });

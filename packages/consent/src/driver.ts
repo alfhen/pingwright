@@ -54,8 +54,15 @@ export class ConsentDriver {
   readonly #rules: string;
   readonly #config: string;
   readonly #detectWindowMs: number;
+  readonly options: Required<ConsentOptions>;
 
   constructor(options: ConsentOptions) {
+    this.options = {
+      ruleFiles: options.ruleFiles ?? [],
+      fixtureRules: options.fixtureRules !== false,
+      detectRetries: options.detectRetries ?? 10,
+      disabledCmps: options.disabledCmps ?? [],
+    };
     const extra = [
       ...(options.fixtureRules === false ? [] : readRuleFile(fixtureRulesPath)),
       ...(options.ruleFiles ?? []).flatMap(readRuleFile),
@@ -78,7 +85,16 @@ export class ConsentDriver {
     await context.exposeBinding('autoconsentSendMessage', (source, msg: ContentMessage) =>
       this.#onMessage(source.frame, msg),
     );
-    await context.addInitScript({ content: contentScriptSource() });
+    const source = contentScriptSource();
+    await context.addInitScript({ content: source });
+    // The init script only reaches documents that load later; inject into the ones already open.
+    const frames = context.pages().flatMap((page) => page.frames());
+    await Promise.all(frames.map((frame) => frame.evaluate(source).catch(() => {})));
+  }
+
+  /** True once autoconsent's content script has started in the frame. */
+  isRunningIn(frame: Frame): boolean {
+    return (this.#frames.get(frame)?.detectT ?? 0) > 0;
   }
 
   async #onMessage(frame: Frame, msg: ContentMessage): Promise<void> {
@@ -230,11 +246,25 @@ const drivers = new WeakMap<BrowserContext, ConsentDriver>();
 /** Install before pages are created: the content script reaches only frames that load afterwards. */
 export async function installConsent(context: BrowserContext, options: ConsentOptions = {}): Promise<ConsentDriver> {
   const existing = drivers.get(context);
-  if (existing) return existing;
+  if (existing) {
+    assertSameOptions(existing, options);
+    return existing;
+  }
   const driver = new ConsentDriver(options);
   drivers.set(context, driver);
   await driver.install(context);
   return driver;
+}
+
+function assertSameOptions(driver: ConsentDriver, options: ConsentOptions): void {
+  for (const key of ['ruleFiles', 'fixtureRules', 'detectRetries', 'disabledCmps'] as const) {
+    const wanted = options[key];
+    if (wanted !== undefined && JSON.stringify(wanted) !== JSON.stringify(driver.options[key])) {
+      throw new Error(
+        `Consent is already installed on this context with a different "${key}" option; set options once in installConsent`,
+      );
+    }
+  }
 }
 
 export async function answerBanner(
