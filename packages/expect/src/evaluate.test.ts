@@ -306,6 +306,15 @@ test('possibleRealData scans requests when only the identity is given', () => {
   expect(find(evaluate([clean.hit, clean.req], parseScenario('start: /'), { identity })).pass).toBe(true);
 });
 
+test('possibleRealData ignores hashes in script load URLs', () => {
+  const url = `https://connect.facebook.net/signals/config/100000000000001?hme=${'ab'.repeat(32)}`;
+  const script = hit({}, { url, resourceType: 'script' });
+  const pixel = hit({}, { url, resourceType: 'image' });
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  expect(find(evaluate([script.req], parseScenario('start: /'), { identity })).pass).toBe(true);
+  expect(find(evaluate([pixel.req], parseScenario('start: /'), { identity })).pass).toBe(false);
+});
+
 test('possibleRealData cannot be evaluated without identity or flags', () => {
   const check = evaluate([], parseScenario('start: /')).find((r) => r.expectation === 'builtin: possibleRealData')!;
   expect(check.pass).toBe(false);

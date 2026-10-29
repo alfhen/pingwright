@@ -1,0 +1,25 @@
+start: /products/fake-tee
+steps:
+  - consent: reject
+  - addToCart: "#add-to-cart"
+  - visit: /checkout
+  - fill:
+      "#email": email
+      "#first-name": firstName
+      "#last-name": lastName
+      "#phone": phone
+      "#address1": address1
+      "#city": city
+      "#zip": zip
+      "#country": SE
+  - click: "#continue"
+  - fill:
+      "#card-number": "4242424242424242"
+      "#card-expiry": "12/34"
+      "#card-cvc": "123"
+  - click: "#pay"
+  - wait: 7s
+expect:
+  mustNot:
+    - { vendor: ga4, ids.user_id: present, consent.analytics: denied }
+options: { seed: 1, allowUnknownDestination: true }

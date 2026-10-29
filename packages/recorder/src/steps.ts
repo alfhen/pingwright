@@ -178,14 +178,14 @@ export async function playScenario(recorder: Recorder, scenario: Scenario, optio
   return identity;
 }
 
-export interface RecordScenarioOptions extends Omit<RecorderOptions, 'headed'>, PlayOptions {
+export interface RecordScenarioOptions extends RecorderOptions, PlayOptions {
   parsed: Scenario;
 }
 
-/** Launches a recorder, headed when the scenario has a handoff, plays the scenario and writes the run. */
+/** Launches a recorder, headed when asked or when the scenario has a handoff, plays the scenario and writes the run. */
 export async function recordScenario(options: RecordScenarioOptions): Promise<RunResult> {
   const { parsed, ...rest } = options;
-  const recorder = await launchRecorder({ ...rest, headed: hasHandoff(parsed) });
+  const recorder = await launchRecorder({ ...rest, headed: rest.headed || hasHandoff(parsed) });
   try {
     await playScenario(recorder, parsed, rest);
   } catch (error) {

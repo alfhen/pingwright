@@ -345,6 +345,8 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     return entry;
   };
   for (const request of ctx.requests.values()) {
+    // Vendor script loads carry build hashes in their URLs (Meta's fbevents.js asks for signals/config/...?hme=<sha256>).
+    if (request.resourceType === 'script') continue;
     slot(request.id, request.stepId).texts.push(request.url, request.postData ?? '');
   }
   for (const hit of ctx.hits) {

@@ -1,0 +1,8 @@
+start: /
+steps:
+  - consent: none
+  - wait: 4s
+expect:
+  mustNot:
+    - { vendor: meta, before: consent }
+options: { seed: 1, allowUnknownDestination: true }
