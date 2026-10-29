@@ -328,3 +328,17 @@ test('epoch(denied) matches hits and epochs that leave some fields unknown', () 
   expect(rule(y, [hit({ vendor: 'meta', t: 10 }), epoch(0, null, partialDenied)]).pass).toBe(true);
   expect(rule(y, [hit({ consent: mixed })]).pass).toBe(false);
 });
+
+test('the identity is read from the Run record', () => {
+  const runRecord = {
+    type: 'run', id: runId, scenario: 's', site: 'http://localhost:3000', startedAt: 0, pingwrightVersion: '0.0.0',
+    browser: { name: 'chromium', version: '0' }, networkMode: 'stub', gtmOverride: null, containerVersions: {},
+    identity: { ...identity },
+  };
+  const good = hit({ vendor: 'meta', params: { hashedEmail: hashEmail(identity.email).hex } });
+  const q = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, identity.hashesMatch: true }');
+  expect(evaluate([runRecord, good.hit, good.req] as never, q)[0]!.pass).toBe(true);
+  const foreign = hit({}, { postData: Buffer.from('{"em":"someone.else@example.com"}').toString('base64') });
+  const rs = evaluate([runRecord, foreign.hit, foreign.req] as never, parseScenario('start: /'));
+  expect(rs.find((r) => r.expectation === 'builtin: possibleRealData')!.pass).toBe(false);
+});
