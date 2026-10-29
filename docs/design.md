@@ -370,7 +370,7 @@ Deferred: HTML report, sink setup commands, a replay page.
 
 Where the code in 0.1 differs from the design above:
 
-- **`sgtm-data-client` is minimal.** It decodes only `/data` requests that carry a `dtdc` parameter, and reports vendor `sgtm` with the event name, `page_location`, `page_hostname`, `cid`, `uid`, `tid` and consent. It does not know other data client paths.
+- **`sgtm-data-client` is minimal.** It decodes only `/data` requests that carry a `dtdc` parameter, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
 - **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`. The rule for what is flagged is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.

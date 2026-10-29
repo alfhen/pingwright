@@ -45,7 +45,7 @@ steps:
   - visit: /collections/all
 expect:
   mustNot:
-    - { vendor: [pinterest, meta, tiktok], before: consent }
+    - { vendor: [meta, google-ads], before: consent }
     - { vendor: ga4, ids.user_id: present, consent.analytics: denied }
   must:
     - { vendor: ga4, event: page_view, consent.analytics: denied, count: ">=2" }
@@ -62,7 +62,7 @@ npm i -g --install-links github:alfhen/pingwright#v0.1.0-rc.1
 pingwright install-browser
 ```
 
-Node 22 or later. `--install-links` is needed: without it, npm 10 links the global package to a temporary clone that it then deletes. Install from a release tag only: tags carry a built `dist/`, branches such as main do not. The other option is a tarball: run `pnpm pack` in a checkout and `npm i -g ./pingwright-<version>.tgz`. See [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the global package to a temporary clone that it then deletes. Install from a release tag only: tags carry a built `dist/`, branches such as main do not. The other option is a tarball: run `pnpm pack` in a checkout and `npm i -g ./pingwright-<version>.tgz`. See [docs/cli.md](docs/cli.md).
 
 ## Quick start
 
@@ -77,17 +77,17 @@ Node 22 or later. `--install-links` is needed: without it, npm 10 links the glob
      - wait: 4s
    expect:
      mustNot:
-       - { vendor: [pinterest, meta, tiktok], before: consent }
+       - { vendor: [meta, google-ads], before: consent }
    ```
 
 4. `pingwright run scenario.yml --site https://staging.example.com`
 5. Read the summary, and the full record in `runs/run_<id>.jsonl`.
 
-Stub mode is the default: known collection endpoints are recorded and answered locally, so no test hit reaches a vendor account. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run unless the scenario sets `allowUnknownDestination`. Use `--network live` to let everything through.
+Stub mode is the default: known collection endpoints are recorded and answered locally. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run unless the scenario sets `allowUnknownDestination`. A request sent while a sandboxed `srcdoc` iframe is loading can escape stubbing and recording (see [design §5.3](docs/design.md)). Use `--network live` to let everything through. In 0.1, Pingwright decodes GA4, Google Ads, Meta and Stape traffic; rules for other vendors match nothing.
 
 ## Safe by default
 
-- **Known collection endpoints are stubbed by default.** Scripts load normally, but requests to known collection endpoints are recorded and answered locally. Unknown destinations pass through and are flagged as `unknownDestination`, so test hits can still reach vendors that way. Pingwright lets them through because blocking by host would stop vendor scripts from loading and make a broken setup look compliant. Use `--network live` to let everything through.
+- **Known collection endpoints are stubbed by default.** Scripts load normally, but requests to known collection endpoints are recorded and answered locally. Unknown destinations pass through, so test hits can still reach vendors that way. Third-party `fetch`, `xhr`, `ping` and `beacon` requests, and images or other requests that carry a query or a body, are flagged as `unknownDestination`. Scripts, stylesheets, fonts and documents are not flagged. Requests a sandboxed `srcdoc` iframe sends while it loads can escape stubbing and recording (design §5.3). Pingwright lets them through because blocking by host would stop vendor scripts from loading and make a broken setup look compliant. Use `--network live` to let everything through.
 - **Fake identities.** Every run uses a generated test identity. Pingwright flags any email, phone number or hashed identifier in a recording that does not belong to that identity.
 - **No payments or log-ins.** On a hosted site these are always handoff steps for a person, who should use test accounts and test cards. Only loopback hosts, such as the fixture shop, may be automated through a fake payment form.
 - **You own the data.** There is no Pingwright-hosted service. When server-side reports are built, they will go to a sink you run: a tunnel to your machine, or a small Worker in your own Cloudflare account.
