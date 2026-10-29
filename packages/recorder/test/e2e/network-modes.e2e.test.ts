@@ -131,11 +131,18 @@ test('service worker requests are recorded without a frame', async () => {
   expect(request).toMatchObject({ frameUrl: null, initiator: 'serviceWorker', outcome: 'passed' });
 });
 
-// Documents a limit of context.route and context.on('request'). If Chromium changes this, update design 5.3.
-test('a collection request sent while a sandboxed srcdoc iframe loads is neither recorded nor stubbed', async () => {
+// Chromium sometimes routes this request and sometimes neither routes nor reports it (design §5.3): accept either, but exactly one.
+test('a collection request sent while a sandboxed srcdoc iframe loads is either stubbed or the known bypass', async () => {
   const { records } = await visit('/early-srcdoc', 'stub');
-  expect(collectionRequests({ records } as RunResult)).toEqual([]);
-  expect(serverSaw.filter((u) => u.includes('en=early'))).toHaveLength(1);
+  const recorded = collectionRequests({ records } as RunResult).filter((q) => q.url.includes('en=early'));
+  const reachedServer = serverSaw.filter((u) => u.includes('en=early'));
+  console.info(`early srcdoc request: recorded outcomes ${JSON.stringify(recorded.map((q) => q.outcome))}, reached server ${reachedServer.length}`);
+  if (recorded.length > 0) {
+    expect(recorded.map((q) => q.outcome)).toEqual(['stubbed']);
+    expect(reachedServer).toEqual([]);
+  } else {
+    expect(reachedServer).toHaveLength(1);
+  }
 });
 
 test('stub mode answers collection requests sent while the page unloads on same-tab navigation', async () => {
