@@ -199,9 +199,9 @@ test('page from a sandbox frame is detectable', () => {
   expect(isSandboxPageUrl(null)).toBe(false);
   expect(isSandboxPageUrl('/web-pixels@abc/sandbox/x')).toBe(true);
   expect(isSandboxPageUrl('http://localhost/?next=/web-pixels@1/sandbox/')).toBe(false);
-  const custom = '/custom/web-pixel-118849878@4/sandbox/modern/page-name';
+  const custom = '/custom/web-pixel-000000001@1/sandbox/modern/page-name';
   expect(isSandboxPageUrl(`https://shop.example.com/web-pixels@abc123${custom}`)).toBe(true);
-  expect(isSandboxPageUrl(`https://shop.example.com/wpm@10e09e41w77fb031${custom}`)).toBe(true);
+  expect(isSandboxPageUrl(`https://shop.example.com/wpm@0000000000000000${custom}`)).toBe(true);
   expect(isSandboxPageUrl('https://shop.example.com/products/sandbox/x')).toBe(false);
 });
 
