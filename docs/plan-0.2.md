@@ -18,11 +18,13 @@ These proposal items are issue fixes. They must be merged, and released as `0.1.
 | #115 to #118 | Usable output on real sites | As in each issue. |
 | #146 | Redirect hops to collection endpoints no longer leave the machine in stub mode | A redirect hop to a collection endpoint is `stubbed`, with a test that fails if it reaches the network. |
 | #119, #132 | Withdrawal epochs: the `withdrawn` label, defined per signal, and `in: epoch(label=…)`. A partial withdrawal gets no grace window. | Proposal §3.1 item 6. |
+| #80, #83 | Handoff steps record no typed values, and `evaluate` steps can't set card or password fields on hosted sites | During a handoff, request bodies are kept only for decoded collection requests. A test POSTs a fake card number during a handoff and asserts it never appears in the JSONL. An `evaluate` step that sets a card field on a non-loopback host fails. |
+| #122 | The `ids.*` filter reads hashed IDs | As in the issue. `diff`'s ID-presence changes rely on it. |
 | #88 | Withdrawal works and is documented | A withdraw scenario (a click on the banner link, then `consent: reject`) runs in an e2e, any error message names the real cause, and docs/cli.md describes it. |
 
-Other open `review-minor` issues are not part of the gate. They are fixed in a cleanup batch before 0.1.0 when cheap, or carried into 0.2.
+Other open `review-minor` issues are not part of the gate. A cleanup batch before 0.1.0 fixes the cheap ones. Any that remain are deferred: 0.2 does not rely on them, and they stay open as issues.
 
-Q08 depends on #119, and Q10 depends on #117. Q11 checks that every issue in this table is closed.
+Q08 depends on #119 and #122. Q10 depends on #117, #80 and #83. Q11 checks that every issue in this table is closed.
 
 ## Changes from the proposal
 
@@ -132,9 +134,9 @@ The run record:
 - `gtmOverride.applied` lists each match: `{way: "direct", url, status}`.
 - If no request matched, or a preview fetch was not 200, the run fails with exit 2, and the message says which. A 404 says the environment may have no version. The JSONL is still written, with `applied` filled in.
 
-Redaction: the recorder scrubs the `gtmAuth` value in `Recorder.close()`, before records are returned to callers or written. The in-memory records also feed `evaluate` and the CLI summary. The scrub decodes before it searches:
+Redaction: the recorder scrubs the `gtmAuth` value in `Recorder.close()`, as its last step, before records are returned to callers or written. Decoding, flags and the built-in checks run on the raw records first, so a redacted `pk` or body keeps its hit, and the published and workspace runs diff alike. The in-memory records also feed `evaluate` and the CLI summary. The scrub decodes before it searches:
 
-- For each query value in `Request.url` and for `postData`, it URL-decodes and base64-decodes recursively, reusing the decoders' base64 helper and the leak scanner's decode path (design §13). If the decoded text contains the value, the whole parameter value or body becomes `[redacted]`.
+- For each query value in `Request.url` and for `postData`, it URL-decodes and base64-decodes recursively. When decoded text is itself a path or URL with a query string, it parses that query and decodes each of its values the same way. If any decoded layer contains the value, the whole outer parameter value or body becomes `[redacted]`.
 - For every other string field, it replaces the plain value and its URL-encoded and base64-encoded forms.
 - It recurses into object fields such as `CollectorReport.payload` and `DataLayerEvent.args`.
 
@@ -160,7 +162,10 @@ Acceptance:
   - a run with it shows the workspace build's hits and `applied[0].status: 200`;
   - a container that never loads fails with "no container request matched";
   - `GTM-PWNOVER` fails with the 404 message.
-- Positive control: the fixture server's log shows the `gtm_auth` value was sent. The Q02 echo page also sends a Stape-loader `/g/collect` and a `/data` request that carry the value nested inside base64, and inside base64 twice. The check decodes every JSONL line and the CLI output the same way the scrub does, then finds no `gtmAuth` value in any form.
+- Positive control: the fixture server's log shows the `gtm_auth` value was sent.
+- Nested leak, checked independently of the scrub's own decoder: the Q02 echo page sends a Stape-loader `/g/collect` and a `/data` request that carry the value inside base64, and inside base64 twice (`pk` decodes to `/data?…&dtdc=<base64>`). In the JSONL, the `pk` value of both records equals `[redacted]`, and so does any `dtdc` value.
+- A unit test runs the scrub on a hand-built URL with the value inside base64 twice and compares the result with the expected redacted URL.
+- A plain text search of every JSONL line and the CLI output finds no plain, URL-encoded or base64-encoded form of the value.
 
 **Q06 Pinterest decoder.** Touches: `packages/decoders`, `fixtures/site` (a new Pinterest page).
 
@@ -222,7 +227,7 @@ Acceptance:
 
 **Q10 Shopify checkout pattern.** Touches: `fixtures/site` (checkout hashes), `docs/shopify-checkout.md`, `e2e/scenarios`. → #117
 
-On a new checkout-pattern page, the fixture's Meta `Purchase` sends `ud[em]` with the SHA-256 of the email typed at checkout, only when an email was typed. The existing /thank-you hits do not change, so other e2e tests and `possibleRealData` are unaffected. GA4 `user_data` is out of scope, because the GA4 decoder does not read it.
+The fixture variant uses its own checkout path, `/checkout?pattern=1`, which keeps the typed email in `sessionStorage` and sends `#pay` to `/thank-you?pattern=1`. On that page only, the fixture's Meta `Purchase` sends `ud[em]` with the SHA-256 of the stored email. The existing /thank-you hits do not change, so other e2e tests and `possibleRealData` are unaffected. GA4 `user_data` is out of scope, because the GA4 decoder does not read it.
 
 docs/shopify-checkout.md is a pattern:
 
