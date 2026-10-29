@@ -18,7 +18,7 @@ These proposal items are issue fixes. They must be merged, and released as `0.1.
 | #115 to #118 | Usable output on real sites | As in each issue. |
 | #146 | Redirect hops to collection endpoints no longer leave the machine in stub mode | A redirect hop to a collection endpoint is `stubbed`, with a test that fails if it reaches the network. |
 | #119, #132 | Withdrawal epochs: the `withdrawn` label, defined per signal, and `in: epoch(label=…)`. A partial withdrawal gets no grace window. | Proposal §3.1 item 6. |
-| #80, #83 | Handoff steps record no typed values, and `evaluate` steps can't set card or password fields on hosted sites | During a handoff, request bodies are kept only for decoded collection requests. A test POSTs a fake card number during a handoff and asserts it never appears in the JSONL. An `evaluate` step that sets a card field on a non-loopback host fails. |
+| #80, #83 | Handoff steps record no typed values, and `evaluate` steps can't set card or password fields on hosted sites | During a handoff, request bodies are kept only for decoded collection requests. A test POSTs a fake card number during a handoff and asserts it never appears in the JSONL. An `evaluate` step that sets a card field, and one that sets a password field, on a non-loopback host both fail. |
 | #122 | The `ids.*` filter reads hashed IDs | As in the issue. `diff`'s ID-presence changes rely on it. |
 | #88 | Withdrawal works and is documented | A withdraw scenario (a click on the banner link, then `consent: reject`) runs in an e2e, any error message names the real cause, and docs/cli.md describes it. |
 
@@ -163,7 +163,7 @@ Acceptance:
   - a container that never loads fails with "no container request matched";
   - `GTM-PWNOVER` fails with the 404 message.
 - Positive control: the fixture server's log shows the `gtm_auth` value was sent.
-- Nested leak, checked independently of the scrub's own decoder: the Q02 echo page sends a Stape-loader `/g/collect` and a `/data` request that carry the value inside base64, and inside base64 twice (`pk` decodes to `/data?…&dtdc=<base64>`). In the JSONL, the `pk` value of both records equals `[redacted]`, and so does any `dtdc` value.
+- Nested leak, checked independently of the scrub's own decoder: the Q02 echo page sends a Stape-loader `/g/collect` and a `/data` request that carry the value inside base64, and inside base64 twice (`pk` decodes to `/data?…&dtdc=<base64>`). In the JSONL, the `pk` value of both records equals `[redacted]`, and so does any `dtdc` value. A loader request from a page without the value keeps its `pk` unredacted and still decodes to its hit, so a scrub that redacts too much fails.
 - A unit test runs the scrub on a hand-built URL with the value inside base64 twice and compares the result with the expected redacted URL.
 - A plain text search of every JSONL line and the CLI output finds no plain, URL-encoded or base64-encoded form of the value.
 
@@ -188,7 +188,7 @@ Acceptance:
   - `mustNot: { vendor: pinterest, before: consent }` fails;
   - `mustNot: { host: ct.pinterest.com, before: consent }` fails too.
 
-**Q08 Diff engine.** Touches: `packages/expect`. → #119
+**Q08 Diff engine.** Touches: `packages/expect`. → #119, #122
 
 `diffRuns(a, b)` takes two loaded runs and returns a JSON result.
 
@@ -225,9 +225,9 @@ Acceptance:
 - An e2e for the `replace` fallback.
 - A unit test that `unwrapStapeLoader` returns the inner `/gtm.js` request for the fixture loader's URL shape.
 
-**Q10 Shopify checkout pattern.** Touches: `fixtures/site` (checkout hashes), `docs/shopify-checkout.md`, `e2e/scenarios`. → #117
+**Q10 Shopify checkout pattern.** Touches: `fixtures/site` (`/checkout`, `/checkout/payment`, `/thank-you`), `docs/shopify-checkout.md`, `e2e/scenarios`. → #117, #80, #83
 
-The fixture variant uses its own checkout path, `/checkout?pattern=1`, which keeps the typed email in `sessionStorage` and sends `#pay` to `/thank-you?pattern=1`. On that page only, the fixture's Meta `Purchase` sends `ud[em]` with the SHA-256 of the stored email. The existing /thank-you hits do not change, so other e2e tests and `possibleRealData` are unaffected. GA4 `user_data` is out of scope, because the GA4 decoder does not read it.
+The fixture variant uses its own checkout path, `/checkout?pattern=1`, which keeps the typed email and a pattern flag in `sessionStorage`. `/checkout/payment` reads the flag and sends `#pay` to `/thank-you?pattern=1`. On that page only, the fixture's Meta `Purchase` sends `ud[em]` with the SHA-256 of the stored email. The existing /thank-you hits do not change, so other e2e tests and `possibleRealData` are unaffected. GA4 `user_data` is out of scope, because the GA4 decoder does not read it.
 
 docs/shopify-checkout.md is a pattern:
 
