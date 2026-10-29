@@ -58,14 +58,22 @@ jobs:
         env:
           GIT_AUTHOR_NAME: CI
           GIT_AUTHOR_EMAIL: ci@example.com
-          GIT_COMMITTER_NAME: CI
-          GIT_COMMITTER_EMAIL: ci@example.com
         run: |
           version=$(node -p 'require("./package.json").version')
           clone=$(mktemp -d)
           git clone -q "$GITHUB_WORKSPACE" "$clone"
           (cd "$clone" && scripts/release.sh --no-tag "$version")
           echo "RELEASE_CLONE=$clone" >> "$GITHUB_ENV"
+          committer=$(git -C "$clone" log -1 --format=%cn)
+          test "$committer" = CI
+      - name: Refuse to release without a git identity
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          clone=$(mktemp -d)
+          git clone -q "$GITHUB_WORKSPACE" "$clone"
+          status=0
+          (cd "$clone" && HOME=$(mktemp -d) GIT_CONFIG_NOSYSTEM=1 scripts/release.sh --no-tag "$version") || status=$?
+          test "$status" = 1
       - name: Install from the release commit
         run: |
           tmp2=$(mktemp -d)

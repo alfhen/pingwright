@@ -37,10 +37,15 @@ if [ "$current" != "$version" ]; then
   exit 1
 fi
 
-if [ -z "${GIT_AUTHOR_NAME:-$(git config user.name || true)}" ] || [ -z "${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}" ]; then
+name="${GIT_AUTHOR_NAME:-$(git config user.name || true)}"
+email="${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}"
+if [ -z "$name" ] || [ -z "$email" ]; then
   echo "refusing: no git identity. Set user.name and user.email, or GIT_AUTHOR_NAME and GIT_AUTHOR_EMAIL." >&2
   exit 1
 fi
+# git guesses a missing committer or tagger from the hostname, so pin all of them.
+export GIT_AUTHOR_NAME="$name" GIT_AUTHOR_EMAIL="$email"
+export GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-$name}" GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-$email}"
 
 pnpm install --frozen-lockfile
 pnpm build
