@@ -342,6 +342,23 @@ describe('later Consent Mode defaults', () => {
     ]);
   });
 
+  test('a default after an accept does not change the state of a later update', () => {
+    const epochs = buildEpochs(
+      [{ t: 1000, tEnd: 1010, action: 'accept' }],
+      changes(
+        push(10, 'default', denied),
+        push(1005, 'update', granted),
+        push(10000, 'default', denied),
+        push(20000, 'update', { ad_storage: 'granted' }),
+      ),
+      { startT: 0 },
+    );
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['granted', 1005],
+    ]);
+  });
+
   test('several defaults before the first decision merge into the undecided state', () => {
     const epochs = buildEpochs([], changes(push(10, 'default', { analytics_storage: 'denied' }), push(20, 'default', { ad_storage: 'denied' })), { startT: 0 });
     expect(epochs).toHaveLength(1);
