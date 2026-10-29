@@ -1,6 +1,6 @@
 # Pingwright design
 
-Status: draft for review, revision 4. Little is built yet. Claims marked **(verify)** are believed true but not yet tested in code. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results.
+Status: revision 5, for release candidate 0.1.0-rc.1. Milestone 0.1 is built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1.
 
 ## 1. Problem
 
@@ -110,7 +110,7 @@ Every profile:
 - All hooks are on the browser context: `context.on('request')`, `context.on('response')` and `context.route`. Page-level hooks miss service-worker traffic.
 - Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading, which are usually neither routed nor reported (§9), and sends from `pagehide` or `visibilitychange`, which the page answers itself in stub mode (§5.3).
 - Service workers: Playwright reports and routes their requests on the context, in Chromium only. Requests to update a service worker's own script cannot be routed. Option: `serviceWorkers: 'block'`.
-- Dedicated workers: capture of requests to the collector origin is proven in Chromium (§9), from a worker on the page and from a worker inside a sandboxed iframe. Capture of other worker traffic is not tested.
+- Dedicated workers: **verified** on Chromium 156.0.8078.4 with Playwright 1.64.1. Requests to the collector origin are routed and seen from a worker on the page and from a worker inside a sandboxed iframe (`collector-origin.e2e.test.ts`). Requests from a dedicated worker to an ordinary host are recorded (`network-modes.e2e.test.ts`, the dedicated worker test), and the startup self-test reports `dedicatedWorker` coverage (`recorder.e2e.test.ts`).
 - A startup self-test loads a routed page at `https://selftest.pingwright.invalid/`. The page, a sandboxed iframe and a dedicated worker each send a report to the collector origin. The run states its capture coverage: `{page, iframe, dedicatedWorker, serviceWorker: 'chromium-only'}`. Self-test reports are not stored. The self-test does not probe early iframe requests: a probe cannot tell a request that bypassed capture from one that was never sent (§5.3).
 - An init script hooks `dataLayer.push` and records each push with a timestamp on the shared clock (§7.3).
 - Checkpoints run at the end of each step and after each consent action.
@@ -119,7 +119,7 @@ Every profile:
 
 | Mode | Behaviour |
 | --- | --- |
-| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect`, Meta `/tr`, Pinterest `/v3/`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
+| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect` and Meta `/tr`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
 | `server` | As `stub`, but requests to the configured server-container hosts pass through. Required for server-side tag reports, server-set cookies and the server preview header. |
 | `live` | Everything goes through. Test hits reach real vendor accounts. |
 
@@ -129,17 +129,17 @@ Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, 
 
 **Unknown destination rule.** A request is flagged `unknownDestination` when its host is not the site's host, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
 
-**Stubbing side effects (verified).** On Chromium 156.0.8078.4 with the real gtag.js (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds:
+**Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds:
 
 - GA4 sent each event once, as a `POST` through `fetch`. It did not retry on another transport, such as an image or a beacon.
-- A gtag `event_callback` fired within a few milliseconds of the `gtag('event')` call, without waiting for any response. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
+- A gtag `event_callback` fired in under 1.5 s of the `gtag('event')` call (the test's bound), without waiting for any response. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
 - GA4 sent events other than `page_view` several seconds after the call.
 
-Other vendors were not tested.
+Other vendors were not tested in 0.1.
 
-**Unload-time sends.** Chromium neither routes nor reports requests a page sends from `pagehide` or `visibilitychange` (probe: `sendBeacon` and `fetch` with `keepalive` to a local server and to the collector origin; the server received them and `context.on('request')` saw none). Binding calls from those handlers are lost too. Real gtag.js sends a GA4 `fetch` with `keepalive` at that moment on every same-tab navigation, so without a fix stub mode would leak it. In `stub` mode the init script therefore answers `sendBeacon` and `fetch` with `keepalive` locally while the page is hidden or unloading. It queues each one in `sessionStorage` until the binding call is acknowledged, and the next same-origin document in the tab, or `close()`, replays the queue. These requests are recorded with `initiator: unload` and `outcome: stubbed`. Limits: every unload-time beacon is swallowed, not only collection endpoints. A send is unrecorded, though still not sent, if the tab navigates to another origin, or comes from a sandboxed iframe without `allow-same-origin`. Other transports used during unload (image, XHR) are not covered. Test: `network-modes.e2e.test.ts`.
+**Unload-time sends (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1, Chromium neither routes nor reports requests a page sends from `pagehide` or `visibilitychange` (probe: `sendBeacon` and `fetch` with `keepalive` to a local server and to the collector origin; the server received them and `context.on('request')` saw none). Binding calls from those handlers are lost too. Real gtag.js sends a GA4 `fetch` with `keepalive` at that moment on every same-tab navigation, so without a fix stub mode would leak it. In `stub` mode the init script therefore answers `sendBeacon` and `fetch` with `keepalive` locally while the page is hidden or unloading. It queues each one in `sessionStorage` until the binding call is acknowledged, and the next same-origin document in the tab, or `close()`, replays the queue. These requests are recorded with `initiator: unload` and `outcome: stubbed`. Limits: every unload-time beacon is swallowed, not only collection endpoints. A send is unrecorded, though still not sent, if the tab navigates to another origin, or comes from a sandboxed iframe without `allow-same-origin`. Other transports used during unload (image, XHR) are not covered. Test: `network-modes.e2e.test.ts`.
 
-**Limit: early iframe requests.** A request sent while a sandboxed `srcdoc` iframe is loading is usually not routed, so it is not stubbed and reaches the network. It is then also not reported by `context.on('request')`. Locally this happened in 5 of 5 runs of `network-modes.e2e.test.ts`. On CI the same request was once routed and stubbed, so the outcome depends on timing. The test accepts either outcome and logs which one it saw. The recorder cannot record or flag such a request, so a collection hit sent this way can leave the machine unrecorded in `stub` mode. The recorder still flags any collection request it sees but did not route as `stubBypass`.
+**Limit: early iframe requests.** A request sent while a sandboxed `srcdoc` iframe is loading is usually not routed, so it is not stubbed and reaches the network. It is then also not reported by `context.on('request')`. Locally on Chromium 156.0.8078.4 with Playwright 1.64.1 this happened in 5 of 5 runs of `network-modes.e2e.test.ts` (the srcdoc test). On CI the same request was once routed and stubbed, so the outcome depends on timing. The test accepts either outcome and logs which one it saw. The recorder cannot record or flag such a request, so a collection hit sent this way can leave the machine unrecorded in `stub` mode. The recorder still flags any collection request it sees but did not route as `stubBypass`.
 
 ### 5.4 Steps
 
@@ -210,7 +210,7 @@ A custom tag template, published to the Community Template Gallery.
 - **Data.** Calls `addEventCallback`. The callback runs once the tags for the event have run, and receives the container ID and event data. The event data includes `tags[]` with `id`, `status` and `executionTime`, plus each tag's monitoring metadata.
 - **Only fired tags appear.** Tags blocked by triggers or consent do not appear. "Did not fire" is computed by comparing against an expected tag list the caller supplies (§8.2).
 - **Tag names.** Names are present only when tags have monitoring metadata with a tag-name key. A missing name is reported as `null` (unknown). Name-based rules (`tags.mustFire`, `tags.mustNotFire`) treat an unknown name as "cannot evaluate" and report that, instead of passing or failing. Rules can also match by tag ID.
-- **Permissions.** The template needs `read_event_metadata` for `addEventCallback`, and a sending permission (for example `send_pixel`) limited to the collector origin field. Which web template API can send the report body is still open **(verify)**. Template tests check the permissions and the URL limit.
+- **Permissions.** The template needs `read_event_metadata` for `addEventCallback`, and a sending permission (for example `send_pixel`) limited to the collector origin field. Which web template API can send the report body is still open **(verify)**. Not tested in 0.1. Template tests check the permissions and the URL limit.
 - **What it sends.** `{runId, event, gtmUniqueEventId, tags[]}` to the collector origin. Never event data.
 - **Exposure.** A published template ships to all visitors. Any visitor could set the debug cookie and make their own browser post to the collector origin, which resolves nowhere for them. Keep the reporter in workspace or environment versions where possible.
 
@@ -242,7 +242,7 @@ Limits:
 
 A server-side tag template with the same job. The server-side `addEventCallback` exists: it runs once all tags for the event have run, and its `tags[]` has `id`, `status` and `executionTime` plus metadata ([server-side API reference](https://developers.google.com/tag-platform/tag-manager/server-side/api)).
 
-- **Gating.** The server container is public, so a header alone is not enough: anyone could send it. The recorder sends a run token: run ID, timestamp, and a signature of both under a secret held in a template field. The template recomputes the signature and drops requests that do not match or are older than a few minutes. Signature method: HMAC-SHA256 if the server template APIs offer it **(verify)**, otherwise SHA-256 over secret, run ID and timestamp.
+- **Gating.** The server container is public, so a header alone is not enough: anyone could send it. The recorder sends a run token: run ID, timestamp, and a signature of both under a secret held in a template field. The template recomputes the signature and drops requests that do not match or are older than a few minutes. Signature method: HMAC-SHA256 if the server template APIs offer it **(verify)**, otherwise SHA-256 over secret, run ID and timestamp. Not tested in 0.1.
 - **Target.** It posts only to the sink address in its template field. It never takes an address from the incoming request. Its `send_http` permission is limited to that address.
 - **What it sends.** Run ID, event name, client name, tag statuses and the consent state the server saw. Never the event payload.
 - **Not visible.** The server container's own outgoing requests, for example to Meta's Conversions API, are not recorded. The reporter shows only whether those tags succeeded.
@@ -345,13 +345,13 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 14. Risks and open questions
 
-1. **Collector origin interception.** Proven in Chromium for the sources listed in §9, once the sandboxed iframe has loaded. Open: requests sent during sandboxed `srcdoc` iframe load are usually not routed or seen, and reach the network; Firefox and WebKit are untested. There is no fallback yet: a local listener needs write authorization first (§9).
+1. **Collector origin interception.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 for the sources listed in §9 (`collector-origin.e2e.test.ts`), once the sandboxed iframe has loaded. Open: requests sent during sandboxed `srcdoc` iframe load are usually not routed or seen, and reach the network; Firefox and WebKit are untested. There is no fallback yet: a local listener needs write authorization first (§9).
 2. **Early iframe requests can escape stub mode and capture.** A tracking hit fired while a sandboxed `srcdoc` iframe loads is usually not recorded and not stubbed (§9). P09 confirmed that `context.on('request')` does not see these requests either (§5.3), so the recorder cannot detect them from the network. Open: block or rewrite `srcdoc` iframes, or detect them in the page.
    Unload-time sends are handled in the page in stub mode, with the limits in §5.3.
-3. **Dedicated worker capture.** Verified for the collector origin in Chromium (§5.2). The startup self-test still reports coverage per run.
-4. **Stubbing side effects.** Verified for GA4 in Chromium (§5.3). Other vendors are untested.
-5. **Server template signature APIs (verify).**
-6. **Web template sending permission (verify).**
+3. **Dedicated worker capture.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.2). The startup self-test still reports coverage per run.
+4. **Stubbing side effects.** Verified for GA4 in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.3). Other vendors are untested in 0.1.
+5. **Server template signature APIs (verify).** Not tested in 0.1.
+6. **Web template sending permission (verify).** Not tested in 0.1.
 7. **Custom loaders.** Swapping the container script loses loader-specific behaviour (§8.2).
 8. **Banner bot detection** changes over time. Guard: the "banner shown" check.
 9. **Scope.** Many vendors and banners exist. Decoders are plugins, and banner handling is delegated to autoconsent.
@@ -365,6 +365,24 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 5. **0.5:** `server` mode, server reporter, sink reader.
 
 Deferred: HTML report, sink setup commands, a replay page.
+
+### 15.1 Differences in 0.1
+
+Where the code in 0.1 differs from the design above:
+
+- **`sgtm-data-client` is minimal.** It decodes only `/data` requests that carry a `dtdc` parameter, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
+- **Only Meta and Google hosts are stubbed by host.** Hits to vendors without a 0.1 decoder (Pinterest, Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
+- **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`. The rule for what is flagged is in §5.3.
+- **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
+- **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
+- **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes. Only release tags carry a built `dist/`, so install from a tag, not a branch (`docs/release.md`). A tarball from `pnpm install && pnpm build && pnpm pack` also works (`docs/cli.md`).
+- **Consent answers are `accept`, `reject`, `none` and `withdraw`.** Named choices are not supported. Only the Google Consent Mode probe exists; TCF, GPP and Shopify probes are not built.
+- **Network modes are `stub` and `live`.** `server` mode is not built.
+- **Commands are `run`, `install-browser` and `--version`.** `diff`, `report` and the MCP server are not built.
+- **Rules are `must`, `mustNot`, `count`, `before`, `in`, `after` and `identity.hashesMatch`.** `tags.mustFire` and `tags.mustNotFire` need the GTM reporters, which are not built. The `TagReport` record type exists and no 0.1 code writes it.
+- **Chromium only.** There is no Firefox or WebKit profile. Playwright's Firefox does not start on the macOS used for development.
+- **Decoders are `ga4`, `google-ads`, `meta`, `sgtm-data-client` and `stape-custom-loader`.** `pinterest` and `microsoft-uet` are not built.
+- **Verification used Chromium 156.0.8078.4 and Playwright 1.64.1.** Other versions are untested.
 
 ## 16. Related tools
 
