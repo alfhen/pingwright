@@ -30,21 +30,19 @@ export function stubResponse(req: Pick<Request, 'resourceType' | 'headers'>): St
   return { status: 204, headers: cors };
 }
 
+const LOADS = new Set(['script', 'stylesheet', 'font', 'document']);
+
 /**
- * Collection paths of vendors whose decoders may not be registered. Stub mode must never let these leave the
- * machine, whatever the registry holds.
+ * Anything but a script, stylesheet, font or document sent to Google ad hosts or Meta. Stub mode must never let
+ * these leave the machine, whatever the decoder registry holds.
  */
-export function isKnownVendorCollection(req: Pick<Request, 'url'>): boolean {
-  let u: URL;
+export function isKnownVendorCollection(req: Pick<Request, 'url' | 'resourceType'>): boolean {
+  if (LOADS.has(req.resourceType)) return false;
+  let host: string;
   try {
-    u = new URL(req.url);
+    host = new URL(req.url).hostname;
   } catch {
     return false;
   }
-  const host = u.hostname;
-  if (/(^|\.)facebook\.com$/.test(host)) return /^\/tr\/?$/.test(u.pathname);
-  if (/(^|\.)(googleadservices|doubleclick|googlesyndication)\.(com|net)$|^(www\.)?google\.com$/.test(host)) {
-    return /^\/(ccm\/collect|pagead\/)/.test(u.pathname);
-  }
-  return false;
+  return /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$|^(www\.)?google\.com$/.test(host);
 }

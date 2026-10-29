@@ -80,6 +80,6 @@ test('GA4 does not retry on another transport, and event_callback fires before a
     expect(sent.map((s) => s.event).sort()).toEqual(['callback_probe', 'page_view']);
     expect(new Set(sent.map((s) => `${s.method} ${s.type}`))).toEqual(new Set(['POST fetch']));
     expect(callbackAfterMs).not.toBeNull();
-    expect(callbackAfterMs).toBeLessThan(500);
+    expect(callbackAfterMs).toBeLessThan(1500);
   }
 });

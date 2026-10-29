@@ -31,15 +31,18 @@ test('requested headers are allowed', () => {
   expect(stub.headers['access-control-allow-headers']).toBe('content-type');
 });
 
-test('Meta and Ads collection paths are recognised without decoders', () => {
+test('Meta and Google ad hosts are recognised without decoders, except for loads', () => {
   for (const url of [
     'https://www.facebook.com/tr/?id=100000000000001',
     'https://pagead2.googlesyndication.com/ccm/collect?x=1',
     'https://www.googleadservices.com/pagead/conversion/1/',
     'https://stats.g.doubleclick.net/pagead/viewthroughconversion/1/',
+    'https://www.google.com/rmkt/collect/000000001/?en=purchase',
+    'https://ad.doubleclick.net/ccm/s/collect?fmt=8',
   ]) {
-    expect(isKnownVendorCollection({ url })).toBe(true);
+    expect(isKnownVendorCollection({ url, resourceType: 'fetch' })).toBe(true);
   }
-  expect(isKnownVendorCollection({ url: 'https://www.facebook.com/' })).toBe(false);
-  expect(isKnownVendorCollection({ url: 'https://example.com/tr/' })).toBe(false);
+  expect(isKnownVendorCollection({ url: 'https://connect.facebook.net/en_US/fbevents.js', resourceType: 'script' })).toBe(false);
+  expect(isKnownVendorCollection({ url: 'https://www.facebook.com/', resourceType: 'document' })).toBe(false);
+  expect(isKnownVendorCollection({ url: 'https://example.com/tr/', resourceType: 'fetch' })).toBe(false);
 });
