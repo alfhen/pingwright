@@ -1,7 +1,8 @@
-import { lstatSync, mkdirSync, realpathSync, unlinkSync } from 'node:fs';
+import { appendFileSync, lstatSync, mkdirSync, realpathSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 await import('./build.ts');
+appendFileSync('/Users/alfhenderson/.claude-personal/jobs/6e3078b2/tmp/p14/dbg.txt', `${new Date().toISOString()} prepare cwd=${process.cwd()} global=${process.env.npm_config_global}\n`);
 
 // For `npm i -g <git url>`, npm 10 runs the clone's install in global mode, which links the temporary clone into
 // the global prefix. The clone is deleted afterwards and the real install writes through the dangling link.
@@ -14,6 +15,7 @@ if (process.env.npm_config_global === 'true' && process.env.npm_config_prefix) {
       unlinkSync(link);
       unlinkSync(join(prefix, 'bin', 'pingwright'));
       mkdirSync(link);
+      appendFileSync('/Users/alfhenderson/.claude-personal/jobs/6e3078b2/tmp/p14/dbg.txt', `${new Date().toISOString()} replaced ${link} cwd=${process.cwd()}\n`);
     }
   } catch {
     // Nothing was linked.
