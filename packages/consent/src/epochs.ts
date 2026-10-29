@@ -17,7 +17,7 @@ export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId'> & { label: 
 export interface EpochOptions {
   /** Start of the run on the shared clock. */
   startT: number;
-  /** A Consent Mode update up to this long after a banner event counts as the same change. */
+  /** A Consent Mode update up to this long after a banner action ends counts as the same change. */
   pairWindowMs?: number;
   /** A Consent Mode update up to this long before a banner event counts as the same change. */
   leadWindowMs?: number;
@@ -47,9 +47,9 @@ interface Change {
   decision: boolean;
 }
 
-/** The latest banner at or before the update, else the earliest one just after it. */
+/** The latest banner that started at or before the update and ended less than the pair window ago, else the earliest one just after it. */
 function closestBanner(banners: readonly BannerEvent[], t: number, pairWindowMs: number, leadWindowMs: number): number {
-  const before = banners.findLastIndex((b) => b.t <= t && t - b.t <= pairWindowMs);
+  const before = banners.findLastIndex((b) => b.t <= t && t <= (b.tEnd ?? b.t) + pairWindowMs);
   if (before >= 0) return before;
   return banners.findIndex((b) => b.t > t && b.t - t <= leadWindowMs);
 }

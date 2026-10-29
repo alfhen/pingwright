@@ -202,6 +202,23 @@ describe('buildEpochs', () => {
     const modes = consentModeChanges([push(10, 'default', denied), push(100, 'update', granted), push(200, 'update', granted)]);
     expect(buildEpochs([], modes, { startT: 0 })).toHaveLength(2);
   });
+
+  test('a long accept with a partial update is one epoch carrying the Consent Mode state', () => {
+    const partial = { ...granted, ads: 'denied' };
+    const modes = consentModeChanges([push(10, 'default', denied), push(6000, 'update', partial)]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 5000, action: 'accept' }], modes, { startT: 0 });
+    expect(epochs).toHaveLength(2);
+    expect(epochs[1]!.startT).toBe(5000);
+    expect(epochs[1]!.state).toEqual(modes.find((m) => m.command === 'update')!.state);
+  });
+
+  test('a long reject with an all-denied update starts the epoch at the update', () => {
+    const modes = consentModeChanges([push(10, 'default', granted), push(3500, 'update', denied)]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 5000, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs).toHaveLength(2);
+    expect(epochs[1]!.startT).toBe(3500);
+    expect(epochs[1]!.label).toBe('denied');
+  });
 });
 
 describe('epochsForHit', () => {
