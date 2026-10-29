@@ -20,7 +20,7 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
-import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentOptions } from '@pingwright/consent';
+import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint } from '@pingwright/decoders';
 import {
   chromium,
@@ -89,6 +89,7 @@ function initiatorOf(request: PwRequest): string | null {
 export class Recorder {
   runId: Id<'run'> = newId('run');
   coverage!: CaptureCoverage;
+  consent!: ConsentDriver;
   private run!: Run;
   private clockOffset = 0;
   private collectorHandler: CollectorHandler = () => undefined;
@@ -156,7 +157,7 @@ export class Recorder {
       if (event) this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
     });
     await context.addInitScript(dataLayerInitScript);
-    await installConsent(context, this.options.autoconsent);
+    this.consent = await installConsent(context, this.options.autoconsent);
     if (this.options.networkMode === 'stub') {
       await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
       await context.addInitScript(unloadInitScript);

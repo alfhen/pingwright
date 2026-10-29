@@ -1,5 +1,4 @@
 import { createInterface } from 'node:readline/promises';
-import { answerBanner } from '@pingwright/consent';
 import { createIdentity, type Identity, type Step as StepRecord } from '@pingwright/core';
 import type { Scenario, Step } from '@pingwright/expect';
 import type { Page } from 'playwright';
@@ -18,7 +17,7 @@ export type ConsentHandler = (answer: ConsentAnswer, context: ConsentContext) =>
 
 /** `withdraw` is a rejection; the scenario reopens the banner itself first. */
 export const bannerConsentHandler: ConsentHandler = async (answer, { recorder, page, timeoutMs }) => {
-  const result = await answerBanner(page, answer === 'withdraw' ? 'reject' : answer, { timeoutMs });
+  const result = await recorder.consent.answer(page, answer === 'withdraw' ? 'reject' : answer, timeoutMs ?? 10_000);
   if (result.result === 'banner not shown') throw new Error('banner not shown');
   if (result.result === 'failed') throw new Error(`consent ${answer} failed`);
   recorder.recordBanner(result);

@@ -98,3 +98,16 @@ test('banner not shown: a HeadlessChrome user agent fails consent: none', async 
   const records = (error as StepError).run!.records;
   expect(records.steps.find((s) => s.label === 'consent-1')?.error).toBe('banner not shown');
 });
+
+test('autoconsent options given to the recorder reach the driver', async () => {
+  const parsed = parseScenario('start: /\noptions: { consentTimeout: 2s }\nsteps:\n  - consent: accept\n');
+  const error = await recordScenario({
+    networkMode: 'stub',
+    outDir,
+    site: site.url,
+    parsed,
+    autoconsent: { fixtureRules: false },
+  }).catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(StepError);
+  expect((error as StepError).message).toContain('banner not shown');
+});
