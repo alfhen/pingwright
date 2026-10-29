@@ -37,10 +37,19 @@ function pingPath(req: Request): { url: URL; id: string | undefined } | undefine
 
 const isAdsPing = (req: Request): boolean => pingPath(req) !== undefined;
 
+function isGtmBeacon(req: Request): boolean {
+  try {
+    const url = new URL(req.url);
+    return url.hostname === 'www.googletagmanager.com' && url.pathname === '/td';
+  } catch {
+    return false;
+  }
+}
+
 export const googleAds: Decoder = {
   name: 'google-ads',
   match: isAdsPing,
-  isCollectionEndpoint: isAdsPing,
+  isCollectionEndpoint: (req) => isAdsPing(req) || isGtmBeacon(req),
   decode(req: Request, newHitId: NewHitId = defaultHitId): Hit[] {
     const ping = pingPath(req);
     if (!ping) return [];
@@ -61,6 +70,13 @@ export const googleAds: Decoder = {
     ] as const) {
       const v = p.get(from);
       if (v) params[to] = v;
+    }
+    if (p.get('userId') ?? p.get('uid')) ids.user_id = true;
+    const oid = p.get('oid');
+    if (oid) params.transaction_id = oid;
+    for (const [k, v] of p) {
+      if (k.startsWith('ep.')) params[k.slice(3)] = v;
+      else if (k.startsWith('epn.')) params[k.slice(4)] = v;
     }
     return [
       {

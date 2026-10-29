@@ -208,3 +208,21 @@ test('page from a sandbox frame is detectable', () => {
 test('the registry lists ga4', () => {
   expect(decoders.map((d) => d.name)).toContain('ga4');
 });
+
+test('gcd with a trailing lettered segment', () => {
+  const [hit] = decodeRequest(collect(`${BASE}&en=purchase&gcd=13r3r3r3r5l1`));
+  expect(hit?.consent).toMatchObject({
+    ads: 'granted',
+    analytics: 'granted',
+    adUserData: 'granted',
+    adPersonalization: 'granted',
+  });
+});
+
+test('decodes /g/collect under a site path prefix', () => {
+  const r = req(`https://shop.example.com/metrics/g/collect?${BASE}&en=page_view`);
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'ga4', event: 'page_view' });
+  expect(isCollectionEndpoint(req('https://shop.example.com/metrics/g/collect?en=page_view'))).toBe(false);
+  expect(isCollectionEndpoint(req(`https://shop.example.com/g/collector?${BASE}`))).toBe(false);
+});

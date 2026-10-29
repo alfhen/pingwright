@@ -6,9 +6,10 @@ export const defaultHitId: NewHitId = () => newId('hit');
 
 export interface Decoder {
   name: string;
-  match(req: Request): boolean;
+  /** `viaLoader` is true when `req` was unwrapped from a Stape custom loader URL. */
+  match(req: Request, viaLoader?: boolean): boolean;
   /** One request can hold several hits. Hit ids come from `newHitId`. */
-  decode(req: Request, newHitId?: NewHitId): Hit[];
+  decode(req: Request, newHitId?: NewHitId, viaLoader?: boolean): Hit[];
   /** True for requests that `stub` mode answers locally. */
-  isCollectionEndpoint(req: Request): boolean;
+  isCollectionEndpoint(req: Request, viaLoader?: boolean): boolean;
 }
