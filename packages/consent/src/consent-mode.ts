@@ -35,7 +35,8 @@ export function consentModeChanges(pushes: readonly ConsentPush[]): ConsentModeC
   const changes: ConsentModeChange[] = [];
   let state = unknownConsent;
   for (const push of [...pushes].sort((a, b) => a.t - b.t)) {
-    const [name, command, signals] = push.args ?? [];
+    if (!Array.isArray(push.args)) continue;
+    const [name, command, signals] = push.args;
     if (name !== 'consent' || (command !== 'default' && command !== 'update')) continue;
     if (typeof signals !== 'object' || signals === null) continue;
     const next = { ...state };

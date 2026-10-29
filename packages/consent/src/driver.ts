@@ -69,7 +69,6 @@ export class ConsentDriver {
       ...(options.fixtureRules === false ? [] : readRuleFile(fixtureRulesPath)),
       ...(options.ruleFiles ?? []).flatMap(readRuleFile),
     ];
-    // Extra rules go first so a user rule wins over a bundled rule for the same banner.
     const rules: Rule[] = [...extra, ...bundledRules()];
     this.#rules = JSON.stringify({ autoconsent: rules });
     this.#detectWindowMs = (options.detectRetries ?? 10) * 500 + 1000;
@@ -121,8 +120,8 @@ export class ConsentDriver {
         state.cmp = msg.cmp ?? null;
         break;
       case 'popupFound':
+        if (state.shownT === null) state.cmp = msg.cmp ?? state.cmp;
         state.shownT = Date.now();
-        state.cmp = msg.cmp ?? state.cmp;
         break;
       case 'optInResult':
       case 'optOutResult':
@@ -247,7 +246,7 @@ export class ConsentDriver {
 
 const drivers = new WeakMap<BrowserContext, ConsentDriver>();
 
-/** Install before pages are created: the content script reaches only frames that load afterwards. */
+/** Installs the content script in every page of the context, including frames that are already open. */
 export async function installConsent(context: BrowserContext, options: ConsentOptions = {}): Promise<ConsentDriver> {
   const existing = drivers.get(context);
   if (existing) {

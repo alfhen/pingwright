@@ -89,7 +89,8 @@ function mergeChanges(
  * belong to that decision. Its epoch starts at the earliest of the action end and those updates,
  * is labelled by the action, and takes the last Consent Mode state in the window (the action's
  * own state when no update came). Updates outside every window that change state start their
- * own epoch with source consentMode; one that repeats the state while undecided is not a decision.
+ * own epoch with source consentMode. While undecided, such an update that grants nothing only
+ * updates the undecided state and starts no epoch.
  */
 export function buildEpochs(
   banners: readonly BannerEvent[],

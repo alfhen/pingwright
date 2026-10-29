@@ -38,6 +38,11 @@ describe('consentModeChanges', () => {
     const [change] = consentModeChanges([push(1, 'default', { ad_storage: 'denied' })]);
     expect(change?.state).toEqual({ analytics: 'unknown', ads: 'denied', adUserData: 'unknown', adPersonalization: 'unknown' });
   });
+
+  test('skips pushes whose args is a plain object', () => {
+    const changes = consentModeChanges([{ t: 1, args: { event: 'gtm.js' } as never }, push(2, 'default', { ad_storage: 'denied' })]);
+    expect(changes).toHaveLength(1);
+  });
 });
 
 describe('buildEpochs', () => {
