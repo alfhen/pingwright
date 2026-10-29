@@ -3,10 +3,18 @@ import { expect, test } from 'vitest';
 import { README_QUICKSTART_SCENARIO, README_SCENARIO } from './readme-scenario.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';
 
+test('parses host lists in options and rejects bad entries', () => {
+  const s = parseScenario("start: /\noptions: { firstPartyHosts: ['i.guim.co.uk', '*.shopifycdn.com'], allowUnknownDestination: ['cdn.example.net'] }");
+  expect(s.options).toEqual({ firstPartyHosts: ['i.guim.co.uk', '*.shopifycdn.com'], allowUnknownDestination: ['cdn.example.net'] });
+  expect(() => parseScenario("start: /\noptions: { firstPartyHosts: ['https://a.com/x'] }")).toThrow(/firstPartyHosts/);
+  expect(() => parseScenario("start: /\noptions: { allowUnknownDestination: 'yes' }")).toThrow(/allowUnknownDestination/);
+});
+
 test('parses the README quick start scenario', () => {
   const s = parseScenario(README_QUICKSTART_SCENARIO);
   expect(s.steps[0]).toMatchObject({ kind: 'consent' });
   expect(s.expect.mustNot[0]).toMatchObject({ before: 'consent' });
+  expect(s.options.allowUnknownDestination).toBeUndefined();
 });
 
 function errorOf(text: string): string {

@@ -41,6 +41,21 @@ test('formats failures with message and evidence, and the record path', () => {
   expect(text.trimEnd().endsWith('Record: runs/run_1.jsonl')).toBe(true);
 });
 
+test('groups unknown and first-party flags by host with counts and a few paths', () => {
+  const flags = [
+    ...['a', 'b', 'c', 'd', 'a'].map((p) => ({ kind: 'unknownDestination', detail: `GET https://t.example.net/${p}?x=1` })),
+    { kind: 'unknownDestination', detail: 'POST https://u.example.net/p' },
+    { kind: 'firstPartySubdomain', detail: 'POST https://sgtm.example.com/collect' },
+    { kind: 'stubBypass', detail: 'It was not routed: https://x.test/' },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('unknownDestination: t.example.net x5 (/a, /b, /c and 1 more)');
+  expect(text).toContain('unknownDestination: u.example.net x1 (/p)');
+  expect(text).toContain('firstPartySubdomain: sgtm.example.com x1 (/collect)');
+  expect(text).toContain('stubBypass: It was not routed: https://x.test/');
+  expect(text).not.toContain('?x=1');
+});
+
 test('shows evidence for passing expectations, capped', () => {
   const ids = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7'];
   const summary: Summary = {
@@ -63,6 +78,10 @@ test('main prints the version and exits 2 on a usage error', async () => {
   const io = { stdout: (t: string) => void out.push(t), stderr: (t: string) => void err.push(t) };
   expect(await main(['--version'], io)).toBe(0);
   expect(out.join('')).toBe(`${readVersion()}\n`);
+  out.length = 0;
+  expect(await main(['run', '--help'], io)).toBe(0);
+  expect(out.join('')).toContain('Usage: pingwright run <scenario.yml>');
+  expect(out.join('')).not.toContain('install-browser');
   expect(await main(['run', 's.yml'], io)).toBe(2);
   expect(err.join('')).toContain('--site is required');
 });

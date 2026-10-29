@@ -165,3 +165,30 @@ test('--version prints the root package version', async () => {
   expect(r.code).toBe(0);
   expect(r.stdout.trim()).toBe('0.1.0-rc.1');
 });
+
+const UNKNOWN = 'builtin: unknownDestination';
+
+test('a third-party IP host is still an unknownDestination failure', async () => {
+  const r = await run('third-party-ip');
+  expect(r.failed).toContain(UNKNOWN);
+  const { flags, requests } = r.records!;
+  const hosts = flags
+    .filter((f) => f.kind === 'unknownDestination')
+    .map((f) => new URL(requests.find((q) => q.id === f.recordIds[0])!.url).hostname);
+  expect(hosts).toContain('127.0.0.1');
+  expect(flags.some((f) => f.kind === 'firstPartySubdomain')).toBe(false);
+}, 90_000);
+
+test('firstPartyHosts turns those requests into firstPartySubdomain flags that do not fail', async () => {
+  const r = await run('first-party-hosts');
+  expect(r.failed).not.toContain(UNKNOWN);
+  const { flags } = r.records!;
+  expect(flags.some((f) => f.kind === 'unknownDestination')).toBe(false);
+  expect(flags.some((f) => f.kind === 'firstPartySubdomain' && f.detail.includes('/unknown-pixel'))).toBe(true);
+}, 90_000);
+
+test('run --help prints the help of run', async () => {
+  const r = await runCli(['run', '--help']);
+  expect(r.code).toBe(0);
+  expect(r.stdout).toContain('Usage: pingwright run <scenario.yml>');
+});
