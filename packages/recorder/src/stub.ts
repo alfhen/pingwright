@@ -38,7 +38,7 @@ export function stubResponse(req: Pick<Request, 'resourceType' | 'headers'>): St
 
 const LOADS = new Set(['script', 'stylesheet', 'font', 'document']);
 const VENDOR_HOST =
-  /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$|^(www\.)?google\.com$/;
+  /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com|googletagmanager\.com)$|^(www\.)?google\.com$/;
 const COLLECTION_PATH = /^\/(?:tr|pagead\/(?:viewthroughconversion|conversion|1p-[\w-]+)|rmkt|ccm|td)(?:\/|$)/;
 const LIBRARY_PATH = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
 

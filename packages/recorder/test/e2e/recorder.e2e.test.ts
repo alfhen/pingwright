@@ -37,6 +37,7 @@ const isMetaTr = (r: Request) => /(^|\.)facebook\.com$/.test(url(r).hostname) &&
 const isAdsCollect = (r: Request) =>
   /(^|\.)(googleadservices|doubleclick|googlesyndication)\.com$|^(www\.)?google\.com$/.test(url(r).hostname) &&
   /^\/(ccm\/collect|pagead\/)/.test(url(r).pathname);
+const isTagManagerPing = (r: Request) => /(^|\.)googletagmanager\.com$/.test(url(r).hostname) && /^\/(a|td)\/?$/.test(url(r).pathname);
 
 describe('stub mode on the fixture site', () => {
   test('no collection request is passed through', () => {
@@ -46,7 +47,7 @@ describe('stub mode on the fixture site', () => {
   });
 
   test('no request to a known vendor collection path is passed or failed', () => {
-    const vendor = records.requests.filter((r) => isCollectionEndpoint(r) || isMetaTr(r) || isAdsCollect(r));
+    const vendor = records.requests.filter((r) => isCollectionEndpoint(r) || isMetaTr(r) || isAdsCollect(r) || isTagManagerPing(r));
     expect(vendor.filter((r) => r.outcome === 'passed' || r.outcome === 'failed')).toEqual([]);
   });
 

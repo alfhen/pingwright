@@ -20,8 +20,8 @@ afterAll(async () => {
   if (outDir) await rm(outDir, { recursive: true, force: true });
 });
 
-const VENDOR_HOST = /(^|\.)(facebook\.com|facebook\.net|google\.com|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$/;
-const LIBRARY = /\/(gtag\/js|fbevents\.js|signals\/config\/[^/?]*)(\?|$)/;
+const VENDOR_HOST = /(^|\.)(facebook\.com|facebook\.net|google\.com|googletagmanager\.com|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$/;
+const LIBRARY = /\/(gtag\/js|gtag\/destination|gtm\.js|fbevents\.js|signals\/config\/[^/?]*)(\?|$)/;
 
 test('with consent accepted, every Meta and Google ad request except library loads is stubbed', async () => {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
