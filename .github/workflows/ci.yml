@@ -52,12 +52,11 @@ jobs:
           "$tmp/bin/pingwright" --version
           echo "PW_BIN=$tmp/bin/pingwright" >> "$GITHUB_ENV"
       - name: Install from git
-        # A local install: npm 10 leaves a dangling link for `npm i -g <git url>` when the package has a prepare script.
+        # --install-links: with npm 10, a plain global git install leaves a dangling link when the package has a prepare script.
         run: |
           tmp2=$(mktemp -d)
-          cd "$tmp2" && npm init -y > /dev/null
-          npm i "git+file://$GITHUB_WORKSPACE"
-          ./node_modules/.bin/pingwright --version
+          npm i -g --install-links --prefix "$tmp2" "git+file://$GITHUB_WORKSPACE"
+          "$tmp2/bin/pingwright" --version
       - run: $PW_BIN install-browser
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
@@ -69,9 +68,18 @@ jobs:
           for i in $(seq 1 30); do grep -q '^shop:' fixture.log && break; sleep 1; done
           url=$(sed -n 's/^shop: *//p' fixture.log)
           set +e
-          "$PW_BIN" run e2e/scenarios/reject.yml --site "$url" --out "$RUNNER_TEMP/runs"
+          "$PW_BIN" run e2e/scenarios/reject.yml --site "$url" --out "$RUNNER_TEMP/runs" --json > summary.json
           code=$?
           set -e
-          # The fixture's sandboxed pixel makes the built-in sandbox check fail, so exit 1 is the expected result.
-          test "$code" = 1
           kill %1
+          # The fixture's sandboxed pixel makes the built-in sandbox check fail, so exit 1 is expected.
+          # The other expectations must pass, which shows the packaged CLI recorded and decoded hits.
+          test "$code" = 1
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync("summary.json", "utf8"));
+            const failed = s.results.filter((r) => !r.pass).map((r) => r.expectation);
+            const ok = JSON.stringify(failed) === JSON.stringify(["builtin: sandboxPageUrl"])
+              && s.hits.ga4 && s.hits.ga4.add_to_cart > 0 && s.hits.meta
+              && require("fs").existsSync(s.path);
+            if (!ok) { console.error(JSON.stringify(s, null, 2)); process.exit(1); }
+          '
