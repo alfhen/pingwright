@@ -39,7 +39,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 
 The text summary lists hits per vendor and event, consent epochs, flags, each expectation with PASS or FAIL (failures show the message and evidence IDs), and the path of the JSONL file. The `result` records are appended to that file.
 
-Payments and log-ins are handoff steps on any host that is not on this machine. Filling a card or password field on another host fails the run.
+Payments and log-ins are handoff steps on any host other than `localhost`, `127.0.0.1` or `::1`. Filling a card or password field on another host fails the run.
 
 ### `pingwright install-browser`
 

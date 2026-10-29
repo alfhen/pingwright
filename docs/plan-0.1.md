@@ -42,7 +42,7 @@ e2e/                      end-to-end scenarios against the fixture site
 
 `core` is not in the README table. Decoders, recorder, consent and expect all share the record types, so they live in one small package. The README table is updated to match.
 
-Workspace packages are private. The root package `pingwright` bundles them with esbuild into `dist/`. Its runtime dependencies are only external packages (Playwright, autoconsent, yaml, Faker and similar). So `pnpm pack` at the root gives an installable tarball, and `npm i -g --install-links github:alfhen/pingwright#<tag>` works from a release tag, which carries a built `dist/` (see `docs/release.md`). npm 10 needs `--install-links` for a global install from git.
+Workspace packages are private. The root package `pingwright` bundles them with esbuild into `dist/`. Its runtime dependencies are only external packages (Playwright, autoconsent, yaml, Faker and similar). So `pnpm build && pnpm pack` at the root gives an installable tarball, and `npm i -g --install-links github:alfhen/pingwright#<tag>` works from a release tag, which carries a built `dist/` (see `docs/release.md`). npm 10 needs `--install-links` for a global install from git.
 
 ## Rules for every PR
 
@@ -68,7 +68,7 @@ Acceptance: `pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pn
 
 **P02 Collector origin verification (§9).** (done, #16) → P01
 A Playwright test, with no Pingwright code yet, that answers `https://collector.pingwright.invalid/` through `context.route` and proves capture from: the page, `sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe, a sandboxed cross-site iframe (out of process), and a worker inside a sandboxed iframe. It also loads a page under a public-looking origin and shows that a sandboxed iframe there still reaches the collector. Updates design §5.2, §9 and §14 with the results.
-Acceptance: the test passes on Chromium 1.64.1 with no browser flags.
+Acceptance: the test passes on Chromium with Playwright 1.64.1 and no browser flags.
 
 **P03 Core records.** (done, #11) → P01
 ULID IDs with type prefixes, record types from §4, the shared clock helpers, and a JSONL run store that writes `runs/<id>.jsonl` and reads it back.
@@ -137,20 +137,21 @@ Acceptance: e2e scenario files in `e2e/scenarios/` for undecided, accept, reject
 
 ### Wave 8
 
-**P15 Docs for 0.1.** → P14
+**P15 Docs for 0.1.** (#104) → P14
 README status and quick start. Design doc: every (verify) claim in 0.1 scope resolved. Version `0.1.0-rc.1`.
 Acceptance: docs build nothing; a reviewer checks every 0.1 (verify) claim has a result.
 
-Then tag `v0.1.0-rc.1` on main. No npm publish and no GitHub release.
+Then run `scripts/release.sh 0.1.0-rc.1` on main and push the tag it creates (`docs/release.md`). The tag points at a release commit that carries `dist/` and is not on main. No npm publish and no GitHub release.
 
-Extra fix, outside the plan: #76 made the srcdoc iframe test in the recorder stable.
+Extra PRs, outside the plan: #76 made the srcdoc iframe test in the recorder stable. #107 (P16) made installs come from release tags that carry a built `dist/`.
 
 ## (verify) claims
 
 | Claim | Section | Resolved in |
 | --- | --- | --- |
-| Collector origin works in sandboxed and out-of-process iframes and workers | §9, §14.1 | P02 |
-| Dedicated worker capture | §5.2, §14.2 | P02, P09 |
-| Stubbing side effects: retries on other transports, tag callbacks | §5.3, §14.3 | P09 |
-| Web template sending permission | §8.1, §14.5 | not in 0.1 (0.3) |
-| Server template signature APIs | §8.3, §14.4 | not in 0.1 (0.5) |
+| Collector origin works in sandboxed and out-of-process iframes and workers | §9, §14.1 | P02: `collector-origin.e2e.test.ts`, Chromium 156.0.8078.4, Playwright 1.64.1 |
+| Early requests from a loading sandboxed `srcdoc` iframe | §5.3, §9, §14.2 | P02, P09, #76: `network-modes.e2e.test.ts` (usually not routed; accepted either way) |
+| Dedicated worker capture | §5.2, §14.3 | P02, P09: `collector-origin.e2e.test.ts`, `recorder.e2e.test.ts` |
+| Stubbing side effects: retries on other transports, tag callbacks | §5.3, §14.4 | P09: `stubbing-side-effects.e2e.test.ts` (GA4 only) |
+| Server template signature APIs | §8.3, §14.5 | not in 0.1 (0.5) |
+| Web template sending permission | §8.1, §14.6 | not in 0.1 (0.3) |

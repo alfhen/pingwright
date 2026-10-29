@@ -119,7 +119,7 @@ Every profile:
 
 | Mode | Behaviour |
 | --- | --- |
-| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect`, Meta `/tr`, Pinterest `/v3/`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
+| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect` and Meta `/tr`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
 | `server` | As `stub`, but requests to the configured server-container hosts pass through. Required for server-side tag reports, server-set cookies and the server preview header. |
 | `live` | Everything goes through. Test hits reach real vendor accounts. |
 
@@ -132,7 +132,7 @@ Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, 
 **Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds:
 
 - GA4 sent each event once, as a `POST` through `fetch`. It did not retry on another transport, such as an image or a beacon.
-- A gtag `event_callback` fired within a few milliseconds of the `gtag('event')` call, without waiting for any response. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
+- A gtag `event_callback` fired in under 1.5 s of the `gtag('event')` call (the test's bound), without waiting for any response. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
 - GA4 sent events other than `page_view` several seconds after the call.
 
 Other vendors were not tested in 0.1.
@@ -371,10 +371,11 @@ Deferred: HTML report, sink setup commands, a replay page.
 Where the code in 0.1 differs from the design above:
 
 - **`sgtm-data-client` is minimal.** It decodes only `/data` requests that carry a `dtdc` parameter, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
+- **Only Meta and Google hosts are stubbed by host.** Hits to vendors without a 0.1 decoder (Pinterest, Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
 - **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`. The rule for what is flagged is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
-- **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes. Only release tags carry a built `dist/`, so install from a tag, not a branch (`docs/release.md`). `pnpm pack` and a tarball also work (`docs/cli.md`).
+- **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes. Only release tags carry a built `dist/`, so install from a tag, not a branch (`docs/release.md`). A tarball from `pnpm install && pnpm build && pnpm pack` also works (`docs/cli.md`).
 - **Consent answers are `accept`, `reject`, `none` and `withdraw`.** Named choices are not supported. Only the Google Consent Mode probe exists; TCF, GPP and Shopify probes are not built.
 - **Network modes are `stub` and `live`.** `server` mode is not built.
 - **Commands are `run`, `install-browser` and `--version`.** `diff`, `report` and the MCP server are not built.
