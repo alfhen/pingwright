@@ -169,12 +169,34 @@ test('grace window: a hit just before the boundary counts as after it', () => {
   expect(wide[0]!.pass).toBe(true);
 });
 
-test('Google hits are judged by their own consent, not by the epoch', () => {
-  const recs = [hit({ consent: denied, t: 2000 }), ...UNDECIDED_THEN_ACCEPT];
-  expect(rule(`expect:\n  must:\n    - { vendor: ga4, before: consent }`, recs).pass).toBe(true);
-  const grantedHit = hit({ consent: granted, t: 10 });
-  expect(rule(`expect:\n  mustNot:\n    - { vendor: ga4, before: consent }`, [grantedHit, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
-  expect(rule(`expect:\n  must:\n    - { vendor: ga4, in: epoch(granted) }`, [grantedHit, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+test('before: consent uses time for Google hits', () => {
+  const afterReject = [hit({ consent: denied, t: 5000 }), epoch(0, 1000, 'undecided'), epoch(1000, null, denied)];
+  expect(rule(`expect:\n  mustNot:\n    - { vendor: ga4, before: consent }`, afterReject).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { vendor: ga4, before: consent }`, afterReject).pass).toBe(false);
+  const grantedEarly = hit({ consent: granted, t: 10 });
+  const r = rule(`expect:\n  mustNot:\n    - { vendor: ga4, consent.analytics: granted, before: consent }`, [grantedEarly, ...UNDECIDED_THEN_ACCEPT]);
+  expect(r.pass).toBe(false);
+  expect(r.evidence).toEqual([grantedEarly.hit.id]);
+  expect(rule(`expect:\n  must:\n    - { vendor: ga4, in: epoch(granted) }`, [grantedEarly, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { vendor: ga4, in: epoch(undecided) }`, [grantedEarly, ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+});
+
+test('consent.* on a non-Google vendor falls back to the epoch', () => {
+  const q = `expect:\n  mustNot:\n    - { vendor: meta, consent.ads: denied }`;
+  const deniedEpochs = [epoch(0, 1000, 'undecided'), epoch(1000, null, denied)];
+  const inDenied = hit({ vendor: 'meta', t: 2000 });
+  const r = rule(q, [inDenied, ...deniedEpochs]);
+  expect(r.pass).toBe(false);
+  expect(r.evidence).toEqual([inDenied.hit.id]);
+  expect(rule(q, [hit({ vendor: 'meta', t: 2000 }), ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { vendor: meta, consent.ads: granted }`, [hit({ vendor: 'meta', t: 2000 }), ...UNDECIDED_THEN_ACCEPT]).pass).toBe(true);
+  expect(rule(q, [hit({ vendor: 'meta', t: 100 }), ...deniedEpochs]).pass).toBe(true);
+});
+
+test('Google hit without consent fields falls back to the epoch', () => {
+  const q = `expect:\n  mustNot:\n    - { vendor: ga4, consent.analytics: denied }`;
+  const recs = [hit({ t: 2000 }), epoch(0, 1000, 'undecided'), epoch(1000, null, denied)];
+  expect(rule(q, recs).pass).toBe(false);
 });
 
 test('in: epoch(<state>) with accept then withdraw', () => {
@@ -221,6 +243,12 @@ test('identity.hashesMatch', () => {
   expect(failed.evidence).toEqual([bad.hit.id]);
   expect(ev([hit({ vendor: 'meta' })]).message).toContain('no hashed values');
   expect(rule(q, [good]).message).toContain('no run identity');
+  const digitsPhone = hit({ vendor: 'meta', params: {
+    'ud[em]': em.hex, 'ud[ph]': hashEmail(identity.phone.replace(/\D/g, '')).hex,
+    'ud[fn]': hashEmail(identity.firstName).hex, 'ud[ln]': hashEmail(identity.lastName).hex,
+  } });
+  expect(ev([digitsPhone]).pass).toBe(true);
+  expect(ev([hit({ vendor: 'meta', params: { 'ud[ph]': hashEmail('15550000000').hex } })]).pass).toBe(false);
 });
 
 test('built-in unknownDestination fails with evidence unless allowed', () => {

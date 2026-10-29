@@ -1,10 +1,12 @@
 import {
   hashEmail,
   hashPhone,
+  sha256,
   newId,
   type ConsentEpoch,
   type ConsentState,
   type ConsentValue,
+  type HashForms,
   type Hit,
   type Identity,
   type PingwrightRecord,
@@ -120,9 +122,10 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
 function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
   if (f.vendor && !f.vendor.includes(hit.vendor)) return false;
   if (f.event && (hit.event === null || !f.event.includes(hit.event))) return false;
+  const effective = effectiveConsent(hit, ctx);
   for (const field of consentFields) {
     const want = f.consent[field];
-    if (want && hit.consent[field] !== want) return false;
+    if (want && effective[field] !== want) return false;
   }
   for (const [name, want] of Object.entries(f.ids)) {
     const have = hit.ids[name];
@@ -156,10 +159,6 @@ function hostOf(url: string): string {
   }
 }
 
-function judgedByHit(hit: Hit): boolean {
-  return GOOGLE_VENDORS.has(hit.vendor) && consentFields.some((f) => hit.consent[f] !== 'unknown');
-}
-
 /**
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
  * epoch, since tags may fire on the consent update itself.
@@ -173,8 +172,28 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
   return found;
 }
 
-function stateMatches(state: ConsentState | 'undecided', selector: string): boolean {
-  if (state === 'undecided') return selector === 'undecided';
+/**
+ * Google hits state their own consent for every field they carry; every other field, and every other
+ * vendor, takes the state of the epoch the hit falls in.
+ */
+function effectiveConsent(hit: Hit, ctx: Context): ConsentState {
+  const epochState = epochOf(hit, ctx)?.state;
+  const base = epochState && epochState !== 'undecided' ? epochState : undefined;
+  const own = GOOGLE_VENDORS.has(hit.vendor);
+  const pick = (f: ConsentField): ConsentValue => {
+    const carried = hit.consent[f];
+    if (own && carried !== 'unknown') return carried;
+    return base ? base[f] : 'unknown';
+  };
+  return {
+    analytics: pick('analytics'),
+    ads: pick('ads'),
+    adUserData: pick('adUserData'),
+    adPersonalization: pick('adPersonalization'),
+  };
+}
+
+function stateMatches(state: ConsentState, selector: string): boolean {
   if (selector === 'undecided') return false;
   if (selector === 'granted' || selector === 'denied') {
     const known = consentFields.map((f) => state[f]).filter((v) => v !== 'unknown');
@@ -184,55 +203,59 @@ function stateMatches(state: ConsentState | 'undecided', selector: string): bool
   return state[field] === value;
 }
 
-/** Google hits carry no undecided state, so `undecided` means no field is granted. */
-function hitConsentMatches(hit: Hit, selector: string): boolean {
-  if (selector === 'undecided') return consentFields.every((f) => hit.consent[f] !== 'granted');
-  return stateMatches(hit.consent, selector);
+/** Timing decides this for every vendor: what a hit carries cannot show that the visitor had not yet answered. */
+function inUndecidedEpoch(hit: Hit, ctx: Context): boolean {
+  const epoch = epochOf(hit, ctx);
+  return !epoch || epoch.state === 'undecided';
 }
 
 function isBeforeConsent(hit: Hit, ctx: Context): boolean {
-  if (judgedByHit(hit)) return hitConsentMatches(hit, 'undecided');
   const epoch = epochOf(hit, ctx);
   return !epoch || (epoch === ctx.epochs[0] && epoch.state === 'undecided');
 }
 
 function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
-  if (judgedByHit(hit)) return hitConsentMatches(hit, selector);
-  const epoch = epochOf(hit, ctx);
-  if (!epoch) return selector === 'undecided';
-  return stateMatches(epoch.state, selector);
+  if (selector === 'undecided') return inUndecidedEpoch(hit, ctx);
+  return stateMatches(effectiveConsent(hit, ctx), selector);
 }
 
-function hashForms(identity: Identity): Set<string> {
-  const out = new Set<string>();
-  for (const h of [hashEmail(identity.email), hashPhone(identity.phone)]) {
-    out.add(h.hex);
-    out.add(h.base64);
-    out.add(h.base64url);
-  }
-  return out;
-}
+const EMAIL_PARAM = /^(?:em|ud\[em\]|sha256_email_address)$/;
+const PHONE_PARAM = /^(?:ph|ud\[ph\]|sha256_phone_number)$/;
 
-const LOOKS_HASHED = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/;
+function allForms(h: HashForms): string[] {
+  return [h.hex, h.base64, h.base64url];
+}
 
 function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: string[]; message: string } {
-  if (!ctx.identity) return { pass: false, evidence: [], message: 'Cannot check hashes: no run identity was given.' };
-  const known = hashForms(ctx.identity);
+  const identity = ctx.identity;
+  if (!identity) return { pass: false, evidence: [], message: 'Cannot check hashes: no run identity was given.' };
+  const emailHashes = new Set(allForms(hashEmail(identity.email)));
+  const phone = hashPhone(identity.phone);
+  const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
   const withHash: string[] = [];
   const wrong: string[] = [];
   for (const hit of hits) {
-    const hashed = Object.entries(hit.params).filter(([, v]) => LOOKS_HASHED.test(v));
-    if (hashed.length) withHash.push(hit.id);
-    if (hashed.some(([, v]) => !known.has(v))) wrong.push(hit.id);
+    let seen = false;
+    let bad = false;
+    for (const [name, value] of Object.entries(hit.params)) {
+      const known = EMAIL_PARAM.test(name) ? emailHashes : PHONE_PARAM.test(name) ? phoneHashes : undefined;
+      if (!known || !LOOKS_HASHED.test(value)) continue;
+      seen = true;
+      if (!known.has(value)) bad = true;
+    }
+    if (seen) withHash.push(hit.id);
+    if (bad) wrong.push(hit.id);
   }
   if (wrong.length) {
-    return { pass: false, evidence: wrong, message: `Hashed values in ${wrong.length} hit(s) do not match the run identity.` };
+    return { pass: false, evidence: wrong, message: `Hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
   }
   if (!withHash.length) {
     return { pass: false, evidence: [], message: 'Expected hashed email or phone values matching the run identity, found no hashed values.' };
   }
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
+
+const LOOKS_HASHED = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/;
 
 function builtInChecks(
   records: readonly Input[],
