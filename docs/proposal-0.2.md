@@ -38,13 +38,22 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
 1. **GTM override per run, including custom loaders** (moved forward from 0.3, design §8.2).
    - `--gtm-override <file>` takes the JSON in §8.2: container, `gtmAuth`, `gtmPreview`, and optional `expectedTags`.
    - 0.2 stores `expectedTags` in the record but does not evaluate it. "Did not fire" needs the web tag-firing reporter, which stays in 0.3.
-   - The recorder matches the container request at `www.googletagmanager.com/gtm.js`, as §8.2 says. It also matches a configurable loader pattern, so a site that loads GTM through a custom loader can be tested. One option is to replace the loader response with the preview build from `www.googletagmanager.com`. Another is to pass the preview values through the loader, if the loader forwards them **(verify)**. Either option loses what the loader adds beyond fetching the container, and the run record must say so.
-   - The override applies to the run only, and the record stores it as `gtmOverride`. `gtmAuth` is a credential for the preview build, so the record stores it as `"[redacted]"`. The same rule applies to `gtm_auth` in any recorded request URL. Design §13 adds `gtmAuth` to "Secrets are always redacted".
-   - Acceptance: the fixture site serves two container builds. One run with the override and one without show different hits. This is tested twice: once with a direct `gtm.js` load, and once with a load through a Stape-style custom loader. The record of the loader run states what the loader would have added. No JSONL line contains the `gtmAuth` value.
+   - The recorder matches the container request at `www.googletagmanager.com/gtm.js`, as §8.2 says. It also handles sites that load GTM through a custom loader. There are three ways, from narrowest to widest:
+     1. **Rewrite the decoded container request.** A Stape loader fetches the container as a disguised request (`/<id>?<key>=<base64 of /gtm.js?id=…>`), and the `stape-custom-loader` decoder already decodes it. The recorder matches the decoded `gtm.js` request and answers it with the preview build, fetched with `route.fetch`. The loader script itself stays in place. This is the preferred way.
+     2. Pass the preview values through the loader, if the loader forwards them **(verify)**.
+     3. Replace the whole loader response with the preview build from `www.googletagmanager.com`. This loses what the loader adds beyond fetching the container.
+   - The run record states which way was used and what it may lose.
+   - The override applies to the run only, and the record stores it as `gtmOverride`. `gtmAuth` is a credential for the preview build, so the record stores it as `"[redacted]"`. The same rule applies to `gtm_auth` in any recorded request URL, in request headers such as `Referer`, and in any preview or debug beacon the preview build sends. Design §13 adds `gtmAuth` to "Secrets are always redacted".
+   - Acceptance:
+     - The fixture site serves two container builds. One run with the override and one without show different hits.
+     - This is tested three times: with a direct `gtm.js` load, with a load through a Stape-style custom loader, and with that loader running inside a sandboxed iframe like a Shopify custom pixel.
+     - The record of each loader run states the way used.
+     - No JSONL line contains the `gtmAuth` value.
 
 2. **`pingwright diff <a> <b>`** (design §15, already planned for 0.2).
    - The diff groups hits by consent epoch label, then vendor, then event.
-   - It pairs hits across the two runs by a match key: epoch label, vendor, event and step label. Inside one key, it pairs hits in time order: the first with the first, the second with the second. An unpaired hit is reported as added or removed.
+   - It pairs hits across the two runs by a match key: epoch label, vendor, event and step label. An option adds the page path to the key, for steps that visit more than one page. Inside one key, it pairs hits in time order: the first with the first, the second with the second. An unpaired hit is reported as added or removed.
+   - The `Run` record gets a record schema version. `diff` warns when the two runs have different versions.
    - For each pair, it reports a change in consent (for example `gcs` G100 → G111) or in ID presence (for example `user_id` present → absent).
    - Pairing by order is a heuristic. A scenario that sends the same event a different number of times in one step can pair the wrong hits. The output says which keys had different counts, so a reader can check them.
    - It also reports changes in flags per host and kind.
@@ -56,7 +65,13 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
    - Stubs Pinterest collection hosts in `stub` mode.
    - Acceptance: synthetic fixtures for init, pagevisit, addtocart and checkout, and a Pinterest rule that fails in an e2e run.
 
-4. **Fix the checks that fail on every real run.**
+4. **Stub known tracker hosts that have no decoder.** In 0.1, `stub` mode lets every vendor without a decoder through. The field test showed this with Pinterest: real hits reached it, and no rule could name it. A decoder fixes one vendor at a time. This item fixes the leak for all of them.
+   - In `stub` mode, the recorder also stubs data-carrying requests that are not script, stylesheet, font or document loads, to hosts on a list of known tracker hosts. DuckDuckGo Tracker Radar (design §16) can supply the list, pinned to a version and shipped with Pingwright. Library loads still pass, so vendor scripts run.
+   - These requests are recorded with `outcome: stubbed` and the tracker's name, even with no decoder.
+   - A host-based rule can name them, for example `{ host: ct.pinterest.com, before: consent }`.
+   - Acceptance: a fixture page sends a pixel request to a listed tracker host that has no decoder. The request is `stubbed`, a host rule matches it, and its script load still passes.
+
+5. **Fix the checks that fail on every real run.** These fixes and those in item 8 are already in progress as issue batches. They ship first in `0.1.0-rc.2`, ahead of 0.2, because #46 is a stub-mode leak in a tagged release. 0.2 inherits them.
    - #46: decode Stape data-client POST requests (JSON body, event in the query string), and stub them. In 0.1 they reach the real server container.
    - #114: `possibleRealData` must not flag random IDs or hashed client IDs.
    - #112: subdomains of the site are not third party by default.
@@ -65,8 +80,11 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
      - #114: a fixture page sends a random 64-character hex ID and a hashed client ID in non-identity fields. `possibleRealData` passes. A SHA-256 of an email that is not the run identity, sent as `em`, still fails it.
      - #112: a request to a subdomain of `--site` is not flagged as `unknownDestination`. A request to a different registrable domain still is.
 
-5. **Withdrawal epochs** (#119). Withdrawal is where trigger-group setups break.
+6. **Withdrawal epochs** (#119). Withdrawal is where trigger-group setups break.
    - `withdrawn` is a label, not a new consent state. A denied epoch that follows a granted epoch gets the label `withdrawn`. Its state stays `denied`.
+   - `ConsentEpoch.label` already exists and today holds values such as `denied` and `mixed`. For a withdrawal, `withdrawn` replaces `denied` as the label. The state keeps the consent values.
+   - A mixed epoch that follows a granted epoch is a partial withdrawal. It gets the label `withdrawn` too, and its state shows which signals were denied.
+   - Every withdrawal gets the label, so in granted, denied, granted, denied both denied epochs are `withdrawn`.
    - `in: epoch(denied)` keeps its meaning from design §7.3: it matches by state, so it matches withdrawn epochs too.
    - A new selector, `in: epoch(label=<label>)`, matches by label. `label` is a reserved name, so it can't be mistaken for a consent field such as `analytics`.
    - `diff` groups by label, so a withdrawn epoch is not compared with a first reject.
@@ -74,13 +92,14 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
 
 ### 3.2 Should have
 
-6. **Shopify checkout scenario** (a part of design §10.1, moved forward from 0.4).
+7. **Shopify checkout scenario** (a part of design §10.1, moved forward from 0.4).
    - A documented scenario pattern: product, add to cart, checkout, fill with the fake identity, set the delivery country explicitly, then a `handoff` step for payment.
    - The thank-you page gets its own step, so purchase hits can be matched with `after:`.
    - `identity.hashesMatch` runs on the purchase hits.
    - No new automation of payment. The handoff rule in §5.4 stays as it is.
+   - The payment handoff waits for a person, so this pattern can't run unattended in CI or from an agent session. It is a field-run pattern. Its fixture-site version, which pays on localhost, runs in CI.
 
-7. **Usable output on real sites.**
+8. **Usable output on real sites.** In progress, and ships in `0.1.0-rc.2` (see item 5).
    - #116: group flags by host in the text summary.
    - #115: record why a request failed.
    - #117: `addToCart` checks that something was added to the cart.
@@ -93,8 +112,8 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
 
 ## 4. Milestones after this change
 
-1. **0.1:** as released.
-2. **0.2:** GTM override (web, including custom loaders), `diff`, `pinterest` decoder, withdrawal epochs, the field-test fixes, Shopify checkout pattern.
+1. **0.1:** as released in `0.1.0-rc.1`. `0.1.0-rc.2` adds the field-test fixes (items 5 and 8) and the other open issue fixes.
+2. **0.2:** GTM override (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts, withdrawal epochs, Shopify checkout pattern.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
 5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
@@ -107,10 +126,10 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
   2. Run them again with `--gtm-override` for a changed workspace.
   3. `pingwright diff` each pair, and read the change per consent state.
   4. Fail on rules such as "GA4 page_view fires while undecided at G100 with no `user_id`" and "no Meta or Pinterest hit in `epoch(denied)`". That rule covers both a reject and a withdrawal.
-- On a real storefront, the built-in checks fail only for real findings.
+- A field-run checklist, not a CI test: on a real storefront, the built-in checks fail only for real findings.
 
 ## 6. Open questions
 
-- Do Stape custom loaders forward `gtm_auth` and `gtm_preview` to the container request? If they do, the override can keep the loader in place.
+- Do Stape custom loaders forward `gtm_auth` and `gtm_preview` to the container request? If they do, option 2 in item 1 works. Option 1 does not depend on the answer.
 - Is pairing by time order inside a match key good enough for `diff`, or do some vendors need a stronger key, such as an event ID that stays the same across runs?
-- Is a Pinterest decoder enough, or does 0.2 need a generic decoder for "pixel-style GET with an event parameter", so new vendors become rules without new code?
+- When should Pingwright get a generic decoder for "pixel-style GET with an event parameter", so new vendors become rules without new code? Item 4 stops the leak for undecoded vendors in 0.2, and host rules can name them. A generic decoder can wait until after 0.3.
