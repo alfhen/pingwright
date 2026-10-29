@@ -1,6 +1,7 @@
 import {
   hashEmail,
   hashPhone,
+  scan,
   sha256,
   newId,
   type ConsentEpoch,
@@ -53,7 +54,7 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
       .sort((a, b) => a.startT - b.startT),
     steps: records.filter((r): r is Step => r.type === 'step'),
     grace: options.graceWindowMs ?? scenario.options.graceWindow ?? DEFAULT_GRACE_MS,
-    identity: options.identity,
+    identity: options.identity ?? identityOf(runRecord),
   };
 
   const results: Result[] = [];
@@ -297,12 +298,61 @@ function builtInChecks(
   );
 
   const real = flags.filter((f) => f.kind === 'possibleRealData');
+  const leaks = ctx.identity ? scanForeignData(ctx, ctx.identity) : [];
+  const evidence = [...real.flatMap((f) => [f.id, ...f.recordIds]), ...leaks.flatMap((l) => l.evidence)];
+  const problems = [...real.map((f) => f.detail), ...leaks.map((l) => l.detail)];
+  if (!ctx.identity && real.length === 0) {
+    add(
+      'builtin: possibleRealData',
+      false,
+      [],
+      'Cannot check for data that is not from the run identity: no identity was given and no possibleRealData flags exist.',
+    );
+    return;
+  }
   add(
     'builtin: possibleRealData',
-    real.length === 0,
-    real.flatMap((f) => [f.id, ...f.recordIds]),
-    real.length === 0
+    problems.length === 0,
+    evidence,
+    problems.length === 0
       ? 'Expected no data that is not from the run identity, found none.'
-      : `Expected no data that is not from the run identity, found ${real.length} flag(s): ${real.map((f) => f.detail).join('; ')}.`,
+      : `Expected no data that is not from the run identity, found ${problems.length}: ${problems.join('; ')}.`,
   );
+}
+
+function identityOf(run: Run | undefined): Identity | undefined {
+  const id = run?.identity;
+  if (!id) return undefined;
+  const fields = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'];
+  return fields.every((f) => typeof id[f] === 'string') ? (id as unknown as Identity) : undefined;
+}
+
+function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
+  const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
+  const slot = (key: string, stepId: string | null) => {
+    let entry = byRequest.get(key);
+    if (!entry) byRequest.set(key, (entry = { texts: [], hitIds: [], stepId }));
+    return entry;
+  };
+  for (const request of ctx.requests.values()) {
+    slot(request.id, request.stepId).texts.push(request.url, request.postData ?? '');
+  }
+  for (const hit of ctx.hits) {
+    const entry = slot(hit.requestId, hit.stepId);
+    entry.hitIds.push(hit.id);
+    entry.texts.push(...Object.values(hit.params));
+  }
+  const out: { detail: string; evidence: string[] }[] = [];
+  for (const [requestId, entry] of byRequest) {
+    const found = new Map<string, string>();
+    for (const text of entry.texts) for (const m of scan(text, identity)) found.set(`${m.kind}:${m.value}`, m.kind);
+    if (found.size === 0) continue;
+    const kinds = [...new Set(found.values())].join(', ');
+    const step = entry.stepId ? ` in step ${entry.stepId}` : '';
+    out.push({
+      detail: `request ${requestId}${step} carries ${found.size} ${kinds} value(s) that are not from the run identity`,
+      evidence: [requestId, ...entry.hitIds, ...(entry.stepId ? [entry.stepId] : [])],
+    });
+  }
+  return out;
 }

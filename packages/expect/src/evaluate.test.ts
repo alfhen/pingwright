@@ -49,7 +49,7 @@ const UNDECIDED_THEN_ACCEPT = [epoch(0, 1000, 'undecided'), epoch(1000, null, gr
 
 function run(yaml: string, records: unknown[]) {
   const flat = records.flatMap((r) => (r && typeof r === 'object' && 'hit' in r ? [(r as { hit: Hit }).hit, (r as unknown as { req: Request }).req] : [r]));
-  return evaluate(flat as never, parseScenario(yaml));
+  return evaluate(flat as never, parseScenario(yaml), { identity });
 }
 
 function rule(yaml: string, records: unknown[]) {
@@ -242,7 +242,8 @@ test('identity.hashesMatch', () => {
   expect(failed.pass).toBe(false);
   expect(failed.evidence).toEqual([bad.hit.id]);
   expect(ev([hit({ vendor: 'meta' })]).message).toContain('no hashed values');
-  expect(rule(q, [good]).message).toContain('no run identity');
+  const noIdentity = evaluate([good.hit, good.req], parseScenario(`start: /\n${q}`))[0]!;
+  expect(noIdentity.message).toContain('no run identity');
   const digitsPhone = hit({ vendor: 'meta', params: {
     'ud[em]': em.hex, 'ud[ph]': hashEmail(identity.phone.replace(/\D/g, '')).hex,
     'ud[fn]': hashEmail(identity.firstName).hex, 'ud[ln]': hashEmail(identity.lastName).hex,
@@ -267,7 +268,7 @@ test('built-in unknownDestination fails with evidence unless allowed', () => {
   expect(check.message).toContain('127.0.0.1:9100');
   const allowed = evaluate([flag], parseScenario('start: /\noptions: { allowUnknownDestination: true }'));
   expect(allowed.find((r) => r.expectation === 'builtin: unknownDestination')!.pass).toBe(true);
-  expect(evaluate([], parseScenario('start: /')).every((r) => r.pass)).toBe(true);
+  expect(evaluate([], parseScenario('start: /'), { identity }).every((r) => r.pass)).toBe(true);
 });
 
 test('built-in sandbox page URL check', () => {
@@ -283,6 +284,23 @@ test('built-in possibleRealData comes from flags', () => {
   const check = evaluate([flag], parseScenario('start: /')).find((r) => r.expectation === 'builtin: possibleRealData')!;
   expect(check.pass).toBe(false);
   expect(check.evidence).toContain('req_Y');
+});
+
+test('possibleRealData scans requests when only the identity is given', () => {
+  const foreign = Buffer.from('{"em":"someone.else@example.com"}').toString('base64');
+  const bad = hit({}, { postData: foreign, stepId: 'stp_X' as Request['stepId'] });
+  const clean = hit({}, { postData: Buffer.from(identity.email).toString('base64') });
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  const check = find(evaluate([bad.hit, bad.req, clean.hit, clean.req], parseScenario('start: /'), { identity }));
+  expect(check.pass).toBe(false);
+  expect(check.evidence).toEqual([bad.req.id, bad.hit.id, 'stp_X']);
+  expect(find(evaluate([clean.hit, clean.req], parseScenario('start: /'), { identity })).pass).toBe(true);
+});
+
+test('possibleRealData cannot be evaluated without identity or flags', () => {
+  const check = evaluate([], parseScenario('start: /')).find((r) => r.expectation === 'builtin: possibleRealData')!;
+  expect(check.pass).toBe(false);
+  expect(check.message).toContain('Cannot check');
 });
 
 test('results carry the run id and ids with a prefix', () => {
