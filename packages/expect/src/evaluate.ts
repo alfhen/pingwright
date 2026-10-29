@@ -337,6 +337,17 @@ function identityOf(run: Run | undefined): Identity | undefined {
   return fields.every((f) => typeof id[f] === 'string') ? (id as unknown as Identity) : undefined;
 }
 
+// Library loads carry build hashes (fbevents.js asks for signals/config/...?hme=<sha256>). Other script requests can carry hits.
+const LIBRARY_LOAD = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
+
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return '';
+  }
+}
+
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
   const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
@@ -345,8 +356,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     return entry;
   };
   for (const request of ctx.requests.values()) {
-    // Vendor script loads carry build hashes in their URLs (Meta's fbevents.js asks for signals/config/...?hme=<sha256>).
-    if (request.resourceType === 'script') continue;
+    if (request.resourceType === 'script' && LIBRARY_LOAD.test(pathOf(request.url))) continue;
     slot(request.id, request.stepId).texts.push(request.url, request.postData ?? '');
   }
   for (const hit of ctx.hits) {

@@ -315,6 +315,13 @@ test('possibleRealData ignores hashes in script load URLs', () => {
   expect(find(evaluate([pixel.req], parseScenario('start: /'), { identity })).pass).toBe(false);
 });
 
+test('possibleRealData still scans script-type conversion hits', () => {
+  const sha = 'cd'.repeat(32);
+  const ads = hit({ vendor: 'google-ads', event: 'conversion' }, { url: `https://www.googleadservices.com/pagead/conversion/AW-000000001/?em=${sha}`, resourceType: 'script' });
+  const check = evaluate([ads.hit, ads.req], parseScenario('start: /'), { identity }).find((r) => r.expectation === 'builtin: possibleRealData')!;
+  expect(check.pass).toBe(false);
+});
+
 test('possibleRealData cannot be evaluated without identity or flags', () => {
   const check = evaluate([], parseScenario('start: /')).find((r) => r.expectation === 'builtin: possibleRealData')!;
   expect(check.pass).toBe(false);
