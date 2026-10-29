@@ -161,14 +161,55 @@ function isNonPersonalKey(text: string, index: number): boolean {
   return NON_PERSONAL_HASH_KEYS.has(name);
 }
 
-// A prefix glued to the value shifts the base64 alignment, so each piece is also tried from offsets 1 to 3.
-function* base64Candidates(text: string): Generator<string> {
+const MAX_BOUNDARIES = 8;
+const MAX_UNSEPARATED_PREFIX = 24;
+
+// Junk glued to a value shifts the base64 alignment and adds stray bytes, so pieces cut at '_' and '-' are tried
+// as well, each from offsets 0 to 3. Only the outermost boundaries are used to keep long separator runs linear.
+function* glueCuts(piece: string): Generator<string> {
+  yield piece;
+  const bounds: number[] = [];
+  for (let i = 0; i < piece.length && bounds.length < MAX_BOUNDARIES; i++) if (piece[i] === '_' || piece[i] === '-') bounds.push(i);
+  const tail: number[] = [];
+  for (let i = piece.length - 1; i >= 0 && tail.length < MAX_BOUNDARIES; i--) if (piece[i] === '_' || piece[i] === '-') tail.push(i);
+  const all = [...new Set([...bounds, ...tail])];
+  if (all.length === 0) return;
+  const first = Math.min(...all);
+  const last = Math.max(...all);
+  for (const i of all) {
+    yield piece.slice(i + 1);
+    yield piece.slice(0, i);
+  }
+  if (last > first) yield piece.slice(first + 1, last);
+}
+
+// Longer unseparated junk is only tried when nothing nearer decodes, so a clean payload is never cut short.
+function* base64Decodes(text: string): Generator<string> {
   for (const token of text.match(BASE64_TOKEN) ?? []) {
     const pieces = new Set([token]);
     if (token.includes('/')) for (const piece of token.split('/')) if (piece.length >= 12) pieces.add(piece);
+    const seen = new Set<string>();
+    const attempt = (candidate: string): string | undefined => {
+      if (candidate.length < 12 || seen.has(candidate)) return undefined;
+      seen.add(candidate);
+      return tryBase64Decode(candidate);
+    };
     for (const piece of pieces) {
-      yield piece;
-      for (let offset = 1; offset <= 3; offset++) if (piece.length - offset >= 12) yield piece.slice(offset);
+      let found = false;
+      for (const cut of glueCuts(piece)) {
+        for (let offset = 0; offset <= 3; offset++) {
+          const decoded = attempt(cut.slice(offset));
+          if (decoded !== undefined) {
+            found = true;
+            yield decoded;
+          }
+        }
+      }
+      if (found) continue;
+      for (let offset = 4; offset <= MAX_UNSEPARATED_PREFIX + 3; offset++) {
+        const decoded = attempt(piece.slice(offset));
+        if (decoded !== undefined) yield decoded;
+      }
     }
   }
 }
@@ -176,7 +217,9 @@ function* base64Candidates(text: string): Generator<string> {
 function isDigestToken(token: string): boolean {
   const bare = token.replace(/=+$/, '');
   if (bare.length !== 43 || !/[a-z]/.test(bare) || !/[A-Z]/.test(bare) || !/\d/.test(bare)) return false;
-  return Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length === 32;
+  if (Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length !== 32) return false;
+  // A real digest is random bytes; 32 bytes of readable text is a payload, such as a disguised Stape path.
+  return tryBase64Decode(bare) === undefined;
 }
 
 // Only base64 decoding spends depth; URL decoding is cheap and a disguised Stape URL layers it between base64 steps.
@@ -187,10 +230,7 @@ function* variants(text: string, depth = 0, seen = new Set<string>()): Generator
   const url = tryUrlDecode(text);
   if (url !== undefined && url !== text) yield* variants(url, depth, seen);
   if (depth >= MAX_DEPTH) return;
-  for (const token of base64Candidates(text)) {
-    const decoded = tryBase64Decode(token);
-    if (decoded !== undefined) yield* variants(decoded, depth + 1, seen);
-  }
+  for (const decoded of base64Decodes(text)) yield* variants(decoded, depth + 1, seen);
 }
 
 function ownValues(identity: Identity) {

@@ -186,6 +186,28 @@ describe('scan fixes', () => {
     expect(scan(`x=abcd${Buffer.from('nothing to see here').toString('base64url')}`, id)).toEqual([]);
   });
 
+  it('finds base64 behind long prefixes and before long suffixes (#27)', () => {
+    const payload = Buffer.from('{"email":"jane@shop.example.net"}').toString('base64url');
+    const texts = [
+      `x=sessionprefixvalue_${payload}`,
+      `x=evt-2024-10-29-abc-${payload}`,
+      `x=${payload}_trailingsuffixvalue`,
+      `x=abcdefghijklmnopqrst${payload}`,
+      `x=sessionprefixvalue_${payload}_trailingsuffixvalue`,
+    ];
+    for (const text of texts) expect(scan(text, id), text).toContainEqual(jane);
+    const plain = Buffer.from('nothing to see here').toString('base64url');
+    expect(scan(`x=sessionprefixvalue_${plain}_trailingsuffixvalue`, id)).toEqual([]);
+  });
+
+  it('does not flag base64 text that happens to be 32 bytes long (#29)', () => {
+    const path = '/gtag/js?id=G-PWTEST0001&l=dl123';
+    expect(Buffer.from(path)).toHaveLength(32);
+    expect(scan(`https://sgtm.localhost/abc123?k=${Buffer.from(path).toString('base64url')}`, id)).toEqual([]);
+    const fragment = Buffer.from('{"event":"purchase","value":"123"}'.slice(0, 32)).toString('base64');
+    expect(scan(`d=${encodeURIComponent(fragment)}`, id)).toEqual([]);
+  });
+
   it('flags foreign base64 and base64url hashes and not the own ones (#29)', () => {
     expect(scan(`em=tv.1~em.${foreign.base64url}`, id)).toEqual([{ kind: 'hash', value: foreign.base64url }]);
     expect(scan(`em=${encodeURIComponent(foreign.base64)}`, id)).toEqual([{ kind: 'hash', value: foreign.base64 }]);
