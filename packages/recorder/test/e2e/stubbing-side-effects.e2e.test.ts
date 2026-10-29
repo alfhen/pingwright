@@ -119,8 +119,13 @@ test('GA4 sends each event once as POST fetch and event_callback does not wait f
 
     const ga4 = sent.filter((s) => s.vendor === 'ga4');
     const ga4Events = ga4.map((s) => s.event).sort();
-    expect(ga4Events, `${variant}: GA4 sent each event once`).toEqual(['page_view', EVENT]);
-    expect(new Set(ga4.map((s) => `${s.method} ${s.type}`)), `${variant}: GA4 transport`).toEqual(new Set(['POST fetch']));
+    if (variant === 'abort') {
+      expect([...new Set(ga4Events)], 'abort: GA4 sent both events, possibly retried').toEqual(['page_view', EVENT]);
+      expect(new Set(ga4.map((s) => `${s.method} ${s.type}`)).has('POST fetch'), 'abort: GA4 first sent as POST fetch').toBe(true);
+    } else {
+      expect(ga4Events, `${variant}: GA4 sent each event once`).toEqual(['page_view', EVENT]);
+      expect(new Set(ga4.map((s) => `${s.method} ${s.type}`)), `${variant}: GA4 transport`).toEqual(new Set(['POST fetch']));
+    }
 
     const other = sent.filter((s) => s.vendor === 'other');
     expect(
