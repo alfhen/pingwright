@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { isId } from './ids.ts';
 import type {
   Checkpoint,
   CollectorReport,
@@ -36,6 +37,7 @@ export interface RunRecords {
 }
 
 export function runFilePath(runsDir: string, runId: string): string {
+  if (!isId(runId, 'run')) throw new Error(`invalid run id: ${JSON.stringify(runId)}`);
   return join(runsDir, `${runId}.jsonl`);
 }
 
@@ -93,18 +95,29 @@ function emptyRecords(run: Run): RunRecords {
   };
 }
 
+/** A record written again with the same id replaces the earlier one in place. */
+function upsert<T extends { id: string }>(list: T[], record: T): void {
+  const at = list.findIndex((r) => r.id === record.id);
+  if (at < 0) list.push(record);
+  else list[at] = record;
+}
+
 export async function readRun(path: string): Promise<RunRecords> {
   const lines = createInterface({ input: createReadStream(path, 'utf8'), crlfDelay: Infinity });
   let out: RunRecords | undefined;
   let lineNo = 0;
+  let badLine = 0;
   for await (const line of lines) {
     lineNo++;
     if (line.trim() === '') continue;
+    // Only the last non-empty line may be cut off by a crash; a bad line followed by more records is corruption.
+    if (badLine) throw new Error(`${path}:${badLine}: invalid JSON`);
     let record: PingwrightRecord;
     try {
       record = JSON.parse(line) as PingwrightRecord;
     } catch {
-      throw new Error(`${path}:${lineNo}: invalid JSON`);
+      badLine = lineNo;
+      continue;
     }
     if (typeof record !== 'object' || record === null || Array.isArray(record)) {
       throw new Error(`${path}:${lineNo}: record must be a JSON object`);
@@ -118,7 +131,7 @@ export async function readRun(path: string): Promise<RunRecords> {
       case 'run':
         throw new Error(`${path}:${lineNo}: more than one run record`);
       case 'step':
-        out.steps.push(record);
+        upsert(out.steps, record);
         break;
       case 'request':
         out.requests.push(record);
@@ -136,7 +149,7 @@ export async function readRun(path: string): Promise<RunRecords> {
         out.tagReports.push(record);
         break;
       case 'consentEpoch':
-        out.consentEpochs.push(record);
+        upsert(out.consentEpochs, record);
         break;
       case 'checkpoint':
         out.checkpoints.push(record);
@@ -157,6 +170,6 @@ export async function readRun(path: string): Promise<RunRecords> {
         throw new Error(`${path}:${lineNo}: unknown record type ${String((record as { type: unknown }).type)}`);
     }
   }
-  if (!out) throw new Error(`${path}: empty run file`);
+  if (!out) throw new Error(badLine ? `${path}:${badLine}: invalid JSON` : `${path}: empty run file`);
   return out;
 }

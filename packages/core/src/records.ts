@@ -1,4 +1,5 @@
 import type { Id } from './ids.ts';
+import type { Identity } from './identity.ts';
 
 export type ConsentValue = 'granted' | 'denied' | 'unknown';
 
@@ -34,7 +35,7 @@ export interface Run {
   networkMode: NetworkMode;
   gtmOverride: string | null;
   containerVersions: Record<string, string>;
-  identity: Record<string, unknown> | null;
+  identity: Identity | null;
   identitySeed?: number;
   coverage?: CaptureCoverage;
 }
@@ -75,10 +76,19 @@ export interface Response {
   setCookieNames: string[];
 }
 
+export interface HashedId {
+  present: boolean;
+  /** Whether the hash matches the run's fake identity. Null when the run has no identity or the hash cannot be compared. */
+  matchesIdentity: boolean | null;
+}
+
 export interface HitIds {
   user_id?: boolean;
   client_id?: boolean;
-  [key: string]: boolean | undefined;
+  /** Hashed identity fields by parameter name. */
+  hashes?: Record<string, HashedId>;
+  /** Other identifiers (click IDs, decoder-specific names) by presence. */
+  [key: string]: boolean | Record<string, HashedId> | undefined;
 }
 
 export interface Hit {

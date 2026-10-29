@@ -334,7 +334,8 @@ function identityOf(run: Run | undefined): Identity | undefined {
   const id = run?.identity;
   if (!id) return undefined;
   const fields = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'];
-  return fields.every((f) => typeof id[f] === 'string') ? (id as unknown as Identity) : undefined;
+  const values = id as unknown as Record<string, unknown>;
+  return fields.every((f) => typeof values[f] === 'string') ? id : undefined;
 }
 
 // Library loads carry build hashes (fbevents.js asks for signals/config/...?hme=<sha256>). Other script requests can carry hits.
