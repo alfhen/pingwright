@@ -307,12 +307,11 @@ export class Recorder {
 
   private buildConsentEpochs(): ConsentEpoch[] {
     const drafts = buildEpochs(this.bannerEvents, consentModeChanges(this.dataLayerEvents), { startT: this.run.startedAt });
-    return drafts.map(({ label, ...epoch }) => ({
+    return drafts.map((epoch) => ({
       type: 'consentEpoch',
       id: newId('consentEpoch'),
       runId: this.runId,
       ...epoch,
-      state: label === 'undecided' ? 'undecided' : epoch.state,
     }));
   }
 

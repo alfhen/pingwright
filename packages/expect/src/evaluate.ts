@@ -185,8 +185,8 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
  * vendor, takes the state of the epoch the hit falls in.
  */
 function effectiveConsent(hit: Hit, ctx: Context): ConsentState {
-  const epochState = epochOf(hit, ctx)?.state;
-  const base = epochState && epochState !== 'undecided' ? epochState : undefined;
+  const epoch = epochOf(hit, ctx);
+  const base = epoch && epoch.label !== 'undecided' ? epoch.state : undefined;
   const own = GOOGLE_VENDORS.has(hit.vendor);
   const pick = (f: ConsentField): ConsentValue => {
     const carried = hit.consent[f];
@@ -214,16 +214,19 @@ function stateMatches(state: ConsentState, selector: string): boolean {
 /** Timing decides this for every vendor: what a hit carries cannot show that the visitor had not yet answered. */
 function inUndecidedEpoch(hit: Hit, ctx: Context): boolean {
   const epoch = epochOf(hit, ctx);
-  return !epoch || epoch.state === 'undecided';
+  return !epoch || epoch.label === 'undecided';
 }
 
 function isBeforeConsent(hit: Hit, ctx: Context): boolean {
   const epoch = epochOf(hit, ctx);
-  return !epoch || (epoch === ctx.epochs[0] && epoch.state === 'undecided');
+  return !epoch || (epoch === ctx.epochs[0] && epoch.label === 'undecided');
 }
 
 function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   if (selector === 'undecided') return inUndecidedEpoch(hit, ctx);
+  if ((selector === 'granted' || selector === 'denied') && !GOOGLE_VENDORS.has(hit.vendor)) {
+    return epochOf(hit, ctx)?.label === selector;
+  }
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
 

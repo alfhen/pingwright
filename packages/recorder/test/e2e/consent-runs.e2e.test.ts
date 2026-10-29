@@ -26,13 +26,12 @@ const run = (yaml: string) =>
 
 const googleOwn = (h: { vendor: string; consent: { raw: Record<string, string> } }) => h.vendor === 'ga4' && 'gcs' in h.consent.raw;
 
-const states =(epochs: { state: unknown }[]) =>
-  epochs.map((e) => (e.state === 'undecided' ? 'undecided' : (e.state as { analytics: string }).analytics));
+const states = (epochs: { label: string }[]) => epochs.map((e) => e.label);
 
 test('undecided: one undecided epoch, GA4 hits carry analytics denied', async () => {
   const records = await run('start: /products/fake-tee\nsteps:\n  - consent: none\n  - wait: 3s\n');
   expect(records.consentEpochs).toHaveLength(1);
-  expect(records.consentEpochs[0]).toMatchObject({ state: 'undecided', source: 'start', endT: null });
+  expect(records.consentEpochs[0]).toMatchObject({ label: 'undecided', state: { analytics: 'denied' }, source: 'start', endT: null });
   const ga4 = records.hits.filter(googleOwn);
   expect(ga4.length).toBeGreaterThan(0);
   expect(ga4.every((h) => h.consent.analytics === 'denied')).toBe(true);

@@ -1,7 +1,7 @@
 import type { ConsentEpoch, ConsentState } from '@pingwright/core';
 import { unknownConsent, type ConsentModeChange } from './consent-mode.ts';
 
-export type EpochLabel = 'undecided' | 'granted' | 'denied' | 'mixed';
+export type EpochLabel = ConsentEpoch['label'];
 
 export interface BannerEvent {
   /** When the action started. */
@@ -11,8 +11,7 @@ export interface BannerEvent {
   action: 'accept' | 'reject';
 }
 
-/** A ConsentEpoch without its record identity, plus the label that `epoch(<state>)` matches. */
-export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId' | 'state'> & { state: ConsentState; label: EpochLabel };
+export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId'>;
 
 export interface EpochOptions {
   /** Start of the run on the shared clock. */
