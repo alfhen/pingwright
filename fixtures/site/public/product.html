@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fake tee</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/collections/all">All products</a> <a href="/cart">Cart</a></nav>
+<h1>Fake tee</h1>
+<p id="price">19.00 USD</p>
+<button id="add-to-cart" type="button">Add to cart</button>
+<script>
+  var item = { item_id: 'fake-tee', item_name: 'Fake tee', price: 19, quantity: 1 };
+  gtag('event', 'view_item', { currency: 'USD', value: 19, items: [item] });
+  document.getElementById('add-to-cart').addEventListener('click', function () {
+    var cart = pw.cart();
+    cart.push(item);
+    pw.setCart(cart);
+    gtag('event', 'add_to_cart', { currency: 'USD', value: 19, items: [item] });
+    fbq('track', 'AddToCart', { value: 19, currency: 'USD', content_ids: ['fake-tee'], content_type: 'product' });
+  });
+</script>
+</body>
+</html>

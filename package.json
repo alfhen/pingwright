@@ -4,13 +4,14 @@
   "description": "Agent-first testing for website tracking and consent.",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.18" },
   "packageManager": "pnpm@10.34.7",
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
-    "e2e": "vitest run --project e2e"
+    "e2e": "vitest run --project e2e",
+    "fixture": "node fixtures/site/src/serve.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -46,7 +46,7 @@ Workspace packages are private. The root package `pingwright` bundles them with 
 
 ## Rules for every PR
 
-- Fake identities and fake IDs only. Fake GA4 ID `G-PWTEST0001`, fake Ads ID `AW-000000001`, fake Meta pixel `000000000000001`.
+- Fake identities and fake IDs only. Fake GA4 ID `G-PWTEST0001`, fake Ads ID `AW-000000001`, fake Meta pixel `100000000000001` (fbevents.js rejects IDs starting with 0 and sends no `/tr`).
 - Context-level hooks only: `context.on('request')`, `context.route`. No page-level hooks.
 - A normal Chrome user agent, never `HeadlessChrome`.
 - No browser flags in the default launch.
@@ -78,7 +78,7 @@ Acceptance: unit tests for ID format and order, clock conversion, and a JSONL ro
 `fixtures/site`: a static shop served on `localhost` at a random port. Two more servers on `127.0.0.1` act as a mock server container and an unknown third-party host. `localhost` and `127.0.0.1` are different sites, so these requests are cross-site. It has:
 - a consent banner with accept, reject and a "cookie settings" link that reopens it. It grants consent itself, without showing, when the user agent contains `HeadlessChrome`.
 - Consent Mode defaults (denied) and updates on choice.
-- real gtag.js for `G-PWTEST0001` and `AW-000000001`, and the Meta pixel `000000000000001`.
+- real gtag.js for `G-PWTEST0001` and `AW-000000001`, and the Meta pixel `100000000000001`.
 - a sandboxed iframe at a `/web-pixels@0.0.0-fixture/sandbox/` path that posts to the collector origin and sends a GA4 hit with the sandbox URL as the page.
 - a mock Stape loader that requests `/<id>?<key>=<base64>` for `/gtag/js`, `/g/collect` and `/data` (with a base64 `dtdc` payload) from the mock server-container host.
 - one request to an unknown third-party destination on the third-party host.

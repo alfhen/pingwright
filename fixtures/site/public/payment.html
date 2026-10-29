@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Payment</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/collections/all">All products</a> <a href="/cart">Cart</a></nav>
+<h1>Payment</h1>
+<p>Fake form. No real payment happens.</p>
+<form id="payment-form">
+  <label>Card number <input id="card-number" autocomplete="cc-number" inputmode="numeric"></label><br>
+  <label>Expiry <input id="card-expiry" autocomplete="cc-exp"></label><br>
+  <label>CVC <input id="card-cvc" autocomplete="cc-csc"></label><br>
+  <button id="pay" type="submit">Pay</button>
+</form>
+<script>
+  document.getElementById('payment-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    location.href = '/thank-you';
+  });
+</script>
+</body>
+</html>

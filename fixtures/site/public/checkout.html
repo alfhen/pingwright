@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Checkout</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/collections/all">All products</a> <a href="/cart">Cart</a></nav>
+<h1>Checkout</h1>
+<form id="identity-form">
+  <label>Email <input id="email" type="email" autocomplete="email"></label><br>
+  <label>First name <input id="first-name" autocomplete="given-name"></label><br>
+  <label>Last name <input id="last-name" autocomplete="family-name"></label><br>
+  <label>Phone <input id="phone" type="tel" autocomplete="tel"></label><br>
+  <label>Address <input id="address1" autocomplete="address-line1"></label><br>
+  <label>City <input id="city" autocomplete="address-level2"></label><br>
+  <label>Zip <input id="zip" autocomplete="postal-code"></label><br>
+  <label>Country
+    <select id="country" autocomplete="country">
+      <option value="US">United States</option>
+      <option value="GB">United Kingdom</option>
+      <option value="DE">Germany</option>
+      <option value="SE">Sweden</option>
+      <option value="NO">Norway</option>
+    </select>
+  </label><br>
+  <button id="continue" type="submit">Continue to payment</button>
+</form>
+<script>
+  var region = (navigator.language.split('-')[1] || 'US').toUpperCase();
+  var select = document.getElementById('country');
+  if (select.querySelector('option[value="' + region + '"]')) select.value = region;
+  document.getElementById('identity-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var ids = ['email', 'first-name', 'last-name', 'phone', 'address1', 'city', 'zip', 'country'];
+    var data = {};
+    ids.forEach(function (id) { data[id] = document.getElementById(id).value; });
+    sessionStorage.setItem('pw_checkout', JSON.stringify(data));
+    gtag('event', 'begin_checkout', { currency: 'USD', value: 19 });
+    location.href = '/checkout/payment';
+  });
+</script>
+</body>
+</html>

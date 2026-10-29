@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cart</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/collections/all">All products</a> <a href="/cart">Cart</a></nav>
+<h1>Cart</h1>
+<p id="cart-count"></p>
+<a id="checkout-link" href="/checkout">Check out</a>
+<script>
+  document.getElementById('cart-count').textContent = pw.cart().length + ' item(s)';
+</script>
+</body>
+</html>
