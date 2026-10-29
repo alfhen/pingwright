@@ -24,7 +24,7 @@ test('parses the README example', () => {
   expect(s.steps.map((x) => x.kind)).toEqual(['consent', 'wait', 'visit']);
   expect(s.steps[1]).toMatchObject({ kind: 'wait', value: 4000 });
   expect(s.expect.mustNot).toHaveLength(2);
-  expect(s.expect.mustNot[0]).toMatchObject({ before: 'consent', filter: { vendor: ['pinterest', 'meta', 'tiktok'] } });
+  expect(s.expect.mustNot[0]).toMatchObject({ before: 'consent', filter: { vendor: ['meta', 'google-ads'] } });
   expect(s.expect.mustNot[1]!.filter).toMatchObject({ vendor: ['ga4'], ids: { user_id: 'present' }, consent: { analytics: 'denied' } });
   expect(s.expect.must[0]).toMatchObject({ count: { op: '>=', n: 2 }, filter: { event: ['page_view'] } });
 });
