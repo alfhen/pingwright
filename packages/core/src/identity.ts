@@ -76,7 +76,7 @@ export interface LeakMatch {
 }
 
 const MAX_DEPTH = 3;
-const EMAIL = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
+const EMAIL = /[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
 const PHONE = /\+\d{8,15}(?!\d)|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
 const HASH = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
 const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
@@ -92,15 +92,38 @@ function tryUrlDecode(text: string): string | undefined {
   });
 }
 
-// Random bytes seldom decode to mostly printable text, so this keeps ULIDs and hashes out.
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
+// Random bytes seldom decode to valid UTF-8 with few control characters, so this keeps ULIDs and hashes out.
 function tryBase64Decode(token: string): string | undefined {
   const bytes = Buffer.from(token.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
   if (bytes.length < 8) return undefined;
-  let printable = 0;
-  for (const b of bytes) {
-    if ((b >= 0x20 && b < 0x7f) || b === 0x09 || b === 0x0a || b === 0x0d) printable++;
+  let text: string;
+  try {
+    text = utf8.decode(bytes);
+  } catch {
+    return undefined;
   }
-  return printable / bytes.length >= 0.95 ? bytes.toString('latin1') : undefined;
+  let control = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0)!;
+    if ((c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) || c === 0x7f || c === 0xfffd) control++;
+  }
+  return control / text.length <= 0.05 ? text : undefined;
+}
+
+function hasUrlEscapes(text: string): boolean {
+  const decoded = tryUrlDecode(text);
+  return decoded !== undefined && decoded !== text;
+}
+
+function* base64Candidates(text: string): Generator<string> {
+  for (const token of text.match(BASE64_TOKEN) ?? []) {
+    yield token;
+    if (token.includes('/')) {
+      for (const piece of token.split('/')) if (piece.length >= 12) yield piece;
+    }
+  }
 }
 
 function* variants(text: string, depth = 0): Generator<string> {
@@ -108,7 +131,7 @@ function* variants(text: string, depth = 0): Generator<string> {
   if (depth >= MAX_DEPTH) return;
   const url = tryUrlDecode(text);
   if (url !== undefined && url !== text) yield* variants(url, depth + 1);
-  for (const token of text.match(BASE64_TOKEN) ?? []) {
+  for (const token of base64Candidates(text)) {
     const decoded = tryBase64Decode(token);
     if (decoded !== undefined) yield* variants(decoded, depth + 1);
   }
@@ -147,8 +170,11 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     if (!found.has(key)) found.set(key, { kind, value });
   };
   for (const variant of variants(text)) {
-    for (const m of variant.match(EMAIL) ?? []) {
-      if (normalizeEmail(m) !== own.email) add('email', m);
+    // Escaped text is matched through its decoded variant, so adjacent escapes never join a local part.
+    for (const raw of hasUrlEscapes(variant) ? [] : (variant.match(EMAIL) ?? [])) {
+      // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
+      const m = raw.slice(raw.lastIndexOf('+') + 1);
+      if (m.includes('@') && normalizeEmail(m) !== own.email) add('email', m);
     }
     for (const m of variant.match(PHONE) ?? []) {
       const digits = m.replace(/\D/g, '');

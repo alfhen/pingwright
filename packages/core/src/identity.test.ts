@@ -104,6 +104,36 @@ describe('scan', () => {
     expect(found).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
   });
 
+  it('does not flag the own email next to escapes or plus-spaces', () => {
+    for (const text of [
+      `d=%7B%22email%22%3A%22${id.email}%22%7D`,
+      encodeURI(`{"email":"${id.email}"}`),
+      `dt=Order+for+${id.email}`,
+      `x=mailto%3A${id.email}`,
+    ]) {
+      expect(scan(text, id), text).toEqual([]);
+    }
+  });
+
+  it('reports a foreign email once with a clean value', () => {
+    const jane = { kind: 'email', value: 'jane@real-shop.dk' };
+    expect(scan('d=%22jane@real-shop.dk%22', id)).toEqual([jane]);
+    expect(scan('dt=Order+for+jane@real-shop.dk', id)).toEqual([jane]);
+  });
+
+  it('finds a foreign email in base64 after path segments', () => {
+    const payload = Buffer.from('{"email":"jane@real-shop.dk"}').toString('base64url');
+    for (const url of [`https://collector.pingwright.invalid/r/${payload}`, `/data/${payload}`]) {
+      expect(scan(url, id), url).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
+    }
+  });
+
+  it('finds a foreign email in base64 JSON with non-ASCII text', () => {
+    const json = JSON.stringify({ page_title: 'Ærøskøbing Østergård', email: 'jane@real-shop.dk' });
+    const found = scan(`dtdc=${Buffer.from(json, 'utf8').toString('base64')}`, id);
+    expect(found).toContainEqual({ kind: 'email', value: 'jane@real-shop.dk' });
+  });
+
   it('does not flag Meta-normalised own name and city hashes across seeds', () => {
     const strip = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
     for (let seed = 0; seed < 200; seed++) {
