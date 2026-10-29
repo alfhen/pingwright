@@ -79,21 +79,31 @@ async function activePage(recorder: Recorder): Promise<Page> {
 
 async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<void> {
   const field = page.locator(selector).first();
-  const attributes = await field.evaluate(
-    (el): FieldAttributes & { tag: string } => ({
-      tag: el.tagName.toLowerCase(),
-      autocomplete: el.getAttribute('autocomplete'),
-      name: el.getAttribute('name'),
-      id: el.getAttribute('id'),
-      type: el.getAttribute('type'),
-    }),
+  const inspected = await field.evaluate(
+    (el): { tag: string; host: string; fields: FieldAttributes[] } => {
+      const describe = (e: Element): FieldAttributes => ({
+        autocomplete: e.getAttribute('autocomplete'),
+        name: e.getAttribute('name'),
+        id: e.getAttribute('id'),
+        type: e.getAttribute('type'),
+      });
+      // Playwright retargets fill from a label to the control it labels, so that control is checked too.
+      const isControl = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+      const labelled = el instanceof HTMLLabelElement ? el : isControl || (el as HTMLElement).isContentEditable ? null : el.closest('label');
+      const control = labelled?.control ?? null;
+      return {
+        tag: el.tagName.toLowerCase(),
+        host: el.ownerDocument.location.hostname,
+        fields: control ? [describe(el), describe(control)] : [describe(el)],
+      };
+    },
     undefined,
     { timeout },
   );
-  if (isSensitiveField(attributes) && !isLoopbackHost(new URL(page.url()).hostname)) {
+  if (inspected.fields.some(isSensitiveField) && !isLoopbackHost(inspected.host)) {
     throw new Error(`${selector} is a card or password field. ${HANDOFF_REQUIRED}`);
   }
-  if (attributes.tag === 'select') await field.selectOption(value, { timeout });
+  if (inspected.tag === 'select') await field.selectOption(value, { timeout });
   else await field.fill(value, { timeout });
 }
 

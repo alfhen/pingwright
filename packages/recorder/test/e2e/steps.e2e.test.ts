@@ -136,7 +136,9 @@ test('handoff prints the reminder and waits for the resolver', async () => {
 describe('payment and log-in guard', () => {
   const PAGE = `<!doctype html><title>Pay</title>
 <input id="name" autocomplete="name"><input id="cc" autocomplete="cc-number">
-<input id="secret" type="password"><input id="holder" name="cardholder">`;
+<input id="secret" type="password"><input id="holder" name="cardholder">
+<label for="cc" id="cc-label">Card number</label>
+<label id="pwl">Password <input type="password" autocomplete="off"></label>`;
 
   async function play(yaml: string, host: string) {
     const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `https://${host}` });
@@ -161,6 +163,13 @@ describe('payment and log-in guard', () => {
   test.each(['#secret', '#holder'])('filling %s on a non-loopback host fails the step', async (selector) => {
     const { error } = await play(`start: /\nsteps:\n  - fill: { "${selector}": x }\n`, 'shop.example.com');
     expect(error).toBeInstanceOf(StepError);
+  });
+
+  test.each(['label[for=cc]', '#pwl', 'text=Card number'])('filling through the label %s fails the step', async (selector) => {
+    const { error, card } = await play(`start: /\nsteps:\n  - fill: { "${selector}": x }\n`, 'shop.example.com');
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/payments and log-ins must be handoff steps/i);
+    expect(card).toBe('');
   });
 
   test('an ordinary field on a non-loopback host is filled', async () => {
