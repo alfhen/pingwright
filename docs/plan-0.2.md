@@ -137,7 +137,7 @@ The run record:
 Redaction: the recorder scrubs the `gtmAuth` value in `Recorder.close()`, as its last step, before records are returned to callers or written. Decoding, flags and the built-in checks run on the raw records first, so a redacted `pk` or body keeps its hit, and the published and workspace runs diff alike. The in-memory records also feed `evaluate` and the CLI summary. The scrub decodes before it searches:
 
 - For each query value in `Request.url` and for `postData`, it URL-decodes and base64-decodes recursively. When decoded text is itself a path or URL with a query string, it parses that query and decodes each of its values the same way. If any decoded layer contains the value, the whole outer parameter value or body becomes `[redacted]`.
-- For every other string field, it replaces the plain value and its URL-encoded and base64-encoded forms.
+- Every other string field gets the same decode-aware treatment: if any decoded layer of the string contains the value, the whole string becomes `[redacted]`. This covers `Hit.params` and `Hit.page`, which are built from decoded `pk` and `dtdc` text before the scrub runs.
 - It recurses into object fields such as `CollectorReport.payload` and `DataLayerEvent.args`.
 
 The fields covered include:
@@ -165,7 +165,7 @@ Acceptance:
 - Positive control: the fixture server's log shows the `gtm_auth` value was sent.
 - Nested leak, checked independently of the scrub's own decoder: the Q02 echo page sends a Stape-loader `/g/collect` and a `/data` request that carry the value inside base64, and inside base64 twice (`pk` decodes to `/data?…&dtdc=<base64>`). In the JSONL, the `pk` value of both records equals `[redacted]`, and so does any `dtdc` value. A loader request from a page without the value keeps its `pk` unredacted and still decodes to its hit, so a scrub that redacts too much fails.
 - A unit test runs the scrub on a hand-built URL with the value inside base64 twice and compares the result with the expected redacted URL.
-- A plain text search of every JSONL line and the CLI output finds no plain, URL-encoded or base64-encoded form of the value.
+- A plain text search of every JSONL line and the CLI output finds no plain, URL-encoded or base64-encoded form of the value. The echo page's decoded `sgtm` and GA4 hits have `[redacted]` in any `Hit.params` or `Hit.page` field that held the value.
 
 **Q06 Pinterest decoder.** Touches: `packages/decoders`, `fixtures/site` (a new Pinterest page).
 
@@ -291,7 +291,9 @@ Acceptance: an e2e records two runs of the same scenario through the recorder AP
 - the removed Meta `AddToCart`;
 - the `gcs` change on the paired undecided `page_view`.
 
-**Q11 Docs and version for 0.2.0-rc.1.** Touches: README, `docs/`, root `package.json` and the recorder's version source (#111).
+### Wave 6
+
+**Q11 Docs and version for 0.2.0-rc.1.** → every other PR Touches: README, `docs/`, root `package.json` and the recorder's version source (#111).
 
 This PR:
 
