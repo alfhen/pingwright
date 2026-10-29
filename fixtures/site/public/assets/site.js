@@ -127,8 +127,6 @@
       banner.hidden = false;
     });
 
-    if (/[?&]pixel=off(&|$)/.test(location.search)) return;
-
     var frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts allow-forms');
     frame.id = 'pw-web-pixel';

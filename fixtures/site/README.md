@@ -63,8 +63,6 @@ The choice is stored in the first-party cookie `pw_consent` (`accept` or `reject
 - The delivery country default depends on the browser language.
 - An unknown third-party destination is contacted on every page.
 
-Add `?pixel=off` to a page URL to leave out the sandboxed pixel on that page. A scenario that starts there and stays on the page, with `allowUnknownDestination`, can pass.
-
 ## Notes for tests
 
 - The Meta pixel ID is `100000000000001`, not `000000000000001`. fbevents.js rejects IDs that start with 0 ("Invalid PixelID"), and then sends no `/tr` request. With this ID, `/tr` requests fire.

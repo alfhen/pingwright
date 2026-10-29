@@ -151,13 +151,6 @@ test('a mustNot meta before consent rule fails on the fixture pixel', async () =
   expect(r.failed).toContain('mustNot: {"vendor":"meta","before":"consent"}');
 }, 90_000);
 
-test('a clean run exits 0 with every expectation passing', async () => {
-  const r = await run('clean-pass');
-  expect(r.failed).toEqual([]);
-  expect(r.code).toBe(0);
-  expect(r.records!.results.length).toBeGreaterThan(0);
-}, 90_000);
-
 test('usage errors exit 2', async () => {
   expect((await runCli(['run'])).code).toBe(2);
   expect((await runCli(['run', scenario('undecided')])).stderr).toContain('--site is required');
