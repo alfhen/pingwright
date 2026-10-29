@@ -177,7 +177,7 @@ export function parseScenario(text: string): Scenario {
   if (start) checkVars(start, ['start']);
 
   const steps: Step[] = [];
-  const stepLabels = new Set<string>();
+  const stepLabels = new Set<string>(['start']);
   if (raw.steps !== undefined) {
     if (!Array.isArray(raw.steps)) fail(['steps'], 'must be a list');
     else raw.steps.forEach((item, i) => parseStep(item, i));

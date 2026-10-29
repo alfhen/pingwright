@@ -131,5 +131,7 @@ test('step labels: written, default, duplicate and checked by after', () => {
   expect(parseScenario('start: /\nsteps:\n  - checkpoint: end\n').steps[0]!.label).toBe('end');
   expect(errorOf('start: /\nsteps:\n  - { visit: /a, label: x }\n  - { visit: /b, label: x }\n')).toContain('duplicate step label "x"');
   expect(errorOf('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: nope }\n')).toMatch(/is not a step label.*visit-1/);
+  expect(errorOf('start: /\nsteps:\n  - { visit: /a, label: start }\n')).toContain('duplicate step label "start"');
+  expect(parseScenario('start: /\nexpect:\n  must:\n    - { vendor: ga4, after: start }\n').expect.must).toHaveLength(1);
   expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: visit-1 }\n').expect.must).toHaveLength(1);
 });
