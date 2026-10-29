@@ -265,6 +265,49 @@ test('answerBanner installs late on a loaded page and keeps its options', async 
   await context.close();
 });
 
+test('timeoutMs bounds the action wait, so a slow rule can take longer than 5 s', async () => {
+  const context = await newContext();
+  await installConsent(context, {
+    ruleFiles: [fileURLToPath(new URL('./slow-long-rule.json', import.meta.url))],
+    fixtureRules: false,
+  });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const result = await answerBanner(page, 'accept', { timeoutMs: 15_000 });
+  expect(result).toMatchObject({ result: 'ok', action: 'accept' });
+  expect(result.tEnd - result.t).toBeGreaterThan(5000);
+  await context.close();
+}, 30_000);
+
+test('an action that navigates the frame stops waiting at once', async () => {
+  const context = await newContext();
+  await installConsent(context, {
+    ruleFiles: [fileURLToPath(new URL('./navigating-rule.json', import.meta.url))],
+    fixtureRules: false,
+  });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const began = Date.now();
+  const result = await answerBanner(page, 'accept', { timeoutMs: 20_000 });
+  expect(Date.now() - began).toBeLessThan(8000);
+  expect(result).toMatchObject({ result: 'failed', note: 'autoconsent reported no successful result' });
+  await context.close();
+}, 30_000);
+
+test('a rule file rule with a bundled rule name replaces the bundled rule', async () => {
+  const context = await newContext();
+  await installConsent(context, {
+    ruleFiles: [fileURLToPath(new URL('./replacement-rule.json', import.meta.url))],
+    fixtureRules: false,
+  });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const result = await answerBanner(page, 'accept');
+  expect(result).toMatchObject({ detected: true, shown: true, cmp: 'Cybotcookiebot', result: 'ok' });
+  expect(await storedChoice(context)).toBe('reject');
+  await context.close();
+});
+
 test('banner not shown says when autoconsent never ran', async () => {
   const context = await newContext();
   const result = await answerBanner(context, 'accept', { timeoutMs: 500 });

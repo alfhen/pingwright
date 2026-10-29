@@ -1,6 +1,7 @@
 import {
   newId,
   nodeNow,
+  pageTimeToEpoch,
   RunWriter,
   readRun,
   type CaptureCoverage,
@@ -300,10 +301,14 @@ export class Recorder {
     if (error !== undefined) step.error = error;
   }
 
-  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. */
+  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. Banner times are page-clock readings. */
   recordBanner(result: BannerResult): void {
     if (result.result !== 'ok' || result.action === 'none') return;
-    this.bannerEvents.push({ t: result.t, tEnd: result.tEnd, action: result.action });
+    this.bannerEvents.push({
+      t: pageTimeToEpoch(result.t, this.clockOffset),
+      tEnd: pageTimeToEpoch(result.tEnd, this.clockOffset),
+      action: result.action,
+    });
   }
 
   private buildConsentEpochs(): ConsentEpoch[] {

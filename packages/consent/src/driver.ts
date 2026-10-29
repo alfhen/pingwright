@@ -11,9 +11,12 @@ export interface BannerResult {
   result: 'ok' | 'failed' | 'banner not shown';
   /** Why the result is not `ok`, when known. */
   note?: string;
-  /** Epoch milliseconds on the page clock when the action reached the page, or when the wait ended for `none` and failures. */
+  /**
+   * Epoch milliseconds on the page clock when the action reached the page. For `none`, failures and
+   * `banner not shown` it is Node time, taken when the wait ended.
+   */
   t: number;
-  /** Epoch milliseconds, taken when the action's result arrived. Equals `t` for `none` and failures. */
+  /** Epoch milliseconds on the same clock as `t`, when the action's result arrived. Equals `t` for `none` and failures. */
   tEnd: number;
 }
 
@@ -247,6 +250,7 @@ export class ConsentDriver {
     // Autoconsent keeps its detected CMP after a first action, so a later message can act again.
     const message = action === 'accept' ? 'optIn' : 'optOut';
     let t: number;
+    const sentAt = Date.now();
     try {
       t = (await shownFrame.evaluate(
         `(() => { autoconsentReceiveMessage({ type: '${message}' }); return performance.timeOrigin + performance.now(); })()`,
@@ -266,7 +270,7 @@ export class ConsentDriver {
       result: reported ? 'ok' : 'failed',
       ...(reported ? {} : { note: 'autoconsent reported no successful result' }),
       t,
-      tEnd: Date.now(),
+      tEnd: t + (Date.now() - sentAt),
     };
   }
 }
