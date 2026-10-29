@@ -77,6 +77,8 @@ export interface LeakMatch {
 
 const MAX_DEPTH = 3;
 const EMAIL = /[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
+// Asset names such as logo@2x.png look like emails.
+const FILE_EXTENSION = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|js|mjs|json|map|woff2?|ttf|otf|mp4|webm|mp3)$/i;
 const PHONE = /(?<![A-Za-z0-9+])\+\d{8,15}(?!\d)|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
 const HASH = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
 const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
@@ -177,7 +179,7 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     for (const raw of hasUrlEscapes(variant) ? [] : (variant.match(EMAIL) ?? [])) {
       // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
       const m = raw.slice(raw.lastIndexOf('+') + 1);
-      if (m.includes('@') && normalizeEmail(m) !== own.email) add('email', m);
+      if (m.includes('@') && !FILE_EXTENSION.test(m) && normalizeEmail(m) !== own.email) add('email', m);
     }
     for (const m of variant.match(PHONE) ?? []) {
       const digits = m.replace(/\D/g, '');

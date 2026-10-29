@@ -348,6 +348,18 @@ function pathOf(url: string): string {
   }
 }
 
+// Asset paths carry content hashes and names like logo@2x.png; a hit on an asset request travels in its query or body.
+const ASSET_TYPES = new Set(['image', 'script', 'stylesheet', 'font', 'media']);
+
+function scannedUrl(request: Request): string {
+  if (!ASSET_TYPES.has(request.resourceType)) return request.url;
+  try {
+    return new URL(request.url).search;
+  } catch {
+    return request.url;
+  }
+}
+
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
   const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
@@ -357,7 +369,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   };
   for (const request of ctx.requests.values()) {
     if (request.resourceType === 'script' && LIBRARY_LOAD.test(pathOf(request.url))) continue;
-    slot(request.id, request.stepId).texts.push(request.url, request.postData ?? '');
+    slot(request.id, request.stepId).texts.push(scannedUrl(request), request.postData ?? '');
   }
   for (const hit of ctx.hits) {
     const entry = slot(hit.requestId, hit.stepId);

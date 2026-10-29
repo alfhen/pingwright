@@ -315,6 +315,15 @@ test('possibleRealData ignores hashes in script load URLs', () => {
   expect(find(evaluate([pixel.req], parseScenario('start: /'), { identity })).pass).toBe(false);
 });
 
+test('possibleRealData ignores hashes in asset paths but scans their queries', () => {
+  const sha = 'ef'.repeat(32);
+  const asset = hit({}, { url: `https://cdn.example.com/assets/${sha}.png`, resourceType: 'image' });
+  const tracked = hit({}, { url: `https://cdn.example.com/p.gif?em=${sha}`, resourceType: 'image' });
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  expect(find(evaluate([asset.req], parseScenario('start: /'), { identity })).pass).toBe(true);
+  expect(find(evaluate([tracked.req], parseScenario('start: /'), { identity })).pass).toBe(false);
+});
+
 test('possibleRealData still scans script-type conversion hits', () => {
   const sha = 'cd'.repeat(32);
   const ads = hit({ vendor: 'google-ads', event: 'conversion' }, { url: `https://www.googleadservices.com/pagead/conversion/AW-000000001/?em=${sha}`, resourceType: 'script' });
