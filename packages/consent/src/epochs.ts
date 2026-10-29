@@ -47,8 +47,8 @@ interface Change {
   decision: boolean;
 }
 
-/** The latest banner that started at or before the update and ended less than the pair window ago, else the earliest one just after it. */
-function closestBanner(banners: readonly BannerEvent[], t: number, pairWindowMs: number, leadWindowMs: number): number {
+/** The latest banner that started at or before the update and whose window is still open, else the earliest one just after it. */
+function bannerFor(banners: readonly BannerEvent[], t: number, pairWindowMs: number, leadWindowMs: number): number {
   const before = banners.findLastIndex((b) => b.t <= t && t <= (b.tEnd ?? b.t) + pairWindowMs);
   if (before >= 0) return before;
   return banners.findIndex((b) => b.t > t && b.t - t <= leadWindowMs);
@@ -60,25 +60,36 @@ function mergeChanges(
   pairWindowMs: number,
   leadWindowMs: number,
 ): Change[] {
-  const unpaired = [...banners].sort((a, b) => a.t - b.t);
+  const sortedBanners = [...banners].sort((a, b) => a.t - b.t);
+  const owned = sortedBanners.map(() => [] as ConsentModeChange[]);
   const changes: Change[] = [];
   for (const update of updates) {
-    const i = closestBanner(unpaired, update.t, pairWindowMs, leadWindowMs);
-    const banner = i >= 0 ? unpaired.splice(i, 1)[0] : undefined;
-    const label = banner ? labelOf(stateOf(banner.action)) : labelOf(update.state);
-    const bannerT = banner ? (banner.tEnd ?? banner.t) : 0;
-    if (banner && bannerT < update.t) changes.push({ t: bannerT, source: 'banner', state: update.state, label, decision: true });
-    else changes.push({ t: update.t, source: 'consentMode', state: update.state, label, decision: banner !== undefined });
+    const i = bannerFor(sortedBanners, update.t, pairWindowMs, leadWindowMs);
+    if (i >= 0) owned[i]!.push(update);
+    else changes.push({ t: update.t, source: 'consentMode', state: update.state, label: labelOf(update.state), decision: false });
   }
-  for (const b of unpaired) changes.push({ t: b.tEnd ?? b.t, source: 'banner', state: stateOf(b.action), label: labelOf(stateOf(b.action)), decision: true });
+  sortedBanners.forEach((banner, i) => {
+    const own = owned[i]!;
+    const bannerT = banner.tEnd ?? banner.t;
+    const firstUpdateT = own[0]?.t ?? Infinity;
+    changes.push({
+      t: Math.min(bannerT, firstUpdateT),
+      source: firstUpdateT < bannerT ? 'consentMode' : 'banner',
+      state: own[own.length - 1]?.state ?? stateOf(banner.action),
+      label: labelOf(stateOf(banner.action)),
+      decision: true,
+    });
+  });
   return changes.sort((a, b) => a.t - b.t);
 }
 
 /**
  * The first epoch is `undecided`; a Consent Mode default sets its state but is not a decision.
- * Each later change starts an epoch at the earlier of the banner event and the Consent Mode
- * update for that change. A Consent Mode update that repeats the state while still undecided,
- * with no banner event behind it, is not a decision.
+ * Each banner action defines a window [t - lead, tEnd + after]. Consent Mode updates inside it
+ * belong to that decision. Its epoch starts at the earliest of the action end and those updates,
+ * is labelled by the action, and takes the last Consent Mode state in the window (the action's
+ * own state when no update came). Updates outside every window that change state start their
+ * own epoch with source consentMode; one that repeats the state while undecided is not a decision.
  */
 export function buildEpochs(
   banners: readonly BannerEvent[],

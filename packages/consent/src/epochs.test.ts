@@ -193,6 +193,43 @@ describe('buildEpochs', () => {
     expect(epochs[1]?.state).toEqual({ analytics: 'granted', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
   });
 
+  test('an accept sent as several updates is one epoch with the last state', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', denied),
+      push(1010, 'update', { analytics_storage: 'granted' }),
+      push(1020, 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' }),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1050, action: 'accept' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT, e.endT])).toEqual([
+      ['undecided', 0, 1010],
+      ['granted', 1010, null],
+    ]);
+    expect(epochs[1]?.state).toEqual({ analytics: 'granted', ads: 'granted', adUserData: 'granted', adPersonalization: 'granted' });
+  });
+
+  test('several updates that end in the same state as one update keep the action label', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', denied),
+      push(1010, 'update', { analytics_storage: 'granted', ad_storage: 'granted' }),
+      push(1020, 'update', { ad_user_data: 'granted' }),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1050, action: 'accept' }], modes, { startT: 0 });
+    expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted']);
+  });
+
+  test('a reject sent as two updates is one denied epoch', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', granted),
+      push(1010, 'update', { analytics_storage: 'denied' }),
+      push(1020, 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1050, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['denied', 1010],
+    ]);
+  });
+
   test('a banner event without a Consent Mode update still starts an epoch', () => {
     const epochs = buildEpochs([{ t: 500, action: 'accept' }], [], { startT: 0 });
     expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted']);
