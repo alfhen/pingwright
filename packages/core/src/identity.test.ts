@@ -107,6 +107,12 @@ describe('scan', () => {
     expect(scan(text, id)).toEqual([]);
   });
 
+  it('does not flag asset names that look like emails', () => {
+    const text = 'https://cdn.example.com/img/logo@2x.png?w=98 /fonts/icons@1.0.woff2 /css/app@3.css';
+    expect(scan(text, id)).toEqual([]);
+    expect(scan('mail=someone@example.png.example.com', id)).toEqual([{ kind: 'email', value: 'someone@example.png.example.com' }]);
+  });
+
   it('does not flag a number after a form-encoded plus-space as a phone', () => {
     const id = createIdentity(42);
     expect(scan('dt=Order+100000001&q=sku+123456789', id)).toEqual([]);

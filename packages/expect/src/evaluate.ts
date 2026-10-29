@@ -348,6 +348,22 @@ function pathOf(url: string): string {
   }
 }
 
+// Content-addressed assets are named /<sha256>.<ext>. That name cannot be told apart from a hashed id used as a
+// pixel file name (design §13), so only that exact segment shape is skipped; the rest of the path is still scanned.
+const ASSET_TYPES = new Set(['image', 'script', 'stylesheet', 'font', 'media']);
+const HASH_FILE_SEGMENT = /\/[0-9a-f]{64}\.[a-z0-9]{1,5}(?=$|\/)/gi;
+
+function scannedUrl(request: Request): string {
+  if (!ASSET_TYPES.has(request.resourceType)) return request.url;
+  try {
+    const url = new URL(request.url);
+    url.pathname = url.pathname.replace(HASH_FILE_SEGMENT, '/');
+    return url.href;
+  } catch {
+    return request.url;
+  }
+}
+
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
   const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
@@ -357,7 +373,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   };
   for (const request of ctx.requests.values()) {
     if (request.resourceType === 'script' && LIBRARY_LOAD.test(pathOf(request.url))) continue;
-    slot(request.id, request.stepId).texts.push(request.url, request.postData ?? '');
+    slot(request.id, request.stepId).texts.push(scannedUrl(request), request.postData ?? '');
   }
   for (const hit of ctx.hits) {
     const entry = slot(hit.requestId, hit.stepId);
