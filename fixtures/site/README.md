@@ -9,6 +9,8 @@ const { url, sgtmUrl, thirdPartyUrl, close } = await startFixtureSite();
 
 For manual use, run `pnpm fixture` in the repo root. It prints the three URLs.
 
+Opened in a normal browser, the shop sends live GA4, Google Ads, remarketing, Consent Mode and Meta `/tr` hits to Google and Meta, with fake IDs but real page URLs and client IDs. Block them first. The sandboxed pixel's POST to `https://collector.pingwright.invalid/` fails there, because only Pingwright or a `context.route` answers that origin.
+
 ## Servers
 
 All three listen on port 0 (random).
