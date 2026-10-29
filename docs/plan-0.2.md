@@ -16,8 +16,11 @@ These proposal items are issue fixes. They must be merged, and released as `0.1.
 | #114 | `possibleRealData` ignores random IDs and hashed client IDs | A random 64-hex ID and a hashed client ID pass. A foreign email's SHA-256 sent as `em` still fails. |
 | #112 | Subdomains of the site are first party | A subdomain request is not `unknownDestination`, and another registrable domain still is. |
 | #115 to #118 | Usable output on real sites | As in each issue. |
-| #119 | Withdrawal epochs: the `withdrawn` label, defined per signal, and `in: epoch(label=…)` | Proposal §3.1 item 6. |
-| #88 | Withdrawal documented | docs/cli.md says how to withdraw. |
+| #146 | Redirect hops to collection endpoints no longer leave the machine in stub mode | A redirect hop to a collection endpoint is `stubbed`, with a test that fails if it reaches the network. |
+| #119, #132 | Withdrawal epochs: the `withdrawn` label, defined per signal, and `in: epoch(label=…)`. A partial withdrawal gets no grace window. | Proposal §3.1 item 6. |
+| #88 | Withdrawal works and is documented | A withdraw scenario (a click on the banner link, then `consent: reject`) runs in an e2e, any error message names the real cause, and docs/cli.md describes it. |
+
+Other open `review-minor` issues are not part of the gate. They are fixed in a cleanup batch before 0.1.0 when cheap, or carried into 0.2.
 
 Q08 depends on #119, and Q10 depends on #117. Q11 checks that every issue in this table is closed.
 
@@ -25,6 +28,7 @@ Q08 depends on #119, and Q10 depends on #117. Q11 checks that every issue in thi
 
 - **Tracker host list.** The proposal suggested DuckDuckGo Tracker Radar as the source of known tracker hosts. Its data is CC BY-NC-SA 4.0, which is non-commercial and share-alike, so Pingwright can't ship it or derive entries from it. Pingwright ships a small curated list in the repo instead, under MIT. Each entry cites the vendor's own public docs. A user can add entries with a list file.
 - **Listed trackers become hits.** A request matched by the tracker list gives a minimal hit with the tracker's vendor name. Rules, flags and `diff` then work on it like on any other hit.
+- **Tracker stubbing covers every resource type for listed paths.** Proposal item 4 stubbed only requests that are not script, stylesheet, font or document loads. Collection sent as JSONP scripts or iframe pixels would then leak, so a listed path is stubbed for every resource type (Q07).
 - **Preview builds in tests.** Real preview builds need a real container and real credentials, so tests can't use them. A test-only, loopback-only GTM origin points every `gtm.js` fetch at the fixture site. The matcher for `www.googletagmanager.com` still runs in every test (see Q04).
 
 ## Package layout
@@ -67,7 +71,7 @@ The fixture site serves two GTM container builds, `published` and `workspace`, a
 How the builds differ:
 
 - `workspace` sends one more GA4 event (`workspace_only`) and drops one Meta event (`AddToCart`).
-- `workspace` sets the Consent Mode default for `ad_storage` to granted where `published` denies it, so a paired undecided `page_view` shows a `gcs` change.
+- `workspace` sets the Consent Mode default for `ad_storage` to granted where `published` denies it, so a paired undecided `page_view` shows a `gcs` change. This depends on how real gtag.js treats a container-level default **(verify)**: the Q02 e2e asserts both builds' undecided `page_view` `gcs` values.
 - `workspace` deliberately echoes its `gtm_auth` value in a sub-resource URL, in a beacon body and through a page that sends it as `Referer`, so Q04 can test redaction.
 
 How the server answers:
@@ -91,8 +95,9 @@ The list has entries `{vendor, host, paths?, source}`:
 - `host` is an exact host or `*.domain`.
 - `paths` are path prefixes.
 - `source` is an `https` link to the vendor's own docs.
+- Each vendor has an explicit list of its docs domains, for example X: `business.x.com`, Microsoft UET: `microsoft.com`, Reddit: `reddithelp.com`.
 
-The first vendors are TikTok, Snap, LinkedIn, Microsoft UET, X, Reddit and Criteo. Pinterest gets a full decoder in Q06.
+The first vendors are TikTok, Snap, LinkedIn, Microsoft UET (vendor key `microsoft-uet`, to match the 0.3 decoder), X, Reddit and Criteo. Pinterest gets a full decoder in Q06.
 
 The module exports two functions:
 
@@ -102,7 +107,7 @@ The module exports two functions:
 Acceptance: unit tests for:
 
 - a host match, a path match, a path that must not match, and a library load (the TikTok pixel script) that must not match;
-- every entry's `source` is `https` on the vendor's domain;
+- every entry's `source` is `https` on one of its vendor's listed docs domains;
 - validation errors.
 
 ### Wave 2
@@ -115,19 +120,25 @@ The recorder matches requests to `https://www.googletagmanager.com/gtm.js` with 
 
 The test-only GTM origin:
 
-- It comes only from `PINGWRIGHT_TEST_GTM_ORIGIN`.
-- It must be an `http://` origin on `127.0.0.1`, `localhost` or `::1`. Any other value is a hard error.
+- It comes only from `PINGWRIGHT_TEST_GTM_ORIGIN`. The recorder reads it, so it applies to CLI runs and to direct recorder API runs alike.
+- It is parsed with `new URL`. It must have the protocol `http:`, a hostname exactly equal to `127.0.0.1`, `localhost` or `[::1]`, any port, and no userinfo, path, query or fragment. Any other value is a hard error, so `127.0.0.1.example.com` is rejected.
 - It is never read from scenario YAML or the override JSON.
 - When set, it replaces `https://www.googletagmanager.com` in every `gtm.js` fetch, with or without an override, but not in matching.
-- Its use is recorded as `gtmOverride.testOrigin`, and the CLI prints a warning.
+- Its use is recorded on the run as `Run.testGtmOrigin`, with or without an override, and the CLI prints a warning.
 
 The run record:
 
-- `gtmOverride` stores `container`, `gtmPreview`, `gtmAuth: "[redacted]"`, `expectedTags` (stored, not evaluated) and `testOrigin`.
+- `gtmOverride` stores `container`, `gtmPreview`, `gtmAuth: "[redacted]"` and `expectedTags` (stored, not evaluated).
 - `gtmOverride.applied` lists each match: `{way: "direct", url, status}`.
-- If no request matched, or a preview fetch was not 200, the run fails with exit 2, and the message says which. A 404 says the environment may have no version.
+- If no request matched, or a preview fetch was not 200, the run fails with exit 2, and the message says which. A 404 says the environment may have no version. The JSONL is still written, with `applied` filled in.
 
-Redaction: the recorder scrubs the `gtmAuth` value, URL-encoded and base64-encoded, from every record it writes. That covers all string fields, including:
+Redaction: the recorder scrubs the `gtmAuth` value in `Recorder.close()`, before records are returned to callers or written. The in-memory records also feed `evaluate` and the CLI summary. The scrub decodes before it searches:
+
+- For each query value in `Request.url` and for `postData`, it URL-decodes and base64-decodes recursively, reusing the decoders' base64 helper and the leak scanner's decode path (design §13). If the decoded text contains the value, the whole parameter value or body becomes `[redacted]`.
+- For every other string field, it replaces the plain value and its URL-encoded and base64-encoded forms.
+- It recurses into object fields such as `CollectorReport.payload` and `DataLayerEvent.args`.
+
+The fields covered include:
 
 - `Request.url`, headers and `postData`;
 - `Hit.page` and `Hit.params`;
@@ -149,7 +160,7 @@ Acceptance:
   - a run with it shows the workspace build's hits and `applied[0].status: 200`;
   - a container that never loads fails with "no container request matched";
   - `GTM-PWNOVER` fails with the 404 message.
-- Positive control: the fixture server's log shows the `gtm_auth` value was sent. Every JSONL line and the CLI output still lack it in plain, URL-encoded and base64 form.
+- Positive control: the fixture server's log shows the `gtm_auth` value was sent. The Q02 echo page also sends a Stape-loader `/g/collect` and a `/data` request that carry the value nested inside base64, and inside base64 twice. The check decodes every JSONL line and the CLI output the same way the scrub does, then finds no `gtmAuth` value in any form.
 
 **Q06 Pinterest decoder.** Touches: `packages/decoders`, `fixtures/site` (a new Pinterest page).
 
@@ -160,7 +171,7 @@ It decodes `ct.pinterest.com/v3/` and `/user/` requests, following the documente
 - the `pd` JSON: hashed `em`, presence and raw value;
 - the `ad` JSON: `loc` as the page.
 
-It also reads the event ID. Base the fixtures on a redacted capture from the field test, with fake IDs.
+It also reads the event ID. Base the fixtures on Pinterest's public tag docs and on a redacted capture from the field test. The capture is committed under `packages/decoders/fixtures/pinterest/` with fake IDs, so the entry can be built from the repo alone.
 
 In `stub` mode, Pinterest collection paths are stubbed for every resource type, and the library load `s.pinimg.com/ct/core.js` passes. The new fixture page has a fake Pinterest tag that fires before consent on purpose.
 
@@ -192,9 +203,9 @@ Acceptance: unit tests on synthetic runs for each kind of change, a count mismat
 
 ### Wave 3
 
-**Q05 GTM override through custom loaders.** Touches: `packages/recorder`, `packages/decoders` (an `unwrapStapeLoader()` helper).
+**Q05 GTM override through custom loaders.** Touches: `packages/recorder`.
 
-`unwrapStapeLoader(request)` returns the decoded inner path and query of a disguised Stape request, or nothing. When the inner request is `/gtm.js?id=<container>`, the recorder answers it with the preview build, as in Q04, and the loader script stays in place.
+Reuse the existing exported `unwrapStapeLoader` in `stape-custom-loader.ts`, which returns the inner `Request`. When the inner request is `/gtm.js?id=<container>`, the recorder answers it with the preview build, as in Q04, and the loader script stays in place.
 
 - The record stores `applied: {way: "loader", loader: "stape", url, status}`.
 - It also stores `loses: "nothing known; the loader script runs unchanged"`.
@@ -207,11 +218,11 @@ Acceptance:
 
 - E2E through the CLI, for the Stape-style loader on the page and inside a sandboxed iframe. Each shows the workspace build's hits and `way: "loader"`, and passes the Q04 redaction check.
 - An e2e for the `replace` fallback.
-- Unit tests for `unwrapStapeLoader`.
+- A unit test that `unwrapStapeLoader` returns the inner `/gtm.js` request for the fixture loader's URL shape.
 
 **Q10 Shopify checkout pattern.** Touches: `fixtures/site` (checkout hashes), `docs/shopify-checkout.md`, `e2e/scenarios`. → #117
 
-The fixture's Meta `Purchase` sends `ud[em]` with the SHA-256 of the email typed at checkout. GA4 `purchase` sends `user_data` with the same hash.
+On a new checkout-pattern page, the fixture's Meta `Purchase` sends `ud[em]` with the SHA-256 of the email typed at checkout, only when an email was typed. The existing /thank-you hits do not change, so other e2e tests and `possibleRealData` are unaffected. GA4 `user_data` is out of scope, because the GA4 decoder does not read it.
 
 docs/shopify-checkout.md is a pattern:
 
@@ -245,7 +256,7 @@ The `tracker` decoder turns a request matched by `trackerFor` into a minimal hit
 - consent is `unknown`, so the epoch fallback applies;
 - `transport: "tracker-list"`.
 
-Tracker vendors are valid `vendor:` keys. Listed tracker requests are not raised as `unknownDestination`.
+Tracker vendors are valid `vendor:` keys. The CLI loads `--tracker-list` before it parses the scenario and passes the extra vendor keys to the parser. Listed tracker requests are not raised as `unknownDestination`. A request that a real decoder already matches stays with that decoder, so one request never gives two hits.
 
 Stub rule:
 
@@ -294,4 +305,5 @@ Then run `scripts/release.sh 0.2.0-rc.1` on main and push the tag. Then do the f
 | Claim | Where | Resolved in |
 | --- | --- | --- |
 | A request from inside a sandboxed iframe can be answered with a preview build fetched by `route.fetch` | proposal item 1 | Q05 |
+| A container-level Consent Mode default changes `gcs` on the undecided `page_view` | Q02 | Q02 |
 | Stape custom loaders forward `gtm_auth` and `gtm_preview` | proposal §6 | not built in 0.2 (way 2); field question |

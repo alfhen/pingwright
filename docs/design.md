@@ -360,8 +360,8 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 15. Milestones
 
-1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output.
-2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. Withdrawal epochs and the field-test fixes ship first, in 0.1.0. See docs/proposal-0.2.md and docs/plan-0.2.md.
+1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
+2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
 5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
