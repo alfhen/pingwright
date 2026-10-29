@@ -1,7 +1,7 @@
 import type { ConsentEpoch, ConsentState } from '@pingwright/core';
 import { unknownConsent, type ConsentModeChange } from './consent-mode.ts';
 
-export type EpochLabel = 'undecided' | 'granted' | 'denied' | 'mixed';
+export type EpochLabel = ConsentEpoch['label'];
 
 export interface BannerEvent {
   /** When the action started. */
@@ -11,8 +11,7 @@ export interface BannerEvent {
   action: 'accept' | 'reject';
 }
 
-/** A ConsentEpoch without its record identity, plus the label that `epoch(<state>)` matches. */
-export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId'> & { label: EpochLabel };
+export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId'>;
 
 export interface EpochOptions {
   /** Start of the run on the shared clock. */
@@ -27,9 +26,9 @@ export const DEFAULT_GRACE_MS = 50;
 const DEFAULT_PAIR_WINDOW_MS = 2000;
 
 export function labelOf(state: ConsentState): EpochLabel {
-  const values = Object.values(state);
-  if (values.every((v) => v === 'granted')) return 'granted';
-  if (values.every((v) => v === 'denied')) return 'denied';
+  const known = Object.values(state).filter((v) => v !== 'unknown');
+  if (known.length > 0 && known.every((v) => v === 'granted')) return 'granted';
+  if (known.length > 0 && known.every((v) => v === 'denied')) return 'denied';
   return 'mixed';
 }
 

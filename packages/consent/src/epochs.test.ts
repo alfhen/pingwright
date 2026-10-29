@@ -292,3 +292,11 @@ describe('epochsForHit', () => {
     expect(epochsForHit(epochs, 900).map((e) => e.label)).toEqual(['undecided']);
   });
 });
+
+describe('labelOf', () => {
+  test('ignores unknown fields', () => {
+    const modes = consentModeChanges([push(1000, 'update', { analytics_storage: 'granted', ad_storage: 'granted' })]);
+    const epochs = buildEpochs([], modes, { startT: 0 });
+    expect(epochs.at(-1)?.label).toBe('granted');
+  });
+});

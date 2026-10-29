@@ -5,6 +5,7 @@
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
+    "@pingwright/consent": "workspace:*",
     "@pingwright/core": "workspace:*",
     "@pingwright/decoders": "workspace:*",
     "@pingwright/expect": "workspace:*",

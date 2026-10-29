@@ -3,13 +3,14 @@ import {
   hashEmail,
   hashPhone,
   newId,
+  type ConsentState,
   type Flag,
   type Hit,
   type Request,
   type Step,
 } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { evaluate, type EvalEpoch } from './evaluate.ts';
+import { evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 import { README_SCENARIO } from './readme-scenario.ts';
 
@@ -41,8 +42,16 @@ function hit(over: Partial<Hit> = {}, req: Partial<Request> = {}): { hit: Hit; r
   };
 }
 
-function epoch(startT: number, endT: number | null, state: EvalEpoch['state']): EvalEpoch {
-  return { type: 'consentEpoch', id: newId('consentEpoch'), runId, startT, endT, source: 'test', state };
+function labelFor(state: ConsentState | 'undecided'): EvalEpoch['label'] {
+  if (state === 'undecided') return 'undecided';
+  const known = [state.analytics, state.ads, state.adUserData, state.adPersonalization].filter((v) => v !== 'unknown');
+  if (known.length > 0 && known.every((v) => v === 'granted')) return 'granted';
+  if (known.length > 0 && known.every((v) => v === 'denied')) return 'denied';
+  return 'mixed';
+}
+
+function epoch(startT: number, endT: number | null, state: ConsentState | 'undecided', label = labelFor(state)): EvalEpoch {
+  return { type: 'consentEpoch', id: newId('consentEpoch'), runId, startT, endT, source: 'test', label, state: state === 'undecided' ? allUnknown : state };
 }
 
 const UNDECIDED_THEN_ACCEPT = [epoch(0, 1000, 'undecided'), epoch(1000, null, granted)];
@@ -341,4 +350,28 @@ test('the identity is read from the Run record', () => {
   const foreign = hit({}, { postData: Buffer.from('{"em":"someone.else@example.com"}').toString('base64') });
   const rs = evaluate([runRecord, foreign.hit, foreign.req] as never, parseScenario('start: /'));
   expect(rs.find((r) => r.expectation === 'builtin: possibleRealData')!.pass).toBe(false);
+});
+
+test('placeHitsInEpochs skips Google hits and puts a hit in the grace window in the new epoch', () => {
+  const epoch = (startT: number): EvalEpoch => ({ type: 'consentEpoch', id: newId('consentEpoch'), runId, startT, endT: null, source: 'test', label: 'undecided', state: allUnknown });
+  const epochs = [epoch(0), epoch(1000)];
+  const late = { vendor: 'meta', t: 960 } as Hit;
+  const early = { vendor: 'meta', t: 900 } as Hit;
+  const placed = placeHitsInEpochs([late, early, { vendor: 'ga4', t: 2000 } as Hit], epochs, 50);
+  expect(placed.size).toBe(2);
+  expect(placed.get(late)).toBe(epochs[1]);
+  expect(placed.get(early)).toBe(epochs[0]);
+});
+
+test('epoch(denied) judges a non-Google hit by the label when a reject is followed by a mixed Consent Mode update', () => {
+  const mixed: ConsentState = { ...denied, analytics: 'granted' };
+  const recs = [epoch(0, 1000, 'undecided'), epoch(1000, null, mixed, 'denied')];
+  const y = 'expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }';
+  expect(rule(y, [hit({ vendor: 'meta', t: 2000 }), ...recs]).pass).toBe(false);
+});
+
+test('consent field filters use the state recorded for an undecided epoch', () => {
+  const undecidedDenied: EvalEpoch = { ...epoch(0, null, 'undecided'), state: denied };
+  const q = `expect:\n  must:\n    - { vendor: meta, consent.analytics: denied }`;
+  expect(rule(q, [hit({ vendor: 'meta', t: 500 }), undecidedDenied]).pass).toBe(true);
 });

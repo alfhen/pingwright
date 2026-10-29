@@ -1,10 +1,7 @@
-import type { ConsentState, ConsentValue } from '@pingwright/core';
+import type { ConsentState, ConsentValue, DataLayerEvent } from '@pingwright/core';
 
-/** A dataLayer push with its arguments, for example `['consent', 'update', { analytics_storage: 'granted' }]`. */
-export interface ConsentPush {
-  t: number;
-  args?: readonly unknown[];
-}
+/** A recorded dataLayer event; consent commands look like `['consent', 'update', { analytics_storage: 'granted' }]`. */
+export type ConsentPush = Pick<DataLayerEvent, 't' | 'args'>;
 
 export interface ConsentModeChange {
   t: number;

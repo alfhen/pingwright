@@ -7,6 +7,7 @@ import {
   type Checkpoint,
   type CheckpointCookie,
   type CollectorReport,
+  type ConsentEpoch,
   type DataLayerEvent,
   type Hit,
   type Id,
@@ -19,6 +20,7 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
+import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint } from '@pingwright/decoders';
 import {
   chromium,
@@ -53,6 +55,10 @@ export interface RecorderOptions {
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
+  /** Autoconsent options, such as extra rule files. */
+  autoconsent?: ConsentOptions;
+  /** Test only: replaces the Chrome user agent. */
+  userAgentOverride?: string;
 }
 
 export interface RunResult {
@@ -83,6 +89,7 @@ function initiatorOf(request: PwRequest): string | null {
 export class Recorder {
   runId: Id<'run'> = newId('run');
   coverage!: CaptureCoverage;
+  consent!: ConsentDriver;
   private run!: Run;
   private clockOffset = 0;
   private collectorHandler: CollectorHandler = () => undefined;
@@ -96,6 +103,7 @@ export class Recorder {
   private readonly pending = new Set<Promise<unknown>>();
   private readonly steps: Step[] = [];
   private readonly checkpoints: Checkpoint[] = [];
+  private readonly bannerEvents: BannerEvent[] = [];
   private currentStepId: Id<'stp'> | null = null;
   private closed = false;
 
@@ -109,7 +117,7 @@ export class Recorder {
     const browser = await chromium.launch({ channel: 'chromium', headless: !options.headed });
     try {
       const context = await browser.newContext({
-        userAgent: chromeUserAgent(browser.version()),
+        userAgent: options.userAgentOverride ?? chromeUserAgent(browser.version()),
         serviceWorkers: options.serviceWorkers ?? 'allow',
       });
       const recorder = new Recorder(options, browser, context);
@@ -149,6 +157,7 @@ export class Recorder {
       if (event) this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
     });
     await context.addInitScript(dataLayerInitScript);
+    this.consent = await installConsent(context, this.options.autoconsent);
     if (this.options.networkMode === 'stub') {
       await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
       await context.addInitScript(unloadInitScript);
@@ -291,6 +300,22 @@ export class Recorder {
     if (error !== undefined) step.error = error;
   }
 
+  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. */
+  recordBanner(result: BannerResult): void {
+    if (result.result !== 'ok' || result.action === 'none') return;
+    this.bannerEvents.push({ t: result.t, tEnd: result.tEnd, action: result.action });
+  }
+
+  private buildConsentEpochs(): ConsentEpoch[] {
+    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(this.dataLayerEvents), { startT: this.run.startedAt });
+    return drafts.map((epoch) => ({
+      type: 'consentEpoch',
+      id: newId('consentEpoch'),
+      runId: this.runId,
+      ...epoch,
+    }));
+  }
+
   async checkpoint(label: string, step: Step | null): Promise<Checkpoint> {
     const host = new URL(this.options.site).hostname;
     const cookies: CheckpointCookie[] = (await this.context.cookies()).map((c) => {
@@ -358,6 +383,7 @@ export class Recorder {
         ...this.responses,
         ...hits,
         ...this.dataLayerEvents,
+        ...this.buildConsentEpochs(),
         ...this.collectorReports,
         ...flags,
       ]) {

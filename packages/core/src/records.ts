@@ -136,6 +136,9 @@ export interface ConsentEpoch {
   startT: number;
   endT: number | null;
   source: string;
+  /** What `epoch(<label>)` matches: `undecided` until the visitor answered, then the banner action's outcome. */
+  label: 'undecided' | 'granted' | 'denied' | 'mixed';
+  /** The Consent Mode state in the epoch, which may be mixed. In the undecided epoch it is the default. */
   state: ConsentState;
 }
 
