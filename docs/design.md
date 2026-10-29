@@ -131,11 +131,11 @@ Stubbing may still change behaviour: GA4 may retry on another transport, and sit
 
 `visit`, `click`, `fill` (from the fake identity, §13), `consent` (`accept`, `reject`, `none`, or a named choice), `wait`, `addToCart` (through the platform adapter or a selector), `evaluate`, `checkpoint`, and `handoff`.
 
-`handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done. Pingwright never automates payment or log-in.
+`handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done. Pingwright never automates payment or log-in on a hosted site. The one exception is a loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, where no real payment can happen. There, a scenario may fill a fake payment form so the test suite can cover a whole checkout.
 
 ## 6. Decoders
 
-A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`, and `collectionEndpoints()` for `stub` mode. One request can hold several hits (GA4 batches events in the POST body, one per line).
+A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`, and `isCollectionEndpoint(request) → boolean` for `stub` mode. The check takes the request, not a fixed list, because some endpoints are only known after decoding (for example Stape's disguised paths). One request can hold several hits (GA4 batches events in the POST body, one per line).
 
 | Decoder | Notes |
 | --- | --- |
@@ -321,7 +321,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 - Playwright traces, HAR files and screenshots are off by default. When turned on, the report states that they are unfiltered.
 - MCP results go to the agent's model provider. With fake identities this is acceptable. Flagged `possibleRealData` values are replaced with a placeholder in MCP output.
-- Pingwright never enters passwords or payment data. Those steps are handoffs.
+- Pingwright never enters passwords or payment data on a hosted site. Those steps are handoffs. Only loopback hosts are exempt (§5.4).
 - Pingwright never takes a target address from incoming traffic.
 
 ## 14. Risks and open questions

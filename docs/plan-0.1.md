@@ -75,13 +75,13 @@ ULID IDs with type prefixes, record types from §4, the shared clock helpers, an
 Acceptance: unit tests for ID format and order, clock conversion, and a JSONL round trip.
 
 **P04 Fixture site.** → P01
-`fixtures/site`: a static shop served on a random localhost port, with a second port that acts as a third-party host. It has:
+`fixtures/site`: a static shop served on `localhost` at a random port. Two more servers on `127.0.0.1` act as a mock server container and an unknown third-party host. `localhost` and `127.0.0.1` are different sites, so these requests are cross-site. It has:
 - a consent banner with accept, reject and a "cookie settings" link that reopens it. It grants consent itself, without showing, when the user agent contains `HeadlessChrome`.
 - Consent Mode defaults (denied) and updates on choice.
 - real gtag.js for `G-PWTEST0001` and `AW-000000001`, and the Meta pixel `000000000000001`.
 - a sandboxed iframe at a `/web-pixels@0.0.0-fixture/sandbox/` path that posts to the collector origin and sends a GA4 hit with the sandbox URL as the page.
 - a mock Stape loader that requests `/<id>?<key>=<base64>` for `/gtag/js`, `/g/collect` and `/data` (with a base64 `dtdc` payload) from the mock server-container host.
-- one request to an unknown third-party destination on the second port.
+- one request to an unknown third-party destination on the third-party host.
 - product, cart, checkout with a delivery-country select, a fake payment form, and a thank-you page that sends a GA4 `purchase` with `user_id`, a Meta `Purchase` and an Ads conversion.
 Acceptance: a smoke e2e that loads each page with raw Playwright, stubs Google and Meta collection paths with `context.route`, and sees GA4, Meta, Ads, Stape and collector requests.
 
@@ -120,7 +120,7 @@ Acceptance: unit tests on synthetic records for every rule and filter, including
 ### Wave 5
 
 **P12 Steps.** → P06, P09
-`visit`, `click`, `fill` (from the identity), `wait`, `addToCart` (selector), `evaluate`, `checkpoint` (cookies), `handoff`, and a `consent` step that calls the consent package. `Step` records. Payment and password fields can be filled only on loopback hosts. Elsewhere they must be `handoff` steps.
+`visit`, `click`, `fill` (from the identity), `wait`, `addToCart` (selector), `evaluate`, `checkpoint` (cookies), `handoff`, and a `consent` step that calls the consent package. `Step` records. Payment and password fields can be filled only on loopback hosts, which in practice means the fixture site. On any other host they must be `handoff` steps (design §5.4).
 Acceptance: e2e: full fixture checkout through the fake payment form with an explicit delivery country; filling a card field on a non-loopback host fails.
 
 ### Wave 6
