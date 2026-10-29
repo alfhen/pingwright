@@ -9,10 +9,10 @@ const PINGS = [
   /^\/pagead\/1p-conversion\/(\w+)\/?$/,
   /^\/pagead\/1p-user-list\/(\w+)\/?$/,
   /^\/rmkt\/collect\/(\w+)(?:\/\w+)?\/?$/,
-  /^\/ccm\/collect\/?$/,
+  /^\/ccm\/(?:s\/)?collect\/?$/,
 ];
 
-const REMARKETING = /^\/(?:pagead\/(?:viewthroughconversion|1p-user-list)|rmkt\/collect)\//;
+const REMARKETING = /^\/(?:pagead\/(?:viewthroughconversion|1p-user-list)|rmkt\/collect|ccm\/(?:s\/)?collect)(?:\/|$)/;
 
 function hostMatches(host: string): boolean {
   return ADS_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
@@ -49,7 +49,8 @@ export const googleAds: Decoder = {
     const ids: Hit['ids'] = {};
     for (const key of ['gclid', 'gbraid', 'wbraid']) if (p.get(key)) ids[key] = true;
     const params: Record<string, string> = {};
-    const conversionId = ping.id ?? p.get('tid')?.replace(/^AW-/, '');
+    const conversionId =
+      ping.id ?? p.get('tid')?.replace(/^AW-/, '') ?? /AW-(\d+)/.exec(p.get('gtm') ?? '')?.[1];
     if (conversionId) params.conversionId = conversionId;
     for (const [from, to] of [
       ['label', 'label'],

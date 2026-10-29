@@ -55,6 +55,19 @@ test('doubleclick view-through conversion is remarketing', () => {
   expect(hit?.consent.ads).toBe('granted');
 });
 
+test('real gcd shape without gcs gives consent on viewthroughconversion and rmkt', () => {
+  const urls = [
+    `https://googleads.g.doubleclick.net/pagead/viewthroughconversion/000000001/?url=${enc(PAGE)}&gcd=`,
+    `https://www.google.com/rmkt/collect/000000001/123?url=${enc(PAGE)}&gcd=`,
+  ];
+  for (const u of urls) {
+    const [granted] = decodeRequest(req(`${u}13r3r3r2r5l1`));
+    const [denied] = decodeRequest(req(`${u}13p3p3p2p5l1`));
+    expect(granted?.consent).toMatchObject({ ads: 'granted', analytics: 'granted', adUserData: 'granted', adPersonalization: 'granted' });
+    expect(denied?.consent).toMatchObject({ ads: 'denied', analytics: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
+  }
+});
+
 test('google.com 1p-conversion and 1p-user-list', () => {
   const [conv] = decodeRequest(req('https://www.google.com/pagead/1p-conversion/000000001/?label=fake-label'));
   const [list] = decodeRequest(req('https://www.google.com/pagead/1p-user-list/000000001/?dl=' + enc(PAGE)));
@@ -70,7 +83,7 @@ test('rmkt/collect and googlesyndication pings', () => {
 });
 
 test('ccm/collect on google.com and doubleclick uses en and tid', () => {
-  for (const host of ['www.google.com', 'td.doubleclick.net']) {
+  for (const host of ['www.google.com', 'ad.doubleclick.net']) {
     const [hit] = decodeRequest(
       req(`https://${host}/ccm/collect?tid=AW-000000001&en=page_view&dl=${enc(PAGE)}&gcs=G111`, {
         method: 'POST',
@@ -84,6 +97,21 @@ test('ccm/collect on google.com and doubleclick uses en and tid', () => {
       consent: { ads: 'granted', analytics: 'granted' },
     });
   }
+});
+
+test('ad.doubleclick.net ccm/s/collect is a collection endpoint', () => {
+  const r = req(
+    'https://ad.doubleclick.net/ccm/s/collect?auid=123.456&gtm=45je6a00v9100000000za200_AW-000000001&fmt=8&gcs=G111',
+    { method: 'POST', resourceType: 'fetch' },
+  );
+  expect(isCollectionEndpoint(r)).toBe(true);
+  const [hit] = decodeRequest(r);
+  expect(hit).toMatchObject({
+    vendor: 'google-ads',
+    event: 'remarketing',
+    params: { conversionId: '000000001' },
+    consent: { ads: 'granted', analytics: 'granted' },
+  });
 });
 
 test('each redirect hop is its own request and hit', () => {
