@@ -84,6 +84,10 @@ function mergeChanges(
 
 /**
  * The first epoch is `undecided`; a Consent Mode default sets its state but is not a decision.
+ * The first decision is the first banner action or Consent Mode update, whichever is earlier.
+ * Defaults after it are ignored: gtag gives an update precedence over a later
+ * default within one document, and the recording carries no document identity to tell a new
+ * page's default from a pixel iframe's. A default with a `region` list is ignored.
  * Each banner action defines a window [t - lead, tEnd + after]. Consent Mode updates inside it
  * belong to that decision. Its epoch starts at the earliest of the action end and those updates,
  * is labelled by the action, and takes the last Consent Mode state in the window (the action's
@@ -100,10 +104,11 @@ export function buildEpochs(
   const updates = sorted.filter((c) => c.command === 'update');
   const firstDecisionT = Math.min(updates[0]?.t ?? Infinity, ...banners.map((b) => b.t));
   const initial = sorted.findLast((c) => c.command === 'default' && c.t < firstDecisionT)?.state ?? unknownConsent;
+  const pairWindowMs = options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS;
   const epochs: EpochDraft[] = [
     { startT: options.startT, endT: null, source: 'start', state: initial, label: 'undecided' },
   ];
-  for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS, options.leadWindowMs ?? DEFAULT_LEAD_WINDOW_MS)) {
+  for (const change of mergeChanges(banners, updates, pairWindowMs, options.leadWindowMs ?? DEFAULT_LEAD_WINDOW_MS)) {
     const current = epochs[epochs.length - 1]!;
     const label = change.label;
     if (current.label === 'undecided' && !change.decision && !Object.values(change.state).includes('granted')) {
