@@ -402,7 +402,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   for (const hit of ctx.hits) {
     const entry = slot(hit.requestId, hit.stepId);
     entry.hitIds.push(hit.id);
-    entry.texts.push(...Object.values(hit.params));
+    for (const [key, value] of Object.entries(hit.params)) entry.texts.push(`${key}=${value}`);
   }
   const out: { detail: string; evidence: string[] }[] = [];
   for (const [requestId, entry] of byRequest) {

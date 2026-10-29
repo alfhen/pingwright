@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   createIdentity,
   hashEmail,
@@ -309,6 +310,18 @@ test('possibleRealData scans requests when only the identity is given', () => {
   expect(check.pass).toBe(false);
   expect(check.evidence).toEqual([bad.req.id, bad.hit.id, 'stp_X']);
   expect(find(evaluate([clean.hit, clean.req], parseScenario('start: /'), { identity })).pass).toBe(true);
+});
+
+test('possibleRealData ignores random hashes in decoded hit params but not identity keys', () => {
+  const h = createHash('sha256').update('random-controller').digest('hex');
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  const run = (params: Record<string, string>) => {
+    const { hit: h1, req } = hit({ params });
+    return find(evaluate([h1, req], parseScenario('start: /'), { identity })).pass;
+  };
+  expect(run({ user_id: h, client_id_hash: h, external_id: h })).toBe(true);
+  expect(run({ em: h })).toBe(false);
+  expect(run({ 'ud[em]': h })).toBe(false);
 });
 
 test('possibleRealData ignores hashes in script load URLs', () => {

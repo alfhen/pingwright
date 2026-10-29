@@ -178,6 +178,14 @@ describe('scan fixes', () => {
     expect(scan(`x=v_${Buffer.from('nothing to see here').toString('base64url')}`, id)).toEqual([]);
   });
 
+  it('finds base64 behind long prefixes and before trailing junk (#27)', () => {
+    const payload = Buffer.from('{"email":"jane@shop.example.net"}').toString('base64url');
+    for (const text of [`x=abcd${payload}`, `x=evt42${payload}`, `x=abcdefg${payload}`, `x=${payload}xyz`, `x=abcd_${payload}`, `x=abcd-${payload}`]) {
+      expect(scan(text, id), text).toContainEqual(jane);
+    }
+    expect(scan(`x=abcd${Buffer.from('nothing to see here').toString('base64url')}`, id)).toEqual([]);
+  });
+
   it('flags foreign base64 and base64url hashes and not the own ones (#29)', () => {
     expect(scan(`em=tv.1~em.${foreign.base64url}`, id)).toEqual([{ kind: 'hash', value: foreign.base64url }]);
     expect(scan(`em=${encodeURIComponent(foreign.base64)}`, id)).toEqual([{ kind: 'hash', value: foreign.base64 }]);
@@ -186,9 +194,18 @@ describe('scan fixes', () => {
   });
 
   it('does not flag 43-character tokens that are not hashes (#29)', () => {
+    const tokens = [
+      'this-is-a-long-lowercase-slug-for-an-article',
+      'THIS-IS-A-LONG-UPPERCASE-TOKEN-FOR-AN-ARTICLE',
+      '01HZX3K9Q8W2V5N7M4B6C1D0E3F8G2H5J7K9M1N3P5Q',
+      'abcdefghij0123456789klmnopqrstuvwxyz01234567',
+    ].map((t) => t.slice(0, 43));
+    for (const token of tokens) {
+      expect(token).toHaveLength(43);
+      expect(scan(`x=${token}`, id), token).toEqual([]);
+    }
     const text = [
-      'slug=this-is-a-long-lowercase-slug-for-an-article-x',
-      `ulid=${newId('hit')}${newId('hit')}`.slice(0, 60),
+      `ulid=${newId('hit')}${newId('hit')}`,
       'gcd=13l3l3l3l1l1l3l3l3l3l1l1l3l3l3l3l1l1l3l3l3l3l1l1&gcs=G111',
       'cid=1234567890.1730200000',
       'assets=logo@2x.png',
@@ -196,6 +213,12 @@ describe('scan fixes', () => {
     expect(scan(text, id)).toEqual([]);
   });
 
+  it('ignores random 32-byte tokens under state, nonce and csrf keys (#29)', () => {
+    const token = 'CzBVep_E6Q4zWH2ix-wRNluApcrvFDleg6jN8hc8YYY';
+    expect(scan(`state=${token}`, id)).toEqual([]);
+    expect(scan(`nonce=${token}&csrf=${token}`, id)).toEqual([]);
+    expect(scan(`em=${token}`, id)).toEqual([{ kind: 'hash', value: token }]);
+  });
   it('flags formatted international phone numbers and compares by number (#30)', () => {
     for (const text of ['ph=+44 20 7946 0958', 'ph=+45 12 34 56 78', 'ph=%2B45+12+34+56+78', 'ph=+45-12-34-56-78']) {
       expect(scan(text, id), text).toHaveLength(1);
@@ -248,6 +271,13 @@ describe('scan fixes', () => {
     expect(scan(JSON.stringify({ user_data: { em: foreign.hex } }), id)).toHaveLength(1);
     expect(scan(`uid=1&em=${foreign.hex}`, id)).toHaveLength(1);
     expect(scan(foreign.hex, id)).toHaveLength(1);
+  });
+
+  it('ignores random hashes under GA4 ep. keys and still flags identity keys (#114)', () => {
+    const h = sha256('random-controller').hex;
+    expect(scan(`ep.user_id=${h}&ep.client_id_hash=${h}&epn.external_id=${h}&cd[user_id]=${h}`, id)).toEqual([]);
+    expect(scan(`em=${h}`, id)).toEqual([{ kind: 'hash', value: h }]);
+    expect(scan(`ud[em]=${h}`, id)).toEqual([{ kind: 'hash', value: h }]);
   });
 
   it('keeps the country option as a label only (#32)', () => {

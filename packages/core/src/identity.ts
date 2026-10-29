@@ -108,7 +108,14 @@ const NON_PERSONAL_HASH_KEYS = new Set([
   'sessionid',
   'anonymous_id',
   'anonymousid',
+  'state',
+  'nonce',
+  'csrf',
+  'csrf_token',
+  'csrftoken',
 ]);
+// GA4 sends event parameters as ep.<name> and epn.<name>; other vendors nest the name in cd[...].
+const KEY_PREFIX = /^(?:epn?|up|upn|cd)[._]/;
 const KEY_BEFORE_VALUE = /([\w.[\]-]+)["']?\s*[=:]\s*["']?$/;
 const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
 
@@ -123,24 +130,23 @@ function tryUrlDecode(text: string): string | undefined {
   });
 }
 
-const utf8 = new TextDecoder('utf-8', { fatal: true });
+const utf8Lenient = new TextDecoder('utf-8');
+const EDGE = 4;
 
-// Random bytes seldom decode to valid UTF-8 with few control characters, so this keeps ULIDs and hashes out.
+// Random bytes seldom decode to mostly valid text, so this keeps ULIDs and hashes out. Junk glued to either
+// end of a payload decodes to a few stray bytes there, so the first and last few characters are not counted.
 function tryBase64Decode(token: string): string | undefined {
   const bytes = Buffer.from(token.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
   if (bytes.length < 8) return undefined;
-  let text: string;
-  try {
-    text = utf8.decode(bytes);
-  } catch {
-    return undefined;
-  }
+  const text = utf8Lenient.decode(bytes);
+  const inner = [...text].slice(EDGE, -EDGE);
+  if (inner.length < 4) return undefined;
   let control = 0;
-  for (const ch of text) {
+  for (const ch of inner) {
     const c = ch.codePointAt(0)!;
     if ((c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) || c === 0x7f || c === 0xfffd) control++;
   }
-  return control / text.length <= 0.05 ? text : undefined;
+  return control / inner.length <= 0.05 ? text : undefined;
 }
 
 function hasUrlEscapes(text: string): boolean {
@@ -151,16 +157,15 @@ function hasUrlEscapes(text: string): boolean {
 function isNonPersonalKey(text: string, index: number): boolean {
   const key = KEY_BEFORE_VALUE.exec(text.slice(Math.max(0, index - 64), index))?.[1];
   if (!key) return false;
-  return NON_PERSONAL_HASH_KEYS.has(key.toLowerCase().replace(/[[\]]/g, '_').replace(/^_+|_+$/g, ''));
+  const name = key.toLowerCase().replace(/[[\]]/g, '_').replace(/^_+|_+$/g, '').replace(KEY_PREFIX, '');
+  return NON_PERSONAL_HASH_KEYS.has(name);
 }
 
 // A prefix glued to the value shifts the base64 alignment, so each piece is also tried from offsets 1 to 3.
 function* base64Candidates(text: string): Generator<string> {
   for (const token of text.match(BASE64_TOKEN) ?? []) {
     const pieces = new Set([token]);
-    for (const sep of ['/', '_', '-']) {
-      if (token.includes(sep)) for (const piece of token.split(sep)) if (piece.length >= 12) pieces.add(piece);
-    }
+    if (token.includes('/')) for (const piece of token.split('/')) if (piece.length >= 12) pieces.add(piece);
     for (const piece of pieces) {
       yield piece;
       for (let offset = 1; offset <= 3; offset++) if (piece.length - offset >= 12) yield piece.slice(offset);
