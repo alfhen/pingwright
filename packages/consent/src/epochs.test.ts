@@ -330,26 +330,16 @@ describe('labelOf', () => {
 describe('later Consent Mode defaults', () => {
   const changes = (...pushes: ConsentPush[]) => consentModeChanges(pushes);
 
-  test('a later default denying consent after an accept starts a denied epoch', () => {
+  test('a default after an accept starts no epoch', () => {
     const epochs = buildEpochs(
       [{ t: 1000, tEnd: 1010, action: 'accept' }],
       changes(push(10, 'default', denied), push(1005, 'update', granted), push(3000, 'default', denied)),
       { startT: 0 },
     );
-    expect(epochs.map((e) => [e.label, e.source, e.startT])).toEqual([
-      ['undecided', 'start', 0],
-      ['granted', 'consentMode', 1005],
-      ['denied', 'consentMode', 3000],
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['granted', 1005],
     ]);
-  });
-
-  test('a later default is not paired with a banner window', () => {
-    const epochs = buildEpochs(
-      [{ t: 1000, tEnd: 1010, action: 'accept' }],
-      changes(push(10, 'default', denied), push(1500, 'default', denied)),
-      { startT: 0 },
-    );
-    expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
   });
 
   test('several defaults before the first decision merge into the undecided state', () => {

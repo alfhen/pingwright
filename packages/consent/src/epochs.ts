@@ -63,7 +63,7 @@ function mergeChanges(
   const owned = sortedBanners.map(() => [] as ConsentModeChange[]);
   const changes: Change[] = [];
   for (const update of updates) {
-    const i = update.command === 'default' ? -1 : bannerFor(sortedBanners, update.t, pairWindowMs, leadWindowMs);
+    const i = bannerFor(sortedBanners, update.t, pairWindowMs, leadWindowMs);
     if (i >= 0) owned[i]!.push(update);
     else changes.push({ t: update.t, source: 'consentMode', state: update.state, label: labelOf(update.state), decision: false });
   }
@@ -83,11 +83,10 @@ function mergeChanges(
 }
 
 /**
- * The first epoch is `undecided`; Consent Mode defaults before the first decision set its state
- * but are not decisions. A default after the first decision is treated like an update that no
- * banner owns, so a page that declares denied again after an accept starts a denied epoch.
- * A default followed by an update within the pair window is a page restoring the stored choice
- * and is skipped. A default with a `region` list is ignored.
+ * The first epoch is `undecided`; a Consent Mode default sets its state but is not a decision.
+ * Defaults after the first decision are ignored: gtag gives an update precedence over a later
+ * default within one document, and the recording carries no document identity to tell a new
+ * page's default from a pixel iframe's. A default with a `region` list is ignored.
  * Each banner action defines a window [t - lead, tEnd + after]. Consent Mode updates inside it
  * belong to that decision. Its epoch starts at the earliest of the action end and those updates,
  * is labelled by the action, and takes the last Consent Mode state in the window (the action's
@@ -101,14 +100,10 @@ export function buildEpochs(
   options: EpochOptions,
 ): EpochDraft[] {
   const sorted = [...modeChanges].sort((a, b) => a.t - b.t);
-  const firstDecisionT = Math.min(sorted.find((c) => c.command === 'update')?.t ?? Infinity, ...banners.map((b) => b.t));
+  const updates = sorted.filter((c) => c.command === 'update');
+  const firstDecisionT = Math.min(updates[0]?.t ?? Infinity, ...banners.map((b) => b.t));
   const initial = sorted.findLast((c) => c.command === 'default' && c.t < firstDecisionT)?.state ?? unknownConsent;
   const pairWindowMs = options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS;
-  const updates = sorted.filter(
-    (c, i) =>
-      c.command === 'update' ||
-      (c.t >= firstDecisionT && !sorted.slice(i + 1).some((n) => n.command === 'update' && n.t - c.t <= pairWindowMs)),
-  );
   const epochs: EpochDraft[] = [
     { startT: options.startT, endT: null, source: 'start', state: initial, label: 'undecided' },
   ];

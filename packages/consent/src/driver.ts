@@ -66,6 +66,8 @@ export class ConsentDriver {
   readonly #config: string;
   readonly #detectWindowMs: number;
   readonly options: Required<ConsentOptions>;
+  /** Names of the rules sent to autoconsent, one per rule. */
+  readonly ruleNames: readonly string[];
 
   constructor(options: ConsentOptions) {
     this.options = {
@@ -79,6 +81,7 @@ export class ConsentDriver {
       ...(options.ruleFiles ?? []).flatMap(readRuleFile),
     ];
     const rules = mergeRules(extra, bundledRules());
+    this.ruleNames = rules.map((rule) => String(rule.name));
     this.#rules = JSON.stringify({ autoconsent: rules });
     this.#detectWindowMs = (options.detectRetries ?? 10) * 500 + 1000;
     this.#config = JSON.stringify({
