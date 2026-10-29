@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
@@ -127,6 +128,33 @@ test('accept, reopen the banner, then reject', async () => {
   );
   expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
   expect(epochs[0]?.state.analytics).toBe('denied');
+  await context.close();
+});
+
+test('a second answer without reopening the banner gives banner not shown', async () => {
+  const context = await newContext();
+  await installConsent(context);
+  const page = await context.newPage();
+  await page.goto(site.url);
+  expect((await answerBanner(page, 'accept')).result).toBe('ok');
+  expect(await answerBanner(page, 'reject', { timeoutMs: 1500 })).toMatchObject({ shown: false, result: 'banner not shown' });
+  expect(await answerBanner(page, 'none', { timeoutMs: 1500 })).toMatchObject({ shown: false, result: 'banner not shown' });
+  expect(await storedChoice(context)).toBe('accept');
+  await context.close();
+});
+
+test('a rule with an eval step detects and acts', async () => {
+  const context = await newContext();
+  await context.addInitScript(`window.Cookiebot = { hasResponse: false, dialog: { visible: true } };`);
+  await installConsent(context, {
+    fixtureRules: false,
+    ruleFiles: [fileURLToPath(new URL('./eval-rule.json', import.meta.url))],
+  });
+  const page = await context.newPage();
+  await page.goto(site.url);
+  const result = await answerBanner(page, 'reject');
+  expect(result).toMatchObject({ detected: true, shown: true, cmp: 'pingwright-eval-test', result: 'ok' });
+  expect(await storedChoice(context)).toBe('reject');
   await context.close();
 });
 

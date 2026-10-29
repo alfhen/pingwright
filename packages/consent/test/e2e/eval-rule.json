@@ -1,0 +1,11 @@
+{
+  "autoconsent": [
+    {
+      "name": "pingwright-eval-test",
+      "detectCmp": [{ "exists": "#pw-consent-banner" }],
+      "detectPopup": [{ "eval": "EVAL_COOKIEBOT_2" }],
+      "optIn": [{ "waitForThenClick": "#pw-accept" }],
+      "optOut": [{ "waitForThenClick": "#pw-reject" }]
+    }
+  ]
+}

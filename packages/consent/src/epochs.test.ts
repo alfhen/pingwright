@@ -66,6 +66,21 @@ describe('buildEpochs', () => {
     ]);
   });
 
+  test('a load-time update repeating the default adds no epoch', () => {
+    const modes = consentModeChanges([push(10, 'default', denied), push(100, 'update', denied)]);
+    const epochs = buildEpochs([], modes, { startT: 0 });
+    expect(epochs.map((e) => e.label)).toEqual(['undecided']);
+  });
+
+  test('a load-time denied update followed by a later reject starts the denied epoch at the reject', () => {
+    const modes = consentModeChanges([push(10, 'default', denied), push(100, 'update', denied), push(1630, 'update', denied)]);
+    const epochs = buildEpochs([{ t: 1600, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.map((e) => [e.label, e.startT, e.endT, e.source])).toEqual([
+      ['undecided', 0, 1600, 'start'],
+      ['denied', 1600, null, 'banner'],
+    ]);
+  });
+
   test('accept then withdraw gives three epochs', () => {
     const modes = consentModeChanges([
       push(10, 'default', denied),

@@ -30,12 +30,16 @@ interface ContentMessage {
   type: string;
   cmp?: string;
   result?: boolean;
+  id?: string;
+  code?: string;
 }
 
 interface FrameState {
   detected: boolean;
   cmp: string | null;
   shownT: number | null;
+  /** An action used up the popup report; the banner must be detected again before the next answer. */
+  acted: boolean;
   resultSeq: number;
   result: boolean | null;
 }
@@ -75,7 +79,7 @@ export class ConsentDriver {
     const state = this.#state(frame);
     switch (msg.type) {
       case 'init':
-        this.#frames.set(frame, { detected: false, cmp: null, shownT: null, resultSeq: 0, result: null });
+        this.#frames.set(frame, { detected: false, cmp: null, shownT: null, acted: false, resultSeq: 0, result: null });
         await frame
           .evaluate(`autoconsentReceiveMessage({ type: 'initResp', config: ${this.#config}, rules: ${this.#rules} })`)
           .catch(() => {});
@@ -93,6 +97,15 @@ export class ConsentDriver {
         state.resultSeq += 1;
         state.result = msg.result ?? false;
         break;
+      case 'eval': {
+        const result = await frame.evaluate(msg.code ?? 'false').catch(() => false);
+        await frame
+          .evaluate(
+            `autoconsentReceiveMessage({ id: ${JSON.stringify(msg.id)}, type: 'evalResp', result: ${JSON.stringify(result)} })`,
+          )
+          .catch(() => {});
+        return;
+      }
       default:
         return;
     }
@@ -102,7 +115,7 @@ export class ConsentDriver {
   #state(frame: Frame): FrameState {
     let state = this.#frames.get(frame);
     if (!state) {
-      state = { detected: false, cmp: null, shownT: null, resultSeq: 0, result: null };
+      state = { detected: false, cmp: null, shownT: null, acted: false, resultSeq: 0, result: null };
       this.#frames.set(frame, state);
     }
     return state;
@@ -135,8 +148,24 @@ export class ConsentDriver {
     return best?.frame;
   }
 
+  // Autoconsent reports a popup once per document and ignores a reopened banner. Running its
+  // detection again (rules are already loaded, so none are sent) reports a banner that is open now.
+  async #redetect(frames: Frame[]): Promise<void> {
+    await Promise.all(
+      frames.map(async (frame) => {
+        const state = this.#frames.get(frame);
+        if (!state?.acted) return;
+        state.acted = false;
+        await frame
+          .evaluate(`autoconsentReceiveMessage({ type: 'initResp', config: ${this.#config}, rules: null })`)
+          .catch(() => {});
+      }),
+    );
+  }
+
   async answer(target: Page | BrowserContext, action: BannerAction, timeoutMs: number): Promise<BannerResult> {
     const frames = () => ('frames' in target ? target.frames() : target.pages().flatMap((p) => p.frames()));
+    await this.#redetect(frames());
     const shownFrame = await this.#waitUntil(() => this.#shownFrame(frames), timeoutMs);
     if (!shownFrame) {
       const detected = frames().map((f) => this.#frames.get(f)).filter((s) => s?.detected);
@@ -155,6 +184,8 @@ export class ConsentDriver {
 
     const before = state.resultSeq;
     const t = Date.now();
+    state.shownT = null;
+    state.acted = true;
     // Autoconsent keeps its detected CMP after a first action, so a later message can act again.
     const message = action === 'accept' ? 'optIn' : 'optOut';
     try {

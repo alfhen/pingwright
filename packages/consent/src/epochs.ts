@@ -14,8 +14,10 @@ export type EpochDraft = Omit<ConsentEpoch, 'type' | 'id' | 'runId'> & { label: 
 export interface EpochOptions {
   /** Start of the run on the shared clock. */
   startT: number;
-  /** A banner event and a Consent Mode update this close count as the same change. */
+  /** A Consent Mode update up to this long after a banner event counts as the same change. */
   pairWindowMs?: number;
+  /** A Consent Mode update up to this long before a banner event counts as the same change. */
+  leadWindowMs?: number;
 }
 
 export const DEFAULT_GRACE_MS = 50;
@@ -37,30 +39,37 @@ interface Change {
   t: number;
   source: 'banner' | 'consentMode';
   state: ConsentState;
+  /** Backed by a banner event, so it is a visitor decision even when the state does not change. */
+  decision: boolean;
 }
 
 function mergeChanges(
   banners: readonly BannerEvent[],
   updates: readonly ConsentModeChange[],
   pairWindowMs: number,
+  leadWindowMs: number,
 ): Change[] {
   const unpaired = [...banners].sort((a, b) => a.t - b.t);
   const changes: Change[] = [];
   for (const update of updates) {
     const label = labelOf(update.state);
-    const i = unpaired.findIndex((b) => labelOf(stateOf(b.action)) === label && Math.abs(b.t - update.t) <= pairWindowMs);
+    const i = unpaired.findIndex((b) => {
+      const lag = update.t - b.t;
+      return labelOf(stateOf(b.action)) === label && (lag >= 0 ? lag <= pairWindowMs : -lag <= leadWindowMs);
+    });
     const banner = i >= 0 ? unpaired.splice(i, 1)[0] : undefined;
-    if (banner && banner.t < update.t) changes.push({ t: banner.t, source: 'banner', state: update.state });
-    else changes.push({ t: update.t, source: 'consentMode', state: update.state });
+    if (banner && banner.t < update.t) changes.push({ t: banner.t, source: 'banner', state: update.state, decision: true });
+    else changes.push({ t: update.t, source: 'consentMode', state: update.state, decision: banner !== undefined });
   }
-  for (const b of unpaired) changes.push({ t: b.t, source: 'banner', state: stateOf(b.action) });
+  for (const b of unpaired) changes.push({ t: b.t, source: 'banner', state: stateOf(b.action), decision: true });
   return changes.sort((a, b) => a.t - b.t);
 }
 
 /**
  * The first epoch is `undecided`; a Consent Mode default sets its state but is not a decision.
  * Each later change starts an epoch at the earlier of the banner event and the Consent Mode
- * update for that change.
+ * update for that change. A Consent Mode update that repeats the state while still undecided,
+ * with no banner event behind it, is not a decision.
  */
 export function buildEpochs(
   banners: readonly BannerEvent[],
@@ -73,10 +82,11 @@ export function buildEpochs(
   const epochs: EpochDraft[] = [
     { startT: options.startT, endT: null, source: 'start', state: initial, label: 'undecided' },
   ];
-  for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS)) {
+  for (const change of mergeChanges(banners, updates, options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS, options.leadWindowMs ?? DEFAULT_GRACE_MS)) {
     const current = epochs[epochs.length - 1]!;
     const label = labelOf(change.state);
-    if (current.label === label && JSON.stringify(current.state) === JSON.stringify(change.state)) continue;
+    const sameState = JSON.stringify(current.state) === JSON.stringify(change.state);
+    if (sameState && (current.label === label || (current.label === 'undecided' && !change.decision))) continue;
     current.endT = change.t;
     epochs.push({ startT: change.t, endT: null, source: change.source, state: change.state, label });
   }
