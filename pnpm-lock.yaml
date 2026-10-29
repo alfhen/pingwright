@@ -74,6 +74,9 @@ importers:
       '@pingwright/decoders':
         specifier: workspace:*
         version: link:../decoders
+      '@pingwright/expect':
+        specifier: workspace:*
+        version: link:../expect
       playwright:
         specifier: 1.64.1
         version: 1.64.1

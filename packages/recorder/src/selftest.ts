@@ -38,7 +38,7 @@ export interface SelfTestResult {
 export async function runSelfTest(
   context: BrowserContext,
   setCollectorHandler: (handler: CollectorHandler) => void,
-  timeoutMs = 5000,
+  timeoutMs = 15_000,
 ): Promise<SelfTestResult> {
   const seen = new Set<string>();
   let done: () => void = () => undefined;

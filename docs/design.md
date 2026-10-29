@@ -145,6 +145,8 @@ Other vendors were not tested.
 
 `visit`, `click`, `fill` (from the fake identity, §13), `consent` (`accept`, `reject`, `none`, or a named choice), `wait`, `addToCart` (through the platform adapter or a selector), `evaluate`, `checkpoint`, and `handoff`.
 
+The scenario's `start` is played first, as step 0 labelled `start`. A step may carry `label: <name>`; the default is the kind and the step's index (`click-3`), and a checkpoint is named by its value. Labels are unique, and `after:` must name one. Each Request, Hit and DataLayerEvent carries the id of the step that was running when it was recorded, and a step that ends records a checkpoint of the cookies. A `fill` on a card or password field (autocomplete `cc-*`, `type=password`, or a name or id matching card, cvc, cvv, iban or password) fails unless the page host is loopback.
+
 `handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done. Pingwright never automates payment or log-in on a hosted site. The one exception is a loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, where no real payment can happen. There, a scenario may fill a fake payment form so the test suite can cover a whole checkout.
 
 ## 6. Decoders

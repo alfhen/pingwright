@@ -39,16 +39,19 @@ export interface Rule {
   hashesMatch?: boolean;
 }
 
-export type Step =
-  | { kind: 'visit'; value: string; line: number }
-  | { kind: 'click'; value: string; line: number }
-  | { kind: 'fill'; value: Record<string, string>; line: number }
-  | { kind: 'consent'; value: 'accept' | 'reject' | 'none' | 'withdraw'; line: number }
-  | { kind: 'wait'; value: number; line: number }
-  | { kind: 'addToCart'; value: string; line: number }
-  | { kind: 'evaluate'; value: string; line: number }
-  | { kind: 'checkpoint'; value: string; line: number }
-  | { kind: 'handoff'; value: string; line: number };
+export type StepBody =
+  | { kind: 'visit'; value: string }
+  | { kind: 'click'; value: string }
+  | { kind: 'fill'; value: Record<string, string> }
+  | { kind: 'consent'; value: 'accept' | 'reject' | 'none' | 'withdraw' }
+  | { kind: 'wait'; value: number | { selector: string } }
+  | { kind: 'addToCart'; value: string }
+  | { kind: 'evaluate'; value: string }
+  | { kind: 'checkpoint'; value: string }
+  | { kind: 'handoff'; value: string };
+
+/** `label` is the written label, or the default: the checkpoint's own name, else the kind and the step's index. */
+export type Step = StepBody & { label: string; line: number };
 
 export interface ScenarioOptions {
   network?: NetworkMode;
@@ -174,6 +177,7 @@ export function parseScenario(text: string): Scenario {
   if (start) checkVars(start, ['start']);
 
   const steps: Step[] = [];
+  const stepLabels = new Set<string>();
   if (raw.steps !== undefined) {
     if (!Array.isArray(raw.steps)) fail(['steps'], 'must be a list');
     else raw.steps.forEach((item, i) => parseStep(item, i));
@@ -182,11 +186,23 @@ export function parseScenario(text: string): Scenario {
   function parseStep(item: unknown, i: number) {
     const path: Path = ['steps', i];
     const line = lineOf(path);
-    if (!isMap(item) || Object.keys(item).length !== 1) {
-      fail(path, `a step is a mapping with exactly one key, one of ${STEP_KINDS.join(', ')}`);
+    const keys = isMap(item) ? Object.keys(item).filter((k) => k !== 'label') : [];
+    if (!isMap(item) || keys.length !== 1) {
+      fail(path, `a step is a mapping with exactly one key, one of ${STEP_KINDS.join(', ')}, and an optional label`);
       return;
     }
-    const [kind, value] = Object.entries(item)[0]!;
+    const kind = keys[0]!;
+    const value = item[kind];
+    let label = `${kind}-${i + 1}`;
+    if (item.label !== undefined) {
+      if (typeof item.label === 'string' && /^[\w.-]+$/.test(item.label)) label = item.label;
+      else fail([...path, 'label'], 'must be a string of letters, digits, dots, dashes and underscores');
+    } else if (kind === 'checkpoint' && typeof value === 'string' && value) label = value;
+    const add = (body: StepBody) => {
+      if (stepLabels.has(label)) fail([...path, ...(item.label === undefined ? [kind] : ['label'])], `duplicate step label "${label}"`);
+      stepLabels.add(label);
+      steps.push({ ...body, label, line });
+    };
     const str = (): string | undefined => {
       if (typeof value === 'string' && value) return value;
       fail([...path, kind], 'must be a non-empty string');
@@ -197,7 +213,7 @@ export function parseScenario(text: string): Scenario {
         const v = str();
         if (v !== undefined) {
           checkVars(v, [...path, kind]);
-          steps.push({ kind, value: v, line });
+          add({ kind, value: v });
         }
         return;
       }
@@ -207,7 +223,7 @@ export function parseScenario(text: string): Scenario {
       case 'checkpoint':
       case 'handoff': {
         const v = str();
-        if (v !== undefined) steps.push({ kind, value: v, line });
+        if (v !== undefined) add({ kind, value: v });
         return;
       }
       case 'fill': {
@@ -220,18 +236,19 @@ export function parseScenario(text: string): Scenario {
           if (typeof v === 'string' && v) fields[sel] = v;
           else fail([...path, kind, sel], 'must be a non-empty string');
         }
-        steps.push({ kind, value: fields, line });
+        add({ kind, value: fields });
         return;
       }
       case 'consent': {
-        if (typeof value === 'string' && CONSENT_ANSWERS.includes(value)) steps.push({ kind, value: value as never, line });
+        if (typeof value === 'string' && CONSENT_ANSWERS.includes(value)) add({ kind, value: value as never });
         else fail([...path, kind], `must be one of ${CONSENT_ANSWERS.join(', ')}`);
         return;
       }
       case 'wait': {
         const ms = parseDuration(value);
-        if (ms === undefined) fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m');
-        else steps.push({ kind, value: ms, line });
+        if (ms !== undefined) add({ kind, value: ms });
+        else if (typeof value === 'string' && value.trim()) add({ kind, value: { selector: value } });
+        else fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m, or a selector');
         return;
       }
       default:
@@ -334,8 +351,9 @@ export function parseScenario(text: string): Scenario {
         if (m && validEpochSelector(m[1]!)) rule.inEpoch = m[1]!;
         else fail(p, 'must be epoch(undecided), epoch(granted), epoch(denied) or epoch(<field>=<value>)');
       } else if (k === 'after') {
-        if (typeof v === 'string' && v) rule.after = v;
-        else fail(p, 'must be a step label');
+        if (typeof v !== 'string' || !v) fail(p, 'must be a step label');
+        else if (!stepLabels.has(v)) fail(p, `"${v}" is not a step label, defined labels: ${[...stepLabels].join(', ') || 'none'}`);
+        else rule.after = v;
       } else if (VENDOR_KEYS.has(k)) {
         fail(p, 'invalid');
       } else {
