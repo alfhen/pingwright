@@ -107,6 +107,11 @@ describe('scan', () => {
     expect(scan(text, id)).toEqual([]);
   });
 
+  it('does not flag a number after a form-encoded plus-space as a phone', () => {
+    const id = createIdentity(42);
+    expect(scan('dt=Order+100000001&q=sku+123456789', id)).toEqual([]);
+  });
+
   it('finds an encoded foreign email next to a stray percent sign', () => {
     const id = createIdentity(42);
     const found = scan('note=10%&em=jane%40real-shop.dk', id);
