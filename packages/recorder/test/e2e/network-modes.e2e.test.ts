@@ -131,12 +131,12 @@ test('service worker requests are recorded without a frame', async () => {
   expect(request).toMatchObject({ frameUrl: null, initiator: 'serviceWorker', outcome: 'passed' });
 });
 
-// Documents a limit of context.route and context.on('request'). If Chromium changes this, update design 5.3.
-// Whether Chromium routes this request is a race (design §9): accept either outcome, but exactly one.
+// Chromium sometimes routes this request and sometimes neither routes nor reports it (design §5.3): accept either, but exactly one.
 test('a collection request sent while a sandboxed srcdoc iframe loads is either stubbed or the known bypass', async () => {
   const { records } = await visit('/early-srcdoc', 'stub');
   const recorded = collectionRequests({ records } as RunResult).filter((q) => q.url.includes('en=early'));
   const reachedServer = serverSaw.filter((u) => u.includes('en=early'));
+  console.info(`early srcdoc request: ${recorded.length > 0 ? 'routed and stubbed' : 'not routed, not reported'}`);
   if (recorded.length > 0) {
     expect(recorded.map((q) => q.outcome)).toEqual(['stubbed']);
     expect(reachedServer).toEqual([]);
