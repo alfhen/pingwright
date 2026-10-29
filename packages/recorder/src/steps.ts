@@ -158,8 +158,9 @@ async function sensitiveFieldsOf(page: Page): Promise<{ frame: Frame; index: num
 
 /**
  * An evaluate step is no way around the guard. Card and password fields in hosted frames refuse
- * writes while the script runs, so a value never reaches the site. The after-check is a backstop.
- * A script that redefines the setters itself, or writes through execCommand or setRangeText, is not stopped.
+ * plain writes (value, defaultValue, setAttribute, setAttributeNS, Attr.value) while the script runs, and the step fails.
+ * This is a guard, not a sandbox: a script that works around it (HTML parsing, another realm, async writes,
+ * execCommand, setRangeText, redefining the setters) can still send a value.
  */
 async function evaluateGuarded(page: Page, script: string): Promise<void> {
   const hosted = page.frames().filter((frame) => !isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));

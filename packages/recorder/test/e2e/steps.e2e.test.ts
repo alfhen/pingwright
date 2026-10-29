@@ -180,6 +180,18 @@ describe('payment and log-in guard', () => {
     expect(card).toBe('');
   });
 
+  test.each([
+    "const c = document.getElementById('cc'); c.setAttributeNS(null, 'value', '4242424242424242'); fetch('/pay', { method: 'POST', body: c.value })",
+    "const c = document.getElementById('cc'); const a = document.createAttribute('value'); c.setAttributeNode(a); a.value = '4242424242424242'; fetch('/pay', { method: 'POST', body: c.value })",
+  ])('an evaluate step cannot send a card number set through attribute APIs %#', async (script) => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: PAGE }));
+    const error = await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - evaluate: ${JSON.stringify(script)}\n`)).then(() => undefined, (e: unknown) => e);
+    const { records } = await recorder.close();
+    expect(error).toBeInstanceOf(StepError);
+    expect(JSON.stringify(records.requests)).not.toContain('4242424242424242');
+  });
+
   test('an evaluate step cannot send a card number it just set', async () => {
     const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
     await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: PAGE }));

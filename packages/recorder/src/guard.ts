@@ -52,5 +52,22 @@ export const SENSITIVE_WRITE_TRAP = `(() => {
     return setAttribute.call(this, attr, v);
   };
   restores.push(() => { Element.prototype.setAttribute = setAttribute; });
+  const setAttributeNS = Element.prototype.setAttributeNS;
+  Element.prototype.setAttributeNS = function (ns, attr, v) {
+    const isField = this instanceof HTMLInputElement || this instanceof HTMLTextAreaElement;
+    if (isField && /^(?:[^:]*:)?value$/i.test(String(attr)) && sensitive(this)) refuse();
+    return setAttributeNS.call(this, ns, attr, v);
+  };
+  restores.push(() => { Element.prototype.setAttributeNS = setAttributeNS; });
+  const attrValue = Object.getOwnPropertyDescriptor(Attr.prototype, 'value');
+  if (attrValue && attrValue.set) {
+    Object.defineProperty(Attr.prototype, 'value', { ...attrValue, set(v) {
+      const owner = this.ownerElement;
+      const isField = owner instanceof HTMLInputElement || owner instanceof HTMLTextAreaElement;
+      if (isField && this.name.toLowerCase() === 'value' && sensitive(owner)) refuse();
+      attrValue.set.call(this, v);
+    } });
+    restores.push(() => Object.defineProperty(Attr.prototype, 'value', attrValue));
+  }
   window.__pingwrightTrap = { state, release: () => restores.forEach((r) => r()) };
 })()`;
