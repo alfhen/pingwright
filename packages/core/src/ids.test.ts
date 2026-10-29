@@ -37,3 +37,8 @@ test('isId rejects malformed values', () => {
   expect(isId(newId('hit'), 'request')).toBe(false);
   expect(isId(42)).toBe(false);
 });
+
+test('idKind returns undefined without a separator', () => {
+  expect(idKind('runx')).toBeUndefined();
+  expect(idKind('hitZ')).toBeUndefined();
+});

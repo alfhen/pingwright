@@ -63,7 +63,9 @@ export function newId<K extends IdKind>(kind: K, now?: number): Id<(typeof idPre
 }
 
 export function idKind(id: string): IdKind | undefined {
-  const prefix = id.slice(0, id.indexOf('_'));
+  const sep = id.indexOf('_');
+  if (sep < 0) return undefined;
+  const prefix = id.slice(0, sep);
   const entry = Object.entries(idPrefixes).find(([, p]) => p === prefix);
   return entry ? (entry[0] as IdKind) : undefined;
 }

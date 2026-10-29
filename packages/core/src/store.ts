@@ -106,6 +106,9 @@ export async function readRun(path: string): Promise<RunRecords> {
     } catch {
       throw new Error(`${path}:${lineNo}: invalid JSON`);
     }
+    if (typeof record !== 'object' || record === null || Array.isArray(record)) {
+      throw new Error(`${path}:${lineNo}: record must be a JSON object`);
+    }
     if (!out) {
       if (record.type !== 'run') throw new Error(`${path}:${lineNo}: first record must be a run`);
       out = emptyRecords(record);

@@ -119,3 +119,9 @@ test('reader rejects a file that does not start with a run', async () => {
   await writeFile(path, JSON.stringify(makeRequest(makeRun(), 0)) + '\n');
   await expect(readRun(path)).rejects.toThrow('first record must be a run');
 });
+
+test('reader reports the line of a non-object JSON record', async () => {
+  const path = join(dir, 'scalar.jsonl');
+  await writeFile(path, JSON.stringify(makeRun()) + '\nnull\n');
+  await expect(readRun(path)).rejects.toThrow(':2: record must be a JSON object');
+});
