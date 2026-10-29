@@ -53,7 +53,7 @@ export const sgtmDataClient: Decoder = {
         requestId: req.id,
         t: req.t,
         vendor: 'sgtm',
-        event: p.get('en'),
+        event: p.get('event') ?? p.get('en') ?? str(dtdc.event_name) ?? null,
         consent: decodeGa4Consent(p),
         ids,
         page: str(dtdc.page_location) ?? null,

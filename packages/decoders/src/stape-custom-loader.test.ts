@@ -49,7 +49,7 @@ test('decodes a disguised /g/collect through the GA4 decoder', () => {
 test('decodes a disguised /data with a dtdc payload', () => {
   const payload = dtdc({ page_location: PAGE, page_hostname: 'localhost' });
   const r = disguised(
-    `/data?v=2&tid=G-PWTEST0001&cid=1111111111.2222222222&en=purchase&dtdc=${encodeURIComponent(payload)}`,
+    `/data?v=2&tid=G-PWTEST0001&cid=1111111111.2222222222&event=purchase&dtdc=${encodeURIComponent(payload)}`,
   );
   expect(isCollectionEndpoint(r)).toBe(true);
   const [hit, ...rest] = decodeRequest(r);
@@ -62,6 +62,18 @@ test('decodes a disguised /data with a dtdc payload', () => {
     ids: { client_id: true },
     params: { tid: 'G-PWTEST0001', page_hostname: 'localhost' },
   });
+});
+
+test('reads the /data event from dtdc event_name when the query has none', () => {
+  const payload = dtdc({ event_name: 'add_to_cart', page_location: PAGE, page_hostname: 'localhost' });
+  const r = disguised(`/data?v=2&tid=G-PWTEST0001&cid=1111111111.2222222222&dtdc=${encodeURIComponent(payload)}`);
+  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'sgtm', event: 'add_to_cart', page: PAGE });
+});
+
+test('a fixture-shaped /data without any event name decodes with event null', () => {
+  const payload = dtdc({ page_location: PAGE, page_hostname: 'localhost' });
+  const r = disguised(`/data?v=2&tid=G-PWTEST0001&cid=1111111111.2222222222&dtdc=${encodeURIComponent(payload)}`);
+  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'sgtm', event: null, page: PAGE });
 });
 
 test('reads consent from gcs on /data', () => {
