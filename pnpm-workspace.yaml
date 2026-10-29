@@ -1,3 +1,5 @@
 packages:
   - packages/*
   - fixtures/*
+
+minimumReleaseAge: 20160
