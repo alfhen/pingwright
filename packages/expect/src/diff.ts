@@ -1,0 +1,208 @@
+import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@pingwright/core';
+import { consentFields } from './scenario.ts';
+import { epochForHit } from './evaluate.ts';
+
+export interface DiffOptions {
+  /** Adds the page path to the match key. */
+  byPage?: boolean;
+}
+
+export interface DiffKey {
+  epoch: string;
+  vendor: string;
+  event: string;
+  step: string;
+  page?: string;
+}
+
+export interface DiffHit {
+  hitId: string;
+  t: number;
+}
+
+export interface ValueChange {
+  field: string;
+  a: string;
+  b: string;
+}
+
+export interface ChangedHit {
+  key: DiffKey;
+  a: DiffHit;
+  b: DiffHit;
+  consent: ValueChange[];
+  ids: ValueChange[];
+}
+
+export interface CountMismatch {
+  key: DiffKey;
+  a: number;
+  b: number;
+}
+
+export interface FlagChange {
+  host: string;
+  kind: string;
+  a: number;
+  b: number;
+}
+
+export interface DiffResult {
+  warnings: string[];
+  added: Array<{ key: DiffKey } & DiffHit>;
+  removed: Array<{ key: DiffKey } & DiffHit>;
+  changed: ChangedHit[];
+  countMismatches: CountMismatch[];
+  flags: FlagChange[];
+}
+
+const NO_EPOCH = 'none';
+
+export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}): DiffResult {
+  const result: DiffResult = { warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] };
+
+  const versionA = a.run.recordSchemaVersion ?? 0;
+  const versionB = b.run.recordSchemaVersion ?? 0;
+  if (versionA !== versionB) {
+    result.warnings.push(
+      `The runs have different record schema versions (${versionA} and ${versionB}). The diff may show changes that are only differences in the record shape.`,
+    );
+  }
+
+  const groupsA = groupHits(a, options);
+  const groupsB = groupHits(b, options);
+  const ids = [...new Set([...groupsA.keys(), ...groupsB.keys()])].sort();
+
+  for (const id of ids) {
+    const ga = groupsA.get(id);
+    const gb = groupsB.get(id);
+    const key = (ga ?? gb)!.key;
+    const hitsA = ga?.hits ?? [];
+    const hitsB = gb?.hits ?? [];
+    if (hitsA.length !== hitsB.length) result.countMismatches.push({ key, a: hitsA.length, b: hitsB.length });
+    const paired = Math.min(hitsA.length, hitsB.length);
+    for (let i = 0; i < paired; i++) {
+      const ha = hitsA[i]!;
+      const hb = hitsB[i]!;
+      const consent = consentChanges(ha, hb);
+      const idChanges = idPresenceChanges(ha.ids, hb.ids);
+      if (consent.length || idChanges.length) {
+        result.changed.push({ key, a: ref(ha), b: ref(hb), consent, ids: idChanges });
+      }
+    }
+    for (const h of hitsA.slice(paired)) result.removed.push({ key, ...ref(h) });
+    for (const h of hitsB.slice(paired)) result.added.push({ key, ...ref(h) });
+  }
+
+  result.flags = flagChanges(a, b);
+  return result;
+}
+
+function ref(h: Hit): DiffHit {
+  return { hitId: h.id, t: h.t };
+}
+
+interface Group {
+  key: DiffKey;
+  hits: Hit[];
+}
+
+function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
+  const steps = new Map(run.steps.map((s) => [s.id, s.label]));
+  const epochs: ConsentEpoch[] = [...run.consentEpochs].sort((x, y) => x.startT - y.startT);
+  const groups = new Map<string, Group>();
+  for (const hit of [...run.hits].sort((x, y) => x.t - y.t)) {
+    const key: DiffKey = {
+      epoch: epochForHit(epochs, hit.t)?.label ?? NO_EPOCH,
+      vendor: hit.vendor,
+      event: hit.event ?? '',
+      step: hit.stepId ? (steps.get(hit.stepId) ?? '') : '',
+    };
+    if (options.byPage) key.page = pagePath(hit.page);
+    const id = JSON.stringify(key);
+    const group = groups.get(id) ?? { key, hits: [] };
+    group.hits.push(hit);
+    groups.set(id, group);
+  }
+  return groups;
+}
+
+function pagePath(page: string | null): string {
+  if (page === null) return '';
+  try {
+    return new URL(page).pathname;
+  } catch {
+    return page;
+  }
+}
+
+function consentChanges(a: Hit, b: Hit): ValueChange[] {
+  const changes: ValueChange[] = [];
+  for (const f of consentFields) {
+    if (a.consent[f] !== b.consent[f]) changes.push({ field: f, a: a.consent[f], b: b.consent[f] });
+  }
+  for (const f of ['gcs', 'gcd']) {
+    const va = a.consent.raw[f];
+    const vb = b.consent.raw[f];
+    if (va !== vb) changes.push({ field: f, a: va ?? '', b: vb ?? '' });
+  }
+  return changes;
+}
+
+function idPresence(ids: HitIds): Map<string, boolean> {
+  const out = new Map<string, boolean>();
+  for (const [name, value] of Object.entries(ids)) {
+    if (typeof value === 'boolean') out.set(name, value);
+    else if (name === 'hashes' && value) {
+      for (const [hash, h] of Object.entries(value)) out.set(`hashes.${hash}`, h.present);
+    }
+  }
+  return out;
+}
+
+function idPresenceChanges(a: HitIds, b: HitIds): ValueChange[] {
+  const pa = idPresence(a);
+  const pb = idPresence(b);
+  const names = [...new Set([...pa.keys(), ...pb.keys()])].sort();
+  const changes: ValueChange[] = [];
+  for (const name of names) {
+    const va = pa.get(name) ?? false;
+    const vb = pb.get(name) ?? false;
+    if (va !== vb) changes.push({ field: name, a: va ? 'present' : 'absent', b: vb ? 'present' : 'absent' });
+  }
+  return changes;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+}
+
+function flagCounts(run: RunRecords): Map<string, number> {
+  const requestHosts = new Map(run.requests.map((r) => [r.id as string, hostOf(r.url)]));
+  const hitHosts = new Map(run.hits.map((h) => [h.id as string, requestHosts.get(h.requestId) ?? '']));
+  const counts = new Map<string, number>();
+  for (const flag of run.flags) {
+    const host = flag.recordIds.map((id) => requestHosts.get(id) ?? hitHosts.get(id)).find((h) => h) ?? '';
+    const key = JSON.stringify([host, flag.kind]);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function flagChanges(a: RunRecords, b: RunRecords): FlagChange[] {
+  const ca = flagCounts(a);
+  const cb = flagCounts(b);
+  const changes: FlagChange[] = [];
+  for (const key of [...new Set([...ca.keys(), ...cb.keys()])].sort()) {
+    const na = ca.get(key) ?? 0;
+    const nb = cb.get(key) ?? 0;
+    if (na === nb) continue;
+    const [host, kind] = JSON.parse(key) as [string, string];
+    changes.push({ host, kind, a: na, b: nb });
+  }
+  return changes;
+}
