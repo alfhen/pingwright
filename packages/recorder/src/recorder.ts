@@ -411,7 +411,7 @@ export class Recorder {
     const liveUrl = route.request().url();
     let match = gtmOverride === undefined ? undefined : matchGtmRequest(liveUrl, record, gtmOverride);
     if (!match && gtmOverride && isLoaderCandidate(liveUrl, record.resourceType) && !this.isSameOriginUrl(liveUrl)) this.crossOriginScripts.add(liveUrl);
-    if (!match && gtmOverride && this.isUnseenLoaderCandidate(liveUrl, record)) {
+    if (!match && gtmOverride && !gtmOverride.loader && this.isUnseenLoaderCandidate(liveUrl, record)) {
       const sniff = await this.sniffLoader(route, liveUrl, gtmOverride.container);
       if (!sniff) return false;
       if (!sniff.matched) {
@@ -465,13 +465,13 @@ export class Recorder {
     }
   }
 
-  /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails or redirects, so Chromium follows the request and the recorder sees every hop. */
+  /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails. A redirect is handed back unchanged, so Chromium follows it and the recorder sees every hop without a second request. */
   private async sniffLoader(route: Route, liveUrl: string, container: string): Promise<{ response: APIResponse; matched: boolean } | undefined> {
     try {
       const response = await route.fetch({ maxRedirects: 0 });
       if (response.status() >= 300 && response.status() < 400) {
         this.loaderCandidates.set(liveUrl, false);
-        return undefined;
+        return { response, matched: false };
       }
       const matched = response.ok() && bodyHasContainer(await response.text(), container);
       this.loaderCandidates.set(liveUrl, matched);
