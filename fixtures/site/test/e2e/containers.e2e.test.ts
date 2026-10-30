@@ -143,7 +143,10 @@ test('the workspace build, direct: one more GA4 event, no AddToCart, and a diffe
   await settle(run, { ga4: ['container_event', 'workspace_only'], meta: ['PageView', 'ViewContent'] });
   await quiet();
   expect(metaEvents(run)).not.toContain('AddToCart');
-  expect(ga4Events(run)).not.toContain('ws_echo');
+  const stapeHits = run.seen.filter((s) => s.url.origin === site.sgtmUrl && s.url.pathname === '/pwstape');
+  expect(stapeHits.map((s) => Buffer.from(s.url.searchParams.get('pk') ?? '', 'base64').toString())).not.toContainEqual(
+    expect.stringContaining('en=ws_echo'),
+  );
   expect(run.seen.filter((s) => s.url.pathname.startsWith('/gtm-echo'))).toEqual([]);
   // ad_storage granted, analytics_storage denied (G1, ad, analytics)
   expect(pageViewGcs(run)).toBe('G110');
