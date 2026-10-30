@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { RECORD_SCHEMA_VERSION } from '../packages/core/src/index.ts';
 import { ga4, outDir, run, runCli, SANDBOX, scenario, site } from './cli-helpers.ts';
 
 test('undecided: hits per vendor, denied consent, flags, one epoch', async () => {
@@ -7,7 +8,7 @@ test('undecided: hits per vendor, denied consent, flags, one epoch', async () =>
   expect(r.failed).toEqual([SANDBOX]);
   const { hits, consentEpochs, flags, results } = r.records!;
   expect(results.length).toBeGreaterThan(0);
-  expect(r.records!.run.recordSchemaVersion).toBe(1);
+  expect(r.records!.run.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION);
   expect(consentEpochs.map((e) => e.label)).toEqual(['undecided']);
   const ownConsent = ga4(hits, 'page_view').filter((h) => 'gcs' in h.consent.raw);
   expect(ownConsent.length).toBeGreaterThan(0);
