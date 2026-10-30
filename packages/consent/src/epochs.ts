@@ -94,6 +94,8 @@ function mergeChanges(
  * own state when no update came). Updates outside every window that change state start their
  * own epoch with source consentMode. While undecided, such an update that grants nothing only
  * updates the undecided state and starts no epoch.
+ * An epoch after the undecided one is labelled `withdrawn` when it denies a signal that an earlier
+ * decided epoch granted. The label replaces `granted`, `denied` or `mixed`; the state is kept.
  */
 export function buildEpochs(
   banners: readonly BannerEvent[],
@@ -120,6 +122,17 @@ export function buildEpochs(
     if (sameState && current.label === label) continue;
     current.endT = change.t;
     epochs.push({ startT: change.t, endT: null, source: change.source, state: change.state, label });
+  }
+  return markWithdrawals(epochs);
+}
+
+function markWithdrawals(epochs: EpochDraft[]): EpochDraft[] {
+  const granted = new Set<string>();
+  for (const epoch of epochs) {
+    if (epoch.label === 'undecided') continue;
+    const signals = Object.entries(epoch.state);
+    if (signals.some(([signal, value]) => value === 'denied' && granted.has(signal))) epoch.label = 'withdrawn';
+    for (const [signal, value] of signals) if (value === 'granted') granted.add(signal);
   }
   return epochs;
 }

@@ -85,3 +85,21 @@ test('main prints the version and exits 2 on a usage error', async () => {
   expect(await main(['run', 's.yml'], io)).toBe(2);
   expect(err.join('')).toContain('--site is required');
 });
+
+test('shows the withdrawn label with the state in the epochs lines', () => {
+  const summary: Summary = {
+    runId: 'run_1',
+    path: 'runs/run_1.jsonl',
+    pass: true,
+    hits: {},
+    epochs: [
+      { label: 'undecided', startT: 0, endT: 10 },
+      { label: 'withdrawn', state: 'mixed', startT: 10, endT: null },
+    ],
+    flags: [],
+    results: [],
+  };
+  const text = formatSummary(summary);
+  expect(text).toContain('  undecided (10 ms)');
+  expect(text).toContain('  withdrawn, mixed (to end)');
+});

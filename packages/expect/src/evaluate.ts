@@ -181,21 +181,16 @@ function hostOf(url: string): string {
 
 type Placeable = Pick<ConsentEpoch, 'startT'> & Partial<Pick<ConsentEpoch, 'state' | 'label'>>;
 
-function grants(e: Placeable | undefined): boolean {
-  return !e?.state || consentFields.some((f) => e.state![f] === 'granted');
-}
-
 /**
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
- * epoch, since tags may fire on the consent update itself. That does not hold for a withdraw: a
- * hit before it was sent while consent was still granted. A hit before the first epoch belongs to
+ * epoch, since tags may fire on the consent update itself. That does not hold for a withdrawn
+ * epoch: a hit before it was sent while consent was still granted. A hit before the first epoch belongs to
  * none, unless that epoch is undecided, which is what the visitor was before it.
  */
 export function epochForHit<E extends Placeable>(epochs: readonly E[], t: number, graceMs = DEFAULT_GRACE_MS): E | undefined {
   let found: E | undefined;
   epochs.forEach((e, i) => {
-    const prev = epochs[i - 1];
-    const withdraw = prev !== undefined && grants(prev) && !grants(e);
+    const withdraw = e.label === 'withdrawn';
     const start = i === 0 ? (e.label === 'undecided' ? -Infinity : e.startT) : withdraw ? e.startT : e.startT - graceMs;
     if (t >= start) found = e;
   });
@@ -249,8 +244,10 @@ function isBeforeConsent(hit: Hit, ctx: Context): boolean {
 
 function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   if (selector === 'undecided') return inUndecidedEpoch(hit, ctx);
+  if (selector.startsWith('label=')) return epochOf(hit, ctx)?.label === selector.slice('label='.length);
   if ((selector === 'granted' || selector === 'denied') && !GOOGLE_VENDORS.has(hit.vendor)) {
-    return epochOf(hit, ctx)?.label === selector;
+    const epoch = epochOf(hit, ctx);
+    return epoch?.label === 'withdrawn' ? stateMatches(epoch.state, selector) : epoch?.label === selector;
   }
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }

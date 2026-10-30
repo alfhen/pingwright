@@ -451,7 +451,7 @@ test('a Google hit with gcs but no gcd leaves the other fields unknown', () => {
 });
 
 test('grace window does not move a hit before a withdraw into the denied epoch', () => {
-  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 5000, granted), epoch(5000, null, denied)];
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 5000, granted), epoch(5000, null, denied, 'withdrawn')];
   const beforeWithdraw = hit({ vendor: 'meta', t: 4980 });
   const afterWithdraw = hit({ vendor: 'meta', t: 5010 });
   const q = 'expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }';
@@ -459,6 +459,37 @@ test('grace window does not move a hit before a withdraw into the denied epoch',
   const r = rule(q, [afterWithdraw, ...epochs]);
   expect(r.pass).toBe(false);
   expect(r.evidence).toEqual([afterWithdraw.hit.id]);
+});
+
+test('grace window does not move a hit before a partial withdraw into the new epoch', () => {
+  const adsDenied: ConsentState = { ...granted, ads: 'denied' };
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 5000, granted), epoch(5000, null, adsDenied, 'withdrawn')];
+  const beforeWithdraw = hit({ vendor: 'meta', t: 4980 });
+  const q = 'expect:\n  mustNot:\n    - { vendor: meta, in: epoch(label=withdrawn) }';
+  expect(rule(q, [beforeWithdraw, ...epochs]).pass).toBe(true);
+  expect(rule(q, [hit({ vendor: 'meta', t: 5010 }), ...epochs]).pass).toBe(false);
+});
+
+test('a first reject keeps the grace window', () => {
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, null, denied)];
+  expect(epochForHit(epochs, 980)?.label).toBe('denied');
+});
+
+test('in: epoch(label=withdrawn) matches a withdrawn epoch and epoch(denied) still matches it by state', () => {
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 2000, granted), epoch(2000, null, denied, 'withdrawn')];
+  const after = hit({ vendor: 'meta', t: 2500 });
+  const byLabel = rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(label=withdrawn) }', [after, ...epochs]);
+  expect(byLabel.pass).toBe(false);
+  expect(byLabel.evidence).toEqual([after.hit.id]);
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }', [after, ...epochs]).pass).toBe(false);
+  expect(rule('expect:\n  must:\n    - { vendor: ga4, in: epoch(label=withdrawn) }', [hit({ t: 2500 }), ...epochs]).pass).toBe(true);
+});
+
+test('in: epoch(label=withdrawn) matches nothing in a reject-only run', () => {
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, null, denied)];
+  const after = hit({ vendor: 'meta', t: 2500 });
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(label=withdrawn) }', [after, ...epochs]).pass).toBe(true);
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }', [after, ...epochs]).pass).toBe(false);
 });
 
 test('before: consent with a consent filter that cannot match says so', () => {

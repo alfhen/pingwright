@@ -76,7 +76,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params` |
 | `DataLayerEvent` | `id` (`dle_…`), `runId`, `stepId`, `t`, `event`, `gtmUniqueEventId`, `args` (the pushed arguments, JSON-safe), `isConsentCommand` |
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
-| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied` or `mixed`) |
+| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
 | `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `evidence[]` (record IDs) |
 
@@ -201,13 +201,13 @@ For `consent: none`, Pingwright asserts that a banner was detected and shown, th
 "Before consent" needs a precise meaning.
 
 - **One clock.** The init script records dataLayer pushes and banner events with `performance.timeOrigin + performance.now()`. Request times are converted to the same clock.
-- **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. Defaults before the first decision set the undecided state. The first decision is the first banner action or the first Consent Mode update, whichever comes first, even an update that grants nothing. A default after the first decision is ignored, because within one document an update takes precedence over a later default and the recording cannot tell a new page's default from a pixel iframe's. A default with a `region` list is ignored, because the test machine's region does not say which visitors it covers. A run can have several epochs, for example accept and then withdraw.
+- **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. Defaults before the first decision set the undecided state. The first decision is the first banner action or the first Consent Mode update, whichever comes first, even an update that grants nothing. A default after the first decision is ignored, because within one document an update takes precedence over a later default and the recording cannot tell a new page's default from a pixel iframe's. A default with a `region` list is ignored, because the test machine's region does not say which visitors it covers. A run can have several epochs, for example accept and then withdraw. An epoch after the undecided one gets the label `withdrawn` when it denies a signal that any earlier decided epoch granted. `withdrawn` is a label, not a consent state: the epoch keeps its state (`denied` or `mixed`).
 - **Google hits** are judged by the consent value inside the hit (`gcs`, `gcd`), not by timing. This handles hits that were queued before an update and sent after it.
-- **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself.
+- **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself. A withdrawn epoch gets no grace window, because a hit just before it was sent while consent was still granted.
 
-`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what rules read: `before: consent` and `epoch(granted)` or `epoch(denied)` on non-Google hits use it.
+`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what `before: consent`, `epoch(label=<label>)` and, on non-Google hits, `epoch(granted)` and `epoch(denied)` read. In a withdrawn epoch `epoch(granted)` and `epoch(denied)` read the state instead.
 
-Rules: `before: consent` means "in the first epoch, while the state is undecided". `in: epoch(<state>)` matches hits in any epoch with that state.
+Rules: `before: consent` means "in the first epoch, while the state is undecided". `in: epoch(<state>)` matches hits in any epoch with that state, so `epoch(denied)` matches a first reject and a withdrawal. `in: epoch(label=<label>)` matches by label; `epoch(label=withdrawn)` matches only a withdrawal.
 
 ## 8. GTM
 
@@ -302,7 +302,8 @@ Scenario files are YAML. An expectation is a filter over records, plus a rule.
 | `must` | At least one match (or `count`) |
 | `mustNot` | No match |
 | `before: consent` | Only in the first epoch, while undecided (§7.3) |
-| `in: epoch(<state>)` | Only in epochs with that consent state |
+| `in: epoch(<state>)` | Only in epochs with that consent state, withdrawn epochs included |
+| `in: epoch(label=<label>)` | Only in epochs with that label: `undecided`, `granted`, `denied`, `mixed` or `withdrawn` |
 | `after: <step>` | Only after a named step |
 | `tags.mustFire`, `tags.mustNotFire` | Over tag reports, by tag ID or name pattern. An unknown name is "cannot evaluate", not a pass or fail. |
 | `identity.hashesMatch` | Hashed identity fields sent to a vendor match the run's fake identity (§13) |
