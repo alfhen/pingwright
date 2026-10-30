@@ -183,15 +183,35 @@ test('the workspace build is served only for the fake parameters', async () => {
   await context.close();
 });
 
-test('the workspace build echoes its gtm_auth in a URL, a beacon body and a Referer', async () => {
+test('the workspace build echoes its gtm_auth in a URL, a beacon body, a Referer and Stape-style hits', async () => {
   const run = await start(true);
-  await run.page.goto(`${site.url}/container/echo?gtm_auth=${fakeWorkspace.gtm_auth}`);
+  await run.page.goto(`${site.url}/container/echo`);
   const echoed = () => run.seen.filter((s) => s.url.origin === site.thirdPartyUrl);
+  const stape = () => run.seen.filter((s) => s.url.origin === site.sgtmUrl && s.url.pathname === '/pwstape');
+  const real = (pk: string | null) => Buffer.from(pk ?? '', 'base64').toString();
   await expect.poll(() => echoed().map((s) => s.url.pathname)).toEqual(
     expect.arrayContaining(['/gtm-echo.gif', '/gtm-echo', '/gtm-referer.gif']),
+  );
+  await expect.poll(() => stape().map((s) => real(s.url.searchParams.get('pk')).split('?')[0])).toEqual(
+    expect.arrayContaining(['/g/collect', '/data']),
   );
   expect(echoed().find((s) => s.url.pathname === '/gtm-echo.gif')?.url.search).toContain(fakeWorkspace.gtm_auth);
   expect(echoed().find((s) => s.url.pathname === '/gtm-echo')?.body).toContain(fakeWorkspace.gtm_auth);
   expect(echoed().find((s) => s.url.pathname === '/gtm-referer.gif')?.referer).toContain(fakeWorkspace.gtm_auth);
+  const paths = stape().map((s) => new URL(real(s.url.searchParams.get('pk')), 'http://x'));
+  const collect = paths.find((u) => u.pathname === '/g/collect');
+  expect(collect?.searchParams.get('dl')).toContain(fakeWorkspace.gtm_auth);
+  const data = paths.find((u) => u.pathname === '/data');
+  const dtdc = JSON.parse(Buffer.from(data?.searchParams.get('dtdc') ?? '', 'base64').toString());
+  expect(dtdc.page_location).toContain(fakeWorkspace.gtm_auth);
+  await run.context.close();
+});
+
+test('the published build on the same page URL echoes nothing', async () => {
+  const run = await start(false);
+  await run.page.goto(`${site.url}/container/echo?gtm_auth=${fakeWorkspace.gtm_auth}`);
+  await settle(run, published);
+  expect(run.seen.filter((s) => s.url.pathname === '/gtm-referer.gif' || s.url.pathname.startsWith('/gtm-echo'))).toEqual([]);
+  expect(run.seen.filter((s) => s.url.origin === site.sgtmUrl)).toEqual([]);
   await run.context.close();
 });

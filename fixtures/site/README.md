@@ -78,14 +78,14 @@ Differences between the builds, seen on the pages below:
 | Undecided GA4 `page_view` `gcs` | `G100` | `G110` |
 | GA4 events | `page_view`, `container_event` | also `workspace_only` |
 | Meta events | `PageView`, `ViewContent`, `AddToCart` | no `AddToCart` |
-| Echoes `gtm_auth` | no | yes: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), and as `Referer` of `/gtm-referer.gif` on `/container/echo?gtm_auth=...` |
+| Echoes `gtm_auth` | no | yes: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
 
 The container sets the Consent Mode default itself and the pages never decide consent, so every container page is undecided. The `gcs` values come from the real gtag.js, and the e2e asserts both.
 
 Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js from the internet, so stub the collection paths):
 
 - `/container/direct`: `<script src="https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1">`.
-- `/container/echo`: the same, with a `unsafe-url` referrer policy.
+- `/container/echo`: the same. Its URL is clean; the workspace build adds `/container/echo-frame?gtm_auth=...` (an `unsafe-url` referrer policy) as a hidden iframe.
 - `/container/noversion`: loads `GTM-PWNOVER`, which is 404. The page still runs.
 - `/container/stape`: loads the container as `sgtmUrl/pwstape?pk=<base64 of /gtm.js?id=GTM-PWTEST1>`.
 - `/container/sandbox`: a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/container/`) with the same Stape-style loader. Real gtag.js cannot run in an opaque-origin frame, so the frame sends the same GA4 and Meta events itself, as a custom pixel does. Its GA4 `dl` is the sandbox URL.

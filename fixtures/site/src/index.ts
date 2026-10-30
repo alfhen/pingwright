@@ -24,6 +24,7 @@ const pages: Record<string, string> = {
   '/thank-you': 'thank-you.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
+  '/container/echo-frame': 'container-echo-frame.html',
   '/container/noversion': 'container-noversion.html',
   '/container/stape': 'container-stape.html',
   '/container/sandbox': 'container-sandbox.html',

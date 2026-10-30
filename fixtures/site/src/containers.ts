@@ -34,7 +34,18 @@ function buildScript(build: BuildName, thirdPartyUrl: string): string {
       var auth = ${JSON.stringify(fakeWorkspace.gtm_auth)};
       new Image().src = ${third} + '/gtm-echo.gif?gtm_auth=' + auth;
       navigator.sendBeacon(${third} + '/gtm-echo', 'gtm_auth=' + auth);
-      new Image().src = ${third} + '/gtm-referer.gif';`
+      var frame = document.createElement('iframe');
+      frame.hidden = true;
+      frame.src = '/container/echo-frame?gtm_auth=' + auth;
+      document.documentElement.appendChild(frame);
+      var fx = window.__PW_FIXTURE;
+      var stape = function (p) {
+        return fx.sgtmUrl + '/pwstape?pk=' + encodeURIComponent(btoa(p));
+      };
+      var shopUrl = location.origin + '/container/echo?gtm_auth=' + auth;
+      var dtdc = btoa(JSON.stringify({ page_location: shopUrl, page_hostname: location.hostname }));
+      fetch(stape('/g/collect?v=2&tid=G-PWTEST0001&cid=5555555555.6666666666&en=ws_echo&dl=' + encodeURIComponent(shopUrl)), { mode: 'no-cors' }).catch(function () {});
+      fetch(stape('/data?v=2&tid=G-PWTEST0001&cid=5555555555.6666666666&dtdc=' + encodeURIComponent(dtdc)), { mode: 'no-cors' }).catch(function () {});`
     : '';
   return `/* fixture container ${containerId}, ${build} build */
 (function () {
