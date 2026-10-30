@@ -121,6 +121,7 @@ export class Recorder {
   private readonly extraRequests: Request[] = [];
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
+  private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
   private readonly mainFrameEventIds = new Set<string>();
@@ -310,6 +311,7 @@ export class Recorder {
   }
 
   private async recordResponse(response: PwResponse): Promise<void> {
+    if (this.selfRecorded.has(response.request())) return;
     const record = this.recordFor(response.request());
     if (!record) return;
     let setCookieNames: string[] = [];
@@ -361,12 +363,15 @@ export class Recorder {
     let postData: Buffer | null = original.postDataBuffer();
     let url = first.url;
     let response: APIResponse;
+    let current = first;
+    this.selfRecorded.add(original);
     try {
       response = await route.fetch({ maxRedirects: 0, timeout: 0 });
     } catch (error) {
       await route.abort(abortCode(error));
       return;
     }
+    this.recordApiResponse(current, response);
     for (let hops = 0; hops < MAX_FOLLOWED_HOPS; hops++) {
       const location = response.headers().location;
       const status = response.status();
@@ -389,11 +394,14 @@ export class Recorder {
         this.routed.add(hop.id);
         this.extraRequests.push(hop);
         const stub = stubResponse(first);
-        this.recordResponseFor(hop, stub.status);
+        this.recordResponseFor(hop, stub.status, []);
         await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
         return;
       }
       if (!this.isSameSiteUrl(next.href)) break;
+      this.extraRequests.push(hop);
+      this.routed.add(hop.id);
+      current = hop;
       try {
         response = await route.fetch({ url: next.href, method, postData: postData ?? undefined, maxRedirects: 0, timeout: 0 });
       } catch (error) {
@@ -401,6 +409,7 @@ export class Recorder {
         return;
       }
       url = next.href;
+      this.recordApiResponse(current, response);
     }
     await route.fulfill({ response });
   }
@@ -439,8 +448,16 @@ export class Recorder {
     return record;
   }
 
-  private recordResponseFor(record: Request, status: number): void {
-    this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status, setCookieNames: [] });
+  private recordResponseFor(record: Request, status: number, setCookieNames: string[]): void {
+    this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status, setCookieNames });
+  }
+
+  private recordApiResponse(record: Request, response: APIResponse): void {
+    const setCookieNames = response
+      .headersArray()
+      .filter((h) => h.name.toLowerCase() === 'set-cookie')
+      .map((h) => h.value.split('=')[0]!.trim());
+    this.recordResponseFor(record, response.status(), setCookieNames);
   }
 
   get site(): string {

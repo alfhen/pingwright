@@ -42,6 +42,8 @@ function page(path: string): string | undefined {
       return `<script>fetch('/set-strict').then(() => { new Image().src = '${origin}/pixel'; });</script>`;
     case '/redirect-frame':
       return '<iframe src="/redirect-to-collect-frame"></iframe>';
+    case '/redirect-same-to-cross':
+      return `<script>fetch('/to-cross', { mode: 'no-cors' });</script>`;
     case '/redirect-final':
       return `<script>fetch('/redirect-plain').then((r) => { fetch('/seen?' + encodeURIComponent(r.url + '|' + r.redirected)); });</script>`;
     case '/collector-get':
@@ -91,6 +93,14 @@ beforeAll(async () => {
     }
     if (path === '/redirect-to-collect-frame') {
       res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('iframe-redirect')}` }).end();
+      return;
+    }
+    if (path === '/to-cross') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}/x-redirect` }).end();
+      return;
+    }
+    if (path === '/x-redirect') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('crosschain')}` }).end();
       return;
     }
     if (path === '/hop-a') {
@@ -209,6 +219,12 @@ test('a frame redirect to a collection endpoint is left to the browser and flagg
   expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
 });
 
+test('a same-site chain that passes through a cross-site hop reaches the server and is flagged stubBypass', async () => {
+  const stub = await visit('/redirect-same-to-cross', 'stub');
+  expect(serverSaw.filter((u) => u.includes('en=crosschain'))).toHaveLength(1);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
+});
+
 test('a two-hop chain to a collection endpoint never reaches the server in stub mode', async () => {
   const stub = await visit('/redirect-chain', 'stub');
   const hops = collectionRequests(stub).filter((q) => q.url.includes('en=chain'));
@@ -244,7 +260,13 @@ test('stub mode sends and stores the same cookies as live mode for a cross-site 
 
 test('a same-site redirect that is not a collection request is followed and recorded', async () => {
   const stub = await visit('/redirect-final', 'stub');
-  expect(stub.records.requests.some((q) => q.url.endsWith('/redirect-plain'))).toBe(true);
+  const first = stub.records.requests.find((q) => q.url.endsWith('/redirect-plain'));
+  const landed = stub.records.requests.find((q) => q.url.endsWith('/redirect-landed'));
+  expect(first).toBeDefined();
+  expect(landed).toMatchObject({ initiator: 'redirect', outcome: 'passed' });
+  const status = (id: string | undefined) => stub.records.responses.filter((r) => r.requestId === id).map((r) => r.status);
+  expect(status(first?.id)).toEqual([302]);
+  expect(status(landed?.id)).toEqual([204]);
   expect(serverSaw.some((u) => u.startsWith('/seen?'))).toBe(true);
 });
 
@@ -278,8 +300,8 @@ test('service worker requests are recorded without a frame', async () => {
   expect(request).toMatchObject({ frameUrl: null, initiator: 'serviceWorker', outcome: 'passed' });
 });
 
-// A fulfilled page loses its loopback address space, so Chromium may block the request (design §5.3). Otherwise it is routed, or it is the known bypass.
-test('a collection request sent while a sandboxed srcdoc iframe loads is stubbed, blocked or the known bypass', async () => {
+// Chromium sometimes routes this request and sometimes neither routes nor reports it (design §5.3): accept either, but exactly one.
+test('a collection request sent while a sandboxed srcdoc iframe loads is either stubbed or the known bypass', async () => {
   const { records } = await visit('/early-srcdoc', 'stub');
   const recorded = collectionRequests({ records } as RunResult).filter((q) => q.url.includes('en=early'));
   const reachedServer = serverSaw.filter((u) => u.includes('en=early'));
@@ -288,7 +310,7 @@ test('a collection request sent while a sandboxed srcdoc iframe loads is stubbed
     expect(recorded.map((q) => q.outcome)).toEqual(['stubbed']);
     expect(reachedServer).toEqual([]);
   } else {
-    expect(reachedServer.length).toBeLessThanOrEqual(1);
+    expect(reachedServer).toHaveLength(1);
   }
 });
 
