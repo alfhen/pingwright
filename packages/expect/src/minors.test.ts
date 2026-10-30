@@ -1,4 +1,4 @@
-import { createIdentity, newId, type Flag, type Hit, type Request } from '@pingwright/core';
+import { createIdentity, newId, type Hit, type Request } from '@pingwright/core';
 import { expect, test } from 'vitest';
 import { evaluate } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
@@ -68,18 +68,6 @@ test('possibleRealData lists the first five findings and counts the rest', () =>
   expect(check.message).toContain('found 7:');
   expect(check.message).toContain('; and 2 more.');
   expect(String(check.message).match(/request req_/g)?.length).toBe(5);
-});
-
-test('built-in checks read scanRecords: real data and the host survive a whole-redacted record', () => {
-  const raw = hit({}, { url: 'https://tracker.example.net/c', postData: b64('other.person@example.org') });
-  const redacted = { ...raw.req, url: '[redacted]', postData: '[redacted]' };
-  const flag: Flag = { type: 'flag', id: newId('flag'), runId, kind: 'unknownDestination', recordIds: [raw.req.id], detail: 'x [redacted]' };
-  const scenario = parseScenario('start: /');
-  const seen = evaluate([raw.hit, redacted, flag], scenario, { identity, scanRecords: [raw.hit, raw.req, flag] });
-  expect(builtin(seen, 'possibleRealData').pass).toBe(false);
-  expect(builtin(seen, 'unknownDestination').message).toContain('tracker.example.net x1');
-  const blind = evaluate([raw.hit, redacted, flag], scenario, { identity });
-  expect(builtin(blind, 'possibleRealData').pass).toBe(true);
 });
 
 test('scenario parse rejects bad ids.hashes names and prototype var names', () => {

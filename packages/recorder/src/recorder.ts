@@ -92,8 +92,6 @@ export interface StepActivity {
 export interface RunResult {
   path: string;
   records: RunRecords;
-  /** The records before the gtmAuth scrub, in memory only. Present only when a scrub ran. */
-  rawRecords?: RunRecords;
   /** Why the GTM override failed: no request matched, or a preview fetch was not 200. Absent when it worked or none was given. */
   gtmOverrideFailure?: string;
 }
@@ -706,7 +704,6 @@ export class Recorder {
     const gtmOverrideFailure = this.gtmFailure();
     // Last step: decoding, flags and the built-in checks have seen the raw records.
     const scrubber = this.gtmOverride ? new Scrubber(this.gtmOverride.gtmAuth) : undefined;
-    const rawRecords = scrubber ? records : undefined;
     if (scrubber) records = scrubber.records(records);
     const writer = await RunWriter.create(this.options.outDir, records.run);
     try {
@@ -728,7 +725,7 @@ export class Recorder {
       await writer.close();
     }
     const failure = gtmOverrideFailure && scrubber ? scrubber.text(gtmOverrideFailure) : gtmOverrideFailure;
-    return { path: writer.path, records, ...(rawRecords ? { rawRecords } : {}), ...(failure ? { gtmOverrideFailure: failure } : {}) };
+    return { path: writer.path, records, ...(failure ? { gtmOverrideFailure: failure } : {}) };
   }
 }
 

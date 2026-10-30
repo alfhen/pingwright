@@ -127,7 +127,6 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
   }
 
   let records: RunRecords;
-  let rawRecords: RunRecords | undefined;
   let path: string;
   try {
     const result = await recordScenario({
@@ -145,7 +144,6 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
       userAgentOverride: process.env.PINGWRIGHT_TEST_USER_AGENT || undefined,
     });
     records = result.records;
-    rawRecords = result.rawRecords;
     path = result.path;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -158,7 +156,7 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
     return 2;
   }
 
-  const results: Result[] = evaluate(allRecords(records), parsed, { scanRecords: rawRecords && allRecords(rawRecords) });
+  const results: Result[] = evaluate(allRecords(records), parsed);
   await appendFile(path, results.map((r) => JSON.stringify(r) + '\n').join(''));
   const summary = buildSummary(records, results, path);
   io.stdout(args.json ? `${JSON.stringify(summary, null, 2)}\n` : `${formatSummary(summary)}\n`);
