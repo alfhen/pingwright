@@ -56,3 +56,63 @@ test('a hit without user_data has no user_data params', () => {
   const [hit] = decodeRequest(req(`https://sgtm.example.com/data?v=2&dtdc=${dtdc(body)}`));
   expect(Object.keys(hit!.params).some((k) => k.startsWith('user_data.'))).toBe(false);
 });
+
+const post = (body: object) =>
+  decodeRequest(req('https://sgtm.example.com/data?v=2&event=purchase', { method: 'POST', postData: JSON.stringify(body) }))[0];
+
+test('reads Data Tag fields at the top level of the body when there is no user_data object', () => {
+  const hit = post({
+    event_name: 'purchase',
+    email_address: HASH,
+    first_name: HASH,
+    last_name: HASH,
+    phone_number: '',
+    street: HASH,
+    city: HASH,
+    postal_code: 'x',
+    country: 'DE',
+    external_id: HASH,
+  });
+  expect(hit?.params).toMatchObject({
+    'user_data.email_address': HASH,
+    'user_data.first_name': HASH,
+    'user_data.last_name': HASH,
+    'user_data.street': HASH,
+    'user_data.city': HASH,
+    'user_data.postal_code': 'x',
+    'user_data.country': 'DE',
+  });
+  expect(hit?.params['user_data.phone_number']).toBeUndefined();
+});
+
+test('prefers the user_data object over top-level fields', () => {
+  const other = 'b'.repeat(64);
+  const hit = post({ event_name: 'purchase', email_address: other, city: other, user_data: { email_address: HASH } });
+  expect(hit?.params['user_data.email_address']).toBe(HASH);
+  expect(hit?.params['user_data.city']).toBeUndefined();
+});
+
+test('reads the first object of an address list and the first string of email and phone lists', () => {
+  const other = 'b'.repeat(64);
+  const hit = post({
+    event_name: 'purchase',
+    user_data: {
+      email_address: [HASH, other],
+      phone_number: ['', other],
+      address: [{ city: HASH, postal_code: 'x' }, { city: other }],
+    },
+  });
+  expect(hit?.params).toMatchObject({
+    'user_data.email_address': HASH,
+    'user_data.phone_number': other,
+    'user_data.city': HASH,
+    'user_data.postal_code': 'x',
+  });
+});
+
+test('does not expose a region field as user_data.region', () => {
+  const top = post({ event_name: 'purchase', region: 'BE', city: HASH });
+  expect(top?.params['user_data.region']).toBeUndefined();
+  const nested = post({ event_name: 'purchase', user_data: { address: { region: 'BE', city: HASH } } });
+  expect(nested?.params['user_data.region']).toBeUndefined();
+});
