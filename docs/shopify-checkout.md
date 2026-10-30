@@ -10,7 +10,7 @@ Use a test store or a store with test payments on, a test card and a test accoun
 4. Fill the identity: `fill` with fake identity names (`email`, `firstName`, ...).
 5. Delivery country: set it explicitly. Shopify guesses the country from the machine's location.
 6. Payment: a `handoff` step. The person enters the test card and submits.
-7. Thank-you: a labelled step, so rules can use `after: thank-you`. Here it is a `wait` for the order page.
+7. Thank-you: a `wait` for the order page, labelled `thank-you`. Purchase hits fire when the order page loads, before this wait ends, so anchor purchase rules on `after: pay`.
 8. Hashes: `identity.hashesMatch` on the purchase hits.
 
 Selectors differ per store and theme. Check them on your own checkout and adjust.
@@ -36,7 +36,7 @@ steps:
     label: thank-you
 expect:
   must:
-    - { vendor: ga4, event: purchase, after: thank-you }
+    - { vendor: ga4, event: purchase, after: pay }
     - { vendor: meta, event: Purchase, identity.hashesMatch: true }
 ```
 

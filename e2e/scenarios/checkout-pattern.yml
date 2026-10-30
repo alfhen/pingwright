@@ -23,5 +23,6 @@ steps:
     label: thank-you
 expect:
   must:
+    - { vendor: ga4, event: purchase, after: pay }
     - { vendor: meta, event: Purchase, identity.hashesMatch: true }
 options: { seed: 1, allowUnknownDestination: true }
