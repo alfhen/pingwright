@@ -1,0 +1,8 @@
+start: /tracker
+steps:
+  - wait: 3s
+expect:
+  must:
+    - { vendor: tiktok, event: Purchase }
+    - { vendor: criteo, event: viewItem }
+options: { seed: 1 }

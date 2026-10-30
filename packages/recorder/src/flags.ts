@@ -1,5 +1,5 @@
 import { newId, type Flag, type Hit, type Id, type NetworkMode, type Request } from '@pingwright/core';
-import { decoders, isCollectionEndpoint, isSandboxPageUrl } from '@pingwright/decoders';
+import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import { hostMatches } from '@pingwright/expect';
 import { getDomain } from 'tldts';
 import { isKnownVendorCollection } from './stub.ts';
@@ -29,24 +29,24 @@ function isFirstPartyHost(host: string, { siteHost, firstPartyHosts = [] }: Firs
 }
 
 /** A request that no decoder claims and that can carry data. Returns its host, or undefined. */
-function undecodedDataHost(req: Request): string | undefined {
+function undecodedDataHost(req: Request, trackers: readonly TrackerEntry[]): string | undefined {
   const url = parse(req.url);
   if (!url || !/^https?:$/.test(url.protocol)) return undefined;
-  if (decoders.some((d) => d.match(req)) || isCollectionEndpoint(req) || isKnownVendorCollection(req)) return undefined;
+  if (decoders.some((d) => d.match(req)) || isCollectionEndpoint(req, trackers) || isKnownVendorCollection(req)) return undefined;
   const carriesData =
     ALWAYS_DATA.has(req.resourceType) || (DATA_WITH_PAYLOAD.has(req.resourceType) && (url.search.length > 1 || !!req.postData));
   return carriesData ? url.hostname : undefined;
 }
 
 /** True for a request to a non-first-party host that no decoder claims and that can carry data. */
-export function isUnknownDestination(req: Request, scope: FirstPartyScope | string): boolean {
-  const host = undecodedDataHost(req);
+export function isUnknownDestination(req: Request, scope: FirstPartyScope | string, trackers: readonly TrackerEntry[] = trackerList): boolean {
+  const host = undecodedDataHost(req, trackers);
   return host !== undefined && !isFirstPartyHost(host, typeof scope === 'string' ? { siteHost: scope } : scope);
 }
 
 /** True for such a request to a first-party host other than the exact site host. */
-export function isFirstPartySubdomain(req: Request, scope: FirstPartyScope): boolean {
-  const host = undecodedDataHost(req);
+export function isFirstPartySubdomain(req: Request, scope: FirstPartyScope, trackers: readonly TrackerEntry[] = trackerList): boolean {
+  const host = undecodedDataHost(req, trackers);
   return host !== undefined && host !== scope.siteHost && isFirstPartyHost(host, scope);
 }
 
@@ -59,22 +59,24 @@ export interface FlagInput {
   networkMode: NetworkMode;
   siteUrl: string;
   firstPartyHosts?: readonly string[];
+  /** The tracker list in force. Default: the built-in list. */
+  trackers?: readonly TrackerEntry[];
   requests: readonly Request[];
   hits: readonly Hit[];
   /** Ids of requests that Playwright routed. A collection request that was seen but not routed escaped stub mode. */
   routedRequestIds: ReadonlySet<string>;
 }
 
-export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, requests, hits, routedRequestIds }: FlagInput): Flag[] {
+export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, requests, hits, routedRequestIds }: FlagInput): Flag[] {
   const scope = { siteHost: parse(siteUrl)?.hostname ?? '', firstPartyHosts };
   const flags: Flag[] = [];
   for (const req of requests) {
-    if (isUnknownDestination(req, scope)) {
+    if (isUnknownDestination(req, scope, trackers)) {
       flags.push(flag(runId, 'unknownDestination', [req.id], `${req.method} ${req.url}`));
-    } else if (isFirstPartySubdomain(req, scope)) {
+    } else if (isFirstPartySubdomain(req, scope, trackers)) {
       flags.push(flag(runId, 'firstPartySubdomain', [req.id], `${req.method} ${req.url}`));
     }
-    if (networkMode !== 'live' && !routedRequestIds.has(req.id) && (isCollectionEndpoint(req) || isKnownVendorCollection(req))) {
+    if (networkMode !== 'live' && !routedRequestIds.has(req.id) && (isCollectionEndpoint(req, trackers) || isKnownVendorCollection(req))) {
       const why = req.initiator === 'redirect' ? 'It followed a redirect' : 'It was not routed';
       flags.push(flag(runId, 'stubBypass', [req.id], `${why}, so it was not stubbed: ${req.url}`));
     }

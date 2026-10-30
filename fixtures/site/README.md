@@ -94,6 +94,10 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/pinterest` loads the standard Pinterest tag snippet and the real `s.pinimg.com/ct/core.js` (needs internet access). Tag ID `2612345678901`, fake email `pinterest-fixture@example.com`. On load, with no consent step, it fires `init`, `pagevisit`, `addtocart` and `checkout` to `ct.pinterest.com`. Stub collection paths so no hit leaves the machine. The page has no banner, on purpose.
 
+## Tracker page
+
+`/tracker` needs no internet access. It loads `thirdPartyUrl/i18n/pixel/events.js` (script), POSTs `thirdPartyUrl/api/v2/pixel?event=Purchase&url=...` (a TikTok-style pixel), and loads `http://criteo.localhost:<p3>/m/collect?event=viewItem&callback=pwCriteo` as a script (a Criteo-style JSONP collection). Neither host is in the built-in list. Tests list host `127.0.0.1` for tiktok and `criteo.localhost` with path `/m/collect` for criteo in a `--tracker-list` file.
+
 ## Deliberate defects
 
 - Reproduces a real failure: when `navigator.userAgent` contains `HeadlessChrome`, the banner grants consent itself, stores `accept` and never shows.

@@ -6,6 +6,7 @@
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@pingwright/core": "workspace:*",
+    "@pingwright/decoders": "workspace:*",
     "@pingwright/expect": "workspace:*",
     "@pingwright/recorder": "workspace:*"
   }

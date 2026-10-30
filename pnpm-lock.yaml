@@ -53,6 +53,9 @@ importers:
       '@pingwright/core':
         specifier: workspace:*
         version: link:../core
+      '@pingwright/decoders':
+        specifier: workspace:*
+        version: link:../decoders
       '@pingwright/expect':
         specifier: workspace:*
         version: link:../expect

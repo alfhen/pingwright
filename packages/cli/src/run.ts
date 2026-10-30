@@ -1,6 +1,7 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { PingwrightRecord, Result, RunRecords } from '@pingwright/core';
+import { parseTrackerList, type TrackerEntry } from '@pingwright/decoders';
 import { evaluate, parseScenario, ScenarioError } from '@pingwright/expect';
 import {
   GtmOverrideError,
@@ -46,6 +47,26 @@ async function readGtmOverride(path: string): Promise<GtmOverrideInput> {
   return parseGtmOverride(json);
 }
 
+async function readTrackerList(path: string): Promise<TrackerEntry[]> {
+  let text: string;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (error) {
+    throw new Error(`Cannot read ${path}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`${path} is not valid JSON`);
+  }
+  try {
+    return parseTrackerList(json);
+  } catch (error) {
+    throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
   let io = rawIo;
   let text: string;
@@ -55,9 +76,18 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
     io.stderr(`Cannot read ${args.scenario}: ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
+  let trackers: TrackerEntry[] = [];
+  if (args.trackerList !== undefined) {
+    try {
+      trackers = await readTrackerList(args.trackerList);
+    } catch (error) {
+      io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 2;
+    }
+  }
   let parsed;
   try {
-    parsed = parseScenario(text);
+    parsed = parseScenario(text, trackers.map((t) => t.vendor));
   } catch (error) {
     if (!(error instanceof ScenarioError)) throw error;
     io.stderr(`${args.scenario} is not a valid scenario:\n${error.issues.map((i) => `  ${i}`).join('\n')}\n`);
@@ -110,6 +140,7 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
       headed: args.headed,
       autoconsent: args.autoconsentRules.length ? { ruleFiles: args.autoconsentRules } : undefined,
       gtmOverride,
+      trackerList: trackers,
       userAgentOverride: process.env.PINGWRIGHT_TEST_USER_AGENT || undefined,
     });
     records = result.records;

@@ -41,7 +41,7 @@ const isTagManagerPing = (r: Request) => /(^|\.)googletagmanager\.com$/.test(url
 
 describe('stub mode on the fixture site', () => {
   test('no collection request is passed through', () => {
-    const collection = records.requests.filter(isCollectionEndpoint);
+    const collection = records.requests.filter((r) => isCollectionEndpoint(r));
     expect(collection.length).toBeGreaterThanOrEqual(2);
     expect(collection.filter((r) => r.outcome === 'passed')).toEqual([]);
   });

@@ -42,6 +42,13 @@ test.each([
   expect(isUnknownDestination(request, HOST)).toBe(expected);
 });
 
+test('a listed tracker request is not an unknown destination', () => {
+  const trackers = [{ vendor: 'tiktok', host: 'px.tiktok-test.example.net', source: 'https://example.com/docs' }];
+  const listed = req('https://px.tiktok-test.example.net/e?x=1', { resourceType: 'fetch' });
+  expect(isUnknownDestination(listed, HOST)).toBe(true);
+  expect(isUnknownDestination(listed, HOST, trackers)).toBe(false);
+});
+
 test('flags unknown destinations, sandbox page URLs and unrouted collection requests', () => {
   const unknown = req('https://tracker.example.net/p?x=1');
   const unrouted = req('https://region1.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001', { resourceType: 'fetch' });
