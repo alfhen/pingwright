@@ -95,6 +95,14 @@ function redactQuery(url: string): string {
 
 const MAX_FOLLOWED_HOPS = 10;
 
+function isTopLevelFrameRequest(request: PwRequest): boolean {
+  try {
+    return request.frame().parentFrame() === null;
+  } catch {
+    return false;
+  }
+}
+
 function frameUrlOf(request: PwRequest): string | null {
   try {
     return request.frame().url();
@@ -428,7 +436,7 @@ export class Recorder {
   }
 
   private isSameSiteRequest(request: PwRequest): boolean {
-    if (request.isNavigationRequest() || request.frame().parentFrame() !== null) return false;
+    if (request.isNavigationRequest() || !isTopLevelFrameRequest(request)) return false;
     const frame = frameUrlOf(request);
     return frame !== null && this.isSameSiteUrl(request.url()) && (frame === 'about:blank' || this.isSameSiteUrl(frame));
   }
