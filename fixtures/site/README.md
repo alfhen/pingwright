@@ -111,6 +111,10 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/stable-ids` loads the shop banner and, after 1.5 s and again after 2.5 s, POSTs one fake SHA-256 client ID under `clientIdHash`, `client_id_hash`, `external_id`, `uid`, `user_id`, `id` and `uuid` to `thirdPartyUrl/stable-ids/data`, and loads `thirdPartyUrl/stable-ids/session?hmac=<hex>&id=<same hash>`. With `?leak=email` it also POSTs the hash of `other.person@example.com` as `external_id` once.
 
+## Server container Data Tag page
+
+`/sgtm-data-tag` posts a `purchase` body to `sgtmUrl/data?v=2&event=purchase` (a JSON body sent as `text/plain`). The values are SHA-256 hashes of the identity typed in the checkout form, read from `sessionStorage` (`pw_checkout`), so a scenario fills `/checkout` and then visits this page. `?form=top` (default) is the Stape Data Tag protocol 2 shape: `email_address`, `first_name`, `last_name`, `phone_number`, `street` and `city` as hashed top-level fields, plus unhashed `postal_code` and `country`. `?form=list` sends a `user_data` object with `email_address` and `phone_number` as one-item lists and `address` as a one-item list of objects.
+
 ## Shared hashes page
 
 `/shared-hashes` loads the shop banner and the script `/assets/app-<64 hex>.js` (served from `assets/hashed-app.js`). After 1.5 s it sends a GraphQL persisted-query POST (`{"id":"<hex>"}`) to `thirdPartyUrl/graphql/persisted`, and a GET to the same path with `id` and an `extensions` query holding `persistedQuery.sha256Hash`. All hex values are made up. With `?leak=email` it also sends `em=<hash of other.person@example.com>` to `thirdPartyUrl/shared-hashes/collect`.
