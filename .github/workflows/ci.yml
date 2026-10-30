@@ -30,8 +30,13 @@ jobs:
           fi
       - run: pnpm docs:build
 
-  e2e:
+  e2e-shard:
+    name: e2e-shard (${{ matrix.shard }}/4)
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -40,8 +45,27 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.browsers.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+      - run: pnpm e2e --shard=${{ matrix.shard }}/4
+
+  e2e:
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every shard to pass
+        run: test "${{ needs.e2e-shard.result }}" = success
 
   package:
     runs-on: ubuntu-24.04
