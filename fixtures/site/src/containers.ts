@@ -25,14 +25,14 @@ export function resolveContainer(params: URLSearchParams, thirdPartyUrl: string)
   return { status: 404 };
 }
 
-// The workspace build echoes its gtm_auth on purpose, so redaction can be tested. It does so only on /container/echo,
-// so every other container page is a control without echo traffic.
+// The workspace build echoes its gtm_auth on purpose, so redaction can be tested. It does so everywhere except
+// /container/direct, which stays a control without echo traffic.
 function buildScript(build: BuildName, thirdPartyUrl: string): string {
   const workspace = build === 'workspace';
   const third = JSON.stringify(thirdPartyUrl);
   const echo = workspace
     ? `
-      if (location.pathname !== '/container/echo') return;
+      if (location.pathname === '/container/direct') return;
       var auth = ${JSON.stringify(fakeWorkspace.gtm_auth)};
       new Image().src = ${third} + '/gtm-echo.gif?gtm_auth=' + auth;
       navigator.sendBeacon(${third} + '/gtm-echo', 'gtm_auth=' + auth);

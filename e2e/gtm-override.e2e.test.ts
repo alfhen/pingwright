@@ -186,6 +186,13 @@ async function expectNoAuth(r: CliRun): Promise<void> {
   }
 }
 
+// Positive control: the scrub must have had auth-bearing traffic to act on, or expectNoAuth proves nothing.
+function expectScrubbedEchoes(r: CliRun): void {
+  const echoed = r.records!.requests.filter((q) => q.url.includes('/gtm-echo') || q.url.includes('/pwstape'));
+  expect(echoed.some((q) => q.url.includes('/gtm-echo'))).toBe(true);
+  expect(echoed.some((q) => q.url.includes('[redacted]') || q.postData?.includes('[redacted]'))).toBe(true);
+}
+
 const loaderUrl = () => `${site.sgtmUrl}/pwstape?pk=${encodeURIComponent(b64('/gtm.js?id=GTM-PWTEST1'))}`;
 
 test.each([
@@ -203,6 +210,7 @@ test.each([
   expect(meta(hits, 'AddToCart')).toEqual([]);
   expect(requests.some((q) => q.url === loaderUrl())).toBe(true);
   expect(site.receivedGtmAuth).toContain(auth);
+  expectScrubbedEchoes(r);
   await expectNoAuth(r);
 }, 90_000);
 
@@ -221,5 +229,6 @@ test('loader.replace swaps the loader script for the workspace build and records
     { way: 'replace', url: loaderUrl(), status: 200, loses: 'everything the loader does beyond fetching the container' },
   ]);
   expect(ga4(hits, 'workspace_only').length).toBeGreaterThan(0);
+  expectScrubbedEchoes(r);
   await expectNoAuth(r);
 }, 90_000);

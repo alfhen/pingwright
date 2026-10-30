@@ -78,7 +78,7 @@ Differences between the builds, seen on the pages below:
 | Undecided GA4 `page_view` `gcs` | `G100` | `G110` |
 | GA4 events | `page_view`, `container_event` | also `workspace_only` |
 | Meta events | `PageView`, `ViewContent`, `AddToCart` | no `AddToCart` |
-| Echoes `gtm_auth` | no | yes, on `/container/echo` only: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
+| Echoes `gtm_auth` | no | yes, on every container page except `/container/direct`: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
 
 The container sets the Consent Mode default itself and the pages never decide consent, so every container page is undecided. The `gcs` values come from the real gtag.js, and the e2e asserts both.
 
