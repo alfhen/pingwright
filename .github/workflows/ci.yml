@@ -22,6 +22,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Keep the docs domain out of the code
+        run: |
+          if grep -rn 'pingwright\.dev' packages fixtures --exclude-dir=node_modules --exclude-dir=dist; then
+            echo 'pingwright.dev must not appear under packages/ or fixtures/' >&2
+            exit 1
+          fi
+      - run: pnpm docs:build
 
   e2e:
     runs-on: ubuntu-24.04

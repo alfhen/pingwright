@@ -5,3 +5,5 @@ runs/
 *.tgz
 test-results
 coverage
+.vitepress/cache
+.vitepress/dist

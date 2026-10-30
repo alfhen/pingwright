@@ -1,0 +1,74 @@
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium, type Browser } from 'playwright';
+import { afterAll, beforeAll, expect, test } from 'vitest';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+const dist = join(root, '.vitepress/dist');
+const vitepress = join(root, 'node_modules/vitepress/bin/vitepress.js');
+const port = 4173;
+const deadLinkPage = join(root, 'docs/zz-dead-link-test.md');
+
+const build = () => spawnSync(process.execPath, [vitepress, 'build'], { cwd: root, encoding: 'utf8' });
+
+let preview: ChildProcess | undefined;
+let browser: Browser | undefined;
+let deadLinkBuild: ReturnType<typeof build>;
+
+beforeAll(async () => {
+  // A failed build empties the output folder, so it runs before the good build.
+  writeFileSync(deadLinkPage, '# Dead link\n\n[nowhere](./does-not-exist)\n');
+  try {
+    deadLinkBuild = build();
+  } finally {
+    rmSync(deadLinkPage, { force: true });
+  }
+  const result = build();
+  expect(result.status, result.stdout + result.stderr).toBe(0);
+  preview = spawn(process.execPath, [vitepress, 'preview', '--port', String(port), '--host', '127.0.0.1'], { cwd: root });
+  for (let i = 0; i < 50; i++) {
+    try {
+      if ((await fetch(`http://127.0.0.1:${port}/`)).ok) break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  browser = await chromium.launch({ channel: 'chromium' });
+});
+
+afterAll(async () => {
+  await browser?.close();
+  preview?.kill();
+  rmSync(deadLinkPage, { force: true });
+});
+
+test('builds the README as / and every published doc', () => {
+  for (const page of ['index', 'docs/cli', 'docs/design', 'docs/shopify-checkout', 'docs/release']) {
+    expect(existsSync(join(dist, `${page}.html`)), page).toBe(true);
+  }
+  expect(existsSync(join(dist, 'docs/plan-0.2.html'))).toBe(false);
+  expect(existsSync(join(dist, 'AGENTS.html'))).toBe(false);
+});
+
+test('the build output has no outside fonts or URLs in src, stylesheet href or url()', () => {
+  const result = spawnSync(process.execPath, [join(root, 'scripts/check-docs-dist.ts'), dist], { encoding: 'utf8' });
+  expect(result.status, result.stderr).toBe(0);
+});
+
+test('a dead internal link fails the build', () => {
+  expect(deadLinkBuild.status).not.toBe(0);
+  expect(deadLinkBuild.stdout + deadLinkBuild.stderr).toContain('does-not-exist');
+});
+
+test('search finds a word from docs/cli.md', async () => {
+  const page = await browser!.newPage();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await page.locator('.VPNavBarSearch button').click();
+  await page.locator('#localsearch-input').fill('install-browser');
+  const hit = page.locator('#localsearch-list a[href*="/docs/cli"]').first();
+  await hit.waitFor();
+  expect(await hit.getAttribute('href')).toContain('/docs/cli');
+  await page.close();
+});

@@ -3,19 +3,34 @@
   "version": "0.2.0-rc.1",
   "description": "Agent-first testing for website tracking and consent.",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/alfhen/pingwright.git" },
-  "bugs": { "url": "https://github.com/alfhen/pingwright/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alfhen/pingwright.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alfhen/pingwright/issues"
+  },
   "type": "module",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "packageManager": "pnpm@10.34.7",
-  "bin": { "pingwright": "dist/cli.js" },
-  "files": ["dist", "README.md", "LICENSE"],
+  "bin": {
+    "pingwright": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "node scripts/build.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
     "e2e": "vitest run --project e2e",
+    "docs:build": "vitepress build && node scripts/check-docs-dist.ts .vitepress/dist",
+    "docs:preview": "vitepress preview",
     "fixture": "node fixtures/site/src/serve.ts"
   },
   "dependencies": {
@@ -32,6 +47,8 @@
     "eslint": "10.12.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2",
-    "vitest": "5.0.4"
+    "vitepress": "2.0.0-alpha.20",
+    "vitest": "5.0.4",
+    "vue": "3.5.44"
   }
 }

@@ -6,7 +6,7 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['**/src/**/*.test.ts'],
+          include: ['**/src/**/*.test.ts', 'scripts/*.test.ts'],
           exclude: ['**/node_modules/**', '**/.claude/**', '**/*.e2e.test.ts'],
         },
       },
