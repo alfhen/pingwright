@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
+import { decodeRequest } from '@pingwright/decoders';
 import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts';
 
 let server: Server;
@@ -61,6 +62,15 @@ function page(path: string): string | undefined {
         };
         addEventListener('pagehide', () => send('pagehide'));
         addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') send('hidden'); });
+      </script>`;
+    case '/unload-meta':
+      return `<a href="/next">next</a><script>
+        addEventListener('pagehide', () => {
+          const form = new FormData();
+          form.append('id', '100000000000001');
+          form.append('ev', 'PageView');
+          navigator.sendBeacon('https://www.facebook.com/tr', form);
+        });
       </script>`;
     case '/next':
       return '<p>next</p>';
@@ -226,4 +236,24 @@ test('stub mode answers collection requests sent while the page unloads on same-
     expect(sent.some((q) => q.url.includes(`en=${tag}`))).toBe(true);
   }
   expect(records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+test('a multipart Meta beacon sent during unload keeps its body and boundary for the decoder', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `http://localhost:${port}` });
+  try {
+    const page = await recorder.visit(`http://localhost:${port}/unload-meta`);
+    await page.click('a');
+    await page.waitForURL('**/next');
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const { records } = await recorder.close();
+  const sent = records.requests.filter((q) => q.url === 'https://www.facebook.com/tr');
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.headers['content-type']).toMatch(/^multipart\/form-data; boundary=/);
+  const hits = decodeRequest(sent[0]!);
+  expect(hits).toHaveLength(1);
+  expect(hits[0]).toMatchObject({ vendor: 'meta', event: 'PageView', params: { pixelId: '100000000000001' } });
 });

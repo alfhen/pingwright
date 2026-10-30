@@ -246,7 +246,7 @@ export class Recorder {
       resourceType: payload.resourceType,
       frameUrl: payload.frameUrl,
       initiator: 'unload',
-      headers: {},
+      headers: payload.headers ?? {},
       postData: payload.postData === null ? null : payload.postData.slice(0, MAX_POST_DATA),
       outcome: 'stubbed',
     };

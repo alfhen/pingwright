@@ -7,6 +7,7 @@ export interface UnloadSendPayload {
   url: string;
   resourceType: 'ping' | 'fetch';
   postData: string | null;
+  headers?: Record<string, string>;
   frameUrl: string;
 }
 
@@ -37,14 +38,34 @@ export const unloadInitScript = `(() => {
     send(entry).then(() => save(load().filter((e) => e.key !== entry.key)), () => {});
   };
   window.${UNLOAD_FLUSH} = () => { for (const entry of load()) deliver(entry); };
+  const serialise = (body) => {
+    if (typeof body === 'string') return { postData: body, headers: {} };
+    if (body == null) return { postData: null, headers: {} };
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+      const boundary = '----pingwright' + Math.random().toString(36).slice(2);
+      let text = '';
+      for (const [name, value] of body) {
+        const file = typeof value === 'string' ? null : value;
+        text += '--' + boundary + '\\r\\nContent-Disposition: form-data; name="' + name + '"' +
+          (file ? '; filename="' + file.name + '"\\r\\nContent-Type: ' + (file.type || 'application/octet-stream') : '') +
+          '\\r\\n\\r\\n' + (file ? '[file]' : value) + '\\r\\n';
+      }
+      return { postData: text + '--' + boundary + '--\\r\\n', headers: { 'content-type': 'multipart/form-data; boundary=' + boundary } };
+    }
+    if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+      return { postData: body.toString(), headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' } };
+    }
+    return { postData: '[non-text body]', headers: {} };
+  };
   const enqueue = (method, url, resourceType, body) => {
-    const postData = typeof body === 'string' ? body : body == null ? null : '[non-text body]';
+    const { postData, headers } = serialise(body);
     const entry = {
       key: Math.random().toString(36).slice(2) + Date.now().toString(36),
       method,
       url: new URL(String(url), location.href).href,
       resourceType,
       postData,
+      headers,
       frameUrl: location.href,
     };
     save([...load(), entry]);

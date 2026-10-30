@@ -33,7 +33,7 @@ function dataRequest(req: Request, viaLoader: boolean): URL | undefined {
   if (Object.keys(parseDtdc(p.get('dtdc'))).length > 0) return url;
   if (p.has('v') && (p.has('event') || p.has('en'))) return url;
   const body = req.method === 'POST' ? parseObject(req.postData) : {};
-  return str(body.event_name) || str(body.page_location) ? url : undefined;
+  return str(body.event_name) && str(body.page_location) ? url : undefined;
 }
 
 export const sgtmDataClient: Decoder = {
@@ -47,8 +47,8 @@ export const sgtmDataClient: Decoder = {
     const dtdc = parseDtdc(p.get('dtdc'));
     const body = req.method === 'POST' ? parseObject(req.postData) : {};
     const ids: Hit['ids'] = {};
-    if (p.get('cid')) ids.client_id = true;
-    if (p.get('uid')) ids.user_id = true;
+    if (p.get('cid') || str(body.client_id)) ids.client_id = true;
+    if (p.get('uid') || str(body.user_id)) ids.user_id = true;
     const params: Record<string, string> = {};
     const tid = p.get('tid');
     if (tid) params.tid = tid;
