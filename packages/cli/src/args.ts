@@ -21,10 +21,19 @@ export interface RunArgs {
   json: boolean;
 }
 
-export type Command = RunArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
+export interface DiffArgs {
+  command: 'diff';
+  a: string;
+  b: string;
+  byPage: boolean;
+  json: boolean;
+}
+
+export type Command = RunArgs | DiffArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
 
 export const USAGE = `Usage:
   pingwright run <scenario.yml> --site <url> [options]
+  pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--json]
   pingwright install-browser
   pingwright --version
 
@@ -78,6 +87,7 @@ export function parseCli(argv: string[]): Command {
         'gtm-override': { type: 'string' },
         var: { type: 'string', multiple: true },
         json: { type: 'boolean' },
+        'by-page': { type: 'boolean' },
         version: { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
@@ -93,6 +103,10 @@ export function parseCli(argv: string[]): Command {
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');
     return { command: 'install-browser' };
+  }
+  if (command === 'diff') {
+    if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
+    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, json: values.json ?? false };
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}"`);
 

@@ -82,6 +82,19 @@ The `gtmAuth` value is removed from the record and from all output, in any form:
 
 Tests can set `PINGWRIGHT_TEST_GTM_ORIGIN` to a loopback origin (`http://localhost`, `http://127.0.0.1` or `http://[::1]`, with an optional port, and no path) to fetch every `gtm.js` from there instead of from `www.googletagmanager.com`. Any other value is an error. The run records it as `testGtmOrigin` and the CLI prints a warning. It is not read from the scenario or the override file.
 
+### `pingwright diff <a.jsonl> <b.jsonl>`
+
+Compares two runs of the same scenario, for example one with a GTM override and one without. It does not open a browser.
+
+| Option | Meaning |
+| --- | --- |
+| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. |
+| `--json` | Prints the full diff result as JSON instead of the text summary. |
+
+The text summary is grouped by consent epoch label, then vendor, then event. Under each event it lists hits that were added (only in the second run), removed (only in the first), and changed. A changed hit is one that pairs up but differs in a consent field, in `gcs` or `gcd`, or in whether an ID is present. Hits are paired by epoch, vendor, event and step, in time order. A line at the end lists flag counts that changed per host.
+
+Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missing, is not JSONL, or does not start with a `run` record exits 2 with a message that names the file. A run record with a newer schema version than Pingwright knows prints a warning and the diff goes on.
+
 ### `pingwright install-browser`
 
 Installs Chromium with the Playwright version Pingwright depends on.
