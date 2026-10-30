@@ -756,7 +756,7 @@ export class Recorder {
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
-      flags.push(...buildUnloadGapFlags({ runId: this.runId, events: embedded, hits, navigations: this.navigations, ignore: this.options.unloadGapIgnore }));
+      flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, ignore: this.options.unloadGapIgnore }));
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }

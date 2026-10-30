@@ -21,7 +21,8 @@ test('the missing hit is reported as a gap in the summary', async () => {
   const gap = records!.flags.filter((f) => f.kind === 'unloadGap');
   expect(gap).toHaveLength(1);
   expect(gap[0]!.detail).toContain('add_to_cart');
-  expect(gap[0]!.detail).toContain('--net-log');
+  expect(gap[0]!.detail).toContain('unloadGapIgnore');
+  expect(gap[0]!.detail).toContain('--network live --net-log');
 }, 90_000);
 
 test('unload gap is checked per vendor and skips events that never produced a hit', async () => {
