@@ -49,7 +49,7 @@ Options for run:
   --headed                   Show the browser window
   --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
-  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace)
+  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
@@ -68,7 +68,7 @@ Options:
   --headed                   Show the browser window
   --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
-  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace)
+  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout

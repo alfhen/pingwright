@@ -67,9 +67,14 @@ export interface ScenarioOptions {
   cartRequest?: string;
 }
 
+export const IDENTITY_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'] as const;
+export type IdentityField = (typeof IDENTITY_FIELDS)[number];
+
 export interface Scenario {
   start: string;
   vars: Record<string, string>;
+  /** Fields of the run identity that the scenario sets instead of generating. */
+  identity: Partial<Record<IdentityField, string>>;
   steps: Step[];
   expect: { must: Rule[]; mustNot: Rule[] };
   options: ScenarioOptions;
@@ -93,7 +98,7 @@ const OUTCOMES = ['passed', 'stubbed', 'failed'];
 const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
-const TOP_KEYS = ['start', 'vars', 'steps', 'expect', 'options'];
+const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
 const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
@@ -193,6 +198,22 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       }
   }
 
+  const warnings: string[] = [];
+  const identity: Partial<Record<IdentityField, string>> = {};
+  if (raw.identity !== undefined) {
+    if (!isMap(raw.identity)) fail(['identity'], `must be a mapping of identity fields to values, from ${IDENTITY_FIELDS.join(', ')}`);
+    else
+      for (const [k, v] of Object.entries(raw.identity)) {
+        if (!(IDENTITY_FIELDS as readonly string[]).includes(k)) fail(['identity', k], `unknown identity field, expected one of ${IDENTITY_FIELDS.join(', ')}`);
+        else if (typeof v !== 'string' || !v.trim()) fail(['identity', k], 'must be a non-empty string');
+        else {
+          identity[k as IdentityField] = v;
+          const kind = looksLikeRealData(v);
+          if (kind) warnings.push(`line ${lineOf(['identity', k])}: identity.${k}: looks like a real ${kind}; do not write personal data in a scenario`);
+        }
+      }
+  }
+
   const checkVars = (value: string, path: Path) => {
     for (const m of value.matchAll(/\{(\w+)\}/g)) {
       if (!Object.hasOwn(vars, m[1]!)) fail(path, `uses {${m[1]}} but vars has no "${m[1]}"`);
@@ -201,7 +222,6 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
   if (start) checkVars(start, ['start']);
 
   const steps: Step[] = [];
-  const warnings: string[] = [];
   const stepLabels = new Set<string>(['start']);
   if (raw.steps !== undefined) {
     if (!Array.isArray(raw.steps)) fail(['steps'], 'must be a list');
@@ -431,7 +451,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
   }
 
   if (issues.length) throw new ScenarioError(issues);
-  return { start, vars, steps, expect: expectOut, options, warnings };
+  return { start, vars, identity, steps, expect: expectOut, options, warnings };
 }
 
 const EPOCH_LABELS = ['undecided', 'granted', 'denied', 'mixed', 'withdrawn'];
@@ -445,7 +465,7 @@ export function validEpochSelector(selector: string): boolean {
 
 const RESERVED_EMAIL_DOMAIN = /(?:^|\.)(?:example\.(?:com|net|org)|[^.]+\.(?:test|invalid|example|localhost))$/i;
 
-const SECRET_FIELD = /card|cvc|cvv|iban|password|cc-/i;
+export const SECRET_FIELD = /card|cvc|cvv|iban|password|cc-/i;
 const PHONE_SHAPE = /^(?:\+\d{8,15}|\+?[\d\s]*\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\+?\d{0,3}[-.\s]?\d{3}[-.\s]\d{3}[-.\s]\d{4})$/;
 
 function looksLikeRealData(value: string): 'email' | 'phone' | undefined {
@@ -454,5 +474,5 @@ function looksLikeRealData(value: string): 'email' | 'phone' | undefined {
   const text = value.trim();
   if (!PHONE_SHAPE.test(text)) return undefined;
   const digits = text.replace(/\D/g, '');
-  return !/55501\d\d$/.test(digits) ? 'phone' : undefined;
+  return !/55501\d\d$/.test(digits) && !/^4670174(?:060[5-9]|06[1-9]\d)$/.test(digits) ? 'phone' : undefined;
 }

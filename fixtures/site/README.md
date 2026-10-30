@@ -42,7 +42,7 @@ All three listen on port 0 (random).
 | `#continue` | `/checkout` | Goes to `/checkout/payment`. |
 | `#card-number` (`cc-number`), `#card-expiry` (`cc-exp`), `#card-cvc` (`cc-csc`), `#pay` | `/checkout/payment` | Fake card form. `#pay` goes to `/thank-you`, or to `/thank-you?pattern=1` when the flag below is set. |
 
-Pattern variant: `/checkout?pattern=1` sets the `pw_pattern` flag in `sessionStorage` when the identity form is submitted. Every identity-form submit, with or without the flag, stores the typed fields in `pw_checkout`. With the flag, `#pay` goes to `/thank-you?pattern=1`, where Meta `Purchase` carries `ud[em]`, the SHA-256 of the typed email (trimmed, lower case). Plain `/checkout` and `/thank-you` are unchanged. The scenario shape is in [docs/shopify-checkout.md](../../docs/shopify-checkout.md).
+Pattern variant: `/checkout?pattern=1` sets the `pw_pattern` flag in `sessionStorage` when the identity form is submitted. Every identity-form submit, with or without the flag, stores the typed fields in `pw_checkout`. With the flag, `#pay` goes to `/thank-you?pattern=1`, where Meta `Purchase` carries `ud[em]`, the SHA-256 of the typed email (trimmed, lower case). `/checkout?pattern=sgtm` sets the flag to `sgtm`. Then `#pay` goes to `/thank-you?pattern=sgtm`, where Meta `Purchase` carries no hashed data and a server-container `/data` hit (through the mock Stape host) carries a `dtdc` payload with `event_name` `purchase` and `user_data` hashes of the typed email, phone (E.164), first name, last name and city. Plain `/checkout` and `/thank-you` are unchanged. The scenario shape is in [docs/shopify-checkout.md](../../docs/shopify-checkout.md).
 
 ## Consent
 

@@ -11,6 +11,8 @@ export interface Identity {
   city: string;
   zip: string;
   country: string;
+  /** Literal values a scenario types with `fill`. They count as the run's own data, but are not tied to a field. */
+  extra?: string[];
 }
 
 export interface HashForms {
@@ -310,10 +312,27 @@ function* variants(text: string, depth = 0, seen = new Set<string>()): Generator
   for (const decoded of base64Decodes(text)) yield* variants(decoded, depth + 1, seen);
 }
 
+/** Hex, base64 and base64url forms of the SHA-256 of a value, trimmed and lower case, with and without punctuation. */
+export function fieldHashes(...values: string[]): Set<string> {
+  const hashes = new Set<string>();
+  // Vendors such as Meta strip spaces and punctuation before hashing names and cities.
+  for (const value of values) {
+    const lower = value.trim().toLowerCase();
+    hashes.add(sha256(lower).hex);
+    hashes.add(sha256(lower.replace(/[^\p{L}\p{N}]/gu, '')).hex);
+  }
+  for (const hex of [...hashes]) {
+    const bytes = Buffer.from(hex, 'hex');
+    hashes.add(bytes.toString('base64').replace(/=+$/, ''));
+    hashes.add(bytes.toString('base64url'));
+  }
+  return hashes;
+}
+
 function ownValues(identity: Identity) {
   const email = normalizeEmail(identity.email);
   const phone = normalizePhone(identity.phone);
-  const hashes = new Set<string>();
+  const extra = identity.extra ?? [];
   const fields = [
     email,
     phone,
@@ -324,21 +343,14 @@ function ownValues(identity: Identity) {
     identity.city,
     identity.zip,
     identity.country,
+    ...extra,
   ];
-  // Vendors such as Meta strip spaces and punctuation before hashing names and cities.
-  for (const field of fields) {
-    const lower = field.trim().toLowerCase();
-    hashes.add(sha256(lower).hex);
-    hashes.add(sha256(lower.replace(/[^\p{L}\p{N}]/gu, '')).hex);
-  }
-  for (const hex of [...hashes]) {
-    const bytes = Buffer.from(hex, 'hex');
-    hashes.add(bytes.toString('base64').replace(/=+$/, ''));
-    hashes.add(bytes.toString('base64url'));
-  }
+  const hashes = fieldHashes(...fields);
   const phoneDigits = phone.slice(1);
   const format = COUNTRIES[identity.country.toUpperCase()] ?? US;
-  return { email, phoneDigits, nationalDigits: format.nationalDigits(phoneDigits), hashes };
+  const extraEmails = extra.map(normalizeEmail).filter((v) => v.includes('@'));
+  const extraPhones = extra.map((v) => v.replace(/\D/g, '')).filter((v) => v.length >= 8);
+  return { email, phoneDigits, nationalDigits: format.nationalDigits(phoneDigits), hashes, extraEmails, extraPhones };
 }
 
 /** Finds emails, phone numbers and SHA-256 hex strings in text that do not belong to the identity. */
@@ -354,7 +366,7 @@ export function scan(text: string, identity: Identity, options: { stableHashes?:
     for (const raw of hasUrlEscapes(variant) ? [] : (variant.match(EMAIL) ?? [])) {
       // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
       const m = raw.slice(raw.lastIndexOf('+') + 1);
-      if (!m.includes('@') || FILE_EXTENSION.test(m) || normalizeEmail(m).includes(own.email)) continue;
+      if (!m.includes('@') || FILE_EXTENSION.test(m) || normalizeEmail(m).includes(own.email) || own.extraEmails.includes(normalizeEmail(m))) continue;
       add('email', m);
       // One '+' is either a form-encoded space or a plus-address tag, so both readings are reported.
       if (raw !== m && raw.indexOf('+') === raw.lastIndexOf('+') && !raw.startsWith('+')) add('email', raw);
@@ -364,7 +376,7 @@ export function scan(text: string, identity: Identity, options: { stableHashes?:
       if (digits.length < 8 || digits.length > 15) continue;
       // In the form-encoded "+cc+nn+nn" shape the first group is a country code, which has 1 to 3 digits.
       if (/^\+\d+\+/.test(m) && !/^\+\d{1,3}\+/.test(m)) continue;
-      if (!digits.includes(own.phoneDigits) && !digits.includes(own.nationalDigits)) add('phone', m);
+      if (!digits.includes(own.phoneDigits) && !digits.includes(own.nationalDigits) && !own.extraPhones.includes(digits)) add('phone', m);
     }
     // The decoded variant carries the same hex, with its key readable.
     for (const m of hasUrlEscapes(variant) ? [] : variant.matchAll(HASH)) {

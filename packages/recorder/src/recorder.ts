@@ -766,6 +766,7 @@ export class Recorder {
       trackers: this.trackers,
       requests,
       hits,
+      identity: this.run.identity,
       routedRequestIds: this.routed,
     });
     if (!this.netLogPath) {

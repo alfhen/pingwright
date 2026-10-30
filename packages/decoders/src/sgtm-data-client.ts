@@ -21,6 +21,26 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' && v !== 
 
 const hasId = (v: unknown): boolean => str(v) !== undefined || (typeof v === 'number' && Number.isFinite(v));
 
+const USER_DATA_FIELDS = ['email_address', 'phone_number', 'first_name', 'last_name', 'street', 'city', 'region', 'postal_code', 'country'];
+
+function isObject(v: unknown): v is Json {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** Reads `user_data`, with address fields either at its top level or under `address`, as `user_data.<field>`. */
+function userData(...sources: Json[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const source of sources) {
+    if (!isObject(source.user_data)) continue;
+    const address = isObject(source.user_data.address) ? source.user_data.address : {};
+    for (const field of USER_DATA_FIELDS) {
+      const value = str(source.user_data[field]) ?? str(address[field]);
+      if (value && out[`user_data.${field}`] === undefined) out[`user_data.${field}`] = value;
+    }
+  }
+  return out;
+}
+
 /** Outside the Stape loader the path alone is too common, so a request needs a Data Tag signature. */
 function dataRequest(req: Request, viaLoader: boolean): URL | undefined {
   let url: URL;
@@ -56,6 +76,7 @@ export const sgtmDataClient: Decoder = {
     if (tid) params.tid = tid;
     const hostname = str(dtdc.page_hostname) ?? str(body.page_hostname);
     if (hostname) params.page_hostname = hostname;
+    Object.assign(params, userData(dtdc, body));
     return [
       {
         type: 'hit',
