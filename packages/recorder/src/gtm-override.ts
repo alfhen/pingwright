@@ -1,5 +1,7 @@
 import type { GtmOverrideApplied, GtmOverrideTag, Request } from '@pingwright/core';
 import { unwrapStapeLoader } from '@pingwright/decoders';
+import { hostMatches } from '@pingwright/expect';
+import { getDomain } from 'tldts';
 
 export const GTM_ORIGIN = 'https://www.googletagmanager.com';
 export const TEST_GTM_ORIGIN_ENV = 'PINGWRIGHT_TEST_GTM_ORIGIN';
@@ -199,6 +201,25 @@ export function isLoaderCandidate(url: string, resourceType: string): boolean {
   try {
     const u = new URL(url);
     return (u.protocol === 'http:' || u.protocol === 'https:') && !GOOGLE_HOST.test(u.hostname) && u.pathname.endsWith('.js') && u.search !== '';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Only hosts that can hold a Stape custom domain are sniffed: the site's registrable domain, a listed first-party
+ * host, or a loopback host when the site is loopback. Other scripts stay with Chromium, because the sniff fetch
+ * goes through Playwright's cookie jar.
+ */
+export function isLoaderHost(url: string, site: string, firstPartyHosts: readonly string[] = []): boolean {
+  try {
+    const siteHost = new URL(site).hostname;
+    const host = new URL(url).hostname;
+    const loopback = (h: string) => ['localhost', '127.0.0.1', '[::1]'].includes(h);
+    if (loopback(siteHost)) return loopback(host);
+    if (hostMatches(host, firstPartyHosts)) return true;
+    const domain = getDomain(siteHost, { allowPrivateDomains: true });
+    return domain !== null && getDomain(host, { allowPrivateDomains: true }) === domain;
   } catch {
     return false;
   }

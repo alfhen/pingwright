@@ -1,4 +1,4 @@
-import { createIdentity, newId, type Hit, type Request } from '@pingwright/core';
+import { createIdentity, newId, type Flag, type Hit, type Request } from '@pingwright/core';
 import { expect, test } from 'vitest';
 import { evaluate } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
@@ -85,4 +85,21 @@ test('scenario parse rejects bad ids.hashes names and prototype var names', () =
   expect(error(withKey('ids.hashes.em.matchesIdentiy'))).toContain('ids.hashes');
   expect(error(withKey('ids.hashes.em.x.y'))).toContain('ids.hashes');
   expect(error('start: /{constructor}\n')).toContain('uses {constructor}');
+});
+
+test('host filter matches an IPv6 loopback with or without brackets', () => {
+  const a = hit({}, { url: 'http://[::1]:4173/g/collect' });
+  const pass = (f: string) => rule(`expect:\n  must:\n    - ${f}`, [a]).pass;
+  expect(pass('{ host: "::1" }')).toBe(true);
+  expect(pass('{ host: "[::1]" }')).toBe(true);
+  expect(pass('{ host: "[::1]:4173" }')).toBe(true);
+  expect(pass('{ host: "::2" }')).toBe(false);
+});
+
+test('unknownDestination names the host when the request URL was redacted whole', () => {
+  const flag: Flag = { type: 'flag', id: newId('flag'), runId, kind: 'unknownDestination', recordIds: ['req_R'], detail: 'GET https://tracker.example.net/[redacted]' };
+  const req = request({ id: 'req_R' as Request['id'], url: '[redacted]' });
+  const r = builtin(evaluate([flag, req], parseScenario('start: /'), { identity }), 'unknownDestination');
+  expect(r.message).toContain('tracker.example.net x1');
+  expect(r.message).not.toContain('(unknown host)');
 });

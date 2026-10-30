@@ -25,8 +25,6 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
-import { hostMatches } from '@pingwright/expect';
-import { getDomain } from 'tldts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import {
@@ -60,6 +58,7 @@ import {
   parseTestGtmOrigin,
   previewFetchUrl,
   testOriginUrl,
+  isLoaderHost,
   TEST_GTM_ORIGIN_ENV,
   type GtmOverrideInput,
 } from './gtm-override.ts';
@@ -473,27 +472,8 @@ export class Recorder {
 
   private isUnseenLoaderCandidate(liveUrl: string, record: Request): boolean {
     if (this.loaderCandidates.get(liveUrl) === false) return false;
-    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl) || !this.isLoaderHost(liveUrl)) return false;
+    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl) || !isLoaderHost(liveUrl, this.options.site, this.options.firstPartyHosts)) return false;
     return !isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record);
-  }
-
-  /**
-   * Only hosts that can hold a Stape custom domain are sniffed: the site's registrable domain, a listed first-party
-   * host, or a loopback host when the site is loopback. Other scripts stay with Chromium, because the sniff fetch
-   * goes through Playwright's cookie jar.
-   */
-  private isLoaderHost(url: string): boolean {
-    try {
-      const siteHost = new URL(this.options.site).hostname;
-      const host = new URL(url).hostname;
-      const loopback = (h: string) => ['localhost', '127.0.0.1', '[::1]'].includes(h);
-      if (loopback(siteHost)) return loopback(host);
-      if (hostMatches(host, this.options.firstPartyHosts ?? [])) return true;
-      const domain = getDomain(siteHost, { allowPrivateDomains: true });
-      return domain !== null && getDomain(host, { allowPrivateDomains: true }) === domain;
-    } catch {
-      return false;
-    }
   }
 
   /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails. A redirect is handed back unchanged, so Chromium follows it and the recorder sees every hop without a second request. */

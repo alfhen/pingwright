@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { bodyHasContainer, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, loaderHint, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
+import { bodyHasContainer, isLoaderHost, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, loaderHint, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
 
 const valid = { container: 'GTM-PWTEST1', gtmAuth: 'pwfake-auth-0001', gtmPreview: 'env-99' };
 
@@ -151,4 +151,28 @@ test('loaderHint skips the firstPartyHosts advice when every script was checked'
   const url = 'https://load.example.com/abcd.js?k=1';
   expect(loaderHint([url], [url])).not.toContain('firstPartyHosts');
   expect(loaderHint([], [])).toContain('custom loader');
+});
+
+test('isLoaderHost covers the site domain, listed hosts and loopback only', () => {
+  const site = 'https://www.shop.example.com/';
+  expect(isLoaderHost('https://load.shop.example.com/a.js?k=1', site)).toBe(true);
+  expect(isLoaderHost('https://shop.example.com/a.js?k=1', site)).toBe(true);
+  expect(isLoaderHost('https://cdn.other.example/a.js?k=1', site)).toBe(false);
+  expect(isLoaderHost('https://sgtm.other.example/a.js?k=1', site, ['*.other.example'])).toBe(true);
+  expect(isLoaderHost('https://other.example/a.js?k=1', site, ['*.other.example'])).toBe(false);
+  expect(isLoaderHost('http://localhost:4000/a.js?k=1', site)).toBe(false);
+});
+
+test('isLoaderHost treats a PSL private suffix as a boundary', () => {
+  const site = 'https://a.myshopify.com/';
+  expect(isLoaderHost('https://b.myshopify.com/a.js?k=1', site)).toBe(false);
+  expect(isLoaderHost('https://cdn.a.myshopify.com/a.js?k=1', site)).toBe(true);
+});
+
+test('isLoaderHost on a loopback site accepts only loopback hosts', () => {
+  const site = 'http://localhost:4173/';
+  expect(isLoaderHost('http://127.0.0.1:4000/a.js?k=1', site)).toBe(true);
+  expect(isLoaderHost('http://[::1]:4000/a.js?k=1', site)).toBe(true);
+  expect(isLoaderHost('https://load.shop.example.com/a.js?k=1', site)).toBe(false);
+  expect(isLoaderHost('https://load.shop.example.com/a.js?k=1', site, ['*.shop.example.com'])).toBe(false);
 });
