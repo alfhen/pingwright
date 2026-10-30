@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,6 @@ let listFile: string;
 let thirdPartyHost: string;
 
 beforeAll(async () => {
-  execFileSync(process.execPath, [join(root, 'scripts/build.ts')], { cwd: root, stdio: 'inherit' });
   site = await startFixtureSite();
   thirdPartyHost = new URL(site.thirdPartyUrl).host;
   const parent = join(root, 'test-results');
