@@ -92,6 +92,19 @@ test('search finds a word from docs/cli.md', async () => {
   await context.close();
 });
 
+test('the first-run guide copies the get started prompt', async () => {
+  const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: `http://127.0.0.1:${port}` });
+  const page = await context.newPage();
+  await page.goto(`http://127.0.0.1:${port}/docs/guide/first-run`);
+  await page.getByRole('button', { name: 'Copy get started prompt' }).click();
+  await expect.poll(() => page.locator('.get-started-status').textContent()).toBe('Copied');
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain('npm i -g pingwright@next');
+  expect(copied).toContain(await page.locator('.get-started-text').textContent());
+  await context.close();
+});
+
 test('built pages make no requests to other hosts', async () => {
   const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
   const outside: string[] = [];

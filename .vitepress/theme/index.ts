@@ -13,5 +13,6 @@ export default {
     }),
   enhanceApp({ app }: { app: { component: (name: string, component: unknown) => void } }) {
     app.component('Mermaid', defineAsyncComponent(() => import('./Mermaid.vue')));
+    app.component('GetStartedPrompt', defineAsyncComponent(() => import('./GetStartedPrompt.vue')));
   },
 };
