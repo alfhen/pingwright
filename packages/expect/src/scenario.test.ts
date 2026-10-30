@@ -170,6 +170,13 @@ test('warns when a fill value looks like a real email or phone', () => {
   expect(warn('+1 415 867 5309')).toHaveLength(1);
   expect(warn('jane@example.com')).toEqual([]);
   expect(warn('+12015550123')).toEqual([]);
+  expect(warn('+447911123456')).toHaveLength(1);
+  expect(warn('+447700900123')).toEqual([]);
+  expect(warn('+442079460123')).toEqual([]);
+  expect(warn('+441632960123')).toEqual([]);
+  expect(warn('+441134960123')).toEqual([]);
+  expect(warn('+447700901000')).toHaveLength(1);
+  expect(warn('+46701740620')).toEqual([]);
   expect(warn('hello')).toEqual([]);
   expect(warn('2026-10-29')).toEqual([]);
   expect(warn('4242 4242 4242 4242')).toEqual([]);

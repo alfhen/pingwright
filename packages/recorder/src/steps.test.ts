@@ -2,7 +2,7 @@ import { createIdentity, type Request } from '@pingwright/core';
 import { parseScenario } from '@pingwright/expect';
 import { describe, expect, test } from 'vitest';
 import { isLoopbackHost, isSensitiveField } from './guard.ts';
-import { createCartCheck, fillValue, hasHandoff, recordScenario, resolveSitePath } from './steps.ts';
+import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath } from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
   autocomplete: null,
@@ -145,4 +145,30 @@ test('a StepError from a run with a GTM override does not repeat the gtmAuth', a
   expect(scrubbed.name).toBe('StepError');
   expect(scrubbed.message).not.toContain(auth);
   expect(scrubbed.stack ?? '').not.toContain(auth);
+});
+
+test('a value typed into a password field by any selector is not kept in the run identity', async () => {
+  const saved: unknown[] = [];
+  const locator = (type: string) => ({
+    first: () => ({
+      evaluate: () => Promise.resolve({ tag: 'input', host: 'localhost', fields: [{ autocomplete: null, name: 'pass', id: 'x', type }] }),
+      fill: () => Promise.resolve(),
+    }),
+  });
+  const page = {
+    goto: () => Promise.resolve(),
+    locator: (selector: string) => locator(selector === '#pw' ? 'password' : 'text'),
+  };
+  const recorder = {
+    site: 'http://localhost',
+    setIdentity: (i: unknown) => saved.push(structuredClone(i)),
+    beginStep: () => ({}),
+    endStep: () => undefined,
+    checkpoint: () => Promise.resolve(),
+    context: { pages: () => [page] },
+  };
+  const scenario = parseScenario('start: /\nsteps:\n  - fill:\n      "#pw": secret-fake-value\n      "#note": Berlin\n');
+  const identity = await playScenario(recorder as never, scenario, { seed: 1 });
+  expect(identity.extra).toEqual(['Berlin']);
+  expect(JSON.stringify(saved.at(-1))).not.toContain('secret-fake-value');
 });

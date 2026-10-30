@@ -136,7 +136,8 @@ async function activePage(recorder: Recorder): Promise<Page> {
   return pages[pages.length - 1] ?? recorder.context.newPage();
 }
 
-async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<void> {
+/** Returns true when the field is a card or password field (only allowed on loopback hosts). */
+async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<boolean> {
   const field = page.locator(selector).first();
   const inspected = await field.evaluate(
     (el): { tag: string; host: string; fields: FieldAttributes[] } => {
@@ -164,6 +165,7 @@ async function fillField(page: Page, selector: string, value: string, timeout: n
   }
   if (inspected.tag === 'select') await field.selectOption(value, { timeout });
   else await field.fill(value, { timeout });
+  return inspected.fields.some(isSensitiveField);
 }
 
 interface PageField extends FieldAttributes {
@@ -278,7 +280,14 @@ async function runStep(
       await waitForCart(recorder, record, scenario, options);
       return;
     case 'fill':
-      for (const [selector, value] of Object.entries(step.value)) await fillField(page, selector, fillValue(value, identity), timeout);
+      for (const [selector, value] of Object.entries(step.value)) {
+        const typed = fillValue(value, identity);
+        if (await fillField(page, selector, typed, timeout) && identity.extra?.includes(typed)) {
+          identity.extra = identity.extra.filter((v) => v !== typed);
+          if (identity.extra.length === 0) delete identity.extra;
+          recorder.setIdentity(identity);
+        }
+      }
       return;
     case 'wait':
       if (typeof step.value === 'number') await recorder.wait(step.value);
