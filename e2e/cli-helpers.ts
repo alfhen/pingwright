@@ -13,7 +13,7 @@ export const rootVersion = (JSON.parse(readFileSync(join(root, 'package.json'), 
 export const scenario = (name: string) => join(root, 'e2e/scenarios', `${name}.yml`);
 
 export let site: FixtureSite;
-let outDir: string;
+export let outDir: string;
 
 beforeAll(async () => {
   site = await startFixtureSite();

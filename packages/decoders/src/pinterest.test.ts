@@ -140,3 +140,12 @@ test('/v3/ and /user/ decode, the whole ct.pinterest.com host is stubbed', () =>
   expect(decodeRequest(req('https://ct.pinterest.com/other'))).toEqual([]);
   expect(decodeRequest(req('https://ct.pinterest.com.example.com/v3/'))).toEqual([]);
 });
+
+test('/user/ without an event is named user; /v3/ without one stays unnamed', () => {
+  const [a] = decodeRequest(req(`https://ct.pinterest.com/user/?tid=${TID}`));
+  expect(a?.event).toBe('user');
+  const [b] = decodeRequest(req(`https://ct.pinterest.com/user/?event=pagevisit&tid=${TID}`));
+  expect(b?.event).toBe('pagevisit');
+  const [c] = decodeRequest(req(v3({ tid: TID })));
+  expect(c?.event).toBeNull();
+});
