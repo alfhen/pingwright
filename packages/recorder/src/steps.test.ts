@@ -1,8 +1,8 @@
 import { createIdentity, type Request } from '@pingwright/core';
 import { parseScenario } from '@pingwright/expect';
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { isLoopbackHost, isSensitiveField } from './guard.ts';
-import { defaultCartCheck, fillValue, hasHandoff, recordScenario, resolveSitePath } from './steps.ts';
+import { createCartCheck, fillValue, hasHandoff, recordScenario, resolveSitePath } from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
   autocomplete: null,
@@ -71,12 +71,78 @@ const request = (over: Partial<Request>): Request =>
   ({ method: 'GET', url: 'http://localhost/', postData: null, ...over }) as Request;
 const dl = (event: string | null) => ({ event }) as never;
 
-test('the default cart check wants a cart POST, a cart mutation or an add_to_cart event', () => {
-  const check = (requests: Request[], events: ReturnType<typeof dl>[] = []) => defaultCartCheck({ requests, dataLayerEvents: events });
-  expect(check([])).toBe(false);
-  expect(check([request({ url: 'https://shop.example.com/cart.js' })])).toBe(false);
-  expect(check([request({ method: 'POST', url: 'https://shop.example.com/cart/add.js' })])).toBe(true);
-  expect(check([request({ method: 'POST', url: 'https://shop.example.com/api/graphql', postData: '{"query":"mutation { cartLinesAdd }"}' })])).toBe(true);
-  expect(check([], [dl('page_view')])).toBe(false);
-  expect(check([], [dl('add_to_cart')])).toBe(true);
+describe('the default cart check', () => {
+  const check = (
+    requests: Request[],
+    events: ReturnType<typeof dl>[] = [],
+    responses: { requestId: string; status: number }[] = requests.map((r) => ({ requestId: r.id, status: 200 })),
+    pattern?: string,
+  ) => createCartCheck(pattern)({ requests, responses: responses as never, dataLayerEvents: events });
+
+  test('wants a cart write, a cart mutation or an add_to_cart event', () => {
+    expect(check([])).toBe(false);
+    expect(check([request({ url: 'https://shop.example.com/cart.js' })])).toBe(false);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/cart.js' })])).toBe(false);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/cart/add.js' })])).toBe(true);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/cart/clear' })])).toBe(false);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/api/graphql', postData: '{"query":"mutation { cartLinesAdd }"}' })])).toBe(true);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/api/graphql', postData: '{"query":"mutation { cartCreate }"}' })])).toBe(true);
+    expect(check([], [dl('page_view')])).toBe(false);
+    expect(check([], [dl('add_to_cart')])).toBe(true);
+  });
+
+  test('knows WooCommerce, Magento, Hydrogen and GET adds', () => {
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/?wc-ajax=add_to_cart' })])).toBe(true);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/checkout/cart/add/uenc/abc/product/7/' })])).toBe(true);
+    expect(check([request({ method: 'POST', url: 'https://shop.example.com/cart' })])).toBe(true);
+    expect(check([request({ method: 'GET', url: 'https://shop.example.com/cart' })])).toBe(false);
+    expect(check([request({ method: 'GET', url: 'https://shop.example.com/cart/add?id=7' })])).toBe(true);
+    expect(check([request({ method: 'GET', url: 'https://shop.example.com/cart/change?id=7' })])).toBe(false);
+  });
+
+  test('wants a recorded 2xx response', () => {
+    const add = request({ id: 'req_1' as Request['id'], method: 'POST', url: 'https://shop.example.com/cart/add.js' });
+    expect(check([add], [], [{ requestId: 'req_1', status: 422 }])).toBe(false);
+    expect(check([add], [], [{ requestId: 'req_1', status: 200 }])).toBe(true);
+    expect(check([add], [], [{ requestId: 'req_1', status: 302 }])).toBe(true);
+    expect(check([add], [], [{ requestId: 'req_1', status: 500 }])).toBe(false);
+    expect(check([add], [], [])).toBe(false);
+    expect(check([add], [], [{ requestId: 'other', status: 200 }])).toBe(false);
+  });
+
+  test('takes a scenario pattern on top', () => {
+    const custom = request({ method: 'POST', url: 'https://shop.example.com/api/basket/items' });
+    expect(check([custom])).toBe(false);
+    expect(check([custom], [], undefined, '/api/basket/')).toBe(true);
+  });
+});
+
+test('a StepError from a run with a GTM override does not repeat the gtmAuth', async () => {
+  const auth = 'pwfake-auth-0001';
+  const recorder = {
+    site: 'http://localhost',
+    setIdentity: () => undefined,
+    beginStep: () => ({}),
+    endStep: () => undefined,
+    close: () => Promise.resolve({ path: 'unused', records: {} }),
+    context: { pages: () => [{ goto: () => Promise.reject(new Error(`page.goto: net::ERR_FAILED at http://localhost/?gtm_auth=${auth}`)) }] },
+  };
+  const options = {
+    networkMode: 'stub' as const,
+    outDir: 'unused',
+    site: 'http://localhost',
+    parsed: parseScenario('start: /\n'),
+    launch: (() => Promise.resolve(recorder)) as never,
+  };
+  const failure = (o: Parameters<typeof recordScenario>[0]) =>
+    recordScenario(o).then(
+      () => new Error('no error'),
+      (e: Error) => e,
+    );
+  const plain = await failure(options);
+  expect(plain.message).toContain(auth);
+  const scrubbed = await failure({ ...options, gtmOverride: { container: 'GTM-PWTEST1', gtmAuth: auth, gtmPreview: 'env-99' } });
+  expect(scrubbed.name).toBe('StepError');
+  expect(scrubbed.message).not.toContain(auth);
+  expect(scrubbed.stack ?? '').not.toContain(auth);
 });

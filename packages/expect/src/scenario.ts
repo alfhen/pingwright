@@ -63,6 +63,8 @@ export interface ScenarioOptions {
   /** `true` allows every unknown destination. A list allows only those hosts or `*.domain` wildcards. */
   allowUnknownDestination?: boolean | string[];
   firstPartyHosts?: string[];
+  /** Regular expression matched against request URLs: a matching request in an `addToCart` step counts as a cart change. */
+  cartRequest?: string;
 }
 
 export interface Scenario {
@@ -92,9 +94,18 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
+
+function isRegExp(source: string): boolean {
+  try {
+    new RegExp(source);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function isHostList(v: unknown): v is string[] {
   return Array.isArray(v) && v.every(isHostPattern);
@@ -401,6 +412,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         } else if (k === 'allowUnknownDestination') {
           if (typeof v === 'boolean' || isHostList(v)) options.allowUnknownDestination = v;
           else fail(p, `must be true, false or a list of hosts${HOST_HINT}`);
+        } else if (k === 'cartRequest') {
+          if (typeof v === 'string' && v !== '' && isRegExp(v)) options.cartRequest = v;
+          else fail(p, 'must be a regular expression such as "/api/cart/add"');
         } else if (k === 'firstPartyHosts') {
           if (isHostList(v)) options.firstPartyHosts = v;
           else fail(p, `must be a list of hosts${HOST_HINT}`);

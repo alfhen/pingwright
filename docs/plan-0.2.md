@@ -97,9 +97,9 @@ The list has entries `{vendor, host, paths?, source}`:
 - `host` is an exact host or `*.domain`.
 - `paths` are path prefixes.
 - `source` is an `https` link to the vendor's own docs.
-- Each vendor has an explicit list of its docs domains, for example X: `business.x.com`, Microsoft UET: `microsoft.com`, Reddit: `reddithelp.com`.
+- Each vendor has an explicit list of its docs domains, for example Microsoft UET: `microsoft.com`, Reddit: `reddithelp.com`.
 
-The built-in vendors are LinkedIn, Microsoft UET (vendor key `microsoft-uet`, to match the 0.3 decoder), X and Reddit. TikTok, Snap and Criteo are left out: no collection host or path could be sourced from the vendor's own docs (ads.tiktok.com help, businesshelp.snapchat.com, help.criteo.com OneTag notes). Users add them with `--tracker-list`. Pinterest gets a full decoder in Q06.
+The built-in vendors are LinkedIn, Microsoft UET (vendor key `microsoft-uet`, to match the 0.3 decoder) and Reddit. X was dropped: its docs source was dead. TikTok, Snap and Criteo are left out: no collection host or path could be sourced from the vendor's own docs (ads.tiktok.com help, businesshelp.snapchat.com, help.criteo.com OneTag notes). Users add them with `--tracker-list`. Pinterest gets a full decoder in Q06.
 
 The module exports two functions:
 
