@@ -308,7 +308,7 @@ D3 and D4 both touch the workflow, so they go one after the other.
 ## 10. Decisions
 
 - **VitePress `2.0.0-alpha.20`**, pinned exactly. Bump it on purpose, never by range.
-- **User docs only:** the README, `cli.md`, `shopify-checkout.md`, `design.md` and `release.md`. Plans, proposals and `AGENTS.md` stay in the repo.
+- **User docs only:** the README, `cli.md`, `shopify-checkout.md` and `design.md`. Plans, proposals, `release.md` and `AGENTS.md` are for maintainers and stay in the repo.
 - **Web Storage is allowed** for the two VitePress UI keys (`vitepress:local-search-detailed-list`, `vitepress-theme-appearance`). They never leave the browser. The dogfood check still fails on any cookie.
 - **A CSP is a later PR.** VitePress adds inline scripts, so a `<meta>` policy needs their hashes **(verify)**.
 - **`ci.yml` gets SHA-pinned actions in its own PR.** Dependabot for actions comes with it.

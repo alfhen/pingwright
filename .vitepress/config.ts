@@ -16,6 +16,29 @@ function repoFileLinks(md: MarkdownIt) {
   };
 }
 
+// A <picture> picks its source from the OS colour scheme, not the site's light/dark toggle,
+// so on the site each one becomes a light and a dark <img> that brand.css shows by theme.
+function themedPictures(md: MarkdownIt) {
+  md.core.ruler.push('themed-pictures', (state) => {
+    for (const token of state.tokens) {
+      if (token.type !== 'html_block' || !token.content.includes('<picture>')) continue;
+      token.content = token.content.replace(/<picture>([\s\S]*?)<\/picture>/g, (whole, inner: string) => {
+        const dark = /<source[^>]*media="\(prefers-color-scheme: dark\)"[^>]*srcset="([^"]+)"/.exec(inner)?.[1];
+        const img = /<img\b[^>]*>/.exec(inner)?.[0];
+        if (!dark || !img) return whole;
+        return `${img.replace('<img', '<img class="theme-light"')}${img
+          .replace('<img', '<img class="theme-dark"')
+          .replace(/src="[^"]+"/, `src="${dark}"`)}`;
+      });
+    }
+  });
+}
+
+function markdownSetup(md: MarkdownIt) {
+  repoFileLinks(md);
+  themedPictures(md);
+}
+
 export default defineConfig({
   title: 'Pingwright',
   description: 'Agent-first testing for website tracking and consent.',
@@ -37,6 +60,7 @@ export default defineConfig({
     'CLAUDE.md',
     'docs/plan-*.md',
     'docs/proposal-*.md',
+    'docs/release.md',
   ],
   rewrites: { 'README.md': 'index.md' },
   cleanUrls: true,
@@ -53,7 +77,7 @@ export default defineConfig({
     // The README refers to its lockup images as brand/*.svg.
     resolve: { alias: [{ find: /^brand\//, replacement: fileURLToPath(new URL('../brand/', import.meta.url)) }] },
   },
-  markdown: { config: repoFileLinks },
+  markdown: { config: markdownSetup },
   buildEnd(siteConfig) {
     const extra = unlistedPages(siteConfig.pages);
     if (extra.length) throw new Error(`Pages not in the published list: ${extra.join(', ')}`);
@@ -66,7 +90,6 @@ export default defineConfig({
       { text: 'CLI', link: '/docs/cli' },
       { text: 'Shopify checkout', link: '/docs/shopify-checkout' },
       { text: 'Design', link: '/docs/design' },
-      { text: 'Releasing', link: '/docs/release' },
     ],
     search: { provider: 'local' },
     socialLinks: [{ icon: 'github', link: repo }],
