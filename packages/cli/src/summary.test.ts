@@ -28,6 +28,7 @@ test('formats failures with message and evidence, and the record path', () => {
     runId: 'run_1',
     path: 'runs/run_1.jsonl',
     pass: false,
+    ok: false,
     hits: { ga4: { purchase: 1 } },
     epochs: [{ label: 'undecided', startT: 0, endT: null }],
     flags: [{ kind: 'unknownDestination', detail: 'GET http://x.test/' }],
@@ -52,7 +53,7 @@ test('groups unknown and first-party flags by host with counts and a few paths',
     { kind: 'firstPartySubdomain', detail: 'POST https://sgtm.example.com/collect' },
     { kind: 'stubBypass', detail: 'It was not routed: https://x.test/' },
   ];
-  const text = formatSummary({ runId: 'r', path: 'p', pass: true, hits: {}, epochs: [], flags, results: [] });
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
   expect(text).toContain('unknownDestination: t.example.net x5 (/a, /b, /c and 1 more)');
   expect(text).toContain('unknownDestination: u.example.net x1 (/p)');
   expect(text).toContain('firstPartySubdomain: sgtm.example.com x1 (/collect)');
@@ -66,7 +67,7 @@ test('groups sandboxPageUrl flags by vendor with a count and an example path', (
     ...[1, 2, 3].map((n) => ({ kind: 'sandboxPageUrl', detail: `ga4 received ${sandbox}?n=${n} as the page` })),
     { kind: 'sandboxPageUrl', detail: `meta received ${sandbox} as the page` },
   ];
-  const text = formatSummary({ runId: 'r', path: 'p', pass: true, hits: {}, epochs: [], flags, results: [] });
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
   expect(text).toContain('sandboxPageUrl: ga4 x3 (/web-pixels@abc/sandbox/modern/checkout)');
   expect(text).toContain('sandboxPageUrl: meta x1 (/web-pixels@abc/sandbox/modern/checkout)');
   expect(text).not.toContain('received');
@@ -79,6 +80,7 @@ test('shows evidence for passing expectations, capped', () => {
     runId: 'run_1',
     path: 'p.jsonl',
     pass: true,
+    ok: true,
     hits: {},
     epochs: [],
     flags: [],
@@ -108,6 +110,7 @@ test('shows the withdrawn label with the state in the epochs lines', () => {
     runId: 'run_1',
     path: 'runs/run_1.jsonl',
     pass: true,
+    ok: true,
     hits: {},
     epochs: [
       { label: 'undecided', startT: 0, endT: 10 },
@@ -148,10 +151,17 @@ test('epoch durations are rounded: ms under a second, seconds with one decimal a
     runId: 'run_1',
     path: 'runs/run_1.jsonl',
     pass: true,
+    ok: true,
     hits: {},
     epochs: [{ label: 'undecided', startT: 100, endT: 5728.000244140625 }],
     flags: [],
     results: [],
   };
   expect(formatSummary(summary)).toContain('  undecided (5.6 s)');
+});
+
+test('a failed warn result does not change the exit code', () => {
+  const warn = { ...result(false), severity: 'warn' as const };
+  expect(exitCodeFor([result(true), warn])).toBe(0);
+  expect(exitCodeFor([warn, result(false)])).toBe(1);
 });

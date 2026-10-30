@@ -1,4 +1,4 @@
-import type { ConsentValue, NetworkMode, RequestOutcome } from '@pingwright/core';
+import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@pingwright/core';
 import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
 import { isHostPattern } from './hosts.ts';
@@ -67,7 +67,13 @@ export interface ScenarioOptions {
   cartRequest?: string;
   /** dataLayer event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
+  /** Severity per built-in check. A check that is not listed is `fail`. */
+  builtins?: Partial<Record<BuiltinName, Severity>>;
 }
+
+export const BUILTIN_NAMES = ['unknownDestination', 'sandboxPageUrl', 'possibleRealData'] as const;
+export type BuiltinName = (typeof BUILTIN_NAMES)[number];
+export const SEVERITIES = ['fail', 'warn'] as const;
 
 export const IDENTITY_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'] as const;
 export type IdentityField = (typeof IDENTITY_FIELDS)[number];
@@ -101,7 +107,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -443,6 +449,19 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         } else if (k === 'unloadGapIgnore') {
           if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
           else fail(p, 'must be a list of event names or globs such as consent_*');
+        } else if (k === 'builtins') {
+          if (!isMap(v)) fail(p, `must be a mapping of check name to ${SEVERITIES.join(' or ')}`);
+          else {
+            const builtins: NonNullable<ScenarioOptions['builtins']> = {};
+            for (const [name, severity] of Object.entries(v)) {
+              const bp = [...p, name];
+              if (!(BUILTIN_NAMES as readonly string[]).includes(name)) fail(bp, `unknown builtin check, expected one of ${BUILTIN_NAMES.join(', ')}`);
+              else if (typeof severity !== 'string' || !(SEVERITIES as readonly string[]).includes(severity))
+                fail(bp, `must be ${SEVERITIES.join(' or ')}`);
+              else builtins[name as BuiltinName] = severity as Severity;
+            }
+            options.builtins = builtins;
+          }
         } else if (k === 'firstPartyHosts') {
           if (isHostList(v)) options.firstPartyHosts = v;
           else fail(p, `must be a list of hosts${HOST_HINT}`);
