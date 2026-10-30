@@ -81,7 +81,7 @@ When the page requests `https://www.googletagmanager.com/gtm.js?id=<container>`,
 
 The run fails with exit 2 if no request matched ("no container request matched"), or if the preview fetch did not return 200. A 404 usually means the environment has no version. The JSONL is still written, and `run.gtmOverride.applied` lists each match with its status.
 
-The `gtmAuth` value is removed from the record and from all output, in any form: plain, URL-encoded, or inside base64 at any depth. A request URL parameter, a request body or any other string that holds it in any decoded form becomes `[redacted]`. The record keeps `gtmAuth: "[redacted]"`.
+The `gtmAuth` value is removed from the record and from all output, in any form: plain, URL-encoded, or inside nested URL-encoding and base64 layers, up to 8 layers (each URL-decode and each base64 decode counts as one). A base64 value glued to unseparated text, such as `abc<base64>xyz`, is not decoded. A request URL parameter, a request body or any other string that holds it in any decoded form becomes `[redacted]`. The record keeps `gtmAuth: "[redacted]"`.
 
 Tests can set `PINGWRIGHT_TEST_GTM_ORIGIN` to a loopback origin (`http://localhost`, `http://127.0.0.1` or `http://[::1]`, with an optional port, and no path) to fetch every `gtm.js` from there instead of from `www.googletagmanager.com`. Any other value is an error. The run records it as `testGtmOrigin` and the CLI prints a warning. It is not read from the scenario or the override file.
 
