@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { newId, type Request, type Step } from '@pingwright/core';
 import { decodeRequest, trackerList } from '@pingwright/decoders';
-import { mergeNetLog, parseNetLog, watchNetLogDir, type NavigationWindow, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NavigationWindow, type NetLogRequest } from './netlog.ts';
 
 const constants = {
   logEventTypes: { URL_REQUEST_START_JOB: 1, HTTP_TRANSACTION_SEND_REQUEST_HEADERS: 2, HTTP_TRANSACTION_READ_RESPONSE_HEADERS: 3, REQUEST_ALIVE: 4 },
@@ -117,6 +117,41 @@ test('initiator is unload only between a top-level navigation request and shortl
 
 test('a request sent while the page loads after the navigation response is not labelled unload', () => {
   expect(merge([entry({ t: 3000 })], [], [], [{ from: 900, to: 950 }]).requests[0]?.initiator).toBe('netlog');
+});
+
+test('a slow response does not shorten the unload window', () => {
+  expect(merge([entry({ t: 7000 })], [], [], [{ from: 0, to: 6000 }]).requests[0]?.initiator).toBe('unload');
+  expect(merge([entry({ t: 7600 })], [], [], [{ from: 0, to: 6000 }]).requests[0]?.initiator).toBe('netlog');
+});
+
+type Req = { id: string; from: Req | null; redirectedFrom(): Req | null };
+const req = (id: string, from: Req | null = null): Req => ({ id, from, redirectedFrom: () => from });
+
+test('the first navigation and its redirect hops get no window', () => {
+  const windows = new NavigationWindows<Req>();
+  const a = req('a');
+  const b = req('b', a);
+  const c = req('c', b);
+  windows.start(a, 100);
+  windows.start(b, 200);
+  windows.start(c, 300);
+  windows.respond(c, 400);
+  expect(windows.list()).toEqual([]);
+});
+
+test('a later navigation and its redirect hops get a window each', () => {
+  const windows = new NavigationWindows<Req>();
+  const first = req('first');
+  const next = req('next');
+  const hop = req('hop', next);
+  windows.start(first, 100);
+  windows.start(next, 1000);
+  windows.respond(next, 1100);
+  windows.start(hop, 1200);
+  expect(windows.list()).toEqual([
+    { from: 1000, to: 1100 },
+    { from: 1200, to: null },
+  ]);
 });
 
 test('watchNetLogDir removes the directory on demand and on exit handlers', async () => {

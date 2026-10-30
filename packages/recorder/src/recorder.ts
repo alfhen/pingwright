@@ -41,7 +41,7 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags, buildUnloadGapFlags } from './flags.ts';
-import { mergeNetLog, parseNetLog, watchNetLogDir, type NavigationWindow, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
@@ -92,8 +92,8 @@ export interface RecorderOptions {
   /** Tracker entries added to the built-in list. */
   trackerList?: readonly TrackerEntry[];
   /**
-   * Launches Chromium with `--log-net-log` and adds collection requests that no context hook saw (those a frame
-   * sends while it unloads) to the record, with `captured: 'netlog'`. Their bodies are not in the log. Off by default.
+   * Launches Chromium with `--log-net-log` and adds collection requests that no browser hook reports (unload sends,
+   * early sandboxed srcdoc sends) to the record, with `captured: 'netlog'`. Their bodies are not in the log. Off by default.
    * Needs `networkMode: 'live'`: in stub mode those sends would reach the network.
    */
   netLog?: boolean;
@@ -179,7 +179,7 @@ export class Recorder {
   private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
   private readonly navigations: number[] = [];
-  private readonly navigationWindows = new Map<PwRequest, NavigationWindow>();
+  private readonly navigationWindows = new NavigationWindows<PwRequest>();
 
   private constructor(
     private readonly options: RecorderOptions,
@@ -226,8 +226,13 @@ export class Recorder {
       await recorder.init();
       return recorder;
     } catch (error) {
-      await browser.close();
-      removeNetLogDir?.();
+      try {
+        await browser.close();
+      } catch {
+        // The launch error is the one to report.
+      } finally {
+        removeNetLogDir?.();
+      }
       throw error;
     }
   }
@@ -345,7 +350,7 @@ export class Recorder {
     record = this.redactForHandoff(record);
     this.requests.set(request, record);
     if (request.isNavigationRequest() && isTopLevelFrameRequest(request)) {
-      if (this.navigations.length > 0) this.navigationWindows.set(request, { from: record.t, to: null });
+      this.navigationWindows.start(request, record.t);
       this.navigations.push(record.t);
     }
     return record;
@@ -417,8 +422,7 @@ export class Recorder {
     if (this.selfRecorded.has(response.request())) return;
     const record = this.recordFor(response.request());
     if (!record) return;
-    const navigation = this.navigationWindows.get(response.request());
-    if (navigation) navigation.to = nodeNow();
+    this.navigationWindows.respond(response.request(), nodeNow());
     let setCookieNames: string[] = [];
     try {
       setCookieNames = (await response.headerValues('set-cookie')).map((c) => c.split('=')[0]!.trim());
@@ -749,7 +753,7 @@ export class Recorder {
 
     const netLog = await this.readNetLog();
     if (netLog) {
-      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId, [...this.navigationWindows.values()]);
+      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId, this.navigationWindows.list());
       this.extraRequests.push(...added);
       this.responses.push(...responses);
     }

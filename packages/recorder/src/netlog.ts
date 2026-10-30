@@ -96,7 +96,32 @@ const UNLOAD_WINDOW_MS = 5000;
 const COMMIT_SLACK_MS = 1500;
 
 const inUnloadWindow = (windows: readonly NavigationWindow[], t: number): boolean =>
-  windows.some((w) => t >= w.from && t <= (w.to === null ? w.from + UNLOAD_WINDOW_MS : Math.min(w.to + COMMIT_SLACK_MS, w.from + UNLOAD_WINDOW_MS)));
+  windows.some((w) => t >= w.from && t <= (w.to === null ? w.from + UNLOAD_WINDOW_MS : w.to + COMMIT_SLACK_MS));
+
+/**
+ * The windows of a run's top-level navigations. The navigation that loads the first page, with every redirect hop of
+ * it, gets none: nothing unloads before it, so a request sent then is not an unload send.
+ */
+export class NavigationWindows<K extends { redirectedFrom(): K | null }> {
+  private first: K | undefined;
+  private readonly windows = new Map<K, NavigationWindow>();
+
+  start(request: K, t: number): void {
+    let root = request;
+    for (let prev = root.redirectedFrom(); prev; prev = root.redirectedFrom()) root = prev;
+    this.first ??= root;
+    if (root !== this.first) this.windows.set(request, { from: t, to: null });
+  }
+
+  respond(request: K, t: number): void {
+    const window = this.windows.get(request);
+    if (window) window.to = t;
+  }
+
+  list(): NavigationWindow[] {
+    return [...this.windows.values()];
+  }
+}
 
 /** Collection requests that the net log shows and no context hook saw. Each recorded request uses up one log entry of the same method and URL. */
 export function mergeNetLog(
