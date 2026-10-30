@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared hashes</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+<script src="/assets/app-3c9f1d5e7a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c1d.js"></script>
+</head>
+<body>
+<h1>Shared hashes</h1>
+<p>Sends GraphQL persisted-query requests with a made-up query ID, and loads a script whose name holds a content hash. With <code>?leak=email</code> it also sends the hash of an email that is not the run identity on a tracking request.</p>
+<script>
+(function () {
+  var cfg = window.__PW_FIXTURE;
+  var queryId = '7d2e9a4b6c8f0a1b3d5e7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e';
+  var otherEmailHash = '88f45d748ead76a339d3815f0b475088eb8b9621cad412386906e15209bfa045';
+  var leak = new URLSearchParams(location.search).get('leak') === 'email';
+  var base = cfg.thirdPartyUrl + '/graphql/persisted';
+
+  setTimeout(function () {
+    fetch(base, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ id: queryId, variables: { handle: 'fake-tee' } }) });
+    var extensions = JSON.stringify({ persistedQuery: { version: 1, sha256Hash: queryId } });
+    fetch(base + '?id=' + queryId + '&extensions=' + encodeURIComponent(extensions), { mode: 'no-cors' });
+  }, 1500);
+  if (leak) {
+    setTimeout(function () {
+      new Image().src = cfg.thirdPartyUrl + '/shared-hashes/collect?em=' + otherEmailHash;
+    }, 2000);
+  }
+})();
+</script>
+</body>
+</html>

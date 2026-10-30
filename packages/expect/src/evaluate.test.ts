@@ -393,6 +393,38 @@ test('possibleRealData ignores hashes in asset paths but scans their queries', (
   expect(find(evaluate([tracked.req], parseScenario('start: /'), { identity })).pass).toBe(false);
 });
 
+const realDataPasses = (req: Request) =>
+  evaluate([req], parseScenario('start: /'), { identity }).find((r) => r.expectation === 'builtin: possibleRealData')!.pass;
+
+test('possibleRealData skips id and sha256Hash on GraphQL persisted-query requests', () => {
+  const sha = 'a1'.repeat(32);
+  const ext = JSON.stringify({ persistedQuery: { version: 1, sha256Hash: sha } });
+  const base = 'https://shop.example.com/graphql/persisted';
+  expect(realDataPasses(request({ method: 'POST', url: base, resourceType: 'fetch', postData: JSON.stringify({ id: sha, variables: {} }) }))).toBe(true);
+  expect(realDataPasses(request({ url: `${base}?id=${sha}&variables=%7B%7D`, resourceType: 'fetch' }))).toBe(true);
+  expect(realDataPasses(request({ url: `https://shop.example.com/api/graphql?extensions=${encodeURIComponent(ext)}`, resourceType: 'fetch' }))).toBe(true);
+  expect(realDataPasses(request({ method: 'POST', url: 'https://shop.example.com/api/graphql', resourceType: 'fetch', postData: JSON.stringify({ extensions: JSON.parse(ext) }) }))).toBe(true);
+});
+
+test('possibleRealData still flags other hashes and other paths for the persisted-query ids', () => {
+  const sha = 'a1'.repeat(32);
+  const email = createHash('sha256').update('someone.else@example.com').digest('hex');
+  const base = 'https://shop.example.com/graphql/persisted';
+  expect(realDataPasses(request({ method: 'POST', url: base, resourceType: 'fetch', postData: JSON.stringify({ id: sha, variables: { em: email } }) }))).toBe(false);
+  expect(realDataPasses(request({ url: `${base}?id=${sha}&em=${email}`, resourceType: 'fetch' }))).toBe(false);
+  expect(realDataPasses(request({ url: `https://px.tracker.example/collect?id=${sha}`, resourceType: 'ping' }))).toBe(false);
+  expect(realDataPasses(request({ method: 'POST', url: 'https://px.tracker.example/graphql-like', resourceType: 'ping', postData: JSON.stringify({ id: sha }) }))).toBe(false);
+});
+
+test('possibleRealData skips a digest inside a file name but not a bare digest segment', () => {
+  const sha = 'b2'.repeat(32);
+  expect(realDataPasses(request({ url: `https://shop.example.com/assets/app-${sha}.js`, resourceType: 'fetch' }))).toBe(true);
+  expect(realDataPasses(request({ url: `https://shop.example.com/cdn/countryschemas.en-${sha}.json`, resourceType: 'fetch' }))).toBe(true);
+  expect(realDataPasses(request({ url: `https://px.tracker.example/p/${sha}`, resourceType: 'ping' }))).toBe(false);
+  expect(realDataPasses(request({ url: `https://px.tracker.example/p/${sha}.json`, resourceType: 'fetch' }))).toBe(false);
+  expect(realDataPasses(request({ url: `https://shop.example.com/assets/app-${sha}.js?em=${sha}`, resourceType: 'fetch' }))).toBe(false);
+});
+
 test('possibleRealData still finds emails, base64 payloads and phones in pixel paths', () => {
   const payload = Buffer.from('{"em":"someone.else@example.com"}').toString('base64url');
   const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;

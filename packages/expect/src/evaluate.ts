@@ -418,14 +418,53 @@ function pathOf(url: string): string {
 const ASSET_TYPES = new Set(['image', 'script', 'stylesheet', 'font', 'media']);
 const HASH_FILE_SEGMENT = /\/[0-9a-f]{64}\.[a-z0-9]{1,5}(?=$|\/)/gi;
 
-function scannedUrl(request: Request): string {
-  if (!ASSET_TYPES.has(request.resourceType)) return request.url;
+// A digest inside a file name, with other characters around it (app-<hex>.js), is a content hash: the same for
+// every visitor. A segment that is only a digest is not matched, so a hashed id used as a path is still scanned.
+const NAMED_HASH_IN_SEGMENT = /(?<=[^/0-9a-f][^/]{0,200}?)[0-9a-f]{64}(?=\.[a-z0-9]{1,8}(?:$|\/))/gi;
+const PERSISTED_ID_KEYS = /^(?:id|sha256hash)$/i;
+const HEX64 = /^[0-9a-f]{64}$/i;
+const PERSISTED_JSON_ID = /("(?:id|sha256Hash)"\s*:\s*")[0-9a-f]{64}(")/gi;
+
+function blankPersistedIds(params: URLSearchParams): boolean {
+  let changed = false;
+  for (const [key, value] of [...params]) {
+    const next = PERSISTED_ID_KEYS.test(key) && HEX64.test(value) ? '' : value.replace(PERSISTED_JSON_ID, '$1$2');
+    if (next !== value) {
+      params.set(key, next);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+// Only the id and sha256Hash fields of a GraphQL persisted-query request are dropped. Those name a stored query,
+// the same for every visitor. A hash under any other key of the same request is still scanned.
+function withoutPersistedQueryIds(url: string, postData: string): { url: string; postData: string } {
+  let parsed: URL;
   try {
-    const url = new URL(request.url);
-    url.pathname = url.pathname.replace(HASH_FILE_SEGMENT, '/');
-    return url.href;
+    parsed = new URL(url);
   } catch {
-    return request.url;
+    return { url, postData };
+  }
+  if (!/\/graphql/i.test(parsed.pathname)) return { url, postData };
+  if (!/persisted/i.test(parsed.pathname) && !/persistedQuery/.test(parsed.search + postData)) return { url, postData };
+  blankPersistedIds(parsed.searchParams);
+  let body = postData.replace(PERSISTED_JSON_ID, '$1$2');
+  if (body === postData && !/^\s*[[{]/.test(body) && body.includes('=')) {
+    const form = new URLSearchParams(body);
+    if (blankPersistedIds(form)) body = form.toString();
+  }
+  return { url: parsed.href, postData: body };
+}
+
+function scannedUrl(request: Request, url = request.url): string {
+  try {
+    const parsed = new URL(url);
+    parsed.pathname = parsed.pathname.replace(NAMED_HASH_IN_SEGMENT, '');
+    if (ASSET_TYPES.has(request.resourceType)) parsed.pathname = parsed.pathname.replace(HASH_FILE_SEGMENT, '/');
+    return parsed.href;
+  } catch {
+    return url;
   }
 }
 
@@ -447,8 +486,9 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   };
   for (const request of ctx.requests.values()) {
     if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
-    const url = scannedUrl(request);
-    slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), request.postData ?? '');
+    const persisted = withoutPersistedQueryIds(request.url, request.postData ?? '');
+    const url = scannedUrl(request, persisted.url);
+    slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), persisted.postData);
   }
   for (const hit of ctx.hits) {
     const entry = slot(hit.requestId, hit.stepId);

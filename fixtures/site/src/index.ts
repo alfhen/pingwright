@@ -25,6 +25,7 @@ const pages: Record<string, string> = {
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
   '/stable-ids': 'stable-ids.html',
+  '/shared-hashes': 'shared-hashes.html',
   '/delayed-hit': 'delayed-hit.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
@@ -81,6 +82,8 @@ function shopHandler(config: string) {
       await sendFile(res, 'container-frame-script.html');
     } else if (page) {
       await sendFile(res, page);
+    } else if (/^\/assets\/app-[0-9a-f]{64}\.js$/.test(path)) {
+      await sendFile(res, 'assets/hashed-app.js');
     } else if (/^\/assets\/[a-z-]+\.(js|css)$/.test(path)) {
       await sendFile(res, path.slice(1));
     } else {
