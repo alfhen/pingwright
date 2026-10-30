@@ -35,11 +35,11 @@ const US: CountryFormat = {
   phone: (faker) => `+1${faker.helpers.arrayElement(US_AREA_CODES)}5550${faker.number.int({ min: 100, max: 199 })}`,
 };
 
-// The Swedish regulator reserves 070-174 00 00 to 070-174 99 99 for fiction.
+// The Swedish regulator reserves 070-174 06 05 to 070-174 06 99 for fiction.
 const SE: CountryFormat = {
   locale: [sv, en, base],
   zip: (faker) => faker.string.numeric(3) + ' ' + faker.string.numeric(2),
-  phone: (faker) => `+4670174${faker.string.numeric(4)}`,
+  phone: (faker) => `+4670174${String(faker.number.int({ min: 605, max: 699 })).padStart(4, '0')}`,
 };
 
 const COUNTRIES: Record<string, CountryFormat> = { US, SE };
