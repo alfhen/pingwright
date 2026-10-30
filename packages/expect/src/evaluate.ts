@@ -247,7 +247,7 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   if (selector.startsWith('label=')) return epochOf(hit, ctx)?.label === selector.slice('label='.length);
   if ((selector === 'granted' || selector === 'denied') && !GOOGLE_VENDORS.has(hit.vendor)) {
     const epoch = epochOf(hit, ctx);
-    return epoch?.label === 'withdrawn' ? stateMatches(epoch.state, selector) : epoch?.label === selector;
+    return (epoch?.outcome ?? epoch?.label) === selector;
   }
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }

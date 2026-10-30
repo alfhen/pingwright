@@ -129,9 +129,12 @@ export function buildEpochs(
 function markWithdrawals(epochs: EpochDraft[]): EpochDraft[] {
   const granted = new Set<string>();
   for (const epoch of epochs) {
-    if (epoch.label === 'undecided') continue;
+    if (epoch.label === 'undecided' || epoch.label === 'withdrawn') continue;
     const signals = Object.entries(epoch.state);
-    if (signals.some(([signal, value]) => value === 'denied' && granted.has(signal))) epoch.label = 'withdrawn';
+    if (signals.some(([signal, value]) => value === 'denied' && granted.has(signal))) {
+      epoch.outcome = epoch.label;
+      epoch.label = 'withdrawn';
+    }
     for (const [signal, value] of signals) if (value === 'granted') granted.add(signal);
   }
   return epochs;

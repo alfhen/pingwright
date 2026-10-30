@@ -51,7 +51,7 @@ function labelFor(state: ConsentState | 'undecided'): EvalEpoch['label'] {
 }
 
 function epoch(startT: number, endT: number | null, state: ConsentState | 'undecided', label = labelFor(state)): EvalEpoch {
-  return { type: 'consentEpoch', id: newId('consentEpoch'), runId, startT, endT, source: 'test', label, state: state === 'undecided' ? allUnknown : state };
+  return { type: 'consentEpoch', id: newId('consentEpoch'), runId, startT, endT, source: 'test', label, ...(label === 'withdrawn' && state !== 'undecided' ? { outcome: labelFor(state) as 'granted' | 'denied' | 'mixed' } : {}), state: state === 'undecided' ? allUnknown : state };
 }
 
 const UNDECIDED_THEN_ACCEPT = [epoch(0, 1000, 'undecided'), epoch(1000, null, granted)];
@@ -483,6 +483,14 @@ test('in: epoch(label=withdrawn) matches a withdrawn epoch and epoch(denied) sti
   expect(byLabel.evidence).toEqual([after.hit.id]);
   expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }', [after, ...epochs]).pass).toBe(false);
   expect(rule('expect:\n  must:\n    - { vendor: ga4, in: epoch(label=withdrawn) }', [hit({ t: 2500 }), ...epochs]).pass).toBe(true);
+});
+
+test('a banner reject that leaves two signals granted is epoch(denied) as a withdrawal too', () => {
+  const partial: ConsentState = { analytics: 'denied', ads: 'denied', adUserData: 'granted', adPersonalization: 'granted' };
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 3000, granted), { ...epoch(3000, null, partial, 'withdrawn'), outcome: 'denied' as const }];
+  const after = hit({ vendor: 'meta', t: 4000 });
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }', [after, ...epochs]).pass).toBe(false);
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta, in: epoch(label=withdrawn) }', [after, ...epochs]).pass).toBe(false);
 });
 
 test('in: epoch(label=withdrawn) matches nothing in a reject-only run', () => {

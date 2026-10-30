@@ -364,6 +364,13 @@ describe('later Consent Mode defaults', () => {
       return buildEpochs(banners, consentModeChanges([push(10, 'default', denied), ...updates]), { startT: 0 }).map((e) => e.label);
     };
 
+    test('a banner reject that denies only some signals keeps its denied outcome', () => {
+      const banners: BannerEvent[] = [{ t: 1000, action: 'accept' }, { t: 3000, action: 'reject' }];
+      const updates = [push(1000, 'update', granted), push(3000, 'update', { analytics_storage: 'denied', ad_storage: 'denied' })];
+      const epochs = buildEpochs(banners, consentModeChanges([push(10, 'default', denied), ...updates]), { startT: 0 });
+      expect(epochs.map((e) => [e.label, e.outcome])).toEqual([['undecided', undefined], ['granted', undefined], ['withdrawn', 'denied']]);
+    });
+
     test('granted then denied', () => {
       expect(labelsFor([granted, denied])).toEqual(['undecided', 'granted', 'withdrawn']);
     });

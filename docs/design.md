@@ -205,7 +205,7 @@ For `consent: none`, Pingwright asserts that a banner was detected and shown, th
 - **Google hits** are judged by the consent value inside the hit (`gcs`, `gcd`), not by timing. This handles hits that were queued before an update and sent after it.
 - **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself. A withdrawn epoch gets no grace window, because a hit just before it was sent while consent was still granted.
 
-`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what `before: consent`, `epoch(label=<label>)` and, on non-Google hits, `epoch(granted)` and `epoch(denied)` read. In a withdrawn epoch `epoch(granted)` and `epoch(denied)` read the state instead.
+`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what `before: consent`, `epoch(label=<label>)` and, on non-Google hits, `epoch(granted)` and `epoch(denied)` read. A withdrawn epoch also records the label it had before (`outcome`), and `epoch(granted)` and `epoch(denied)` read that on non-Google hits.
 
 Rules: `before: consent` means "in the first epoch, while the state is undecided". `in: epoch(<state>)` matches hits in any epoch with that state, so `epoch(denied)` matches a first reject and a withdrawal. `in: epoch(label=<label>)` matches by label; `epoch(label=withdrawn)` matches only a withdrawal.
 
