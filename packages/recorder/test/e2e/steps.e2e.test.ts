@@ -217,6 +217,22 @@ describe('payment and log-in guard', () => {
     }
   });
 
+  test.each([
+    "document.getElementById('cc').outerHTML = '<input id=cc autocomplete=cc-number value=4242424242424242>'",
+    "document.getElementById('cc').insertAdjacentHTML('afterend', '<input autocomplete=cc-number value=4242424242424242>')",
+  ])('an evaluate step cannot leave a card number through HTML parsing %#', async (script) => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: PAGE }));
+    try {
+      const error = await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - evaluate: ${JSON.stringify(script)}\n`)).then(() => undefined, (e: unknown) => e);
+      expect(error).toBeInstanceOf(StepError);
+      const values = await recorder.context.pages()[0]!.locator('[autocomplete=cc-number]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+      expect(values.join('')).not.toContain('4242');
+    } finally {
+      await recorder.close();
+    }
+  });
+
   test('an evaluate step may set an ordinary field', async () => {
     const { error } = await play(`start: /\nsteps:\n  - evaluate: "document.getElementById('name').value = 'x'"\n`, 'shop.example.com');
     expect(error).toBeUndefined();

@@ -200,7 +200,7 @@ async function changedSensitiveFields(frame: Frame): Promise<PageField[]> {
         type: e.getAttribute('type'),
         index,
         value: (e as HTMLInputElement).value,
-        initial: initial?.get(e) ?? (e as HTMLInputElement).defaultValue,
+        initial: initial ? (initial.get(e) ?? '') : (e as HTMLInputElement).defaultValue,
       }));
     })
     .catch(() => [] as PageField[]);
