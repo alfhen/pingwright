@@ -75,6 +75,8 @@ Options:
   -h, --help                 Show this help
 
 Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
+
+Scenario format: https://github.com/alfhen/pingwright/blob/main/docs/design.md#11-expectations
 `;
 
 export function parseCli(argv: string[]): Command {
