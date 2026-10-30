@@ -517,3 +517,14 @@ test('a phone hash in an email field does not match', () => {
   const swapped = hit({ vendor: 'meta', params: { em: ph.hex } });
   expect(evaluate([swapped.hit, swapped.req] as never, q, { identity })[0]!.pass).toBe(false);
 });
+
+test('ids.hashes.* reads hashed ids and whether they match the identity', () => {
+  const h = hit({ ids: { hashes: { em: { present: true, matchesIdentity: true }, ph: { present: true, matchesIdentity: false } } } });
+  const recs = [h];
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.em: present }`, recs).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.em.matchesIdentity: true }`, recs).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.ph.matchesIdentity: true }`, recs).pass).toBe(false);
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.ph.matchesIdentity: false }`, recs).pass).toBe(true);
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.fn: absent }`, recs).pass).toBe(true);
+  expect(rule(`expect:\n  mustNot:\n    - { ids.hashes.em: present }`, recs).pass).toBe(false);
+});

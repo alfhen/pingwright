@@ -149,7 +149,7 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
     if (want && effective[field] !== want) return false;
   }
   for (const [name, want] of Object.entries(f.ids)) {
-    const have = hit.ids[name];
+    const have = idValue(hit, name);
     const present = have !== undefined && have !== false;
     if (want === 'present') {
       if (!present) return false;
@@ -170,6 +170,20 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
     if (f.outcome && !f.outcome.includes(request.outcome)) return false;
   }
   return true;
+}
+
+/** Reads `ids.<name>`, or `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` from the nested hashes. */
+function idValue(hit: Hit, name: string): boolean | null | undefined {
+  if (name in hit.ids) {
+    const flat = hit.ids[name];
+    if (typeof flat !== 'object') return flat;
+  }
+  const [head, field, prop, ...rest] = name.split('.');
+  if (head !== 'hashes' || !field || rest.length) return undefined;
+  const hash = hit.ids.hashes?.[field];
+  if (!hash) return undefined;
+  if (prop === undefined) return hash.present;
+  return prop === 'matchesIdentity' ? hash.matchesIdentity : undefined;
 }
 
 function hostOf(url: string): string {
