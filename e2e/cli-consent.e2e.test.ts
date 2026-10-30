@@ -107,3 +107,23 @@ test('text summary rounds epoch durations', async () => {
   expect(r.stdout).toMatch(/\n {2}undecided \(\d+(\.\d)? (s|ms)\)\n/);
   expect(r.stdout).not.toMatch(/\d+\.\d{2,} ?(ms|s)\)/);
 }, 90_000);
+
+test('builtins: sandboxPageUrl warn keeps the warning and exits 0, and without it the run exits 1', async () => {
+  const warned = await run('undecided-warn');
+  expect(warned.code).toBe(0);
+  const summary = JSON.parse(warned.stdout) as { pass: boolean; ok: boolean; results: { expectation: string; pass: boolean; severity?: string }[] };
+  expect(summary.pass).toBe(false);
+  expect(summary.ok).toBe(true);
+  expect(summary.results.find((r) => r.expectation === SANDBOX)).toMatchObject({ pass: false, severity: 'warn' });
+  const stored = warned.records!.results.find((r) => r.expectation === SANDBOX)!;
+  expect(stored).toMatchObject({ pass: false, severity: 'warn' });
+  expect(stored.evidence.length).toBeGreaterThan(0);
+
+  const text = await runCli(['run', scenario('undecided-warn'), '--site', site.url, '--out', outDir]);
+  expect(text.code).toBe(0);
+  expect(text.stdout).toMatch(/WARN builtin: sandboxPageUrl/);
+  expect(text.stdout).toContain('Result: pass with 1 warning');
+
+  const strict = await run('undecided');
+  expect(strict.code).toBe(1);
+}, 180_000);

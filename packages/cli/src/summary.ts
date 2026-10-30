@@ -1,13 +1,16 @@
-import type { Result, RunRecords } from '@pingwright/core';
+import type { Result, RunRecords, Severity } from '@pingwright/core';
 
 export interface Summary {
   runId: string;
   path: string;
+  /** Every result passed, warnings included. */
   pass: boolean;
+  /** No result failed at `fail` severity. The exit code is 0 exactly when this is true. */
+  ok: boolean;
   hits: Record<string, Record<string, number>>;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
-  results: { expectation: string; pass: boolean; message: string | undefined; evidence: string[] }[];
+  results: { expectation: string; pass: boolean; severity?: Severity; message: string | undefined; evidence: string[] }[];
 }
 
 const EVIDENCE_CAP = 5;
@@ -35,15 +38,20 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     runId: records.run.id,
     path,
     pass: results.every((r) => r.pass),
+    ok: results.every(passesGate),
     hits: countHits(records.hits),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
-    results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, evidence: r.evidence })),
+    results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, evidence: r.evidence, ...(r.severity && { severity: r.severity }) })),
   };
 }
 
+function passesGate(r: { pass: boolean; severity?: Severity }): boolean {
+  return r.pass || r.severity === 'warn';
+}
+
 export function exitCodeFor(results: Result[]): 0 | 1 {
-  return results.every((r) => r.pass) ? 0 : 1;
+  return results.every(passesGate) ? 0 : 1;
 }
 
 function formatFlags(flags: Summary['flags']): string[] {
@@ -114,7 +122,7 @@ export function formatSummary(summary: Summary): string {
   lines.push(...formatFlags(summary.flags));
   lines.push('Expectations');
   for (const r of summary.results) {
-    lines.push(`  ${r.pass ? 'PASS' : 'FAIL'} ${r.expectation}`);
+    lines.push(`  ${r.pass ? 'PASS' : r.severity === 'warn' ? 'WARN' : 'FAIL'} ${r.expectation}`);
     if (!r.pass && r.message) lines.push(`       ${r.message}`);
     if (r.evidence.length) {
       const shown = r.evidence.slice(0, EVIDENCE_CAP);
@@ -122,8 +130,10 @@ export function formatSummary(summary: Summary): string {
       lines.push(`       evidence: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`);
     }
   }
-  const failed = summary.results.filter((r) => !r.pass).length;
-  lines.push(failed === 0 ? 'Result: pass' : `Result: fail (${failed} of ${summary.results.length})`);
+  const failed = summary.results.filter((r) => !passesGate(r)).length;
+  const warned = summary.results.filter((r) => !r.pass && passesGate(r)).length;
+  const warnings = warned > 0 ? ` with ${warned} warning${warned === 1 ? '' : 's'}` : '';
+  lines.push(failed === 0 ? `Result: pass${warnings}` : `Result: fail (${failed} of ${summary.results.length})${warnings}`);
   lines.push(`Record: ${summary.path}`);
   return lines.join('\n');
 }
