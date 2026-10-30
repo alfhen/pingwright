@@ -11,13 +11,13 @@ export interface DiffKey {
   epoch: string;
   vendor: string;
   event: string;
-  step: string;
   page?: string;
 }
 
 export interface DiffHit {
   hitId: string;
   t: number;
+  step: string;
 }
 
 export interface ValueChange {
@@ -69,6 +69,8 @@ export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}
     );
   }
 
+  const stepsA = stepLabels(a);
+  const stepsB = stepLabels(b);
   const groupsA = groupHits(a, options);
   const groupsB = groupHits(b, options);
   const ids = [...new Set([...groupsA.keys(), ...groupsB.keys()])].sort();
@@ -87,19 +89,23 @@ export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}
       const consent = consentChanges(ha, hb);
       const idChanges = idPresenceChanges(ha.ids, hb.ids);
       if (consent.length || idChanges.length) {
-        result.changed.push({ key, a: ref(ha), b: ref(hb), consent, ids: idChanges });
+        result.changed.push({ key, a: ref(ha, stepsA), b: ref(hb, stepsB), consent, ids: idChanges });
       }
     }
-    for (const h of hitsA.slice(paired)) result.removed.push({ key, ...ref(h) });
-    for (const h of hitsB.slice(paired)) result.added.push({ key, ...ref(h) });
+    for (const h of hitsA.slice(paired)) result.removed.push({ key, ...ref(h, stepsA) });
+    for (const h of hitsB.slice(paired)) result.added.push({ key, ...ref(h, stepsB) });
   }
 
   result.flags = flagChanges(a, b);
   return result;
 }
 
-function ref(h: Hit): DiffHit {
-  return { hitId: h.id, t: h.t };
+function ref(h: Hit, steps: Map<string, string>): DiffHit {
+  return { hitId: h.id, t: h.t, step: h.stepId ? (steps.get(h.stepId) ?? '') : '' };
+}
+
+function stepLabels(run: RunRecords): Map<string, string> {
+  return new Map(run.steps.map((s) => [s.id as string, s.label]));
 }
 
 interface Group {
@@ -108,7 +114,6 @@ interface Group {
 }
 
 function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
-  const steps = new Map(run.steps.map((s) => [s.id, s.label]));
   const epochs: ConsentEpoch[] = [...run.consentEpochs].sort((x, y) => x.startT - y.startT);
   const groups = new Map<string, Group>();
   for (const hit of [...run.hits].sort((x, y) => x.t - y.t)) {
@@ -116,7 +121,6 @@ function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
       epoch: epochForHit(epochs, hit.t)?.label ?? NO_EPOCH,
       vendor: hit.vendor,
       event: hit.event ?? '',
-      step: hit.stepId ? (steps.get(hit.stepId) ?? '') : '',
     };
     if (options.byPage) key.page = pagePath(hit.page);
     const id = JSON.stringify(key);
