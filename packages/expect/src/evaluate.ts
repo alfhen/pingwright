@@ -120,11 +120,8 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
     const check = checkHashes(hits, ctx);
     if (check.pass) return { pass: true, evidence: check.evidence, message: `${message} ${check.message}` };
     const matched = `${hits.length} hit${hits.length === 1 ? '' : 's'} matched ${describeSelector(rule.filter)}${where}`;
-    return {
-      pass: false,
-      evidence: check.evidence,
-      message: `Expected ${describeCount(count)} hits matching all conditions, found ${hits.length - check.evidence.length}. ${matched}, but identity.hashesMatch failed: ${check.message}`,
-    };
+    const headline = check.headline ?? `Expected ${describeCount(count)} hits matching all conditions, found 0.`;
+    return { pass: false, evidence: check.evidence, message: `${headline} ${matched}, but identity.hashesMatch failed: ${check.message}` };
   }
   return { pass, evidence: ids, message };
 }
@@ -295,6 +292,7 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
 
+const UNMATCHED_HEADLINE = 'Expected every hashed email or phone value to match the run identity.';
 const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address)$/;
 const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number)$/;
 
@@ -302,9 +300,16 @@ function allForms(h: HashForms): string[] {
   return [h.hex, h.base64, h.base64url];
 }
 
-function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: string[]; message: string } {
+function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: string[]; message: string; headline?: string } {
   const identity = ctx.identity;
-  if (!identity) return { pass: false, evidence: [], message: 'no run identity was given, so the hashes could not be checked.' };
+  if (!identity) {
+    return {
+      pass: false,
+      evidence: [],
+      headline: 'Expected every hashed email or phone value to match the run identity, but it could not be checked.',
+      message: 'no run identity was given, so the hashes could not be checked.',
+    };
+  }
   const emailHashes = new Set(allForms(hashEmail(identity.email)));
   const phone = hashPhone(identity.phone);
   const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
@@ -329,10 +334,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     if (raw) unhashed.push(hit.id);
   }
   if (unhashed.length) {
-    return { pass: false, evidence: unhashed, message: `${unhashed.length} hit(s) carried an email or phone that is unhashed.` };
+    return { pass: false, evidence: unhashed, headline: UNMATCHED_HEADLINE, message: `${unhashed.length} hit(s) carried an email or phone that is unhashed.` };
   }
   if (wrong.length) {
-    return { pass: false, evidence: wrong, message: `the hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
+    return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message: `the hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
   }
   if (!withHash.length) {
     return { pass: false, evidence: hits.map((h) => h.id), message: 'it carried no hashed email or phone values.' };

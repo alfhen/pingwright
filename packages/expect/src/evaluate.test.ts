@@ -262,9 +262,18 @@ test('identity.hashesMatch', () => {
     'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: it carried no hashed email or phone values.',
   );
   expect(none.message).not.toContain('found 1 matching hit');
-  expect(failed.message).toContain('found 1. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email or phone values in 1 hit(s) do not match');
+  expect(failed.message).toBe(
+    'Expected every hashed email or phone value to match the run identity. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email or phone values in 1 hit(s) do not match the run identity.',
+  );
   const noIdentity = evaluate([good.hit, good.req], parseScenario(`start: /\n${q}`))[0]!;
-  expect(noIdentity.message).toContain('no run identity');
+  expect(noIdentity.message).toBe(
+    'Expected every hashed email or phone value to match the run identity, but it could not be checked. 1 hit matched vendor, but identity.hashesMatch failed: no run identity was given, so the hashes could not be checked.',
+  );
+  const unhashed = ev([hit({ vendor: 'meta', params: { 'ud[em]': identity.email } })]);
+  expect(unhashed.message).toBe(
+    'Expected every hashed email or phone value to match the run identity. 1 hit matched vendor, but identity.hashesMatch failed: 1 hit(s) carried an email or phone that is unhashed.',
+  );
+  for (const m of [none, failed, noIdentity, unhashed]) expect(m.message).not.toMatch(/found [1-9]/);
   const digitsPhone = hit({ vendor: 'meta', params: {
     'ud[em]': em.hex, 'ud[ph]': hashEmail(identity.phone.replace(/\D/g, '')).hex,
     'ud[fn]': hashEmail(identity.firstName).hex, 'ud[ln]': hashEmail(identity.lastName).hex,
