@@ -29,6 +29,8 @@ jobs:
             exit 1
           fi
       - run: pnpm docs:build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm docs:test
 
   e2e-shard:
     name: e2e-shard (${{ matrix.shard }}/4)

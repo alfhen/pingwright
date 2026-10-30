@@ -11,6 +11,22 @@ const vitepress = join(root, 'node_modules/vitepress/bin/vitepress.js');
 const port = 4173;
 const deadLinkPage = join(root, 'docs/zz-dead-link-test.md');
 
+function osToken(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return 'Macintosh; Intel Mac OS X 10_15_7';
+    case 'win32':
+      return 'Windows NT 10.0; Win64; x64';
+    default:
+      return 'X11; Linux x86_64';
+  }
+}
+
+function chromeUserAgent(browserVersion: string): string {
+  const major = browserVersion.split('.')[0];
+  return `Mozilla/5.0 (${osToken()}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+}
+
 const build = () => spawnSync(process.execPath, [vitepress, 'build'], { cwd: root, encoding: 'utf8' });
 
 let preview: ChildProcess | undefined;
@@ -63,12 +79,13 @@ test('a dead internal link fails the build', () => {
 });
 
 test('search finds a word from docs/cli.md', async () => {
-  const page = await browser!.newPage();
+  const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
+  const page = await context.newPage();
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.locator('.VPNavBarSearch button').click();
   await page.locator('#localsearch-input').fill('install-browser');
   const hit = page.locator('#localsearch-list a[href*="/docs/cli"]').first();
   await hit.waitFor();
   expect(await hit.getAttribute('href')).toContain('/docs/cli');
-  await page.close();
+  await context.close();
 });

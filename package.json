@@ -30,6 +30,7 @@
     "test": "vitest run --project unit",
     "e2e": "vitest run --project e2e",
     "docs:build": "vitepress build && node scripts/check-docs-dist.ts .vitepress/dist",
+    "docs:test": "vitest run --project docs",
     "docs:preview": "vitepress preview",
     "fixture": "node fixtures/site/src/serve.ts"
   },
