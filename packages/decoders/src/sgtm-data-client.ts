@@ -19,6 +19,8 @@ const parseDtdc = (value: string | null): Json => parseObject(value ? decodeBase
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
 
+const hasId = (v: unknown): boolean => str(v) !== undefined || (typeof v === 'number' && Number.isFinite(v));
+
 /** Outside the Stape loader the path alone is too common, so a request needs a Data Tag signature. */
 function dataRequest(req: Request, viaLoader: boolean): URL | undefined {
   let url: URL;
@@ -33,7 +35,7 @@ function dataRequest(req: Request, viaLoader: boolean): URL | undefined {
   if (Object.keys(parseDtdc(p.get('dtdc'))).length > 0) return url;
   if (p.has('v') && (p.has('event') || p.has('en'))) return url;
   const body = req.method === 'POST' ? parseObject(req.postData) : {};
-  return str(body.event_name) || str(body.page_location) ? url : undefined;
+  return str(body.event_name) && str(body.page_location) ? url : undefined;
 }
 
 export const sgtmDataClient: Decoder = {
@@ -47,8 +49,8 @@ export const sgtmDataClient: Decoder = {
     const dtdc = parseDtdc(p.get('dtdc'));
     const body = req.method === 'POST' ? parseObject(req.postData) : {};
     const ids: Hit['ids'] = {};
-    if (p.get('cid')) ids.client_id = true;
-    if (p.get('uid')) ids.user_id = true;
+    if (p.get('cid') || hasId(body.client_id)) ids.client_id = true;
+    if (p.get('uid') || hasId(body.user_id)) ids.user_id = true;
     const params: Record<string, string> = {};
     const tid = p.get('tid');
     if (tid) params.tid = tid;
