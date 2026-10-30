@@ -66,6 +66,10 @@ export interface Request {
   headers: Record<string, string>;
   postData: string | null;
   outcome: RequestOutcome;
+  /** Playwright's errorText for a failed request, such as `net::ERR_ABORTED`. */
+  failure?: string;
+  /** Set when `postData` and the URL's query values were replaced because a person was typing during a handoff. */
+  redacted?: 'handoff';
 }
 
 export interface Response {

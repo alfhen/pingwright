@@ -48,6 +48,19 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
 
+To withdraw consent, reopen the banner with a `click` on the site's cookie settings link, then answer it with `consent: reject` (`consent: withdraw` is the same answer). Without the click the step fails with "banner not shown (withdraw needs the banner reopened first)".
+
+```yaml
+steps:
+  - consent: accept
+  - click: "#pw-cookie-settings"
+  - consent: withdraw
+```
+
+`addToCart` clicks the selector and then needs proof that the cart changed: a cart request such as a POST to `/cart/add`, or an `add_to_cart` dataLayer event. Without it the step fails with "click did not add to cart", for example when the click only opened a variant picker. Through the library, `cartCheck` and `cartTimeoutMs` in the play options replace the check and the 5 s wait.
+
+During a `handoff` step, requests that are not tracking hits are stored without their body and query values (`redacted: handoff`), so passwords typed by the person are not kept.
+
 Payments and log-ins are handoff steps on any host other than `localhost`, `127.0.0.1` or `::1`. Filling a card or password field on another host fails the run.
 
 ### `pingwright install-browser`

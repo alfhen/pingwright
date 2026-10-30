@@ -1,4 +1,4 @@
-import type { Request } from '@pingwright/core';
+import { isLibraryLoadPath, type Request } from '@pingwright/core';
 
 const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 
@@ -41,7 +41,6 @@ const VENDOR_HOST =
   /(^|\.)(facebook\.com|facebook\.net|doubleclick\.net|googleadservices\.com|googlesyndication\.com|googletagmanager\.com)$|^(www\.)?google\.com$/;
 const COLLECTION_PATH = /^\/(?:tr|pagead\/(?:viewthroughconversion|conversion|1p-[\w-]+)|rmkt|ccm|td)(?:\/|$)/;
 const SITE_FUNCTION_PATH = /^\/(?:recaptcha|maps|plugins|dialog|login)(?:\/|$)/;
-const LIBRARY_PATH = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
 
 /**
  * Requests to Google ad hosts or Meta that must be stubbed whatever the decoder registry holds. Collection paths
@@ -56,7 +55,7 @@ export function isKnownVendorCollection(req: Pick<Request, 'url' | 'resourceType
     return false;
   }
   if (!VENDOR_HOST.test(url.hostname)) return false;
-  if (LIBRARY_PATH.test(url.pathname)) return false;
+  if (isLibraryLoadPath(url.pathname)) return false;
   if (COLLECTION_PATH.test(url.pathname)) return true;
   if (SITE_FUNCTION_PATH.test(url.pathname)) return false;
   return !LOADS.has(req.resourceType);

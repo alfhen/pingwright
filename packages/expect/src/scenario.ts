@@ -263,6 +263,7 @@ export function parseScenario(text: string): Scenario {
       case 'wait': {
         const ms = parseDuration(value);
         if (ms !== undefined) add({ kind, value: ms });
+        else if (typeof value === 'string' && /^\s*\d/.test(value)) fail([...path, kind], `"${value}" is not a duration such as 4s, 500ms or 2m`);
         else if (typeof value === 'string' && value.trim()) add({ kind, value: { selector: value } });
         else fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m, or a selector');
         return;

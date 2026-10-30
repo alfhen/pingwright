@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const cli = join(root, 'dist/cli.js');
+const rootVersion = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }).version;
 const scenario = (name: string) => join(root, 'e2e/scenarios', `${name}.yml`);
 
 let site: FixtureSite;
@@ -163,7 +165,7 @@ test('usage errors exit 2', async () => {
 test('--version prints the root package version', async () => {
   const r = await runCli(['--version']);
   expect(r.code).toBe(0);
-  expect(r.stdout.trim()).toBe('0.1.0-rc.1');
+  expect(r.stdout.trim()).toBe(rootVersion);
 });
 
 const UNKNOWN = 'builtin: unknownDestination';
