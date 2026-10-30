@@ -11,6 +11,8 @@ export interface ConsentModeChange {
   command: 'default' | 'update';
   /** State after the command, with earlier commands merged in. */
   state: ConsentState;
+  /** Only the signals this command set. */
+  signals: Partial<ConsentState>;
 }
 
 export const unknownConsent: ConsentState = {
@@ -31,12 +33,14 @@ function toValue(raw: unknown): ConsentValue {
   return raw === 'granted' || raw === 'denied' ? raw : 'unknown';
 }
 
-/** `firstDecisionT` is the time of the first banner action; defaults at or after it are ignored, as they are after an update. */
+/** `firstDecisionT` is the time of the first banner action; defaults after it are ignored, as they are after an update. */
 export function consentModeChanges(pushes: readonly ConsentPush[], firstDecisionT = Infinity): ConsentModeChange[] {
   const changes: ConsentModeChange[] = [];
   let state = unknownConsent;
   let updated = false;
-  for (const push of [...pushes].sort((a, b) => a.t - b.t)) {
+  const isUpdate = (push: ConsentPush) => Array.isArray(push.args) && push.args[1] === 'update';
+  // A default in the same tick as an update comes first, whatever order the recorder saw them in.
+  for (const push of [...pushes].sort((a, b) => a.t - b.t || Number(isUpdate(a)) - Number(isUpdate(b)))) {
     if (!Array.isArray(push.args)) continue;
     const [name, command, signals] = push.args;
     if (name !== 'consent' || (command !== 'default' && command !== 'update')) continue;
@@ -44,14 +48,14 @@ export function consentModeChanges(pushes: readonly ConsentPush[], firstDecision
     // A region-scoped default applies to visitors elsewhere than the test machine may be; it is not the global state.
     if (command === 'default' && 'region' in signals) continue;
     // An update or banner decision wins over a later default, so a default after one must not leak into later states.
-    if (command === 'default' && (updated || push.t >= firstDecisionT)) continue;
+    if (command === 'default' && (updated || push.t > firstDecisionT)) continue;
     if (command === 'update') updated = true;
-    const next = { ...state };
+    const delta: Partial<ConsentState> = {};
     for (const [signal, field] of Object.entries(signalToField)) {
-      if (signal in signals) next[field] = toValue((signals as Record<string, unknown>)[signal]);
+      if (signal in signals) delta[field] = toValue((signals as Record<string, unknown>)[signal]);
     }
-    state = next;
-    changes.push({ t: push.t, command, state });
+    state = { ...state, ...delta };
+    changes.push({ t: push.t, command, state, signals: delta });
   }
   return changes;
 }

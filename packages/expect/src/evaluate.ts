@@ -32,6 +32,7 @@ export interface EvaluateOptions {
 
 export const DEFAULT_GRACE_MS = 50;
 
+const MAX_LISTED = 5;
 const GOOGLE_VENDORS = new Set(['ga4', 'google-ads']);
 
 type Input = PingwrightRecord | EvalEpoch;
@@ -168,31 +169,34 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
   if (f.host || f.outcome) {
     const request = ctx.requests.get(hit.requestId);
     if (!request) return false;
-    if (f.host && !f.host.includes(hostOf(request.url))) return false;
+    if (f.host && !hostForms(request.url).some((form) => f.host!.includes(form))) return false;
     if (f.outcome && !f.outcome.includes(request.outcome)) return false;
   }
   return true;
 }
 
-/** Reads `ids.<name>`, or `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` from the nested hashes. */
+/** Reads `ids.<name>`, `ids.hashes` (any hash present), or `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` from the nested hashes. */
 function idValue(hit: Hit, name: string): boolean | null | undefined {
-  if (name in hit.ids) {
+  if (name === 'hashes') return Object.values(hit.ids.hashes ?? {}).some((h) => h.present);
+  if (Object.hasOwn(hit.ids, name)) {
     const flat = hit.ids[name];
     if (typeof flat !== 'object') return flat;
   }
   const [head, field, prop, ...rest] = name.split('.');
   if (head !== 'hashes' || !field || rest.length) return undefined;
-  const hash = hit.ids.hashes?.[field];
+  const hash = hit.ids.hashes && Object.hasOwn(hit.ids.hashes, field) ? hit.ids.hashes[field] : undefined;
   if (!hash) return undefined;
   if (prop === undefined) return hash.present;
   return prop === 'matchesIdentity' ? hash.matchesIdentity : undefined;
 }
 
-function hostOf(url: string): string {
+/** A `host:` rule matches the host with its port (`127.0.0.1:4173`) or the bare hostname (`127.0.0.1`). */
+function hostForms(url: string): string[] {
   try {
-    return new URL(url).host;
+    const { host, hostname } = new URL(url);
+    return [host, hostname];
   } catch {
-    return '';
+    return [''];
   }
 }
 
@@ -371,6 +375,8 @@ function builtInChecks(
   const leaks = ctx.identity ? scanForeignData(ctx, ctx.identity) : [];
   const evidence = [...real.flatMap((f) => [f.id, ...f.recordIds]), ...leaks.flatMap((l) => l.evidence)];
   const problems = [...real.map((f) => f.detail), ...leaks.map((l) => l.detail)];
+  const shown = problems.slice(0, MAX_LISTED).join('; ');
+  const more = problems.length > MAX_LISTED ? `; and ${problems.length - MAX_LISTED} more` : '';
   if (!ctx.identity && real.length === 0) {
     add(
       'builtin: possibleRealData',
@@ -386,7 +392,7 @@ function builtInChecks(
     evidence,
     problems.length === 0
       ? 'Expected no data that is not from the run identity, found none.'
-      : `Expected no data that is not from the run identity, found ${problems.length}: ${problems.join('; ')}.`,
+      : `Expected no data that is not from the run identity, found ${problems.length}: ${shown}${more}.`,
   );
 }
 
