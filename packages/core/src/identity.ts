@@ -208,12 +208,14 @@ function* base64Decodes(text: string): Generator<string> {
 }
 
 const DIGEST_BEFORE = new Set(['=', ':', '"', "'", '~', ',', '+']);
-const DIGEST_AFTER = new Set(['&', '"', "'", ',']);
+const DIGEST_AFTER = new Set(['&', '"', "'", ',', '~', ';']);
+const SLASH_LEAD_BEFORE = new Set(['=', ':', '"', "'"]);
 
 // A digest is a whole value. Path segments and slugs that happen to be 43 characters long are not.
 function isWholeValue(text: string, start: number, token: string): boolean {
-  if (token.startsWith('/') || token.endsWith('/')) return false;
+  if (token.endsWith('/')) return false;
   const before = text[start - 1];
+  if (token.startsWith('/') && (before === undefined || !SLASH_LEAD_BEFORE.has(before))) return false;
   const after = text[start + token.length];
   const startsOk = before === undefined || DIGEST_BEFORE.has(before) || (before === '.' && !token.includes('/'));
   const endsOk = after === undefined || DIGEST_AFTER.has(after) || /\s/.test(after);
@@ -309,10 +311,17 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
       if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
     }
     for (const m of variant.matchAll(BASE64_TOKEN)) {
-      // A leading '+' is a joiner between values, not part of the digest.
-      const token = m[0].replace(/^\++/, '');
-      const bare = token.replace(/=+$/, '');
-      if (isDigestToken(token) && isWholeValue(variant, m.index + m[0].length - token.length, token) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) add('hash', token);
+      // A leading '+' is a joiner between values or the first character of a standard-base64 digest, so both readings are tried.
+      const stripped = m[0].replace(/^\++/, '');
+      const readings = m[0].startsWith('+') ? [stripped, m[0].replace(/^\++(?=\+)/, '')] : [stripped];
+      for (const token of readings) {
+        const bare = token.replace(/=+$/, '');
+        const start = m.index + m[0].length - token.length;
+        if (isDigestToken(token) && isWholeValue(variant, start, token) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) {
+          add('hash', token);
+          break;
+        }
+      }
     }
   }
   return [...found.values()];

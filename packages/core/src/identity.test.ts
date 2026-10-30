@@ -382,12 +382,38 @@ describe('own identity is never flagged', () => {
 });
 
 describe('foreign digests in base64', () => {
+  it('flags digests before ~ and ; and not the own ones', () => {
+    const me = createIdentity(1);
+    const a = sha256('a@shop.example.net').base64url;
+    const b = sha256('b@shop.example.net').base64url;
+    for (const text of [`em=tv.1~em.${a}~ph.${b}`, `em=tv.1~em.${encodeURIComponent(a)}~ph.${encodeURIComponent(b)}`, `x=${a};y=${b}`]) {
+      expect(scan(text, me).map((l) => l.value).sort(), text).toEqual([a, b].sort());
+    }
+    const own = [hashEmail(me.email).base64url, hashPhone(me.phone).base64url];
+    expect(scan(`em=tv.1~em.${own[0]}~ph.${own[1]}`, me)).toEqual([]);
+  });
+
+  it('flags standard-base64 digests that start with + or /', () => {
+    const me = createIdentity(1);
+    let plus = 0;
+    let slash = 0;
+    for (let i = 0; plus < 5 || slash < 5; i++) {
+      const form = sha256(`lead${i}@shop.example.net`).base64.replace(/=+$/, '');
+      if (!/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form) || form.endsWith('/')) continue;
+      if (form.startsWith('+')) plus++;
+      else if (form.startsWith('/')) slash++;
+      else continue;
+      expect(scan(`em=${form}`, me), form).toEqual([{ kind: 'hash', value: form }]);
+      expect(scan(`em=${encodeURIComponent(form)}`, me).map((l) => l.value), form).toEqual([form]);
+    }
+  });
+
   it('flags every random SHA-256 digest as base64 and base64url', () => {
     const me = createIdentity(1);
     for (let i = 0; i < 400; i++) {
       const bytes = Buffer.from(sha256(`foreign${i}@shop.example.net`).hex, 'hex');
       for (const form of [bytes.toString('base64').replace(/=+$/, ''), bytes.toString('base64url')]) {
-        if (/^[+/]|\/$/.test(form) || !/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form)) continue;
+        if (/\/$/.test(form) || !/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form)) continue;
         expect(scan(`em=${form}`, me), form).toEqual([{ kind: 'hash', value: form }]);
       }
     }
