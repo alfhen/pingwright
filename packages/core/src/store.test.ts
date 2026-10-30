@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { newId } from './ids.ts';
 import { createIdentity } from './identity.ts';
-import type { ConsentEpoch, Flag, Hit, Request, Run, Step } from './records.ts';
+import { RECORD_SCHEMA_VERSION, type ConsentEpoch, type Flag, type Hit, type Request, type Run, type Step } from './records.ts';
 import { RunWriter, readRun, runFilePath } from './store.ts';
 
 let dir: string;
@@ -92,7 +92,7 @@ test('round trips records, grouped by type, with the run on the first line', asy
   expect(JSON.parse(lines[0]!).type).toBe('run');
 
   const loaded = await readRun(writer.path);
-  expect(loaded.run).toEqual(run);
+  expect(loaded.run).toEqual({ ...run, recordSchemaVersion: RECORD_SCHEMA_VERSION });
   expect(loaded.requests).toEqual([req]);
   expect(loaded.hits).toEqual([hit]);
   expect(loaded.flags).toEqual([flag]);
@@ -209,4 +209,44 @@ test('Run.identity accepts an Identity', () => {
 test('Hit.ids can carry hashed identity fields', () => {
   const ids: Hit['ids'] = { user_id: true, hashes: { em: { present: true, matchesIdentity: false } } };
   expect(JSON.parse(JSON.stringify(ids))).toEqual(ids);
+});
+
+async function writeLines(name: string, run: Record<string, unknown>): Promise<string> {
+  const path = join(dir, name);
+  await writeFile(path, JSON.stringify(run) + '\n');
+  return path;
+}
+
+test('RunWriter stamps the current record schema version', async () => {
+  const run = makeRun();
+  const writer = await RunWriter.create(dir, run);
+  await writer.close();
+  const first = JSON.parse((await readFile(writer.path, 'utf8')).split('\n')[0]!) as Run;
+  expect(first.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION);
+  const warnings: string[] = [];
+  const read = await readRun(writer.path, { onWarning: (m) => warnings.push(m) });
+  expect(read.run.recordSchemaVersion).toBe(1);
+  expect(warnings).toEqual([]);
+});
+
+test('a run with no version reads as version 0 without a warning', async () => {
+  const warnings: string[] = [];
+  const path = await writeLines('old.jsonl', makeRun() as unknown as Record<string, unknown>);
+  const read = await readRun(path, { onWarning: (m) => warnings.push(m) });
+  expect(read.run.recordSchemaVersion).toBe(0);
+  expect(warnings).toEqual([]);
+});
+
+test('a run with a newer version reads with a warning', async () => {
+  const path = await writeLines('new.jsonl', { ...makeRun(), recordSchemaVersion: RECORD_SCHEMA_VERSION + 1 });
+  const warnings: string[] = [];
+  const read = await readRun(path, { onWarning: (m) => warnings.push(m) });
+  expect(read.run.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION + 1);
+  expect(warnings).toHaveLength(1);
+  expect(warnings[0]).toContain('newer');
+});
+
+test('a version that is not a non-negative integer is rejected', async () => {
+  const path = await writeLines('bad.jsonl', { ...makeRun(), recordSchemaVersion: '1' });
+  await expect(readRun(path)).rejects.toThrow('recordSchemaVersion');
 });

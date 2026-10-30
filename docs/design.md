@@ -69,7 +69,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 
 | Entity | Fields (main) |
 | --- | --- |
-| `Run` | `id` (`run_…`), `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride`, `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
+| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride`, `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
 | `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt` |
 | `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`), `failure` (Playwright's error text for a failed request), `redacted` (`handoff` when a handoff step replaced the body and query values) |
 | `Response` | `id` (`res_…`), `requestId`, `status`, `setCookieNames[]` |
@@ -79,6 +79,8 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
 | `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `evidence[]` (record IDs) |
+
+`recordSchemaVersion` on a `Run` is an integer. Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. Do not bump it within 0.2. A reader treats a record with no version as version 0, and warns when the version is newer than it knows.
 
 `t` is milliseconds on one shared clock (§7.3).
 

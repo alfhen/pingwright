@@ -68,6 +68,7 @@ test('undecided: hits per vendor, denied consent, flags, one epoch', async () =>
   expect(r.failed).toEqual([SANDBOX]);
   const { hits, consentEpochs, flags, results } = r.records!;
   expect(results.length).toBeGreaterThan(0);
+  expect(r.records!.run.recordSchemaVersion).toBe(1);
   expect(consentEpochs.map((e) => e.label)).toEqual(['undecided']);
   const ownConsent = ga4(hits, 'page_view').filter((h) => 'gcs' in h.consent.raw);
   expect(ownConsent.length).toBeGreaterThan(0);

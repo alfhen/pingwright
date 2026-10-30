@@ -3,6 +3,7 @@ import { mkdir, open, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { isId } from './ids.ts';
+import { RECORD_SCHEMA_VERSION } from './records.ts';
 import type {
   Checkpoint,
   CollectorReport,
@@ -58,7 +59,7 @@ export class RunWriter {
     const path = runFilePath(runsDir, run.id);
     const handle = await open(path, 'wx');
     const writer = new RunWriter(path, handle);
-    await writer.append(run);
+    await writer.append({ ...run, recordSchemaVersion: RECORD_SCHEMA_VERSION });
     return writer;
   }
 
@@ -104,7 +105,13 @@ function upsert<T extends { id: string }>(list: T[], record: T): void {
   else list[at] = record;
 }
 
-export async function readRun(path: string): Promise<RunRecords> {
+export interface ReadRunOptions {
+  /** Receives problems that do not stop the read. Defaults to `console.warn`. */
+  onWarning?: (message: string) => void;
+}
+
+export async function readRun(path: string, options: ReadRunOptions = {}): Promise<RunRecords> {
+  const warn = options.onWarning ?? ((message: string) => console.warn(message));
   const lines = createInterface({ input: createReadStream(path, 'utf8'), crlfDelay: Infinity });
   let out: RunRecords | undefined;
   let lineNo = 0;
@@ -127,6 +134,16 @@ export async function readRun(path: string): Promise<RunRecords> {
     if (!out) {
       if (record.type !== 'run') throw new Error(`${path}:${lineNo}: first record must be a run`);
       out = emptyRecords(record);
+      const version = record.recordSchemaVersion;
+      if (version === undefined) {
+        record.recordSchemaVersion = 0;
+      } else if (!Number.isInteger(version) || version < 0) {
+        throw new Error(`${path}:${lineNo}: recordSchemaVersion must be a non-negative integer`);
+      } else if (version > RECORD_SCHEMA_VERSION) {
+        warn(
+          `${path}: record schema version ${version} is newer than this reader knows (${RECORD_SCHEMA_VERSION}); fields may be missing or misread`,
+        );
+      }
       continue;
     }
     switch (record.type) {
