@@ -4,6 +4,8 @@ export type NewHitId = () => Id<'hit'>;
 
 export const defaultHitId: NewHitId = () => newId('hit');
 
+export const vendorKeys: readonly string[] = ['ga4', 'google-ads', 'meta', 'pinterest', 'sgtm'];
+
 export interface Decoder {
   name: string;
   /** `viaLoader` is true when `req` was unwrapped from a Stape custom loader URL. */
