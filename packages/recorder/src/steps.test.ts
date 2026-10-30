@@ -172,3 +172,35 @@ test('a value typed into a password field by any selector is not kept in the run
   expect(identity.extra).toEqual(['Berlin']);
   expect(JSON.stringify(saved.at(-1))).not.toContain('secret-fake-value');
 });
+
+test('a password value is never saved in the identity when the run fails at or before the fill', async () => {
+  const saved: unknown[] = [];
+  const page = (host: string, clickFails: boolean) => ({
+    goto: () => Promise.resolve(),
+    locator: (selector: string) => ({
+      first: () => ({
+        click: () => (clickFails ? Promise.reject(new Error('click timeout')) : Promise.resolve()),
+        evaluate: () =>
+          Promise.resolve({ tag: 'input', host, fields: [{ autocomplete: null, name: 'pass', id: 'x', type: selector === '#pw' ? 'password' : 'text' }] }),
+        fill: () => Promise.resolve(),
+      }),
+    }),
+  });
+  const play = (host: string, clickFails: boolean, yaml: string) => {
+    const recorder = {
+      site: `https://${host}`,
+      setIdentity: (i: unknown) => saved.push(structuredClone(i)),
+      beginStep: () => ({}),
+      endStep: () => undefined,
+      checkpoint: () => Promise.resolve(),
+      context: { pages: () => [page(host, clickFails)] },
+    };
+    return playScenario(recorder as never, parseScenario(yaml), { seed: 1 });
+  };
+  await expect(play('shop.example.com', false, 'start: /\nsteps:\n  - fill:\n      "#pw": secret-fake-value\n')).rejects.toThrow(/password field/);
+  await expect(
+    play('localhost', true, 'start: /\nsteps:\n  - click: "#go"\n  - fill:\n      "#pw": secret-fake-value\n'),
+  ).rejects.toThrow(/click timeout/);
+  expect(saved.length).toBeGreaterThan(0);
+  expect(JSON.stringify(saved)).not.toContain('secret-fake-value');
+});

@@ -282,11 +282,10 @@ async function runStep(
     case 'fill':
       for (const [selector, value] of Object.entries(step.value)) {
         const typed = fillValue(value, identity);
-        if (await fillField(page, selector, typed, timeout) && identity.extra?.includes(typed)) {
-          identity.extra = identity.extra.filter((v) => v !== typed);
-          if (identity.extra.length === 0) delete identity.extra;
-          recorder.setIdentity(identity);
-        }
+        const sensitive = await fillField(page, selector, typed, timeout);
+        if (sensitive || SECRET_FIELD.test(selector) || typed !== value) continue;
+        identity.extra = [...new Set([...(identity.extra ?? []), typed])];
+        recorder.setIdentity(identity);
       }
       return;
     case 'wait':
@@ -316,18 +315,9 @@ async function runStep(
   }
 }
 
-/** The seeded identity with the scenario's own field values, plus every literal `fill` value as `extra`. */
+/** The seeded identity with the scenario's own field values. Literal `fill` values join `extra` once typed into a non-sensitive field. */
 export function scenarioIdentity(scenario: Scenario, seed: number): Identity {
-  const literals = scenario.steps.flatMap((step) =>
-    step.kind === 'fill'
-      ? Object.entries(step.value)
-          .filter(([selector, v]) => !SECRET_FIELD.test(selector) && !(IDENTITY_FIELDS as readonly string[]).includes(v))
-          .map(([, v]) => v)
-      : [],
-  );
-  const identity: Identity = { ...createIdentity(seed), ...scenario.identity };
-  if (literals.length) identity.extra = [...new Set(literals)];
-  return identity;
+  return { ...createIdentity(seed), ...scenario.identity };
 }
 
 /**

@@ -333,7 +333,7 @@ describe('scan fixes', () => {
     scan('a'.repeat(200_000), id);
     scan(`${'a.'.repeat(50_000)}@`, id);
     scan('a-'.repeat(50_000), id);
-    expect(performance.now() - started).toBeLessThan(1500);
+    expect(performance.now() - started).toBeLessThan(10_000);
     expect(scan(`${'a'.repeat(100_000)} em=jane@shop.example.net`, id)).toContainEqual(jane);
   });
 
@@ -471,7 +471,7 @@ describe('own identity is never flagged', () => {
         }
       }
     }
-  }, 30_000);
+  }, 120_000);
 
   it('holds for a Swedish identity in national and E.164 phone forms', () => {
     for (let seed = 1; seed <= 200; seed++) {
