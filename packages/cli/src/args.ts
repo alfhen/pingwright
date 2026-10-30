@@ -79,6 +79,9 @@ Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
 Scenario format: https://github.com/alfhen/pingwright/blob/main/docs/design.md#11-expectations
 `;
 
+export const NET_LOG_NEEDS_LIVE =
+  '--net-log needs --network live. In stub mode it would let the requests a frame sends while it unloads leave the machine.';
+
 export function parseCli(argv: string[]): Command {
   let parsed;
   try {
@@ -132,8 +135,8 @@ export function parseCli(argv: string[]): Command {
   if (network !== undefined && network !== 'stub' && network !== 'live') {
     throw new UsageError(`--network must be stub or live, got "${network}"`);
   }
-  if (values['net-log'] && network !== 'live') {
-    throw new UsageError('--net-log needs --network live. In stub mode it would let the requests a frame sends while it unloads leave the machine.');
+  if (values['net-log'] && network === 'stub') {
+    throw new UsageError(NET_LOG_NEEDS_LIVE);
   }
   let seed: number | undefined;
   if (values.seed !== undefined) {

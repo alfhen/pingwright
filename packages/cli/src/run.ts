@@ -14,7 +14,7 @@ import {
   TEST_GTM_ORIGIN_ENV,
   type GtmOverrideInput,
 } from '@pingwright/recorder';
-import type { RunArgs } from './args.ts';
+import { NET_LOG_NEEDS_LIVE, type RunArgs } from './args.ts';
 import { buildSummary, exitCodeFor, formatSummary } from './summary.ts';
 
 export interface Io {
@@ -104,6 +104,10 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
   const networkMode = args.network ?? parsed.options.network ?? 'stub';
   if (networkMode === 'server') {
     io.stderr('Network mode "server" is not available yet. Use stub or live.\n');
+    return 2;
+  }
+  if (args.netLog && networkMode !== 'live') {
+    io.stderr(`${NET_LOG_NEEDS_LIVE}\n`);
     return 2;
   }
   if (networkMode === 'live') io.stderr('Warning: live mode. Hits reach real vendor accounts.\n');
