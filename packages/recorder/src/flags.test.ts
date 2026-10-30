@@ -249,3 +249,25 @@ test('unload gap: a same-name GA4 hit on a later page does not cover a lost one'
 test('unload gap: a GA4 hit just after the navigation starts still covers the event', () => {
   expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('add_to_cart', 4500)], navigations: [4000] })).toEqual([]);
 });
+
+test('unload gap: with no GA4 hit in the run, an sgtm hit of the same name covers the event', () => {
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [sgtmHit('add_to_cart', 1100)], navigations: [4000] })).toEqual([]);
+});
+
+test('unload gap: an sgtm hit before the push does not cover it', () => {
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [sgtmHit('add_to_cart', 500)], navigations: [4000] })).toHaveLength(1);
+});
+
+test('unload gap: a Shopify event name is matched to its GA4 name', () => {
+  const hits = [ga4Hit('add_to_cart', 1200)];
+  expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits, navigations: [4000] })).toEqual([]);
+  expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits: [ga4Hit('begin_checkout', 1200), sgtmHit('product_added_to_cart', 1100)], navigations: [4000] })).toHaveLength(1);
+});
+
+test('unload gap: the advice depends on the network mode', () => {
+  const input = { events: [pushed('add_to_cart', 1000)], navigations: [4000] };
+  const stub = gap({ ...input, networkMode: 'stub' })[0]!.detail;
+  expect(stub).toContain('unloadGapIgnore');
+  expect(stub).toContain('--network live --net-log');
+  expect(gap({ ...input, networkMode: 'live' })[0]!.detail).toContain('not captured without --net-log');
+});

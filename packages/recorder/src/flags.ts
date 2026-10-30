@@ -103,12 +103,27 @@ const GA4_EVENTS = new Set([
   'remove_from_cart', 'search', 'select_content', 'select_item', 'select_promotion', 'share', 'sign_up', 'view_cart', 'view_item', 'view_item_list', 'view_promotion',
 ]);
 
+/** Shopify standard event names and a few common aliases, mapped to the GA4 name a pixel normally sends. Not exhaustive. */
+const GA4_ALIASES: Readonly<Record<string, string>> = {
+  product_added_to_cart: 'add_to_cart',
+  product_removed_from_cart: 'remove_from_cart',
+  product_viewed: 'view_item',
+  collection_viewed: 'view_item_list',
+  cart_viewed: 'view_cart',
+  checkout_started: 'begin_checkout',
+  payment_info_submitted: 'add_payment_info',
+  checkout_shipping_info_submitted: 'add_shipping_info',
+  checkout_completed: 'purchase',
+  search_submitted: 'search',
+};
+
 function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${glob.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
 }
 
 export interface UnloadGapInput {
   runId: Id<'run'>;
+  networkMode?: NetworkMode;
   /** dataLayer events pushed from frames other than the main frame. */
   events: readonly DataLayerEvent[];
   hits: readonly Hit[];
@@ -118,14 +133,20 @@ export interface UnloadGapInput {
   ignore?: readonly string[];
 }
 
+function unloadGapAdvice(networkMode: NetworkMode | undefined): string {
+  return networkMode === 'live'
+    ? 'which is not captured without --net-log'
+    : 'which stub mode cannot capture. Add the name to options.unloadGapIgnore if the hit is not needed, or check it in a live run with --network live --net-log';
+}
+
 /**
  * An event pushed in an embedded frame shortly before the page navigated may have a GA4 hit that the frame flushed
  * while unloading. Chromium does not report those requests to the browser context.
  * Only events that look like tracking events are checked: some vendor sent a hit of that name, or the name is a GA4
- * recommended event. GA4 is expected when the run has any GA4 hit or the name is a GA4 event. Another vendor's hit
- * does not cover it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it.
+ * recommended event, or an alias in `GA4_ALIASES` (`product_added_to_cart` for `add_to_cart`). GA4 is expected when the run has any GA4 hit or the name is a GA4 event. Another vendor's hit
+ * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it.
  */
-export function buildUnloadGapFlags({ runId, events, hits, navigations, ignore = [] }: UnloadGapInput): Flag[] {
+export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigations, ignore = [] }: UnloadGapInput): Flag[] {
   const ignored = ignore.map(globToRegExp);
   const ga4Hits = hits.filter((h) => h.vendor === 'ga4');
   const flags: Flag[] = [];
@@ -134,17 +155,20 @@ export function buildUnloadGapFlags({ runId, events, hits, navigations, ignore =
     if (name === null || event.isConsentCommand || name.startsWith('gtm.') || ignored.some((re) => re.test(name))) continue;
     const navigation = navigations.find((n) => n >= event.t);
     if (navigation === undefined || navigation - event.t > UNLOAD_GAP_WINDOW_MS) continue;
-    const ga4Name = GA4_EVENTS.has(name);
+    const expected = GA4_ALIASES[name] ?? name;
+    const ga4Name = GA4_EVENTS.has(expected);
     if (!ga4Name && !hits.some((h) => h.event === name)) continue;
     if (!ga4Name && ga4Hits.length === 0) continue;
-    if (ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event !== null && (h.event === name || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
+    const covered = (h: Hit) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event === name;
+    if (ga4Hits.length === 0 && hits.some(covered)) continue;
+    if (ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event !== null && (h.event === name || h.event === expected || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
     const seconds = ((navigation - event.t) / 1000).toFixed(1);
     flags.push(
       flag(
         runId,
         'unloadGap',
         [event.id],
-        `A frame pushed "${name}" ${seconds} s before the page navigated and no ga4 hit for it was recorded after it. The frame may have sent the hit while unloading, which is not captured without --net-log (design §5.3).`,
+        `A frame pushed "${name}" ${seconds} s before the page navigated and no ga4 hit for it was recorded after it. The frame may have sent the hit while unloading, ${unloadGapAdvice(networkMode)} (design §5.3).`,
       ),
     );
   }
