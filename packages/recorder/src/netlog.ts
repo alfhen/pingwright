@@ -53,10 +53,11 @@ export function parseNetLog(text: string): NetLogRequest[] {
     const params = event.params ?? {};
     const id = event.source.id;
     if (event.type === types.URL_REQUEST_START_JOB && typeof params.url === 'string') {
-      if (bySource.has(id)) continue;
+      const method = typeof params.method === 'string' ? params.method : 'GET';
+      if (bySource.has(id) || method === 'OPTIONS') continue;
       bySource.set(id, {
         t: Number(event.time) + offset,
-        method: typeof params.method === 'string' ? params.method : 'GET',
+        method,
         url: params.url,
         headers: {},
         status: null,

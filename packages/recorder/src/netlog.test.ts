@@ -33,6 +33,11 @@ test('reads URL, method, headers, status and network error per request', () => {
   ]);
 });
 
+test('skips CORS preflights', () => {
+  const preflight = [ev(1, 20, 700, { url: 'https://sgtm.pingwright.invalid/g/collect', method: 'OPTIONS' }), ev(3, 20, 710, { headers: ['HTTP/1.1 204 No Content'] })];
+  expect(parseNetLog(JSON.stringify({ constants, events: preflight }))).toEqual([]);
+});
+
 test('reads a log that stops after the last event', () => {
   const text = JSON.stringify({ constants, events }).replace(/\]\}$/, '');
   expect(parseNetLog(text)).toHaveLength(2);
