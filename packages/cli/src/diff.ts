@@ -63,6 +63,9 @@ async function load(path: string): Promise<RunRecords> {
 export async function diffCommand(args: DiffArgs, io: Io): Promise<number> {
   const [a, b] = await Promise.all([load(args.a), load(args.b)]);
   const result = diffRuns(a, b, { byPage: args.byPage });
+  for (const [path, run] of [[args.a, a], [args.b, b]] as const) {
+    if (run.truncatedAtLine) result.warnings.push(`${path}: truncated at line ${run.truncatedAtLine}; later records are missing from the diff`);
+  }
   io.stdout(args.json ? `${JSON.stringify(result, null, 2)}\n` : formatDiff(result, args.a, args.b));
   return 0;
 }

@@ -69,3 +69,29 @@ test('a missing file and an invalid file both exit 2 with a message', async () =
   expect(await main(['diff', bad, bad], io)).toBe(2);
   expect(err.join('')).toContain('first record must be a run');
 });
+
+test('warns when an input file is cut off', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-diff-'));
+  const run = {
+    type: 'run',
+    id: 'run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    scenario: 'checkout',
+    site: 'http://localhost:1234',
+    startedAt: 1_800_000_000_000,
+    pingwrightVersion: '0.0.0',
+    browser: { name: 'chromium', version: '156.0.0.0' },
+    networkMode: 'stub',
+    gtmOverride: null,
+    containerVersions: {},
+    identity: null,
+  };
+  const cut = join(dir, 'cut.jsonl');
+  await writeFile(cut, `${JSON.stringify(run)}\n{"type":"requ`);
+  const out: string[] = [];
+  const io = { stdout: (t: string) => void out.push(t), stderr: () => {} };
+  expect(await main(['diff', cut, cut, '--json'], io)).toBe(0);
+  expect(JSON.parse(out.join('')).warnings).toEqual([
+    `${cut}: truncated at line 2; later records are missing from the diff`,
+    `${cut}: truncated at line 2; later records are missing from the diff`,
+  ]);
+});
