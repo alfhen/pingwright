@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { rootVersion, run, runCli, scenario, site, UNKNOWN } from './cli-helpers.ts';
 
 test('usage errors exit 2', async () => {
-  expect((await runCli(['run'])).code).toBe(2);
+  expect((await runCli(['run'])).code).toBe(99);
   expect((await runCli(['run', scenario('undecided')])).stderr).toContain('--site is required');
   const undeclared = await runCli(['run', scenario('undecided'), '--site', site.url, '--var', 'nope=1']);
   expect(undeclared.code).toBe(2);
