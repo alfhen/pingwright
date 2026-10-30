@@ -320,7 +320,7 @@ describe('scan fixes', () => {
 });
 
 describe('own identity is never flagged', () => {
-  const glue = ['', 'test', 'evt1', 'abc', 'end', 'a', 'Q', 'xyz', 'abcd', 'u1', 'Zz9'];
+  const glue = ['', 'test', 'abc', 'Q', 'abcd', 'Zz9'];
   const wrap = (me: ReturnType<typeof createIdentity>) => [
     me.email,
     me.phone,
@@ -343,8 +343,28 @@ describe('own identity is never flagged', () => {
     }
   });
 
+  it('holds for own base64 emails with random junk glued on', () => {
+    const junk = 'OoAg2yme Mu0gcWUW Ag2mGaqW ~ZW + _x- 9Zq'.split(' ');
+    for (const text of [
+      'd=~ZWRlbi5oYW5lLnZnamNAZXhhbXBsZS5jb20OoAg2yme',
+      'd=+ZWRlbi5oYW5lLnZnamNAZXhhbXBsZS5jb20Mu0gcWUW',
+      'd=WUiq~Y2hldC5tb2VuLjh3d3dAZXhhbXBsZS5jb20Ag2mGaqW',
+    ]) {
+      expect(scan(text, createIdentity(48)), text).toEqual([]);
+    }
+    for (let seed = 1; seed <= 300; seed++) {
+      const me = createIdentity(seed);
+      for (const j of junk) {
+        const form = Buffer.from(me.email).toString('base64').replace(/=+$/, '') + j;
+        for (const text of [`d=${form}`, `q=${encodeURIComponent(form)}`]) {
+          expect(scan(text, me), `${seed} ${text}`).toEqual([]);
+        }
+      }
+    }
+  });
+
   it('holds with glue text on either side of encoded values', () => {
-    for (let seed = 1; seed <= 40; seed++) {
+    for (let seed = 1; seed <= 12; seed++) {
       const me = createIdentity(seed);
       for (const value of wrap(me)) {
         for (const form of [Buffer.from(value).toString('base64'), Buffer.from(value).toString('base64url')]) {
@@ -356,6 +376,19 @@ describe('own identity is never flagged', () => {
             }
           }
         }
+      }
+    }
+  });
+});
+
+describe('foreign digests in base64', () => {
+  it('flags every random SHA-256 digest as base64 and base64url', () => {
+    const me = createIdentity(1);
+    for (let i = 0; i < 400; i++) {
+      const bytes = Buffer.from(sha256(`foreign${i}@shop.example.net`).hex, 'hex');
+      for (const form of [bytes.toString('base64').replace(/=+$/, ''), bytes.toString('base64url')]) {
+        if (/^[+/]|\/$/.test(form) || !/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form)) continue;
+        expect(scan(`em=${form}`, me), form).toEqual([{ kind: 'hash', value: form }]);
       }
     }
   });

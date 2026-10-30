@@ -220,12 +220,27 @@ function isWholeValue(text: string, start: number, token: string): boolean {
   return startsOk && endsOk;
 }
 
+const PAYLOAD_RUN = 16;
+
+function hasPrintableRun(bytes: Buffer): boolean {
+  let run = 0;
+  for (const byte of bytes) {
+    run = byte >= 0x20 && byte < 0x7f ? run + 1 : 0;
+    if (run >= PAYLOAD_RUN) return true;
+  }
+  return false;
+}
+
+// A random digest almost never holds a long printable run (about 2e-6). A disguised Stape path or an own value with junk glued on always does.
 function isDigestToken(token: string): boolean {
   const bare = token.replace(/=+$/, '');
   if (bare.length !== 43 || !/[a-z]/.test(bare) || !/[A-Z]/.test(bare) || !/\d/.test(bare)) return false;
   if (Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length !== 32) return false;
-  // A real digest is random bytes; 32 bytes of readable text, even with junk glued on, is a payload, such as a disguised Stape path.
-  return base64Decodes(bare).next().done === true;
+  // Glued prefix text shifts the base64 alignment, so each of the four alignments is checked.
+  for (let offset = 0; offset <= 3; offset++) {
+    if (hasPrintableRun(Buffer.from(bare.slice(offset).replace(/-/g, '+').replace(/_/g, '/'), 'base64'))) return false;
+  }
+  return true;
 }
 
 // Only base64 decoding spends depth; URL decoding is cheap and a disguised Stape URL layers it between base64 steps.
