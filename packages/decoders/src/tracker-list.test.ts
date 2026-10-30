@@ -20,8 +20,8 @@ test('does not match another path on a listed host', () => {
 
 test('does not match library loads', () => {
   expect(at('https://bat.bing.com/bat.js')).toBeUndefined();
-  expect(at('https://analytics.twitter.com/uwt.js')).toBeUndefined();
-  expect(at('https://px.ads.linkedin.com/insight.min.js')).toBeUndefined();
+  expect(at('https://static.ads-twitter.com/uwt.js')).toBeUndefined();
+  expect(at('https://snap.licdn.com/li.lms-analytics/insight.min.js')).toBeUndefined();
 });
 
 test('does not match an unlisted host or a bad URL', () => {
@@ -37,6 +37,11 @@ test('every source is https on its vendor docs domains', () => {
     expect(u.protocol, e.source).toBe('https:');
     expect(ok, `${e.vendor}: ${e.source}`).toBe(true);
   }
+});
+
+test('every docs-domain vendor has an entry and every entry has docs domains', () => {
+  const vendors = new Set(trackerList.map((e) => e.vendor));
+  expect([...vendors].sort()).toEqual(Object.keys(trackerDocsDomains).sort());
 });
 
 test('wildcard hosts match subdomains only', () => {

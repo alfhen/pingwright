@@ -12,13 +12,10 @@ export interface TrackerEntry {
 
 /** Hosts whose pages count as a vendor's own docs. A built-in entry's `source` must be on one of them. */
 export const trackerDocsDomains: Readonly<Record<string, readonly string[]>> = {
-  tiktok: ['business-api.tiktok.com', 'ads.tiktok.com'],
-  snap: ['developers.snap.com', 'businesshelp.snapchat.com'],
   linkedin: ['linkedin.com', 'learn.microsoft.com'],
   'microsoft-uet': ['microsoft.com', 'help.ads.microsoft.com'],
   x: ['business.x.com', 'business.twitter.com'],
   reddit: ['reddithelp.com'],
-  criteo: ['developers.criteo.com', 'help.criteo.com'],
 };
 
 export const trackerList: readonly TrackerEntry[] = [
