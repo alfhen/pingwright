@@ -394,7 +394,7 @@ describe('foreign digests in base64', () => {
     const me = createIdentity(1);
     const a = sha256('a@shop.example.net').base64url;
     const b = sha256('b@shop.example.net').base64url;
-    for (const text of [`em=tv.1~em.${a}~ph.${b}`, `em=tv.1~em.${encodeURIComponent(a)}~ph.${encodeURIComponent(b)}`, `x=${a};y=${b}`]) {
+    for (const text of [`em=tv.1~em.${a}~ph.${b}`, `em=tv.1~em.${encodeURIComponent(a)}~ph.${encodeURIComponent(b)}`, `ud[em]=${a}&ud[ph]=${b}`]) {
       expect(scan(text, me).map((l) => l.value).sort(), text).toEqual([a, b].sort());
     }
     const own = [hashEmail(me.email).base64url, hashPhone(me.phone).base64url];
@@ -407,7 +407,6 @@ describe('foreign digests in base64', () => {
     let slash = 0;
     for (let i = 0; plus < 5 || slash < 5; i++) {
       const form = sha256(`lead${i}@shop.example.net`).base64.replace(/=+$/, '');
-      if (!/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form) || form.endsWith('/') || form.indexOf('/', 1) > 0) continue;
       if (form.startsWith('+')) plus++;
       else if (form.startsWith('/')) slash++;
       else continue;
@@ -421,8 +420,40 @@ describe('foreign digests in base64', () => {
     for (let i = 0; i < 400; i++) {
       const bytes = Buffer.from(sha256(`foreign${i}@shop.example.net`).hex, 'hex');
       for (const form of [bytes.toString('base64').replace(/=+$/, ''), bytes.toString('base64url')]) {
-        if (/\/$/.test(form) || (form.startsWith('/') && form.indexOf('/', 1) > 0) || !/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form)) continue;
         expect(scan(`em=${form}`, me), form).toEqual([{ kind: 'hash', value: form }]);
+      }
+    }
+  });
+
+  it('flags digests under every identity key and inside tv.1~ values', () => {
+    const me = createIdentity(1);
+    const keys = ['em', 'ph', 'fn', 'ln', 'ud[em]', 'ud[ph]', 'ud[fn]', 'ud[ln]', 'ud[ct]', 'sha256_email_address', 'sha256_phone_number', 'sha256_first_name', 'sha256_last_name', 'user_data.sha256_email_address'];
+    for (let i = 0; i < 60; i++) {
+      const bytes = Buffer.from(sha256(`key${i}@shop.example.net`).hex, 'hex');
+      for (const form of [bytes.toString('base64').replace(/=+$/, ''), bytes.toString('base64url'), bytes.toString('base64')]) {
+        const bare = form.replace(/=+$/, '');
+        for (const key of keys) {
+          expect(scan(`${key}=${form}`, me).map((l) => l.value), `${key}=${form}`).toEqual([form]);
+          expect(scan(`${encodeURIComponent(key)}=${encodeURIComponent(form)}`, me).map((l) => l.value)).toEqual([form]);
+          expect(scan(JSON.stringify({ [key]: form }), me).map((l) => l.value)).toEqual([form]);
+        }
+        expect(scan(`tv.1~em.${form}~ph.${form}`, me).map((l) => l.value)).toEqual([form]);
+        for (const key of ['utm_campaign', 'dp', 'ep.item_id', 'item_em', 'ep.em']) {
+          expect(scan(`${key}=${bare}`, me), `${key}=${bare}`).toEqual([]);
+        }
+        expect(scan(JSON.stringify({ page_path: bare }), me)).toEqual([]);
+        expect(scan(bare, me)).toEqual([]);
+      }
+    }
+  });
+
+  it('does not flag readable 43-character values', () => {
+    const me = createIdentity(1);
+    const values = ['SummerSale2024-EmailBlast-Newsletter-Week1', 'Product-Variant-Blue-Large-Edition-Item-12345', '/products/BlueShirt-2024/Variant9X12345abcd'];
+    for (const v of values) {
+      const value = v.slice(0, 43);
+      for (const text of [`utm_campaign=${value}`, `dp=${value}`, `ep.item_id=${value}`, JSON.stringify({ page_path: value }), value]) {
+        expect(scan(text, me), text).toEqual([]);
       }
     }
   });

@@ -207,42 +207,28 @@ function* base64Decodes(text: string): Generator<string> {
   }
 }
 
-const DIGEST_BEFORE = new Set(['=', ':', '"', "'", '~', ',', '+']);
-const DIGEST_AFTER = new Set(['&', '"', "'", ',', '~', ';']);
-const SLASH_LEAD_BEFORE = new Set(['=', ':', '"', "'"]);
+const DIGEST_VALUE = '([A-Za-z0-9+/_-]{43}={0,2})(?![A-Za-z0-9+/_=-])';
+// Base64 digests are only recognised under these keys; by shape alone they cannot be told from readable text.
+const IDENTITY_DIGEST_KEY = new RegExp(
+  `(?<![\\w.\\[\\]-])(?:em|ph|fn|ln|ud\\[[^\\]&=]+\\]|sha256_(?:email_address|phone_number|first_name|last_name)|user_data\\.[\\w.]+)["']?\\s*[=:]\\s*["']?${DIGEST_VALUE}`,
+  'gi',
+);
+const ADS_USER_DATA = /tv\.1~([^&\s"']*)/gi;
+const ADS_FIELD = /^(?:em|ph|fn|ln)\.(.+)$/i;
 
-// A digest is a whole value. Path segments and slugs that happen to be 43 characters long are not.
-function isWholeValue(text: string, start: number, token: string): boolean {
-  if (token.endsWith('/')) return false;
-  const before = text[start - 1];
-  if (token.startsWith('/') && (token.includes('/', 1) || before === undefined || !SLASH_LEAD_BEFORE.has(before))) return false;
-  const after = text[start + token.length];
-  const startsOk = before === undefined || DIGEST_BEFORE.has(before) || (before === '.' && !token.includes('/'));
-  const endsOk = after === undefined || DIGEST_AFTER.has(after) || /\s/.test(after);
-  return startsOk && endsOk;
-}
-
-const PAYLOAD_RUN = 16;
-
-function hasPrintableRun(bytes: Buffer): boolean {
-  let run = 0;
-  for (const byte of bytes) {
-    run = byte >= 0x20 && byte < 0x7f ? run + 1 : 0;
-    if (run >= PAYLOAD_RUN) return true;
-  }
-  return false;
-}
-
-// A random digest almost never holds a long printable run (about 2e-6). A disguised Stape path or an own value with junk glued on always does.
-function isDigestToken(token: string): boolean {
+function isDigest(token: string): boolean {
   const bare = token.replace(/=+$/, '');
-  if (bare.length !== 43 || !/[a-z]/.test(bare) || !/[A-Z]/.test(bare) || !/\d/.test(bare)) return false;
-  if (Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length !== 32) return false;
-  // Glued prefix text shifts the base64 alignment, so each of the four alignments is checked.
-  for (let offset = 0; offset <= 3; offset++) {
-    if (hasPrintableRun(Buffer.from(bare.slice(offset).replace(/-/g, '+').replace(/_/g, '/'), 'base64'))) return false;
+  return bare.length === 43 && Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length === 32;
+}
+
+function* keyedDigests(text: string): Generator<string> {
+  for (const m of text.matchAll(IDENTITY_DIGEST_KEY)) if (isDigest(m[1]!)) yield m[1]!;
+  for (const m of text.matchAll(ADS_USER_DATA)) {
+    for (const field of m[1]!.split('~')) {
+      const value = ADS_FIELD.exec(field)?.[1];
+      if (value !== undefined && /^[A-Za-z0-9+/_-]{43}={0,2}$/.test(value) && isDigest(value)) yield value;
+    }
   }
-  return true;
 }
 
 // Only base64 decoding spends depth; URL decoding is cheap and a disguised Stape URL layers it between base64 steps.
@@ -310,18 +296,9 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     for (const m of variant.matchAll(HASH)) {
       if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
     }
-    for (const m of variant.matchAll(BASE64_TOKEN)) {
-      // A leading '+' is a joiner between values or the first character of a standard-base64 digest, so both readings are tried.
-      const stripped = m[0].replace(/^\++/, '');
-      const readings = m[0].startsWith('+') ? [stripped, m[0].replace(/^\++(?=\+)/, '')] : [stripped];
-      for (const token of readings) {
-        const bare = token.replace(/=+$/, '');
-        const start = m.index + m[0].length - token.length;
-        if (isDigestToken(token) && isWholeValue(variant, start, token) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) {
-          add('hash', token);
-          break;
-        }
-      }
+    // Escaped text is matched through its decoded variant, so a percent-encoded '=' never splits a digest.
+    for (const token of hasUrlEscapes(variant) ? [] : keyedDigests(variant)) {
+      if (!own.hashes.has(token.replace(/=+$/, ''))) add('hash', token);
     }
   }
   return [...found.values()];
