@@ -269,7 +269,7 @@ What PRs do: the VitePress config, the workflow, the dogfood check, the post-dep
 - Write in Simplified Technical English (ASD-STE100 style): short sentences, one idea per sentence, active voice, common words. Define a term the first time it appears, then use only that term.
 - Explain in simple terms first. Put the technical detail after the plain explanation, not instead of it.
 - Prefer a picture to a paragraph. Show flows, consent states and what a run records as diagrams.
-- Diagrams are hand-written SVG files in `docs/images/`, in the brand colours from `brand/README.md`, with a text alternative. No diagram library that runs in the browser.
+- Diagrams are Mermaid code blocks (` ```mermaid `) in the markdown. GitHub draws them, and the site draws them from the `mermaid` package bundled with the site (root `devDependency`, no CDN). The theme follows light and dark mode with the brand colours from `brand/README.md` and the system font stack. Each diagram has a one-line text summary under it.
 - Run the `humanizer` skill on all new or changed prose before the PR, and fix what it finds.
 - The reviewer checks the writing as well as the facts.
 
@@ -299,14 +299,16 @@ Touches: `README.md`, `docs/release.md`.
 Acceptance: the README links to `https://pingwright.dev`. The release steps say the site follows `main`.
 
 **D6. Landing page and guides.** Needs D1.
-Touches: `docs/index.md` or the VitePress home page, `docs/guide/*.md`, `docs/images/*.svg`, `.vitepress/config.ts` (sidebar), the Writing section of `AGENTS.md`.
+Touches: `docs/index.md` (the VitePress home page, built as `/`; the README moves to `/readme`), `docs/guide/*.md`, `.vitepress/` (config, sidebar, Mermaid theme component), the Writing section of `AGENTS.md`.
 A landing page and three short guides: what Pingwright checks and why, your first run, and reading a run's results. Each guide has at least one diagram. The guides follow the writing rules in §8 and link to `cli.md` and `design.md` for detail.
-Acceptance: the pages build and pass the link check. Each diagram has a text alternative and renders in light and dark mode. The review finds no jargon left unexplained.
+Acceptance: the pages build and pass the link check. Each diagram is a Mermaid block with a text summary and renders in light and dark mode. The review finds no jargon left unexplained.
 
 D3 and D4 both touch the workflow, so they go one after the other.
 
 ## 10. Decisions
 
+- **Mermaid `11.17.2`** draws diagrams, bundled from the site's own files and loaded only on pages that have a diagram.
+- **`/` is a VitePress home page** (`docs/index.md`). The README cannot carry the front matter that GitHub would show as a table, so it is published at `/readme`.
 - **VitePress `2.0.0-alpha.20`**, pinned exactly. Bump it on purpose, never by range.
 - **User docs only:** the README, `cli.md`, `shopify-checkout.md`, `design.md` and `release.md`. Plans, proposals and `AGENTS.md` stay in the repo.
 - **Web Storage is allowed** for the two VitePress UI keys (`vitepress:local-search-detailed-list`, `vitepress-theme-appearance`). They never leave the browser. The dogfood check still fails on any cookie.

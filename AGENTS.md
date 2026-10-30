@@ -27,6 +27,7 @@ The spec is [docs/design.md](docs/design.md). The current plan is the newest `do
 
 - Docs, commits and PR text use plain, short sentences.
 - Code comments are rare. Write one only for a reason the code can't show: why it is this way, a hidden constraint, or a property a refactor must keep. Design reasoning goes in the PR.
+- Diagrams are Mermaid code blocks (` ```mermaid `) in the markdown, with a one-line text summary under each. No images of diagrams.
 - Match the style of the code around you.
 
 ## How a change is made

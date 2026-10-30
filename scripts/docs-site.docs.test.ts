@@ -59,8 +59,10 @@ afterAll(async () => {
   rmSync(deadLinkPage, { force: true });
 });
 
-test('builds the README as / and every published doc', () => {
-  for (const page of ['index', 'docs/cli', 'docs/design', 'docs/shopify-checkout', 'docs/release']) {
+const guides = ['docs/guide/what-it-checks', 'docs/guide/first-run', 'docs/guide/reading-results'];
+
+test('builds the landing page as /, the README as /readme, the guides and every published doc', () => {
+  for (const page of ['index', 'readme', ...guides, 'docs/cli', 'docs/design', 'docs/shopify-checkout', 'docs/release']) {
     expect(existsSync(join(dist, `${page}.html`)), page).toBe(true);
   }
   expect(existsSync(join(dist, 'docs/plan-0.2.html'))).toBe(false);
@@ -96,9 +98,47 @@ test('built pages make no requests to other hosts', async () => {
     if (new URL(request.url()).hostname !== '127.0.0.1') outside.push(request.url());
   });
   const page = await context.newPage();
-  for (const path of ['/', '/docs/cli', '/docs/design', '/docs/shopify-checkout', '/docs/release']) {
+  for (const path of ['/', '/readme', ...guides.map((g) => `/${g}`), '/docs/cli', '/docs/design', '/docs/shopify-checkout', '/docs/release']) {
     await page.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: 'networkidle' });
   }
   await context.close();
   expect(outside).toEqual([]);
+});
+
+test('a page with a diagram draws an svg, in light and dark mode, without outside requests', async () => {
+  const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
+  const outside: string[] = [];
+  context.on('request', (request) => {
+    if (new URL(request.url()).hostname !== '127.0.0.1') outside.push(request.url());
+  });
+  const page = await context.newPage();
+  for (const path of ['/docs/design', ...guides.map((g) => `/${g}`)]) {
+    await page.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: 'networkidle' });
+    await page.locator('.mermaid-svg svg').first().waitFor();
+    const drawn = await page.locator('.mermaid-diagram').count();
+    expect(await page.locator('.mermaid-svg svg').count(), path).toBe(drawn);
+    expect(await page.locator('.mermaid-source').count(), path).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), path).toBe(true);
+  }
+  const nodeFill = () => page.locator('.mermaid-svg svg .node rect').first().evaluate((el) => getComputedStyle(el).fill);
+  const lightFill = await nodeFill();
+  await page.locator('.VPSwitchAppearance').first().click();
+  await expect.poll(nodeFill).not.toBe(lightFill);
+  await context.close();
+  expect(outside).toEqual([]);
+});
+
+test('pages without a diagram do not load the diagram code', async () => {
+  const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
+  const scripts: string[] = [];
+  context.on('request', (request) => {
+    if (request.resourceType() === 'script') scripts.push(request.url());
+  });
+  const page = await context.newPage();
+  await page.goto(`http://127.0.0.1:${port}/docs/cli`, { waitUntil: 'networkidle' });
+  const withoutDiagram = scripts.length;
+  scripts.length = 0;
+  await page.goto(`http://127.0.0.1:${port}/docs/guide/first-run`, { waitUntil: 'networkidle' });
+  await context.close();
+  expect(scripts.length).toBeGreaterThan(withoutDiagram);
 });
