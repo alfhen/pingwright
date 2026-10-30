@@ -413,6 +413,19 @@ describe('own identity is never flagged', () => {
     }
   }, 30_000);
 
+  it('holds for a Swedish identity in national and E.164 phone forms', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const me = createIdentity(seed, { country: 'SE' });
+      const d = me.phone.slice(3);
+      const national = [`0${d}`, `0${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5)}`, `0${d.slice(0, 2)}-${d.slice(2, 5)} ${d.slice(5)}`, `0${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 7)} ${d.slice(7)}`];
+      for (const form of [me.phone, ...national]) {
+        for (const text of [`ph=${form}`, `a=${form}&b=1`, JSON.stringify({ phone: form })]) {
+          expect(scan(text, me), `${seed} ${text}`).toEqual([]);
+        }
+      }
+    }
+  });
+
   it('holds for own base64 emails with random junk glued on', () => {
     const junk = 'OoAg2yme Mu0gcWUW Ag2mGaqW ~ZW + _x- 9Zq'.split(' ');
     for (const text of [
