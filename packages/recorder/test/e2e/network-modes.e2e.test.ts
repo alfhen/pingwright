@@ -434,7 +434,19 @@ for (const [name, path] of [
 }
 
 test('live mode lets a redirect hop through to the server', async () => {
-  const live = await visit('/redirect', 'live');
+  serverSaw = [];
+  const recorder = await launchRecorder({ networkMode: 'live', outDir, site: `http://localhost:${port}` });
+  try {
+    await recorder.visit(`http://localhost:${port}/redirect`);
+    // Closing before Playwright reports the hop would drop its record (design §5.3), so wait for the server first.
+    const deadline = Date.now() + 10_000;
+    while (!serverSaw.some((u) => u.includes('en=redirected')) && Date.now() < deadline) await recorder.wait(100);
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const live = await recorder.close();
   const hop = collectionRequests(live).find((q) => q.url.includes('en=redirected'));
   expect(hop).toMatchObject({ outcome: 'passed' });
   expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
