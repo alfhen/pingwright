@@ -397,9 +397,9 @@ export class Recorder {
       if (!next || !/^https?:$/.test(next.protocol)) break;
       const toGet = [301, 302].includes(status) ? method === 'POST' : status === 303 && method !== 'HEAD';
       if (toGet) {
+        if (method !== 'GET') headers = withoutMethodChangeHeaders(headers);
         method = 'GET';
         postData = null;
-        headers = withoutBodyHeaders(headers);
       }
       const hop = this.hopRecord(first, next.href, method, headers, postData);
       if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
@@ -429,7 +429,10 @@ export class Recorder {
       url = next.href;
       this.recordApiResponse(current, response);
     }
-    await route.fulfill({ response });
+    // Chromium applies a handed-back 307 or 308 to the original request, so after a method change it must
+    // see a 303, or it re-sends the original method and body to the next host.
+    const keepsMethod = [307, 308].includes(response.status());
+    await route.fulfill(method !== first.method && keepsMethod ? { response, status: 303 } : { response });
   }
 
   private isSameOriginUrl(url: string): boolean {
@@ -656,9 +659,9 @@ function abortCode(error: unknown): string {
   return 'failed';
 }
 
-// Fetch spec: a redirect that changes the method to GET drops the body and its headers.
-const BODY_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'content-language', 'content-location']);
+// Fetch spec and Chromium: a redirect that changes the method to GET drops the body, its headers and Origin.
+const BODY_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'content-language', 'content-location', 'origin']);
 
-function withoutBodyHeaders(headers: Record<string, string>): Record<string, string> {
+function withoutMethodChangeHeaders(headers: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !BODY_HEADERS.has(name.toLowerCase())));
 }

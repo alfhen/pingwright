@@ -15,7 +15,8 @@ let otherSaw: { cookie: string; authorization: string }[] = [];
 let outDir: string;
 let serverSaw: string[] = [];
 let pixelCookies: string[] = [];
-let landedSaw: { method: string; contentType: string; body: string }[] = [];
+let landedSaw: { method: string; contentType: string; body: string; origin: string }[] = [];
+let otherBodies: { method: string; body: string }[] = [];
 
 const COLLECT = (tag: string) => `/g/collect?v=2&tid=G-PWTEST0001&cid=1.2&en=${tag}`;
 
@@ -113,6 +114,8 @@ function page(path: string): string | undefined {
           });
         });
       </script>`;
+    case '/post-303-307':
+      return `<script>fetch('/p303x', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'b=secret', mode: 'no-cors' }).catch(() => {});</script>`;
     case '/post-303':
       return `<script>fetch('/post-redirect', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'a=secret' });</script>`;
     case '/next':
@@ -163,6 +166,15 @@ beforeAll(async () => {
       res.writeHead(307, { location: `http://localhost:${otherPort}/echo` }).end();
       return;
     }
+    if (path === '/p303x') {
+      req.resume();
+      res.writeHead(303, { location: '/p307x' }).end();
+      return;
+    }
+    if (path === '/p307x') {
+      res.writeHead(307, { location: `http://127.0.0.1:${otherPort}/echo-body` }).end();
+      return;
+    }
     if (path === '/post-redirect') {
       req.resume();
       res.writeHead(303, { location: '/post-landed' }).end();
@@ -172,7 +184,7 @@ beforeAll(async () => {
       let body = '';
       req.on('data', (chunk) => (body += chunk));
       req.on('end', () => {
-        landedSaw.push({ method: req.method ?? '', contentType: req.headers['content-type'] ?? '', body });
+        landedSaw.push({ method: req.method ?? '', contentType: req.headers['content-type'] ?? '', body, origin: req.headers.origin ?? '' });
         res.writeHead(204).end();
       });
       return;
@@ -207,6 +219,15 @@ beforeAll(async () => {
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization' };
     if (req.method === 'OPTIONS') {
       res.writeHead(204, cors).end();
+      return;
+    }
+    if (new URL(req.url ?? '/', 'http://x').pathname === '/echo-body') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        otherBodies.push({ method: req.method ?? '', body });
+        res.writeHead(204, cors).end();
+      });
       return;
     }
     otherSaw.push({ cookie: req.headers.cookie ?? '', authorization: req.headers.authorization ?? '' });
@@ -381,7 +402,18 @@ test('a POST that a 303 turns into a GET reaches the server the same way in stub
     return landedSaw;
   };
   const live = await seen('live');
-  expect(live).toEqual([{ method: 'GET', contentType: '', body: '' }]);
+  expect(live).toEqual([{ method: 'GET', contentType: '', body: '', origin: '' }]);
+  expect(await seen('stub')).toEqual(live);
+});
+
+test('a 303 then a cross-origin 307 reaches the other host as a GET without the body in stub and live mode', async () => {
+  const seen = async (mode: 'stub' | 'live') => {
+    otherBodies = [];
+    await visit('/post-303-307', mode);
+    return otherBodies;
+  };
+  const live = await seen('live');
+  expect(live).toEqual([{ method: 'GET', body: '' }]);
   expect(await seen('stub')).toEqual(live);
 });
 
