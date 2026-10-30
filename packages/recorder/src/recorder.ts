@@ -372,6 +372,7 @@ export class Recorder {
     }
     let method = first.method;
     let postData: Buffer | null = original.postDataBuffer();
+    let headers: Record<string, string> = original.headers();
     let url = first.url;
     let response: APIResponse;
     let current = first;
@@ -398,8 +399,9 @@ export class Recorder {
       if (toGet) {
         method = 'GET';
         postData = null;
+        headers = withoutBodyHeaders(headers);
       }
-      const hop = this.hopRecord(first, next.href, method, original.headers(), postData);
+      const hop = this.hopRecord(first, next.href, method, headers, postData);
       if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
         hop.outcome = 'stubbed';
         this.routed.add(hop.id);
@@ -414,7 +416,12 @@ export class Recorder {
       this.routed.add(hop.id);
       current = hop;
       try {
-        response = await route.fetch({ url: next.href, method, postData: postData ?? undefined, maxRedirects: 0, timeout: 0 });
+        // route.fetch always falls back to the original request's body, and an explicit empty body adds a
+        // content-type, so a hop with no body goes through the context's request client, which shares its cookies.
+        response =
+          postData === null
+            ? await this.context.request.fetch(next.href, { method, headers, maxRedirects: 0, timeout: 0 })
+            : await route.fetch({ url: next.href, method, headers, postData, maxRedirects: 0, timeout: 0 });
       } catch (error) {
         await route.abort(abortCode(error));
         return;
@@ -647,4 +654,11 @@ function abortCode(error: unknown): string {
   if (message.includes('ETIMEDOUT') || message.includes('ERR_TIMED_OUT')) return 'timedout';
   if (message.includes('ECONNRESET') || message.includes('ERR_CONNECTION_RESET')) return 'connectionreset';
   return 'failed';
+}
+
+// Fetch spec: a redirect that changes the method to GET drops the body and its headers.
+const BODY_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'content-language', 'content-location']);
+
+function withoutBodyHeaders(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => !BODY_HEADERS.has(name.toLowerCase())));
 }

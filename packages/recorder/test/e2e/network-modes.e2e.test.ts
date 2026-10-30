@@ -15,6 +15,7 @@ let otherSaw: { cookie: string; authorization: string }[] = [];
 let outDir: string;
 let serverSaw: string[] = [];
 let pixelCookies: string[] = [];
+let landedSaw: { method: string; contentType: string; body: string }[] = [];
 
 const COLLECT = (tag: string) => `/g/collect?v=2&tid=G-PWTEST0001&cid=1.2&en=${tag}`;
 
@@ -112,6 +113,8 @@ function page(path: string): string | undefined {
           });
         });
       </script>`;
+    case '/post-303':
+      return `<script>fetch('/post-redirect', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'a=secret' });</script>`;
     case '/next':
       return '<p>next</p>';
     default:
@@ -158,6 +161,20 @@ beforeAll(async () => {
     }
     if (path === '/redir-auth') {
       res.writeHead(307, { location: `http://localhost:${otherPort}/echo` }).end();
+      return;
+    }
+    if (path === '/post-redirect') {
+      req.resume();
+      res.writeHead(303, { location: '/post-landed' }).end();
+      return;
+    }
+    if (path === '/post-landed') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        landedSaw.push({ method: req.method ?? '', contentType: req.headers['content-type'] ?? '', body });
+        res.writeHead(204).end();
+      });
       return;
     }
     if (path === '/echo-cookie') {
@@ -355,6 +372,17 @@ test('a same-site redirect that is not a collection request is followed and reco
   expect(status(first?.id)).toEqual([302]);
   expect(status(landed?.id)).toEqual([204]);
   expect(serverSaw.some((u) => u.startsWith('/seen?'))).toBe(true);
+});
+
+test('a POST that a 303 turns into a GET reaches the server the same way in stub and live mode', async () => {
+  const seen = async (mode: 'stub' | 'live') => {
+    landedSaw = [];
+    await visit('/post-303', mode);
+    return landedSaw;
+  };
+  const live = await seen('live');
+  expect(live).toEqual([{ method: 'GET', contentType: '', body: '' }]);
+  expect(await seen('stub')).toEqual(live);
 });
 
 test('live mode lets a redirect hop through to the server', async () => {
