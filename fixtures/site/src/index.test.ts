@@ -73,6 +73,33 @@ describe('mock server container', () => {
   });
 });
 
+describe('container host', () => {
+  const ws = 'gtm_auth=pwfake-auth-0001&gtm_preview=env-99&gtm_cookies_win=x';
+
+  test('serves the published build, and the workspace build only for the fake parameters', async () => {
+    const published = await fetch(`${site.containerUrl}/gtm.js?id=GTM-PWTEST1`);
+    expect(published.status).toBe(200);
+    expect(await published.text()).toContain('published build');
+    const workspace = await fetch(`${site.containerUrl}/gtm.js?id=GTM-PWTEST1&${ws}`);
+    expect(await workspace.text()).toContain('workspace build');
+    expect((await fetch(`${site.containerUrl}/gtm.js?id=GTM-PWTEST1&build=workspace`)).status).toBe(404);
+    expect((await fetch(`${site.containerUrl}/gtm.js?id=GTM-PWNOVER`)).status).toBe(404);
+  });
+
+  test('logs every gtm_auth it receives, also through the Stape-style path', async () => {
+    site.receivedGtmAuth.length = 0;
+    await fetch(`${site.containerUrl}/gtm.js?id=GTM-PWTEST1&gtm_auth=wrong`);
+    await fetch(`${site.sgtmUrl}/pwstape?pk=${b64(`/gtm.js?id=GTM-PWTEST1&${ws}`)}`);
+    expect(site.receivedGtmAuth).toEqual(['wrong', 'pwfake-auth-0001']);
+  });
+
+  test('the Stape-style path serves the published build for a plain gtm.js request', async () => {
+    const res = await fetch(`${site.sgtmUrl}/pwstape?pk=${b64('/gtm.js?id=GTM-PWTEST1')}`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('published build');
+  });
+});
+
 describe('third-party host', () => {
   test('answers any path with an image', async () => {
     const res = await fetch(`${site.thirdPartyUrl}/unknown-pixel?x=1`);

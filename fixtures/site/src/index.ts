@@ -1,11 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFile } from 'node:fs/promises';
+import { resolveContainer } from './containers.ts';
 
 export interface FixtureSite {
   url: string;
   sgtmUrl: string;
   thirdPartyUrl: string;
+  containerUrl: string;
+  receivedGtmAuth: string[];
   close(): Promise<void>;
 }
 
@@ -19,9 +22,15 @@ const pages: Record<string, string> = {
   '/checkout': 'checkout.html',
   '/checkout/payment': 'payment.html',
   '/thank-you': 'thank-you.html',
+  '/container/direct': 'container-direct.html',
+  '/container/echo': 'container-echo.html',
+  '/container/noversion': 'container-noversion.html',
+  '/container/stape': 'container-stape.html',
+  '/container/sandbox': 'container-sandbox.html',
 };
 
 const pixelPath = '/web-pixels@0.0.0-fixture/sandbox/modern/';
+const containerPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container/';
 
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -58,6 +67,8 @@ function shopHandler(config: string) {
       res.end(config);
     } else if (path === pixelPath) {
       await sendFile(res, 'pixel.html');
+    } else if (path === containerPixelPath) {
+      await sendFile(res, 'container-frame.html');
     } else if (page) {
       await sendFile(res, page);
     } else if (/^\/assets\/[a-z-]+\.(js|css)$/.test(path)) {
@@ -72,15 +83,39 @@ function decodeBase64(value: string | null): string {
   return value ? Buffer.from(value, 'base64').toString('utf8') : '';
 }
 
-function sgtmHandler(req: IncomingMessage, res: ServerResponse): void {
-  const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-  const real = url.pathname === '/pwstape' ? decodeBase64(url.searchParams.get('pk')) : '';
-  if (real.startsWith('/gtag/js')) {
-    res.writeHead(200, { 'content-type': 'text/javascript' });
-    res.end('/* fixture sgtm gtag.js */');
-  } else {
-    res.writeHead(204).end();
+function sendContainer(res: ServerResponse, params: URLSearchParams, thirdPartyUrl: string, received: string[]): void {
+  const auth = params.get('gtm_auth');
+  if (auth !== null) received.push(auth);
+  const result = resolveContainer(params, thirdPartyUrl);
+  if (result.status === 404) {
+    res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
+    return;
   }
+  res.writeHead(200, { 'content-type': contentTypes['.js']!, 'cache-control': 'no-store' });
+  res.end(result.body);
+}
+
+function containerHandler(thirdPartyUrl: string, received: string[]) {
+  return (req: IncomingMessage, res: ServerResponse): void => {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (url.pathname === '/gtm.js') sendContainer(res, url.searchParams, thirdPartyUrl, received);
+    else res.writeHead(404).end('not found');
+  };
+}
+
+function sgtmHandler(thirdPartyUrl: string, received: string[]) {
+  return (req: IncomingMessage, res: ServerResponse): void => {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    const real = url.pathname === '/pwstape' ? decodeBase64(url.searchParams.get('pk')) : '';
+    if (real.startsWith('/gtm.js')) {
+      sendContainer(res, new URL(real, 'http://127.0.0.1').searchParams, thirdPartyUrl, received);
+    } else if (real.startsWith('/gtag/js')) {
+      res.writeHead(200, { 'content-type': 'text/javascript' });
+      res.end('/* fixture sgtm gtag.js */');
+    } else {
+      res.writeHead(204).end();
+    }
+  };
 }
 
 function thirdPartyHandler(_req: IncomingMessage, res: ServerResponse): void {
@@ -96,10 +131,13 @@ function closeServer(server: Server): Promise<void> {
 }
 
 export async function startFixtureSite(): Promise<FixtureSite> {
-  const sgtm = createServer(sgtmHandler);
+  const received: string[] = [];
   const thirdParty = createServer(thirdPartyHandler);
-  const sgtmUrl = `http://127.0.0.1:${await listen(sgtm)}`;
   const thirdPartyUrl = `http://127.0.0.1:${await listen(thirdParty)}`;
+  const sgtm = createServer(sgtmHandler(thirdPartyUrl, received));
+  const sgtmUrl = `http://127.0.0.1:${await listen(sgtm)}`;
+  const container = createServer(containerHandler(thirdPartyUrl, received));
+  const containerUrl = `http://127.0.0.1:${await listen(container)}`;
   const config = `window.__PW_FIXTURE=${JSON.stringify({ sgtmUrl, thirdPartyUrl })};`;
   const handler = shopHandler(config);
   const shop = createServer((req, res) => void handler(req, res));
@@ -108,8 +146,10 @@ export async function startFixtureSite(): Promise<FixtureSite> {
     url,
     sgtmUrl,
     thirdPartyUrl,
+    containerUrl,
+    receivedGtmAuth: received,
     close: async () => {
-      await Promise.all([shop, sgtm, thirdParty].map(closeServer));
+      await Promise.all([shop, sgtm, thirdParty, container].map(closeServer));
     },
   };
 }
