@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Plugin } from 'vite';
+import type { Plugin } from 'vitepress';
 
 const files: Record<string, string> = {
   '/favicon.ico': 'image/x-icon',

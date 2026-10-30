@@ -1,4 +1,4 @@
-import type MarkdownIt from 'markdown-it';
+import type { MarkdownRenderer as MarkdownIt } from 'vitepress';
 
 // The theme loads the mermaid package only when a page has one of these components.
 export function mermaidFences(md: MarkdownIt) {
