@@ -13,3 +13,11 @@ test('labels a count mismatch under its event', () => {
   );
   expect(text).toContain('      removed: hit_2\n      count 2 -> 1 (pairing by order)\n');
 });
+
+test('shows the page on count lines with --by-page', () => {
+  const home = { epoch: 'undecided', vendor: 'ga4', event: 'page_view', page: '/' };
+  const cart = { ...home, page: '/cart' };
+  const text = formatDiff({ ...empty, countMismatches: [{ key: home, a: 2, b: 1 }, { key: cart, a: 3, b: 1 }] }, 'a.jsonl', 'b.jsonl');
+  expect(text).toContain('count 2 -> 1 (page /) (pairing by order)');
+  expect(text).toContain('count 3 -> 1 (page /cart) (pairing by order)');
+});

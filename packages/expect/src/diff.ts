@@ -48,6 +48,8 @@ export interface FlagChange {
   kind: string;
   a: number;
   b: number;
+  /** True when the scenario allows this host with `allowUnknownDestination` in both runs. */
+  allowed: boolean;
 }
 
 export interface DiffResult {
@@ -189,14 +191,32 @@ function hostOf(url: string): string {
   }
 }
 
-function flagCounts(run: RunRecords): Map<string, number> {
+/** The built-in check lists only the blocked flags as evidence when it fails, and every unknown flag when it passes. */
+function allowedFlagIds(run: RunRecords): Set<string> {
+  const check = run.results.find((r) => r.expectation === 'builtin: unknownDestination');
+  if (!check) return new Set();
+  const unknown = run.flags.filter((f) => f.kind === 'unknownDestination').map((f) => f.id as string);
+  const blocked = new Set(check.pass ? [] : check.evidence);
+  return new Set(unknown.filter((id) => !blocked.has(id)));
+}
+
+interface FlagCount {
+  n: number;
+  allowed: boolean;
+}
+
+function flagCounts(run: RunRecords): Map<string, FlagCount> {
   const requestHosts = new Map(run.requests.map((r) => [r.id as string, hostOf(r.url)]));
   const hitHosts = new Map(run.hits.map((h) => [h.id as string, requestHosts.get(h.requestId) ?? '']));
-  const counts = new Map<string, number>();
+  const allowedIds = allowedFlagIds(run);
+  const counts = new Map<string, FlagCount>();
   for (const flag of run.flags) {
     const host = flag.recordIds.map((id) => requestHosts.get(id) ?? hitHosts.get(id)).find((h) => h) ?? '';
     const key = JSON.stringify([host, flag.kind]);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const count = counts.get(key) ?? { n: 0, allowed: true };
+    count.n += 1;
+    count.allowed &&= allowedIds.has(flag.id as string);
+    counts.set(key, count);
   }
   return counts;
 }
@@ -206,11 +226,12 @@ function flagChanges(a: RunRecords, b: RunRecords): FlagChange[] {
   const cb = flagCounts(b);
   const changes: FlagChange[] = [];
   for (const key of [...new Set([...ca.keys(), ...cb.keys()])].sort()) {
-    const na = ca.get(key) ?? 0;
-    const nb = cb.get(key) ?? 0;
-    if (na === nb) continue;
+    const na = ca.get(key);
+    const nb = cb.get(key);
+    if ((na?.n ?? 0) === (nb?.n ?? 0)) continue;
     const [host, kind] = JSON.parse(key) as [string, string];
-    changes.push({ host, kind, a: na, b: nb });
+    const allowed = (!na || na.allowed) && (!nb || nb.allowed);
+    changes.push({ host, kind, a: na?.n ?? 0, b: nb?.n ?? 0, allowed });
   }
   return changes;
 }
