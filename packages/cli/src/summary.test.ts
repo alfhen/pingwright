@@ -1,7 +1,11 @@
 import type { Hit, Result } from '@pingwright/core';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { countHits, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
+import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
 
 const hit = (vendor: string, event: string | null) => ({ vendor, event }) as Hit;
@@ -102,4 +106,21 @@ test('shows the withdrawn label with the state in the epochs lines', () => {
   const text = formatSummary(summary);
   expect(text).toContain('  undecided (10 ms)');
   expect(text).toContain('  withdrawn, mixed (to end)');
+});
+
+test('prints a scenario warning to stderr before running', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-warn-'));
+  try {
+    const scenario = join(dir, 'scenario.yml');
+    await writeFile(scenario, 'start: /\nsteps:\n  - fill: { "#email": "jane.doe@gmail.com" }\n');
+    const stderr: string[] = [];
+    const code = await runCommand(
+      { command: 'run', scenario, site: 'http://localhost:1', network: undefined, out: dir, seed: undefined, headed: false, autoconsentRules: [], vars: { undeclared: 'x' }, json: false },
+      { stdout: () => {}, stderr: (text) => stderr.push(text) },
+    );
+    expect(code).toBe(2);
+    expect(stderr.join('')).toContain('Warning: line 3');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

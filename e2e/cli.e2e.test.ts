@@ -59,7 +59,7 @@ const run = (name: string, extra: string[] = [], env: Record<string, string> = {
 
 const ga4 = (hits: Hit[], event: string) => hits.filter((h) => h.vendor === 'ga4' && h.event === event);
 
-// The fixture's sandboxed pixel always sends its sandbox URL as the page, so this built-in check fails on every fixture run.
+// The fixture's sandboxed pixel sends its sandbox URL as the page, so this built-in check fails on every run of a page that has the pixel.
 const SANDBOX = 'builtin: sandboxPageUrl';
 
 test('undecided: hits per vendor, denied consent, flags, one epoch', async () => {
