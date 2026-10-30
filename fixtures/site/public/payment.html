@@ -19,7 +19,7 @@
 <script>
   document.getElementById('payment-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    location.href = '/thank-you';
+    location.href = sessionStorage.getItem('pw_pattern') === '1' ? '/thank-you?pattern=1' : '/thank-you';
   });
 </script>
 </body>

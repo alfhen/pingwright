@@ -38,6 +38,7 @@
     var data = {};
     ids.forEach(function (id) { data[id] = document.getElementById(id).value; });
     sessionStorage.setItem('pw_checkout', JSON.stringify(data));
+    if (new URLSearchParams(location.search).get('pattern') === '1') sessionStorage.setItem('pw_pattern', '1');
     gtag('event', 'begin_checkout', { currency: 'USD', value: 19 });
     location.href = '/checkout/payment';
   });

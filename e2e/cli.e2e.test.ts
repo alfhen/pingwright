@@ -168,6 +168,21 @@ test('checkout after reject: the user_id mustNot rule fails and the run exits 1'
   expect(rule.evidence).toEqual(expect.arrayContaining(purchase.map((h) => h.id)));
 }, 120_000);
 
+test('checkout pattern: Meta Purchase carries the hashed email and hashesMatch passes', async () => {
+  const r = await run('checkout-pattern');
+  expect(r.failed).toEqual([SANDBOX]);
+  const purchase = r.records!.hits.filter((h) => h.vendor === 'meta' && h.event === 'Purchase');
+  expect(purchase.some((h) => h.params.hashedEmail)).toBe(true);
+}, 120_000);
+
+test('checkout pattern with a wrong email fails identity.hashesMatch', async () => {
+  const r = await run('checkout-pattern-wrong-hash');
+  expect(r.code).toBe(1);
+  const rule = r.records!.results.find((x) => x.expectation.includes('hashesMatch'))!;
+  expect(rule.pass).toBe(false);
+  expect(rule.message).toContain('do not match the run identity');
+}, 120_000);
+
 test('a mustNot meta before consent rule fails on the fixture pixel', async () => {
   const r = await run('meta-before-consent');
   expect(r.code).toBe(1);

@@ -19,7 +19,19 @@
     value: 19,
     items: [{ item_id: 'fake-tee', item_name: 'Fake tee', price: 19, quantity: 1 }],
   });
-  fbq('track', 'Purchase', { value: 19, currency: 'USD' });
+  function trackPurchase() {
+    fbq('track', 'Purchase', { value: 19, currency: 'USD' });
+  }
+  if (new URLSearchParams(location.search).get('pattern') === '1') {
+    var stored = JSON.parse(sessionStorage.getItem('pw_checkout') || '{}');
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode((stored.email || '').trim().toLowerCase())).then(function (buf) {
+      var hex = Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+      fbq('init', '100000000000001', { em: hex });
+      trackPurchase();
+    });
+  } else {
+    trackPurchase();
+  }
   gtag('event', 'conversion', {
     send_to: 'AW-000000001/fake-label',
     value: 19,
