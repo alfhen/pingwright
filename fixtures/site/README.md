@@ -40,7 +40,9 @@ All three listen on port 0 (random).
 | `#email`, `#first-name`, `#last-name`, `#phone`, `#address1`, `#city`, `#zip` | `/checkout` | Identity form. |
 | `#country` | `/checkout` | Options US, GB, DE, SE, NO. The default is guessed from the region of `navigator.language`, so scenarios must set it explicitly. |
 | `#continue` | `/checkout` | Goes to `/checkout/payment`. |
-| `#card-number` (`cc-number`), `#card-expiry` (`cc-exp`), `#card-cvc` (`cc-csc`), `#pay` | `/checkout/payment` | Fake card form. `#pay` goes to `/thank-you`. |
+| `#card-number` (`cc-number`), `#card-expiry` (`cc-exp`), `#card-cvc` (`cc-csc`), `#pay` | `/checkout/payment` | Fake card form. `#pay` goes to `/thank-you`, or to `/thank-you?pattern=1` when the flag below is set. |
+
+Pattern variant: `/checkout?pattern=1` sets the `pw_pattern` flag in `sessionStorage` when the identity form is submitted. Every identity-form submit, with or without the flag, stores the typed fields in `pw_checkout`. With the flag, `#pay` goes to `/thank-you?pattern=1`, where Meta `Purchase` carries `ud[em]`, the SHA-256 of the typed email (trimmed, lower case). Plain `/checkout` and `/thank-you` are unchanged. The scenario shape is in [docs/shopify-checkout.md](../../docs/shopify-checkout.md).
 
 ## Consent
 
@@ -78,7 +80,7 @@ Differences between the builds, seen on the pages below:
 | Undecided GA4 `page_view` `gcs` | `G100` | `G110` |
 | GA4 events | `page_view`, `container_event` | also `workspace_only` |
 | Meta events | `PageView`, `ViewContent`, `AddToCart` | no `AddToCart` |
-| Echoes `gtm_auth` | no | yes: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
+| Echoes `gtm_auth` | no | yes, on every container page except `/container/direct`: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
 
 The container sets the Consent Mode default itself and the pages never decide consent, so every container page is undecided. The `gcs` values come from the real gtag.js, and the e2e asserts both.
 

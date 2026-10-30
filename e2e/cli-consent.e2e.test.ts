@@ -68,7 +68,11 @@ test('after a reject only, epoch(label=withdrawn) matches nothing', async () => 
   const r = await run('meta-reject-withdrawn-label');
   const rule = r.records!.results.find((x) => x.expectation.startsWith('mustNot:'))!;
   expect(rule.pass).toBe(true);
-  expect(r.records!.hits.some((h) => h.vendor === 'meta')).toBe(true);
+  const epochs = r.records!.consentEpochs;
+  expect(epochs.map((e) => e.label)).toEqual(['undecided', 'denied']);
+  const addToCart = r.records!.hits.filter((h) => h.vendor === 'meta' && h.event === 'AddToCart');
+  expect(addToCart.length).toBeGreaterThan(0);
+  expect(addToCart.every((h) => h.t >= epochs[1]!.startT)).toBe(true);
 }, 90_000);
 
 test('banner not shown: a HeadlessChrome user agent exits 2', async () => {

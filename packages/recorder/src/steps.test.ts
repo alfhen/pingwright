@@ -116,3 +116,33 @@ describe('the default cart check', () => {
     expect(check([custom], [], undefined, '/api/basket/')).toBe(true);
   });
 });
+
+test('a StepError from a run with a GTM override does not repeat the gtmAuth', async () => {
+  const auth = 'pwfake-auth-0001';
+  const recorder = {
+    site: 'http://localhost',
+    setIdentity: () => undefined,
+    beginStep: () => ({}),
+    endStep: () => undefined,
+    close: () => Promise.resolve({ path: 'unused', records: {} }),
+    context: { pages: () => [{ goto: () => Promise.reject(new Error(`page.goto: net::ERR_FAILED at http://localhost/?gtm_auth=${auth}`)) }] },
+  };
+  const options = {
+    networkMode: 'stub' as const,
+    outDir: 'unused',
+    site: 'http://localhost',
+    parsed: parseScenario('start: /\n'),
+    launch: (() => Promise.resolve(recorder)) as never,
+  };
+  const failure = (o: Parameters<typeof recordScenario>[0]) =>
+    recordScenario(o).then(
+      () => new Error('no error'),
+      (e: Error) => e,
+    );
+  const plain = await failure(options);
+  expect(plain.message).toContain(auth);
+  const scrubbed = await failure({ ...options, gtmOverride: { container: 'GTM-PWTEST1', gtmAuth: auth, gtmPreview: 'env-99' } });
+  expect(scrubbed.name).toBe('StepError');
+  expect(scrubbed.message).not.toContain(auth);
+  expect(scrubbed.stack ?? '').not.toContain(auth);
+});

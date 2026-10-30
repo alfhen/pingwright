@@ -31,6 +31,8 @@ export function formatDiff(result: DiffResult, a: string, b: string): string {
     add(tree, c.key, `changed${where(c.key, '')}${moved}: ${changes} (${c.a.hitId} -> ${c.b.hitId})`);
   }
 
+  for (const m of result.countMismatches) add(tree, m.key, `count ${m.a} -> ${m.b} (pairing by order)`);
+
   const out = [`Diff ${a} -> ${b}`];
   for (const warning of result.warnings) out.push(`Warning: ${warning}`);
   if (tree.size === 0 && result.flags.length === 0) out.push('No differences.');

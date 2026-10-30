@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline/promises';
 import { createIdentity, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
 import type { Scenario, Step } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
+import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
@@ -345,7 +346,14 @@ export async function recordScenario(options: RecordScenarioOptions): Promise<Ru
     await playScenario(recorder, parsed, rest);
   } catch (error) {
     const result = await recorder.close().catch(() => undefined);
-    if (error instanceof StepError && result) error.run = result;
+    if (error instanceof StepError) {
+      if (result) error.run = result;
+      if (rest.gtmOverride) {
+        const scrubber = new Scrubber(rest.gtmOverride.gtmAuth);
+        error.message = scrubber.text(error.message);
+        if (error.stack) error.stack = scrubber.text(error.stack);
+      }
+    }
     throw error;
   }
   const result = await recorder.close();
