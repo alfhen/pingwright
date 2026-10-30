@@ -128,7 +128,7 @@ export function previewFetchUrl(override: GtmOverrideInput, origin: string = GTM
 
 export interface GtmMatch {
   applied: Omit<GtmOverrideApplied, 'status'>;
-  /** Parameters of the request that carries the container id. Empty for way 'replace'. */
+  /** Parameters of the request that carries the container id. */
   pageParams: URLSearchParams;
 }
 
@@ -148,7 +148,7 @@ export function matchGtmRequest(liveUrl: string, record: Request, override: GtmO
   if (override.loader && sameUrl(liveUrl, override.loader.replace)) {
     return {
       applied: { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' },
-      pageParams: new URLSearchParams(),
+      pageParams: new URL(liveUrl).searchParams,
     };
   }
   const inner = unwrapStapeLoader({ ...record, url: liveUrl });

@@ -14,6 +14,16 @@ test('loader.replace matches a URL that the Stape loader matcher cannot unwrap',
   expect(matchGtmRequest(other, request(other), override)).toBeUndefined();
 });
 
+test('a loader.replace match keeps l and gtm_debug from the matched URL', () => {
+  const url = 'https://sgtm.example.com/opaque-loader.js?l=dl&gtm_debug=x';
+  const override = parseGtmOverride({ ...valid, loader: { replace: url } });
+  const match = matchGtmRequest(url, request(url), override)!;
+  expect(match.applied.way).toBe('replace');
+  const fetched = new URL(previewFetchUrl(override, undefined, match.pageParams));
+  expect(fetched.searchParams.get('l')).toBe('dl');
+  expect(fetched.searchParams.get('gtm_debug')).toBe('x');
+});
+
 test('the preview fetch copies l and gtm_debug from the matched request', () => {
   const override = parseGtmOverride(valid);
   const directUrl = 'https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1&l=dl&gtm_debug=x';
