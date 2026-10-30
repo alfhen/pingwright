@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const requestingRels = new Set(['stylesheet', 'preload', 'modulepreload', 'prefetch', 'icon', 'apple-touch-icon']);
 const external = /^(?:https?:)?\/\//i;
 
 export function findExternalRefs(file: string, content: string): string[] {
@@ -8,12 +9,21 @@ export function findExternalRefs(file: string, content: string): string[] {
   if (content.includes('fonts.googleapis.com')) found.push('fonts.googleapis.com');
   if (file.endsWith('.html')) {
     for (const tag of content.match(/<[^>]+>/g) ?? []) {
-      for (const m of tag.matchAll(/\ssrc\s*=\s*["']([^"']+)["']/gi)) {
+      for (const m of tag.matchAll(/\s(?:src|poster)\s*=\s*["']([^"']+)["']/gi)) {
         if (external.test(m[1]!)) found.push(`src ${m[1]}`);
       }
-      if (/^<link\b/i.test(tag) && /rel\s*=\s*["']?stylesheet/i.test(tag)) {
+      for (const m of tag.matchAll(/\ssrcset\s*=\s*["']([^"']+)["']/gi)) {
+        for (const candidate of m[1]!.split(',')) {
+          const url = candidate.trim().split(/\s+/)[0];
+          if (url && external.test(url)) found.push(`srcset ${url}`);
+        }
+      }
+      if (/^<link\b/i.test(tag)) {
+        const rel = /\srel\s*=\s*["']?([^"'>]+)/i.exec(tag)?.[1] ?? '';
         const href = /\shref\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
-        if (href && external.test(href)) found.push(`stylesheet ${href}`);
+        if (href && external.test(href) && rel.toLowerCase().split(/\s+/).some((r) => requestingRels.has(r))) {
+          found.push(`link ${href}`);
+        }
       }
     }
   }

@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import type MarkdownIt from 'markdown-it';
 import { brandAssets } from './brand-assets.ts';
+import { unlistedPages } from './page-guard.ts';
 
 const repo = 'https://github.com/alfhen/pingwright';
 
@@ -28,6 +29,10 @@ export default defineConfig({
     'e2e/**',
     'scripts/**',
     'brand/**',
+    'dist/**',
+    'runs/**',
+    'test-results/**',
+    'coverage/**',
     'AGENTS.md',
     'CLAUDE.md',
     'docs/plan-*.md',
@@ -49,6 +54,10 @@ export default defineConfig({
     resolve: { alias: [{ find: /^brand\//, replacement: fileURLToPath(new URL('../brand/', import.meta.url)) }] },
   },
   markdown: { config: repoFileLinks },
+  buildEnd(siteConfig) {
+    const extra = unlistedPages(siteConfig.pages);
+    if (extra.length) throw new Error(`Pages not in the published list: ${extra.join(', ')}`);
+  },
   themeConfig: {
     logo: { light: '/mark.svg', dark: '/mark-dark.svg', alt: 'Pingwright' },
     nav: [{ text: 'GitHub', link: repo }],
