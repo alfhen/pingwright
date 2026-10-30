@@ -86,6 +86,7 @@ export interface RecorderOptions {
 
 export interface StepActivity {
   requests: Request[];
+  responses: Response[];
   dataLayerEvents: DataLayerEvent[];
 }
 
@@ -108,6 +109,10 @@ function redactHeaders(headers: Record<string, string>): Record<string, string> 
   return Object.fromEntries(
     Object.entries(headers).map(([k, v]) => [k, REDACTED_HEADERS.has(k.toLowerCase()) ? '[redacted]' : v]),
   );
+}
+
+function redactRefererQuery(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, /^(?:referer|origin)$/i.test(k) ? redactQuery(v) : v]));
 }
 
 function redactQuery(url: string): string {
@@ -321,6 +326,8 @@ export class Recorder {
     return {
       ...record,
       url: redactQuery(record.url),
+      frameUrl: record.frameUrl === null ? null : redactQuery(record.frameUrl),
+      headers: redactRefererQuery(record.headers),
       postData: record.postData === null ? null : REDACTED_VALUE,
       redacted: 'handoff',
     };
@@ -591,8 +598,11 @@ export class Recorder {
 
   /** What the recorder has seen so far while the step ran. */
   stepActivity(step: Step): StepActivity {
+    const requests = [...this.requests.values(), ...this.extraRequests].filter((r) => r.stepId === step.id);
+    const ids = new Set(requests.map((r) => r.id));
     return {
-      requests: [...this.requests.values(), ...this.extraRequests].filter((r) => r.stepId === step.id),
+      requests,
+      responses: this.responses.filter((r) => ids.has(r.requestId)),
       dataLayerEvents: this.dataLayerEvents.filter((e) => e.stepId === step.id),
     };
   }
