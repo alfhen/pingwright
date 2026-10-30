@@ -388,6 +388,15 @@ function scannedUrl(request: Request): string {
   }
 }
 
+// Each path segment is also scanned as a value of its own, so a "+" that starts a segment can start a phone.
+function pathSegments(url: string): string[] {
+  try {
+    return new URL(url).pathname.split('/').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
   const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
@@ -397,7 +406,8 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   };
   for (const request of ctx.requests.values()) {
     if (request.resourceType === 'script' && LIBRARY_LOAD.test(pathOf(request.url))) continue;
-    slot(request.id, request.stepId).texts.push(scannedUrl(request), request.postData ?? '');
+    const url = scannedUrl(request);
+    slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), request.postData ?? '');
   }
   for (const hit of ctx.hits) {
     const entry = slot(hit.requestId, hit.stepId);
