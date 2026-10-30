@@ -33,11 +33,15 @@ export interface GtmOverrideTag {
 }
 
 export interface GtmOverrideApplied {
-  way: 'direct';
+  way: 'direct' | 'loader' | 'replace';
+  /** Set for way 'loader'. */
+  loader?: 'stape';
   /** The request the page made. Never the preview URL, which carries the auth value. */
   url: string;
   /** The preview fetch's status, or 0 when the fetch failed. */
   status: number;
+  /** What the way gives up. Set for 'loader' and 'replace'. */
+  loses?: string;
 }
 
 export interface GtmOverrideRecord {

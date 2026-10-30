@@ -1,6 +1,6 @@
 import { newId, type Request } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { decodeRequest, isCollectionEndpoint } from './index.ts';
+import { decodeRequest, isCollectionEndpoint, unwrapStapeLoader } from './index.ts';
 
 const PAGE = 'http://localhost:3000/products/fake-tee';
 const HOST = 'http://127.0.0.1:4000';
@@ -212,4 +212,11 @@ test('a JSON POST body without ids sets none', () => {
     postData: JSON.stringify({ event_name: 'purchase', page_location: PAGE }),
   });
   expect(decodeRequest(r)[0]!.ids).toEqual({});
+});
+
+test('unwrapStapeLoader returns the inner /gtm.js request for the fixture loader URL shape', () => {
+  const real = '/gtm.js?id=GTM-PWTEST1';
+  expect(unwrapStapeLoader(disguised(real))?.url).toBe(`${HOST}${real}`);
+  expect(unwrapStapeLoader(disguised(real, urlSafe))?.url).toBe(`${HOST}${real}`);
+  expect(unwrapStapeLoader(req(`${HOST}/gtm.js?id=GTM-PWTEST1`))).toBeUndefined();
 });

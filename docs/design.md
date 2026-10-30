@@ -251,7 +251,11 @@ For tests, `PINGWRIGHT_TEST_GTM_ORIGIN` replaces `https://www.googletagmanager.c
 
 Limits:
 
-- Sites that load the container through a custom loader (for example Stape's) lose whatever that loader does beyond fetching the container. Hits still go to the configured server container URL.
+- Sites that load the container through a custom loader (for example Stape's) are handled in two ways. Both are recorded in `gtmOverride.applied`.
+  - **Loader (default).** A request that decodes (`unwrapStapeLoader`) to `/gtm.js?id=<container>` is answered with the preview build, fetched as above. The loader script stays in place, and the request URL the page made is unchanged. The record is `{way: "loader", loader: "stape", url, status, loses: "nothing known; the loader script runs unchanged"}`.
+  - **Replace (fallback).** `"loader": {"replace": "<script URL>"}` in the override JSON answers the request for exactly that URL with the preview build. The record is `{way: "replace", url, status, loses: "everything the loader does beyond fetching the container"}`.
+  - Passing the preview values through the loader is not built. Whether Stape loaders forward `gtm_auth` and `gtm_preview` is a field question.
+- **Sandboxed iframes (resolved).** The proposal's claim that a request from inside a sandboxed iframe can be answered with a preview build fetched by `route.fetch` holds. On Chromium 156 with Playwright 1.64.1, an e2e run of the fixture's `/container/sandbox` page (a sandboxed iframe with a Stape-style loader) gets the workspace build through `context.route`, and its hits show the workspace build's events. The page is on localhost; sandboxed iframes on public pages were probed in P02 only for the collector origin.
 - An environment with no version assigned returns 404.
 - Only the test browser is affected.
 

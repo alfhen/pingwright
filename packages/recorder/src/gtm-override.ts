@@ -12,6 +12,8 @@ export interface GtmOverrideInput {
   gtmAuth: string;
   gtmPreview: string;
   expectedTags?: GtmOverrideTag[];
+  /** A loader script URL to replace with the preview build. */
+  loader?: { replace: string };
 }
 
 export class GtmOverrideError extends Error {
@@ -25,9 +27,9 @@ export class GtmOverrideError extends Error {
 export function parseGtmOverride(input: unknown): GtmOverrideInput {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new GtmOverrideError('the GTM override must be a JSON object');
   const o = input as Record<string, unknown>;
-  const known = new Set(['container', 'gtmAuth', 'gtmPreview', 'expectedTags']);
+  const known = new Set(['container', 'gtmAuth', 'gtmPreview', 'expectedTags', 'loader']);
   if (Object.keys(o).some((k) => !known.has(k))) {
-    throw new GtmOverrideError('the GTM override has unknown fields. Allowed: container, gtmAuth, gtmPreview, expectedTags');
+    throw new GtmOverrideError('the GTM override has unknown fields. Allowed: container, gtmAuth, gtmPreview, expectedTags, loader');
   }
   if (typeof o.container !== 'string' || !CONTAINER.test(o.container)) {
     throw new GtmOverrideError('container must be a string that matches ^GTM-[A-Z0-9]+$');
@@ -52,7 +54,25 @@ export function parseGtmOverride(input: unknown): GtmOverrideInput {
       expectedTags.push({ id: t.id, name: typeof t.name === 'string' ? t.name : null });
     }
   }
-  return { container: o.container, gtmAuth: o.gtmAuth, gtmPreview: o.gtmPreview, expectedTags };
+  const result: GtmOverrideInput = { container: o.container, gtmAuth: o.gtmAuth, gtmPreview: o.gtmPreview, expectedTags };
+  if (o.loader !== undefined) result.loader = parseLoader(o.loader);
+  return result;
+}
+
+function parseLoader(input: unknown): { replace: string } {
+  const bad = (m: string) => new GtmOverrideError(m);
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) throw bad('loader must be an object like {"replace": "<script URL>"}');
+  const l = input as Record<string, unknown>;
+  if (Object.keys(l).some((k) => k !== 'replace')) throw bad('loader has unknown fields. Allowed: replace');
+  if (typeof l.replace !== 'string') throw bad('loader.replace must be a script URL');
+  let url: URL;
+  try {
+    url = new URL(l.replace);
+  } catch {
+    throw bad('loader.replace must be an absolute http or https URL');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw bad('loader.replace must be an absolute http or https URL');
+  return { replace: url.href };
 }
 
 /** Returns the origin of a loopback test GTM origin, or undefined when the variable is unset or empty. Anything else throws. */
@@ -83,6 +103,16 @@ export function isGtmJsUrl(url: string): boolean {
 /** Only `id` counts. Other parameters such as `l=` are ignored, and `gtag/js` and `ns.html` never match. */
 export function matchesGtmContainer(url: string, container: string): boolean {
   return isGtmJsUrl(url) && new URL(url).searchParams.get('id') === container;
+}
+
+/** `inner` is the request a Stape-style loader URL stands for. Any host counts, because the loader host is the site's own. */
+export function matchesLoaderContainer(inner: string, container: string): boolean {
+  try {
+    const u = new URL(inner);
+    return u.pathname === '/gtm.js' && u.searchParams.get('id') === container;
+  } catch {
+    return false;
+  }
 }
 
 export function previewFetchUrl(override: GtmOverrideInput, origin: string = GTM_ORIGIN): string {
