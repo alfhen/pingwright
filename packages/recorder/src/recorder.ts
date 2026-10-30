@@ -49,9 +49,9 @@ import {
   bodyHasContainer,
   isGtmJsUrl,
   isLoaderCandidate,
+  loaderHint,
   matchesGtmContainer,
   matchesLoaderPattern,
-  withoutQueryValues,
   matchesLoaderContainer,
   parseGtmOverride,
   parseTestGtmOrigin,
@@ -176,6 +176,7 @@ export class Recorder {
   private closed = false;
   private readonly fetchErrors: string[] = [];
   private readonly loaderCandidates = new Map<string, boolean>();
+  private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
 
   private constructor(
@@ -412,6 +413,7 @@ export class Recorder {
     // record.url may be redacted during a handoff window; match on the live URL.
     const liveUrl = route.request().url();
     let applied = gtmOverride === undefined ? undefined : this.appliedWay(liveUrl, record, gtmOverride);
+    if (!applied && gtmOverride && isLoaderCandidate(liveUrl, record.resourceType) && !this.isSameOriginUrl(liveUrl)) this.crossOriginScripts.add(liveUrl);
     if (!applied && gtmOverride && this.isUnseenLoaderCandidate(liveUrl, record)) {
       const sniff = await this.sniffLoader(route, liveUrl, gtmOverride.container);
       if (!sniff) return false;
@@ -498,10 +500,7 @@ export class Recorder {
     if (!applied) return undefined;
     const { container } = this.run.gtmOverride!;
     if (applied.length === 0) {
-      const seen = [...this.loaderCandidates.keys()].map(withoutQueryValues).slice(0, 10);
-      const hint = seen.length
-        ? `. Cross-origin scripts that did not hold the container (query values hidden): ${seen.join(', ')}. If one is your loader, add "loader": {"replace": "<script URL>"} or {"match": "<regex>"} to the override file`
-        : '. If the page uses a custom loader, add "loader": {"replace": "<script URL>"} or {"match": "<regex>"} to the override file';
+      const hint = loaderHint([...this.loaderCandidates.keys()], [...this.crossOriginScripts]);
       return `no container request matched: the page never requested https://www.googletagmanager.com/gtm.js?id=${container}, and no loader script held the container${hint}`;
     }
     const bad = applied.find((a) => a.status !== 200);

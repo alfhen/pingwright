@@ -175,3 +175,15 @@ export function withoutQueryValues(url: string): string {
     return '(unparsable URL)';
   }
 }
+
+const REPLACE_OR_MATCH = '"loader": {"replace": "<script URL>"} or {"match": "<regex>"}';
+
+/** The tail of the no-match message. `sniffed` are scripts the recorder fetched and checked; `seen` are all cross-origin script requests. */
+export function loaderHint(sniffed: readonly string[], seen: readonly string[]): string {
+  const checked = new Set(sniffed.map(withoutQueryValues));
+  const urls = [...new Set([...sniffed, ...seen].map(withoutQueryValues))].slice(0, 10);
+  if (urls.length === 0) return `. If the page uses a custom loader, add ${REPLACE_OR_MATCH} to the override file`;
+  const unchecked = urls.some((u) => !checked.has(u));
+  const advice = unchecked ? '; to have the default way check a host automatically, add it to options.firstPartyHosts' : '';
+  return `. Cross-origin scripts that were not the container (query values hidden): ${urls.join(', ')}. If one is your loader, add ${REPLACE_OR_MATCH} to the override file${advice}`;
+}

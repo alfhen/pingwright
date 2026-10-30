@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { bodyHasContainer, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
+import { bodyHasContainer, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, loaderHint, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
 
 const valid = { container: 'GTM-PWTEST1', gtmAuth: 'pwfake-auth-0001', gtmPreview: 'env-99' };
 
@@ -133,4 +133,18 @@ test('the container check and the query-value hiding', () => {
   expect(bodyHasContainer('x google_tag_manager["GTM-PWTEST1"] y', 'GTM-PWTEST1')).toBe(true);
   expect(bodyHasContainer('nothing', 'GTM-PWTEST1')).toBe(false);
   expect(withoutQueryValues('https://load.example.com/abcd.js?x9f=SECRET&x9f=2&b=3')).toBe('https://load.example.com/abcd.js?x9f=…&b=…');
+});
+
+test('loaderHint lists seen scripts without query values and points at firstPartyHosts for unchecked hosts', () => {
+  const hint = loaderHint([], ['https://load.stape.example/abcd.js?k=SECRET']);
+  expect(hint).toContain('https://load.stape.example/abcd.js?k=…');
+  expect(hint).not.toContain('SECRET');
+  expect(hint).toContain('"replace"');
+  expect(hint).toContain('options.firstPartyHosts');
+});
+
+test('loaderHint skips the firstPartyHosts advice when every script was checked', () => {
+  const url = 'https://load.example.com/abcd.js?k=1';
+  expect(loaderHint([url], [url])).not.toContain('firstPartyHosts');
+  expect(loaderHint([], [])).toContain('custom loader');
 });
