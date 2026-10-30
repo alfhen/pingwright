@@ -1,7 +1,8 @@
 import { createInterface } from 'node:readline/promises';
-import { createIdentity, type Identity, type Step as StepRecord } from '@pingwright/core';
+import { createIdentity, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
 import type { Scenario, Step } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
+import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
@@ -28,14 +29,40 @@ export const bannerConsentHandler: ConsentHandler = async (answer, { recorder, p
 /** Says whether the click of an `addToCart` step changed the cart, from what was recorded during the step. */
 export type CartCheck = (activity: StepActivity) => boolean;
 
-const CART_PATH = /\/cart\/(?:add|change|update|clear)(?:\.js)?$|\/cart\.js$/i;
-const CART_MUTATION = /cartLinesAdd/;
+const CART_WRITE_PATH = /\/cart\/(?:add|change|update)(?:\.js)?(?:\/|$)|\/cart\/?$/i;
+const CART_ADD_PATH = /\/cart\/add(?:\.js)?(?:\/|$)/i;
+const CART_AJAX = /(?:^|[?&])wc-ajax=add_to_cart(?:&|$)/;
+const CART_MUTATION = /cart(?:Create|LinesAdd)/;
 const CART_EVENT = /^(?:add_to_cart|addToCart)$/i;
 
-/** A POST to a cart endpoint (Shopify `/cart/add`, a cart mutation), or an add_to_cart dataLayer event. */
-export const defaultCartCheck: CartCheck = ({ requests, dataLayerEvents }) =>
-  dataLayerEvents.some((e) => e.event !== null && CART_EVENT.test(e.event)) ||
-  requests.some((r) => r.method !== 'GET' && (CART_PATH.test(new URL(r.url).pathname) || CART_MUTATION.test(r.postData ?? '')));
+function isCartRequest(r: Request): boolean {
+  const url = new URL(r.url);
+  return (
+    CART_AJAX.test(url.search) ||
+    (r.method === 'GET' ? CART_ADD_PATH.test(url.pathname) : CART_WRITE_PATH.test(url.pathname) || CART_MUTATION.test(r.postData ?? ''))
+  );
+}
+
+/**
+ * A cart request (Shopify `/cart/add`, GET `/cart/add?id=`, Hydrogen POST `/cart`, Magento `/checkout/cart/add`,
+ * WooCommerce `?wc-ajax=add_to_cart`, a Storefront cart mutation) or an add_to_cart dataLayer event.
+ * A cart request counts once its response is recorded with a 2xx or 3xx status (a form POST answers with a redirect); a pending, failed, 4xx or 5xx one does not. `pattern` is a regular expression for URLs that also count.
+ */
+export function createCartCheck(pattern?: string): CartCheck {
+  const custom = pattern === undefined ? undefined : new RegExp(pattern);
+  return ({ requests, responses, dataLayerEvents }) => {
+    const accepted = (r: Request): boolean => {
+      const statuses = responses.filter((x) => x.requestId === r.id).map((x) => x.status);
+      return statuses.some((status) => status >= 200 && status < 400);
+    };
+    return (
+      dataLayerEvents.some((e) => e.event !== null && CART_EVENT.test(e.event)) ||
+      requests.some((r) => (isCartRequest(r) || custom?.test(r.url) === true) && accepted(r))
+    );
+  };
+}
+
+export const defaultCartCheck: CartCheck = createCartCheck();
 
 export interface PlayOptions {
   /** Identity seed. Default: the scenario's `options.seed`, else random. */
@@ -47,7 +74,7 @@ export interface PlayOptions {
   print?: (text: string) => void;
   /** Longest wait for a selector, a click or a fill. */
   actionTimeoutMs?: number;
-  /** Decides whether an `addToCart` step added anything. Default: `defaultCartCheck`. */
+  /** Decides whether an `addToCart` step added anything. Default: `defaultCartCheck`, widened by the scenario's `cartRequest`. */
   cartCheck?: CartCheck;
   /** How long an `addToCart` step waits for the cart check to pass. Default 5000. */
   cartTimeoutMs?: number;
@@ -142,29 +169,43 @@ async function fillField(page: Page, selector: string, value: string, timeout: n
 }
 
 interface PageField extends FieldAttributes {
+  index: number;
   value: string;
+  initial: string;
 }
 
-async function sensitiveFieldsOf(page: Page): Promise<{ frame: Frame; index: number; value: string }[]> {
-  const found: { frame: Frame; index: number; value: string }[] = [];
-  for (const frame of page.frames()) {
-    if (isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname)) continue;
-    const fields = await frame
-      .evaluate((): PageField[] =>
-        [...document.querySelectorAll('input, textarea')].map((e) => ({
-          autocomplete: e.getAttribute('autocomplete'),
-          name: e.getAttribute('name'),
-          id: e.getAttribute('id'),
-          type: e.getAttribute('type'),
-          value: (e as HTMLInputElement).value,
-        })),
-      )
-      .catch(() => [] as PageField[]);
-    fields.forEach((field, index) => {
-      if (isSensitiveField(field)) found.push({ frame, index, value: field.value });
-    });
-  }
-  return found;
+function hostedFrames(page: Page): Frame[] {
+  return page.frames().filter((frame) => !isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));
+}
+
+/** Remembers each field's value per element, so a field the script adds or moves is not compared with another one. */
+async function rememberFieldValues(frame: Frame): Promise<void> {
+  await frame
+    .evaluate(() => {
+      const initial = new WeakMap<Element, string>();
+      for (const e of document.querySelectorAll('input, textarea')) initial.set(e, (e as HTMLInputElement).value);
+      (window as unknown as { __pingwrightInitial: WeakMap<Element, string> }).__pingwrightInitial = initial;
+    })
+    .catch(() => undefined);
+}
+
+async function changedSensitiveFields(frame: Frame): Promise<PageField[]> {
+  const fields = await frame
+    .evaluate((): PageField[] => {
+      const initial = (window as unknown as { __pingwrightInitial?: WeakMap<Element, string> }).__pingwrightInitial;
+      delete (window as unknown as { __pingwrightInitial?: unknown }).__pingwrightInitial;
+      return [...document.querySelectorAll('input, textarea')].map((e, index) => ({
+        autocomplete: e.getAttribute('autocomplete'),
+        name: e.getAttribute('name'),
+        id: e.getAttribute('id'),
+        type: e.getAttribute('type'),
+        index,
+        value: (e as HTMLInputElement).value,
+        initial: initial ? (initial.get(e) ?? '') : (e as HTMLInputElement).defaultValue,
+      }));
+    })
+    .catch(() => [] as PageField[]);
+  return fields.filter((field) => isSensitiveField(field) && field.value !== '' && field.value !== field.initial);
 }
 
 /**
@@ -174,12 +215,12 @@ async function sensitiveFieldsOf(page: Page): Promise<{ frame: Frame; index: num
  * execCommand, setRangeText, redefining the setters) can still send a value.
  */
 async function evaluateGuarded(page: Page, script: string): Promise<void> {
-  const hosted = page.frames().filter((frame) => !isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));
+  const hosted = hostedFrames(page);
   const trapped: Frame[] = [];
   for (const frame of hosted) {
     if (await frame.evaluate(SENSITIVE_WRITE_TRAP).then(() => true, () => false)) trapped.push(frame);
+    await rememberFieldValues(frame);
   }
-  const before = await sensitiveFieldsOf(page);
   let scriptError: unknown;
   try {
     await page.evaluate(script);
@@ -197,9 +238,10 @@ async function evaluateGuarded(page: Page, script: string): Promise<void> {
       .catch(() => false);
     blocked ||= hit;
   }
-  const changed = (await sensitiveFieldsOf(page)).filter(
-    (field) => field.value !== '' && before.find((b) => b.frame === field.frame && b.index === field.index)?.value !== field.value,
-  );
+  const changed: { frame: Frame; index: number }[] = [];
+  for (const frame of hostedFrames(page)) {
+    for (const { index } of await changedSensitiveFields(frame)) changed.push({ frame, index });
+  }
   for (const { frame, index } of changed) {
     await frame.evaluate((i) => ((document.querySelectorAll('input, textarea')[i] as HTMLInputElement).value = ''), index).catch(() => undefined);
   }
@@ -207,8 +249,8 @@ async function evaluateGuarded(page: Page, script: string): Promise<void> {
   if (scriptError) throw scriptError;
 }
 
-async function waitForCart(recorder: Recorder, record: StepRecord, options: PlayOptions): Promise<void> {
-  const check = options.cartCheck ?? defaultCartCheck;
+async function waitForCart(recorder: Recorder, record: StepRecord, scenario: Scenario, options: PlayOptions): Promise<void> {
+  const check = options.cartCheck ?? createCartCheck(scenario.options.cartRequest);
   const deadline = Date.now() + (options.cartTimeoutMs ?? 5000);
   while (!check(recorder.stepActivity(record))) {
     if (Date.now() >= deadline) throw new Error('click did not add to cart');
@@ -235,7 +277,7 @@ async function runStep(
       return;
     case 'addToCart':
       await page.locator(step.value).first().click({ timeout });
-      await waitForCart(recorder, record, options);
+      await waitForCart(recorder, record, scenario, options);
       return;
     case 'fill':
       for (const [selector, value] of Object.entries(step.value)) await fillField(page, selector, fillValue(value, identity), timeout);
@@ -304,7 +346,14 @@ export async function recordScenario(options: RecordScenarioOptions): Promise<Ru
     await playScenario(recorder, parsed, rest);
   } catch (error) {
     const result = await recorder.close().catch(() => undefined);
-    if (error instanceof StepError && result) error.run = result;
+    if (error instanceof StepError) {
+      if (result) error.run = result;
+      if (rest.gtmOverride) {
+        const scrubber = new Scrubber(rest.gtmOverride.gtmAuth);
+        error.message = scrubber.text(error.message);
+        if (error.stack) error.stack = scrubber.text(error.stack);
+      }
+    }
     throw error;
   }
   const result = await recorder.close();

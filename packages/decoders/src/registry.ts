@@ -24,4 +24,3 @@ export function isCollectionEndpoint(req: Request, trackers: readonly TrackerEnt
   return decoders.some((d) => d.isCollectionEndpoint(req)) || trackerCollection(req, trackers) !== undefined;
 }
 
-export const vendorKeys: readonly string[] = ['ga4', 'google-ads', 'meta', 'pinterest', 'sgtm'];

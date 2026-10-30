@@ -191,3 +191,8 @@ test("built-in tracker vendors are valid vendor keys", () => {
   const s = parseScenario("start: /\nexpect:\n  mustNot:\n    - { vendor: [linkedin, microsoft-uet] }\n");
   expect(s.expect.mustNot[0]!.filter).toMatchObject({ vendor: ["linkedin", "microsoft-uet"] });
 });
+
+test('cartRequest is a regular expression', () => {
+  expect(parseScenario("start: /\noptions: { cartRequest: '/api/basket/' }").options.cartRequest).toBe('/api/basket/');
+  expect(() => parseScenario("start: /\noptions: { cartRequest: '(' }")).toThrow(/cartRequest/);
+});

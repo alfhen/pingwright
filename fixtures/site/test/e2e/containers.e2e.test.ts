@@ -111,6 +111,10 @@ function metaEvents(run: Run): string[] {
     .map((u) => u.searchParams.get('ev') ?? '');
 }
 
+// Absence checks need the burst to be over: events of one build fire together, so a later one can still be on its way.
+const quietMs = 1500;
+const quiet = () => new Promise((resolve) => setTimeout(resolve, quietMs));
+
 const published = { ga4: ['container_event'], meta: ['PageView', 'ViewContent', 'AddToCart'] };
 
 async function settle(run: Run, expected: { ga4: string[]; meta: string[] }): Promise<void> {
@@ -122,6 +126,7 @@ test('the published build, direct: its hits, and a container-level denied defaul
   const run = await start(false);
   await run.page.goto(`${site.url}/container/direct`);
   await settle(run, published);
+  await quiet();
   expect(run.gtmStatus).toEqual([200]);
   expect(ga4Events(run)).not.toContain('workspace_only');
   expect(await run.page.evaluate(() => (window as unknown as { pwContainer: { build: string } }).pwContainer.build)).toBe(
@@ -136,7 +141,10 @@ test('the workspace build, direct: one more GA4 event, no AddToCart, and a diffe
   const run = await start(true);
   await run.page.goto(`${site.url}/container/direct`);
   await settle(run, { ga4: ['container_event', 'workspace_only'], meta: ['PageView', 'ViewContent'] });
+  await quiet();
   expect(metaEvents(run)).not.toContain('AddToCart');
+  expect(ga4Events(run)).not.toContain('ws_echo');
+  expect(run.seen.filter((s) => s.url.pathname.startsWith('/gtm-echo'))).toEqual([]);
   // ad_storage granted, analytics_storage denied (G1, ad, analytics)
   expect(pageViewGcs(run)).toBe('G110');
   await run.context.close();
@@ -146,6 +154,8 @@ test('the Stape-style loader reaches the same published build through a disguise
   const run = await start(false);
   await run.page.goto(`${site.url}/container/stape`);
   await settle(run, published);
+  await quiet();
+  expect(ga4Events(run)).not.toContain('workspace_only');
   const loader = run.seen.find((s) => s.url.origin === site.sgtmUrl && s.url.pathname === '/pwstape');
   expect(Buffer.from(loader?.url.searchParams.get('pk') ?? '', 'base64').toString()).toBe('/gtm.js?id=GTM-PWTEST1');
   expect(run.gtmStatus).toEqual([]);
@@ -156,6 +166,8 @@ test('the same loader inside a sandboxed iframe sends the published hits', async
   const run = await start(false);
   await run.page.goto(`${site.url}/container/sandbox`);
   await settle(run, published);
+  await quiet();
+  expect(ga4Events(run)).not.toContain('workspace_only');
   const hit = run.stubbed.find((u) => u.pathname === '/g/collect' && u.searchParams.get('en') === 'page_view');
   expect(hit?.searchParams.get('dl')).toContain('/web-pixels@');
   await run.context.close();
