@@ -1,5 +1,5 @@
 import type { ConsentValue, NetworkMode, RequestOutcome } from '@pingwright/core';
-import { vendorKeys } from '@pingwright/decoders';
+import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
 import { isHostPattern } from './hosts.ts';
 
@@ -341,7 +341,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         else if (kind === 'mustNot') fail(p, 'is only valid under must');
         else rule.hashesMatch = true;
       } else if (k === 'vendor') {
-        const l = list(k, v, [...vendorKeys, ...extraVendorKeys]);
+        const l = list(k, v, [...vendorKeys, ...trackerVendorKeys, ...extraVendorKeys]);
         if (l) filter.vendor = l;
       } else if (k === 'event' || k === 'transport' || k === 'host') {
         const l = list(k, v);
