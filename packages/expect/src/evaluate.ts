@@ -1,4 +1,5 @@
 import {
+  fieldHashes,
   findStableHashes,
   hashEmail,
   hashPhone,
@@ -274,8 +275,16 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
 
-const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address)$/;
-const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number)$/;
+const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address|user_data\.email_address)$/;
+const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number|user_data\.phone_number)$/;
+const FIELD_PARAMS: Record<string, (identity: Identity) => string> = {
+  'user_data.first_name': (i) => i.firstName,
+  'user_data.last_name': (i) => i.lastName,
+  'user_data.street': (i) => i.address1,
+  'user_data.city': (i) => i.city,
+  'user_data.postal_code': (i) => i.zip,
+  'user_data.country': (i) => i.country,
+};
 
 function allForms(h: HashForms): string[] {
   return [h.hex, h.base64, h.base64url];
@@ -288,6 +297,9 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const phone = hashPhone(identity.phone);
   const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
   const plain = new Set([identity.email.toLowerCase(), identity.phone.toLowerCase(), identity.phone.replace(/\D/g, '')]);
+  // A literal fill value stands in for a field the checkout would not take as generated, such as a German city,
+  // so it can match a name or address hash. An email or phone must still be the identity's own.
+  const extra = identity.extra ?? [];
   const withHash: string[] = [];
   const wrong: string[] = [];
   const unhashed: string[] = [];
@@ -296,12 +308,21 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     let bad = false;
     let raw = false;
     for (const [name, value] of Object.entries(hit.params)) {
-      const known = EMAIL_PARAM.test(name) ? emailHashes : PHONE_PARAM.test(name) ? phoneHashes : undefined;
+      const field = FIELD_PARAMS[name]?.(identity);
+      const accepted = field === undefined ? [] : [field, ...extra];
+      const known = EMAIL_PARAM.test(name)
+        ? emailHashes
+        : PHONE_PARAM.test(name)
+          ? phoneHashes
+          : field !== undefined
+            ? fieldHashes(...accepted)
+            : undefined;
       if (!known || !value) continue;
       seen = true;
       if (known.has(value)) continue;
       bad = true;
-      if (plain.has(value.trim().toLowerCase())) raw = true;
+      const typed = value.trim().toLowerCase();
+      if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) raw = true;
     }
     if (seen) withHash.push(hit.id);
     if (bad) wrong.push(hit.id);
@@ -373,7 +394,9 @@ function builtInChecks(
   );
 
   const real = flags.filter((f) => f.kind === 'possibleRealData');
-  const leaks = ctx.identity ? scanForeignData(ctx, ctx.identity) : [];
+  // Flags from the recorder come from the raw records. Scanning again only adds requests the recorder did not flag.
+  const flagged = new Set(real.flatMap((f) => f.recordIds));
+  const leaks = ctx.identity ? findForeignData(ctx.requests.values(), ctx.hits, ctx.identity).filter((l) => !flagged.has(l.requestId)) : [];
   const evidence = [...real.flatMap((f) => [f.id, ...f.recordIds]), ...leaks.flatMap((l) => l.evidence)];
   const problems = [...real.map((f) => f.detail), ...leaks.map((l) => l.detail)];
   const shown = problems.slice(0, MAX_LISTED).join('; ');
@@ -438,19 +461,27 @@ function pathSegments(url: string): string[] {
   }
 }
 
-function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
+export interface ForeignData {
+  requestId: string;
+  detail: string;
+  /** The request, its hits and its step. */
+  evidence: string[];
+}
+
+/** Finds email, phone and hash values in requests and hits that are not the identity's own. Takes raw records. */
+export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[], identity: Identity): ForeignData[] {
   const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
     let entry = byRequest.get(key);
     if (!entry) byRequest.set(key, (entry = { texts: [], hitIds: [], stepId }));
     return entry;
   };
-  for (const request of ctx.requests.values()) {
+  for (const request of requests) {
     if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
     const url = scannedUrl(request);
     slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), request.postData ?? '');
   }
-  for (const hit of ctx.hits) {
+  for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);
     entry.hitIds.push(hit.id);
     for (const [key, value] of Object.entries(hit.params)) entry.texts.push(`${key}=${value}`);
@@ -458,7 +489,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   const stableHashes = findStableHashes(
     [...byRequest].flatMap(([requestId, entry]) => entry.texts.map((text) => ({ requestId, text }))),
   );
-  const out: { detail: string; evidence: string[] }[] = [];
+  const out: ForeignData[] = [];
   for (const [requestId, entry] of byRequest) {
     const found = new Map<string, string>();
     for (const text of entry.texts) for (const m of scan(text, identity, { stableHashes })) found.set(`${m.kind}:${m.value}`, m.kind);
@@ -466,6 +497,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     const kinds = [...new Set(found.values())].join(', ');
     const step = entry.stepId ? ` in step ${entry.stepId}` : '';
     out.push({
+      requestId,
       detail: `request ${requestId}${step} carries ${found.size} ${kinds} value(s) that are not from the run identity`,
       evidence: [requestId, ...entry.hitIds, ...(entry.stepId ? [entry.stepId] : [])],
     });

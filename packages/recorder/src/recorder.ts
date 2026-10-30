@@ -729,6 +729,7 @@ export class Recorder {
       trackers: this.trackers,
       requests,
       hits,
+      identity: this.run.identity,
       routedRequestIds: this.routed,
     });
     const consentEpochs = this.buildConsentEpochs();
