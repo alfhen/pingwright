@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server container leak</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/banner.js"></script>
+</head>
+<body>
+<h1>Server container leak</h1>
+<p>A data tag that posts the whole dataLayer to the mock server container. <code>?mode=allowlist</code> posts four fields only. <code>?mode=huge</code> pads the leaking body over 64 KiB.</p>
+<script>
+(function () {
+  var mode = new URLSearchParams(location.search).get('mode') || 'leak';
+  var id = window.pwIdentity();
+  var clientIdHash = '41183e7eea68ef10e4a88f59168c7db20625761532c358bbbebae1c3e7b06847';
+
+  function body(name) {
+    var base = { event_name: name, page_location: location.href, page_title: document.title };
+    if (mode === 'allowlist') return Object.assign(base, { page_referrer: document.referrer });
+    var full = Object.assign(base, {
+      email: id.email,
+      phone: id.phone,
+      address: { street: id.address1, city: id.city, postal_code: id.zip, country: id.country },
+      cookie_data: '_ga=GA1.1.1111111111.2222222222; _pwid=pwfake-0001',
+      clientIdHash: clientIdHash
+    });
+    if (mode === 'huge') full.padding = 'x'.repeat(70 * 1024);
+    return full;
+  }
+  function send(name) {
+    fetch(window.__PW_FIXTURE.sgtmUrl + '/data?v=2&event=' + name, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(body(name))
+    }).catch(function () {});
+  }
+
+  send('page_view');
+  window.pwConsent.onAnswer(function () {
+    send('after_consent');
+  });
+})();
+</script>
+</body>
+</html>

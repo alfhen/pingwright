@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Select</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/banner.js"></script>
+</head>
+<body>
+<h1>Select</h1>
+<p>A country select with values and labels (<code>DE</code> / <code>Germany</code>). <code>?send=hash</code> sends a server container hit with the SHA-256 of the chosen value as <code>country</code>. <code>?broken=1</code> resets the select to its default after every change.</p>
+<label>Country
+  <select id="country-code" name="countryCode">
+    <option value="">Choose</option>
+    <option value="DE">Germany</option>
+    <option value="SE">Sweden</option>
+    <option value="NO">Norway</option>
+    <option value="GB">United Kingdom</option>
+  </select>
+</label>
+<div id="current"></div>
+<script>
+(function () {
+  var query = new URLSearchParams(location.search);
+  var select = document.getElementById('country-code');
+  var current = document.getElementById('current');
+  function show() {
+    current.textContent = select.value;
+  }
+  select.addEventListener('change', function () {
+    var value = select.value;
+    if (query.get('send') === 'hash' && value) {
+      window.pwSha256(value).then(function (hash) {
+        fetch(window.__PW_FIXTURE.sgtmUrl + '/data?v=2&event=country_selected', {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ event_name: 'country_selected', page_location: location.href, country: hash })
+        }).catch(function () {});
+      });
+    }
+    if (query.get('broken') === '1') {
+      setTimeout(function () {
+        select.value = '';
+        show();
+      }, 0);
+    }
+    show();
+  });
+  show();
+})();
+</script>
+</body>
+</html>
