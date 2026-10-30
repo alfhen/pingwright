@@ -82,10 +82,10 @@ The [CLI page](../cli.md) lists the options that change these checks.
 
 ## The record file
 
-The record file is a JSONL file. Each line is one JSON object, and its `type` says what it is: `run`, `step`, `request`, `response`, `hit`, `dataLayerEvent`, `consentEpoch`, `flag`, `checkpoint` and `result`. Every record has an `id` that starts with a short prefix, such as `hit_`. The summary prints these IDs as evidence. Search the record file for an ID to see the whole line.
+The record file is a JSONL file. Each line is one JSON object, and its `type` says what it is: `run`, `step`, `request`, `response`, `hit`, `dataLayerEvent`, `consentEpoch`, `flag`, `checkpoint` and `result`. Every record has an `id` that starts with a short prefix, such as `hit_`. The summary prints these IDs as evidence. Search the record file for an ID to see the whole line. This finds the first evidence hit from the summary above:
 
 ```bash
-grep hit_01M66F9D0HD6QK42KFX8VH3CMT runs/run_01M66F96D46CDXKXRNKJVPASAT.jsonl
+grep hit_01M66G9M2S992B5DF1MZ15ZQ08 runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
 Programs can read the file, or the output of `pingwright run --json`. The [design](../design.md#_4-data-model) lists every field.
