@@ -22,7 +22,31 @@
   function trackPurchase() {
     fbq('track', 'Purchase', { value: 19, currency: 'USD' });
   }
-  if (new URLSearchParams(location.search).get('pattern') === '1') {
+  var pattern = new URLSearchParams(location.search).get('pattern');
+  function sha256Hex(value) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(value.trim().toLowerCase())).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    });
+  }
+  if (pattern === 'sgtm') {
+    // Like a hosted store: Meta gets no hashed user data, the server container's data client does.
+    trackPurchase();
+    var stored = JSON.parse(sessionStorage.getItem('pw_checkout') || '{}');
+    var fields = {
+      email_address: stored.email || '',
+      phone_number: '+' + (stored.phone || '').replace(/\D/g, ''),
+      first_name: stored['first-name'] || '',
+      last_name: stored['last-name'] || '',
+      city: stored.city || ''
+    };
+    Promise.all(Object.keys(fields).map(function (k) { return sha256Hex(fields[k]); })).then(function (hashes) {
+      var userData = {};
+      Object.keys(fields).forEach(function (k, i) { userData[k] = hashes[i]; });
+      var dtdc = btoa(JSON.stringify({ event_name: 'purchase', page_location: location.href, page_hostname: location.hostname, user_data: userData }));
+      var real = '/data?v=2&tid=G-PWTEST0001&cid=1111111111.2222222222&dtdc=' + encodeURIComponent(dtdc);
+      fetch(window.__PW_FIXTURE.sgtmUrl + '/pwstape?pk=' + encodeURIComponent(btoa(real)), { mode: 'no-cors' }).catch(function () {});
+    });
+  } else if (pattern === '1') {
     var stored = JSON.parse(sessionStorage.getItem('pw_checkout') || '{}');
     crypto.subtle.digest('SHA-256', new TextEncoder().encode((stored.email || '').trim().toLowerCase())).then(function (buf) {
       var hex = Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');

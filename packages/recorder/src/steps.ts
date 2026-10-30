@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 import { createIdentity, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
-import type { Scenario, Step } from '@pingwright/expect';
+import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Scenario, type Step } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
@@ -103,8 +103,6 @@ export class GtmOverrideFailure extends Error {
   }
 }
 
-const IDENTITY_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'] as const;
-type IdentityField = (typeof IDENTITY_FIELDS)[number];
 const HANDOFF_REMINDER = 'Use test accounts and test cards only. Never enter real personal or payment details.';
 
 export function hasHandoff(scenario: Scenario): boolean {
@@ -309,12 +307,26 @@ async function runStep(
   }
 }
 
+/** The seeded identity with the scenario's own field values, plus every literal `fill` value as `extra`. */
+export function scenarioIdentity(scenario: Scenario, seed: number): Identity {
+  const literals = scenario.steps.flatMap((step) =>
+    step.kind === 'fill'
+      ? Object.entries(step.value)
+          .filter(([selector, v]) => !SECRET_FIELD.test(selector) && !(IDENTITY_FIELDS as readonly string[]).includes(v))
+          .map(([, v]) => v)
+      : [],
+  );
+  const identity: Identity = { ...createIdentity(seed), ...scenario.identity };
+  if (literals.length) identity.extra = [...new Set(literals)];
+  return identity;
+}
+
 /**
  * Plays the scenario's start visit, recorded as step 0 labelled "start", and then its steps.
  * The first failing step ends the run with a StepError.
  */
 export async function playScenario(recorder: Recorder, scenario: Scenario, options: PlayOptions = {}): Promise<Identity> {
-  const identity = createIdentity(options.seed ?? scenario.options.seed ?? Math.floor(Math.random() * 2 ** 31));
+  const identity = scenarioIdentity(scenario, options.seed ?? scenario.options.seed ?? Math.floor(Math.random() * 2 ** 31));
   recorder.setIdentity(identity);
   const steps: Step[] = [{ kind: 'visit', value: scenario.start, label: 'start', line: 0 }, ...scenario.steps];
   for (const [index, step] of steps.entries()) {

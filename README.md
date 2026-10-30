@@ -65,15 +65,15 @@ pingwright run scenarios/undecided-visitor.yml --site https://staging.example.co
 ## Install
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.2
+npm i -g pingwright@next
 pingwright install-browser
 ```
 
-Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the global package to a temporary clone that it then deletes. Install from a release tag only: tags carry a built `dist/`, branches such as main do not. The other option is a tarball: in a checkout, run `pnpm install && pnpm build && pnpm pack`, then `npm i -g ./pingwright-<version>.tgz`. See [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `@next` is the newest release candidate. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
 
 ## Quick start
 
-1. `npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.2`
+1. `npm i -g pingwright@next`
 2. `pingwright install-browser`
 3. Write `scenario.yml`:
 

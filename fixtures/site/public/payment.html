@@ -19,7 +19,8 @@
 <script>
   document.getElementById('payment-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    location.href = sessionStorage.getItem('pw_pattern') === '1' ? '/thank-you?pattern=1' : '/thank-you';
+    var pattern = sessionStorage.getItem('pw_pattern');
+    location.href = pattern === 'sgtm' ? '/thank-you?pattern=sgtm' : pattern === '1' ? '/thank-you?pattern=1' : '/thank-you';
   });
 </script>
 </body>
