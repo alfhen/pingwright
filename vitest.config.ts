@@ -6,7 +6,6 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          testTimeout: 20_000,
           include: ['**/src/**/*.test.ts', 'scripts/*.test.ts'],
           exclude: ['**/node_modules/**', '**/.claude/**', '**/*.e2e.test.ts', '**/*.docs.test.ts'],
         },
