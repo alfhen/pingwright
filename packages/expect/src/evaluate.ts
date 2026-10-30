@@ -121,7 +121,7 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
     const check = checkHashes(hits, ctx);
     if (check.pass) return { pass: true, evidence: check.evidence, message: `${message} ${check.message}` };
     const matched = `${hits.length} hit${hits.length === 1 ? '' : 's'} matched ${describeSelector(rule.filter)}${where}`;
-    const headline = check.headline ?? `Expected ${describeCount(count)} hits matching all conditions, found 0.`;
+    const headline = check.headline ?? (countHolds(count, 0) ? UNMATCHED_HEADLINE : `Expected ${describeCount(count)} hits matching all conditions, found 0.`);
     return { pass: false, evidence: check.evidence, message: `${headline} ${matched}, but identity.hashesMatch failed: ${check.message}` };
   }
   return { pass, evidence: ids, message };

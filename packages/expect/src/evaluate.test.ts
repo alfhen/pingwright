@@ -298,6 +298,18 @@ test('identity.hashesMatch with a count that allows zero hits', () => {
   }
 });
 
+test('identity.hashesMatch with a count that allows zero and hits without hashes', () => {
+  for (const count of ["'<=3'", "'>=0'"]) {
+    const q = `expect:\n  must:\n    - { vendor: meta, count: ${count}, identity.hashesMatch: true }`;
+    const hits = [hit({ vendor: 'meta' }), hit({ vendor: 'meta' })];
+    const r = evaluate(hits.flatMap((h) => [h.hit, h.req]), parseScenario(`start: /\n${q}`), { identity })[0]!;
+    expect(r.pass).toBe(false);
+    expect(r.message).toContain('2 hits matched vendor, but identity.hashesMatch failed');
+    expect(r.message).not.toContain('found 0');
+    expect(r.message).not.toContain('matching all conditions');
+  }
+});
+
 test('built-in unknownDestination fails with evidence unless allowed', () => {
   const flag: Flag = { type: 'flag', id: newId('flag'), runId, kind: 'unknownDestination', recordIds: ['req_X'], detail: 'GET http://127.0.0.1:9100/x' };
   const failing = evaluate([flag], parseScenario('start: /'));
