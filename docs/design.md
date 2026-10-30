@@ -80,7 +80,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
 | `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `evidence[]` (record IDs) |
 
-`recordSchemaVersion` on a `Run` is an integer. Version 1 is the 0.2.0 record shape. A reader treats a record with no version as version 0, and warns when the version is newer than it knows.
+`recordSchemaVersion` on a `Run` is an integer. Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. Do not bump it within 0.2. A reader treats a record with no version as version 0, and warns when the version is newer than it knows.
 
 `t` is milliseconds on one shared clock (§7.3).
 

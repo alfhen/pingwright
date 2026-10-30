@@ -24,7 +24,7 @@ export interface CaptureCoverage {
   serviceWorker: 'chromium-only';
 }
 
-/** Version 1 is the 0.2.0 record shape. A record with no version is version 0. */
+/** Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. A record with no version is version 0. */
 export const RECORD_SCHEMA_VERSION = 1;
 
 export interface Run {
