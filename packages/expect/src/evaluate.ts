@@ -223,17 +223,24 @@ function hostForms(url: string): string[] {
 
 type Placeable = Pick<ConsentEpoch, 'startT'> & Partial<Pick<ConsentEpoch, 'state' | 'label'>>;
 
+function revokes(prev: Placeable, next: Placeable): boolean {
+  if (next.label === 'withdrawn') return true;
+  const before = prev.state;
+  const after = next.state;
+  return !!before && !!after && consentFields.some((f) => before[f] === 'granted' && after[f] === 'denied');
+}
+
 /**
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
- * epoch, since tags may fire on the consent update itself. That does not hold for a withdrawn
- * epoch: a hit before it was sent while consent was still granted. A hit before the first epoch belongs to
+ * epoch, since tags may fire on the consent update itself. That does not hold when the new epoch
+ * denies a signal the previous one granted (a withdrawal, or a reject after a granted default): a hit
+ * before it was sent while consent was still granted. A hit before the first epoch belongs to
  * none, unless that epoch is undecided, which is what the visitor was before it.
  */
 export function epochForHit<E extends Placeable>(epochs: readonly E[], t: number, graceMs = DEFAULT_GRACE_MS): E | undefined {
   let found: E | undefined;
   epochs.forEach((e, i) => {
-    const withdraw = e.label === 'withdrawn';
-    const start = i === 0 ? (e.label === 'undecided' ? -Infinity : e.startT) : withdraw ? e.startT : e.startT - graceMs;
+    const start = i === 0 ? (e.label === 'undecided' ? -Infinity : e.startT) : revokes(epochs[i - 1]!, e) ? e.startT : e.startT - graceMs;
     if (t >= start) found = e;
   });
   return found;

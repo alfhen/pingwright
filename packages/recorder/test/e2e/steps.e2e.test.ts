@@ -270,24 +270,63 @@ describe('addToCart', () => {
     expect((error as StepError).message).toContain('click did not add to cart');
   });
 
-  test('fails when the cart request is answered with a 422 after a delay', async () => {
-    const page = '<!doctype html><title>Shop</title><button id="add" onclick="fetch(\'/cart/add.js\', { method: \'POST\' })">Add</button>';
-    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
-    await recorder.context.route('https://shop.example.com/**', async (route) => {
-      if (route.request().url().endsWith('/cart/add.js')) {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await route.fulfill({ status: 422, contentType: 'application/json', body: '{}' });
+  const SHOP = 'https://shop.example.com';
+  const shopPage = (button: string) => `<!doctype html><title>Shop</title>${button}`;
+
+  async function addToCartError(
+    button: string,
+    cart: { path: string; status: number; location?: string; delayMs?: number },
+    yaml = 'start: /\nsteps:\n  - addToCart: "#add"\n',
+  ): Promise<unknown> {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: SHOP });
+    await recorder.context.route(`${SHOP}/**`, async (route) => {
+      if (new URL(route.request().url()).pathname === cart.path) {
+        if (cart.delayMs) await new Promise((resolve) => setTimeout(resolve, cart.delayMs));
+        await route.fulfill({
+          status: cart.status,
+          contentType: 'application/json',
+          body: '{}',
+          ...(cart.location ? { headers: { location: cart.location } } : {}),
+        });
       } else {
-        await route.fulfill({ status: 200, contentType: 'text/html', body: page });
+        await route.fulfill({ status: 200, contentType: 'text/html', body: shopPage(button) });
       }
     });
-    const error = await playScenario(recorder, parseScenario('start: /\nsteps:\n  - addToCart: "#add"\n'), { cartTimeoutMs: 1500 }).then(
+    const error = await playScenario(recorder, parseScenario(yaml), { cartTimeoutMs: 1500 }).then(
       () => undefined,
       (e: unknown) => e,
     );
     await recorder.close();
+    return error;
+  }
+
+  const fetchButton = (path: string) => `<button id="add" onclick="fetch('${path}', { method: 'POST' })">Add</button>`;
+
+  test('fails when the cart request is answered with a 422 after a delay', async () => {
+    const error = await addToCartError(fetchButton('/cart/add.js'), { path: '/cart/add.js', status: 422, delayMs: 400 });
     expect(error).toBeInstanceOf(StepError);
     expect((error as StepError).message).toContain('click did not add to cart');
+  });
+
+  test('passes when the cart request is answered with a 200 after a delay', async () => {
+    const error = await addToCartError(fetchButton('/cart/add.js'), { path: '/cart/add.js', status: 200, delayMs: 400 });
+    expect(error).toBeUndefined();
+  });
+
+  test('passes when a cart form POST is answered with a 302', async () => {
+    const form = '<form method="post" action="/cart/add"><button id="add">Add</button></form>';
+    const error = await addToCartError(form, { path: '/cart/add', status: 302, location: `${SHOP}/cart/done` });
+    expect(error).toBeUndefined();
+  });
+
+  test('a POST to a custom basket path fails without cartRequest and passes with it', async () => {
+    const button = fetchButton('/api/basket/items');
+    const cart = { path: '/api/basket/items', status: 200 };
+    const failed = await addToCartError(button, cart);
+    expect(failed).toBeInstanceOf(StepError);
+    expect((failed as StepError).message).toContain('click did not add to cart');
+    const passed = await addToCartError(button, cart, "start: /\noptions: { cartRequest: '/api/basket/' }\nsteps:\n  - addToCart: \"#add\"\n");
+    expect(passed).toBeUndefined();
   });
 
   test('passes with a custom cart check', async () => {

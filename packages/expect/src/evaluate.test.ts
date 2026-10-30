@@ -615,6 +615,14 @@ test('a first reject keeps the grace window', () => {
   expect(epochForHit(epochs, 980)?.label).toBe('denied');
 });
 
+test('a first reject after a granted default does not get the grace window', () => {
+  const epochs = [epoch(0, 1000, granted, 'undecided'), epoch(1000, null, denied)];
+  expect(epochForHit(epochs, 980)?.label).toBe('undecided');
+  expect(epochForHit(epochs, 1000)?.label).toBe('denied');
+  const q = 'expect:\n  mustNot:\n    - { vendor: meta, in: epoch(denied) }';
+  expect(rule(q, [hit({ vendor: 'meta', t: 980 }), ...epochs]).pass).toBe(true);
+});
+
 test('in: epoch(label=withdrawn) matches a withdrawn epoch and epoch(denied) still matches it by state', () => {
   const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, 2000, granted), epoch(2000, null, denied, 'withdrawn')];
   const after = hit({ vendor: 'meta', t: 2500 });
