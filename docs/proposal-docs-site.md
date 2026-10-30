@@ -12,7 +12,7 @@ Status: proposal (#224). Nothing is built yet. If it is accepted, the PR plan in
 - No Pingwright-hosted service. The site is documentation only.
 - Nothing in `packages/` points at `pingwright.dev`. The collector origin stays `collector.pingwright.invalid`.
 - No new content in this work. Pages are the existing files.
-- No npm package. Releases stay git tags.
+- No change to how releases are made. The site does not publish anything to npm.
 
 ## 2. Hosting
 
@@ -186,19 +186,19 @@ jobs:
 
 **After a deploy**, a last step checks the live site with `curl`: `https://pingwright.dev/` answers 200, sends no `Set-Cookie` header and has `server: GitHub.com`; `http://pingwright.dev/` redirects to HTTPS. A `cf-ray` header fails it, which catches the Cloudflare proxy being turned on by mistake.
 
-**A guard on the code.** The same workflow fails if `pingwright.dev` appears anywhere under `packages/` or `fixtures/`.
+**A guard on the code.** A step in `ci.yml` fails if `pingwright.dev` appears anywhere under `packages/` or `fixtures/`. It lives in `ci.yml`, not `docs.yml`, because `docs.yml` does not run on a PR that only touches code.
 
 ## 5. Versions
 
 **Recommendation: docs for `main` only.**
 
-- Releases are git tags with no npm package, and there are few of them. Most readers want the newest docs.
+- There are few releases, and only release candidates so far. Most readers want the newest docs.
 - VitePress has no version switcher. Per-tag docs would mean building every tag into its own path (`/v0.2/`) and keeping old configs building.
 - The docs of any release are already readable on GitHub at its tag: `github.com/alfhen/pingwright/tree/v<version>`.
 
 A line under each page (the theme's `doc-footer-before` slot) says "Docs for main. For the docs of a release, open the repo at its tag." The README's status block already marks what is not built yet.
 
-Revisit this when Pingwright is published to npm, or at 1.0, whichever comes first.
+Revisit this at 1.0.
 
 ## 6. Dogfooding
 
@@ -252,6 +252,7 @@ These need account or DNS access. No PR can do them, and no agent should.
 | M4 | After M2 and M1 | **Settings → Pages → Custom domain**: `pingwright.dev`, save. Then add the A, AAAA and `www` CNAME records on Cloudflare, proxy off (§2.2). |
 | M5 | When it appears | Tick **Enforce HTTPS**. |
 | M6 | Optional | Cloudflare zone hygiene, outside the site: a null MX (`0 .`), SPF `v=spf1 -all` and DMARC `v=DMARC1; p=reject`, so nobody can send mail as `pingwright.dev`. |
+| M7 | After M5 | A CAA record `0 issue "letsencrypt.org"` on the apex. |
 
 What PRs do: the VitePress config, the workflow, the dogfood check, the post-deploy check, and the README link.
 
@@ -268,7 +269,8 @@ What PRs do: the VitePress config, the workflow, the dogfood check, the post-dep
 Each entry is one small PR, as in `docs/plan-0.2.md`.
 
 **D1. VitePress site.**
-Touches: `package.json`, `pnpm-lock.yaml`, `.vitepress/config.ts`, `.vitepress/theme/index.ts`, `.gitignore`, `tsconfig.json` if needed.
+Touches: `package.json`, `pnpm-lock.yaml`, `.vitepress/config.ts`, `.vitepress/theme/index.ts`, `.gitignore`, `tsconfig.json` if needed, `.github/workflows/ci.yml` (the domain guard).
+The site uses the logo and favicons in `brand/`.
 Acceptance: `pnpm docs:build` builds the README as `/` and every published doc. A dead link in a doc fails the build. The build output contains no `fonts.googleapis.com` and no `http` URL in a `src`, a stylesheet `href` or a CSS `url()`. Search finds a word from `docs/cli.md` in `pnpm docs:preview`.
 
 **D2. Docs workflow, build and deploy.** Needs D1 and M2.
@@ -289,11 +291,11 @@ Acceptance: the README links to `https://pingwright.dev`. The release steps say 
 
 D3 and D4 both touch the workflow, so they go one after the other.
 
-## 10. Open questions
+## 10. Decisions
 
-- **Alpha or Starlight.** Is an exact pin on VitePress `2.0.0-alpha.20` acceptable? If not, take Starlight `0.42.6` and accept front matter in each doc.
-- **Which docs.** Publish the plans and proposals (`plan-*.md`, `proposal-*.md`) under a "Project" group, or only the user docs (README, `cli.md`, `shopify-checkout.md`, `design.md`, `release.md`)? The proposal leaves `AGENTS.md` out, since it is about working on the repo.
-- **Web Storage.** Does "no cookies" also mean no `localStorage`? If yes, set `appearance: 'force-auto'` (no toggle, so no appearance key) and decide about the search key, which the default theme writes when search opens. Otherwise the check lists the two keys as allowed.
-- **A CSP.** GitHub Pages can't send headers, but a `<meta http-equiv="Content-Security-Policy">` with `default-src 'self'` would block any outside request in the browser. VitePress adds inline scripts, so the policy needs their hashes **(verify)**. Worth a later PR?
-- **The other workflow.** `ci.yml` uses tag refs (`actions/checkout@v7`). Pin it to SHAs in its own PR, and add Dependabot for actions?
-- **CAA.** Add `0 issue "letsencrypt.org"` now? It narrows who can issue certificates for the domain, but a wrong value stops GitHub renewing.
+- **VitePress `2.0.0-alpha.20`**, pinned exactly. Bump it on purpose, never by range.
+- **User docs only:** the README, `cli.md`, `shopify-checkout.md`, `design.md` and `release.md`. Plans, proposals and `AGENTS.md` stay in the repo.
+- **Web Storage is allowed** for the two VitePress UI keys (`vitepress:local-search-detailed-list`, `vitepress-theme-appearance`). They never leave the browser. The dogfood check still fails on any cookie.
+- **A CSP is a later PR.** VitePress adds inline scripts, so a `<meta>` policy needs their hashes **(verify)**.
+- **`ci.yml` gets SHA-pinned actions in its own PR.** Dependabot for actions comes with it.
+- **CAA:** add `0 issue "letsencrypt.org"` as a maintainer step (M7), after the first certificate is issued.
