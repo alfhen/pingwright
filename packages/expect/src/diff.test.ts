@@ -168,6 +168,32 @@ test('byPage adds the page path to the key', () => {
   expect(d.added[0]!.key.page).toBe('/checkout');
 });
 
+test('byPage strips the sandbox prefix from the key and keeps the raw page in the record', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addHit(a, { page: 'https://shop.example.com/web-pixels@aaa/custom/web-pixel-1@1/sandbox/modern/collections/yarn' });
+  addHit(b, { page: 'https://shop.example.com/web-pixels@bbb/custom/web-pixel-1@2/sandbox/modern/collections/yarn' });
+  addHit(b, { page: 'https://shop.example.com/collections/yarn' });
+  const d = diffRuns(a, b, { byPage: true });
+  expect(d.removed).toEqual([]);
+  expect(d.added).toHaveLength(1);
+  expect(d.countMismatches).toEqual([{ key: expect.objectContaining({ page: '/collections/yarn' }), a: 1, b: 2 }]);
+  expect(a.hits[0]!.page).toContain('web-pixels@aaa');
+});
+
+test('byPage groups a hit without a page by its frame URL, else under an empty page', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addHit(a, { page: null });
+  addHit(b, { page: null });
+  const framed = addHit(b, { page: null });
+  b.requests.find((r) => r.id === framed.requestId)!.frameUrl = 'http://localhost:3000/web-pixels@x/sandbox/modern/cart';
+  const d = diffRuns(a, b, { byPage: true });
+  expect(d.added.map((h) => h.key.page)).toEqual(['/cart']);
+  expect(d.countMismatches.map((m) => m.key.page)).toEqual(['/cart']);
+  expect(d.changed).toEqual([]);
+});
+
 test('reports flag changes per host and kind', () => {
   const a = makeRun();
   const b = makeRun();

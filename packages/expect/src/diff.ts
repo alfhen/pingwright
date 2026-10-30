@@ -1,9 +1,10 @@
+import { stripSandboxPrefix } from '@pingwright/decoders';
 import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@pingwright/core';
 import { consentFields } from './scenario.ts';
 import { epochForHit } from './evaluate.ts';
 
 export interface DiffOptions {
-  /** Adds the page path to the match key. */
+  /** Adds the page path to the match key, with the Shopify sandbox prefix stripped. */
   byPage?: boolean;
 }
 
@@ -18,6 +19,8 @@ export interface DiffHit {
   hitId: string;
   t: number;
   step: string;
+  /** The page as recorded. */
+  page: string | null;
 }
 
 export interface ValueChange {
@@ -101,7 +104,7 @@ export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}
 }
 
 function ref(h: Hit, steps: Map<string, string>): DiffHit {
-  return { hitId: h.id, t: h.t, step: h.stepId ? (steps.get(h.stepId) ?? '') : '' };
+  return { hitId: h.id, t: h.t, step: h.stepId ? (steps.get(h.stepId) ?? '') : '', page: h.page };
 }
 
 function stepLabels(run: RunRecords): Map<string, string> {
@@ -115,6 +118,7 @@ interface Group {
 
 function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
   const epochs: ConsentEpoch[] = [...run.consentEpochs].sort((x, y) => x.startT - y.startT);
+  const frames = new Map(run.requests.map((r) => [r.id as string, r.frameUrl]));
   const groups = new Map<string, Group>();
   for (const hit of [...run.hits].sort((x, y) => x.t - y.t)) {
     const key: DiffKey = {
@@ -122,7 +126,7 @@ function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
       vendor: hit.vendor,
       event: hit.event ?? '',
     };
-    if (options.byPage) key.page = pagePath(hit.page);
+    if (options.byPage) key.page = pagePath(hit.page ?? frames.get(hit.requestId) ?? null);
     const id = JSON.stringify(key);
     const group = groups.get(id) ?? { key, hits: [] };
     group.hits.push(hit);
@@ -134,9 +138,9 @@ function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
 function pagePath(page: string | null): string {
   if (page === null) return '';
   try {
-    return new URL(page).pathname;
+    return stripSandboxPrefix(new URL(page).pathname);
   } catch {
-    return page;
+    return stripSandboxPrefix(page);
   }
 }
 

@@ -25,6 +25,8 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
+import { hostMatches } from '@pingwright/expect';
+import { getDomain } from 'tldts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import {
@@ -47,7 +49,10 @@ import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, unwrapUnloadSink, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
+  bodyHasContainer,
   isGtmJsUrl,
+  isLoaderCandidate,
+  loaderHint,
   gtmFailureMessage,
   matchGtmRequest,
   parseGtmOverride,
@@ -174,6 +179,8 @@ export class Recorder {
   private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
   private readonly fetchErrors: string[] = [];
+  private readonly loaderCandidates = new Map<string, boolean>();
+  private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
   private readonly navigations: number[] = [];
 
@@ -477,7 +484,20 @@ export class Recorder {
     const { gtmOverride, testGtmOrigin } = this;
     // record.url may be redacted during a handoff window; match on the live URL.
     const liveUrl = route.request().url();
-    const match = gtmOverride === undefined ? undefined : matchGtmRequest(liveUrl, record, gtmOverride);
+    let match = gtmOverride === undefined ? undefined : matchGtmRequest(liveUrl, record, gtmOverride);
+    if (!match && gtmOverride && isLoaderCandidate(liveUrl, record.resourceType) && !this.isSameOriginUrl(liveUrl)) this.crossOriginScripts.add(liveUrl);
+    if (!match && gtmOverride && !gtmOverride.loader && this.isUnseenLoaderCandidate(liveUrl, record)) {
+      const sniff = await this.sniffLoader(route, liveUrl, gtmOverride.container);
+      if (!sniff) return false;
+      if (!sniff.matched) {
+        await route.fulfill({ response: sniff.response });
+        return true;
+      }
+      match = {
+        applied: { way: 'loader', loader: 'stape', url: record.url, loses: 'everything the loader does beyond fetching the container' },
+        pageParams: new URL(liveUrl).searchParams,
+      };
+    }
     const applied = match?.applied;
     if (!applied && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
     const target = applied ? previewFetchUrl(gtmOverride!, testGtmOrigin, match!.pageParams) : testOriginUrl(liveUrl, testGtmOrigin!);
@@ -495,10 +515,52 @@ export class Recorder {
     return true;
   }
 
+  private isUnseenLoaderCandidate(liveUrl: string, record: Request): boolean {
+    if (this.loaderCandidates.get(liveUrl) === false) return false;
+    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl) || !this.isLoaderHost(liveUrl)) return false;
+    return !isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record);
+  }
+
+  /**
+   * Only hosts that can hold a Stape custom domain are sniffed: the site's registrable domain, a listed first-party
+   * host, or a loopback host when the site is loopback. Other scripts stay with Chromium, because the sniff fetch
+   * goes through Playwright's cookie jar.
+   */
+  private isLoaderHost(url: string): boolean {
+    try {
+      const siteHost = new URL(this.options.site).hostname;
+      const host = new URL(url).hostname;
+      const loopback = (h: string) => ['localhost', '127.0.0.1', '[::1]'].includes(h);
+      if (loopback(siteHost)) return loopback(host);
+      if (hostMatches(host, this.options.firstPartyHosts ?? [])) return true;
+      const domain = getDomain(siteHost, { allowPrivateDomains: true });
+      return domain !== null && getDomain(host, { allowPrivateDomains: true }) === domain;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails. A redirect is handed back unchanged, so Chromium follows it and the recorder sees every hop without a second request. */
+  private async sniffLoader(route: Route, liveUrl: string, container: string): Promise<{ response: APIResponse; matched: boolean } | undefined> {
+    try {
+      const response = await route.fetch({ maxRedirects: 0 });
+      if (response.status() >= 300 && response.status() < 400) {
+        this.loaderCandidates.set(liveUrl, false);
+        return { response, matched: false };
+      }
+      const matched = response.ok() && bodyHasContainer(await response.text(), container);
+      this.loaderCandidates.set(liveUrl, matched);
+      return { response, matched };
+    } catch {
+      return undefined;
+    }
+  }
+
   private gtmFailure(): string | undefined {
     const applied = this.run.gtmOverride?.applied;
     if (!applied || !this.gtmOverride) return undefined;
-    return gtmFailureMessage(this.gtmOverride, applied, this.fetchErrors[0]);
+    const hint = applied.length === 0 ? loaderHint([...this.loaderCandidates.keys()], [...this.crossOriginScripts]) : '';
+    return gtmFailureMessage(this.gtmOverride, applied, this.fetchErrors[0], hint);
   }
 
   /**

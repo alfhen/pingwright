@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { ga4, run, SANDBOX, site } from './cli-helpers.ts';
+import { ga4, outDir, run, runCli, SANDBOX, scenario, site } from './cli-helpers.ts';
 
 test('undecided: hits per vendor, denied consent, flags, one epoch', async () => {
   const r = await run('undecided');
@@ -93,4 +93,17 @@ test('a mustNot meta before consent rule fails on the fixture pixel', async () =
   const r = await run('meta-before-consent');
   expect(r.code).toBe(1);
   expect(r.failed).toContain('mustNot: {"vendor":"meta","before":"consent"}');
+}, 90_000);
+
+test('text summary names a Pinterest /user/ hit without an event', async () => {
+  const r = await runCli(['run', scenario('pinterest-user'), '--site', site.url, '--out', outDir]);
+  expect(r.stdout).toMatch(/pinterest: .*\buser x1\b/);
+  expect(r.stdout).toContain('PASS must: {"vendor":"pinterest","event":"user"}');
+  expect(r.stdout).not.toContain('(no event)');
+}, 90_000);
+
+test('text summary rounds epoch durations', async () => {
+  const r = await runCli(['run', scenario('accept'), '--site', site.url, '--out', outDir]);
+  expect(r.stdout).toMatch(/\n {2}undecided \(\d+(\.\d)? (s|ms)\)\n/);
+  expect(r.stdout).not.toMatch(/\d+\.\d{2,} ?(ms|s)\)/);
 }, 90_000);
