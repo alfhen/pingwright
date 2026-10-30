@@ -121,8 +121,8 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
   if (testGtmOrigin) {
     io.stderr(`Warning: ${TEST_GTM_ORIGIN_ENV} is set. gtm.js is fetched from ${testGtmOrigin}. This is for tests only.\n`);
   }
-  if (gtmOverride) {
-    const scrubber = new Scrubber(gtmOverride.gtmAuth);
+  const scrubber = gtmOverride ? new Scrubber(gtmOverride.gtmAuth) : undefined;
+  if (scrubber) {
     io = { stdout: (t) => rawIo.stdout(scrubber.text(t)), stderr: (t) => rawIo.stderr(scrubber.text(t)) };
   }
 
@@ -156,7 +156,8 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
     return 2;
   }
 
-  const results: Result[] = evaluate(allRecords(records), parsed);
+  let results: Result[] = evaluate(allRecords(records), parsed);
+  if (scrubber) results = scrubber.deep(results);
   await appendFile(path, results.map((r) => JSON.stringify(r) + '\n').join(''));
   const summary = buildSummary(records, results, path);
   io.stdout(args.json ? `${JSON.stringify(summary, null, 2)}\n` : `${formatSummary(summary)}\n`);

@@ -11,7 +11,6 @@ import {
   type CollectorReport,
   type ConsentEpoch,
   type DataLayerEvent,
-  type GtmOverrideApplied,
   type Hit,
   type Id,
   type Identity,
@@ -24,7 +23,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
-import { decodeRequest, isCollectionEndpoint, trackerList, unwrapStapeLoader, type TrackerEntry } from '@pingwright/decoders';
+import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import {
   chromium,
   type APIResponse,
@@ -45,8 +44,8 @@ import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload 
 import { chromeUserAgent } from './user-agent.ts';
 import {
   isGtmJsUrl,
-  matchesGtmContainer,
-  matchesLoaderContainer,
+  gtmFailureMessage,
+  matchGtmRequest,
   parseGtmOverride,
   parseTestGtmOrigin,
   previewFetchUrl,
@@ -95,14 +94,6 @@ export interface RunResult {
   records: RunRecords;
   /** Why the GTM override failed: no request matched, or a preview fetch was not 200. Absent when it worked or none was given. */
   gtmOverrideFailure?: string;
-}
-
-function sameUrl(a: string, b: string): boolean {
-  try {
-    return new URL(a).href === new URL(b).href;
-  } catch {
-    return false;
-  }
 }
 
 function redactHeaders(headers: Record<string, string>): Record<string, string> {
@@ -411,9 +402,10 @@ export class Recorder {
     const { gtmOverride, testGtmOrigin } = this;
     // record.url may be redacted during a handoff window; match on the live URL.
     const liveUrl = route.request().url();
-    const applied = gtmOverride === undefined ? undefined : this.appliedWay(liveUrl, record, gtmOverride);
+    const match = gtmOverride === undefined ? undefined : matchGtmRequest(liveUrl, record, gtmOverride);
+    const applied = match?.applied;
     if (!applied && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
-    const target = applied ? previewFetchUrl(gtmOverride!, testGtmOrigin) : testOriginUrl(liveUrl, testGtmOrigin!);
+    const target = applied ? previewFetchUrl(gtmOverride!, testGtmOrigin, match!.pageParams) : testOriginUrl(liveUrl, testGtmOrigin!);
     let response: APIResponse;
     try {
       response = await route.fetch({ url: target });
@@ -428,28 +420,10 @@ export class Recorder {
     return true;
   }
 
-  private appliedWay(liveUrl: string, record: Request, override: GtmOverrideInput): Omit<GtmOverrideApplied, 'status'> | undefined {
-    if (matchesGtmContainer(liveUrl, override.container)) return { way: 'direct', url: record.url };
-    if (override.loader && sameUrl(liveUrl, override.loader.replace)) {
-      return { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' };
-    }
-    const inner = unwrapStapeLoader({ ...record, url: liveUrl });
-    if (inner && matchesLoaderContainer(inner.url, override.container)) {
-      return { way: 'loader', loader: 'stape', url: record.url, loses: 'nothing known; the loader script runs unchanged' };
-    }
-    return undefined;
-  }
-
   private gtmFailure(): string | undefined {
     const applied = this.run.gtmOverride?.applied;
-    if (!applied) return undefined;
-    const { container } = this.run.gtmOverride!;
-    if (applied.length === 0) return `no container request matched: the page never requested https://www.googletagmanager.com/gtm.js?id=${container}`;
-    const bad = applied.find((a) => a.status !== 200);
-    if (!bad) return undefined;
-    if (bad.status === 0) return `the preview build of ${container} could not be fetched${this.fetchErrors[0] ? `: ${this.fetchErrors[0]}` : ''}`;
-    const hint = bad.status === 404 ? ' (the environment may have no version)' : '';
-    return `the preview build of ${container} returned status ${bad.status}${hint}`;
+    if (!applied || !this.gtmOverride) return undefined;
+    return gtmFailureMessage(this.gtmOverride, applied, this.fetchErrors[0]);
   }
 
   /**
