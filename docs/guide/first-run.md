@@ -2,6 +2,10 @@
 
 This guide installs Pingwright and runs one scenario. You need Node 22.18 or newer and a site with a cookie banner.
 
+A coding agent, for example Claude Code, can do these steps for you. Copy the prompt and paste it into the agent. The agent installs Pingwright, asks for your site and writes your first scenarios.
+
+<GetStartedPrompt />
+
 ## Install
 
 ```bash
