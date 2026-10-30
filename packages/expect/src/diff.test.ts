@@ -204,9 +204,25 @@ test('reports flag changes per host and kind', () => {
   addFlag(b, hb, 'unknownDestination');
   addFlag(b, addHit(b, {}, 'other.example.com'), 'stubBypass');
   expect(diffRuns(a, b).flags).toEqual([
-    { host: 'other.example.com', kind: 'stubBypass', a: 0, b: 1 },
-    { host: 'tracker.example.com', kind: 'unknownDestination', a: 1, b: 2 },
+    { host: 'other.example.com', kind: 'stubBypass', a: 0, b: 1, allowed: false },
+    { host: 'tracker.example.com', kind: 'unknownDestination', a: 1, b: 2, allowed: false },
   ]);
+});
+
+test('marks unknownDestination changes allowed when the built-in check did not block them', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addFlag(a, addHit(a, {}, 'ok.example.com'), 'unknownDestination');
+  addFlag(b, addHit(b, {}, 'ok.example.com'), 'unknownDestination');
+  addFlag(b, addHit(b, {}, 'ok.example.com'), 'unknownDestination');
+  const blocked = b.flags[0]!;
+  const result = (pass: boolean, evidence: string[]) =>
+    ({ type: 'result', id: newId('result'), runId: b.run.id, expectation: 'builtin: unknownDestination', pass, evidence }) as RunRecords['results'][number];
+  a.results.push({ ...result(true, [a.flags[0]!.id]), runId: a.run.id });
+  b.results.push(result(true, b.flags.map((f) => f.id)));
+  expect(diffRuns(a, b).flags).toEqual([{ host: 'ok.example.com', kind: 'unknownDestination', a: 1, b: 2, allowed: true }]);
+  b.results[0] = result(false, [blocked.id]);
+  expect(diffRuns(a, b).flags[0]?.allowed).toBe(false);
 });
 
 test('does not report a flag change when only the host port differs', () => {

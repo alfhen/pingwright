@@ -28,6 +28,7 @@ export interface DiffArgs {
   a: string;
   b: string;
   byPage: boolean;
+  allFlags: boolean;
   json: boolean;
 }
 
@@ -35,7 +36,7 @@ export type Command = RunArgs | DiffArgs | { command: 'install-browser' } | { co
 
 export const USAGE = `Usage:
   pingwright run <scenario.yml> --site <url> [options]
-  pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--json]
+  pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
   pingwright install-browser
   pingwright --version
 
@@ -101,6 +102,7 @@ export function parseCli(argv: string[]): Command {
         var: { type: 'string', multiple: true },
         json: { type: 'boolean' },
         'by-page': { type: 'boolean' },
+        'all-flags': { type: 'boolean' },
         version: { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
@@ -119,7 +121,7 @@ export function parseCli(argv: string[]): Command {
   }
   if (command === 'diff') {
     if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
-    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, json: values.json ?? false };
+    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}"`);
 
@@ -134,9 +136,6 @@ export function parseCli(argv: string[]): Command {
   const network = values.network;
   if (network !== undefined && network !== 'stub' && network !== 'live') {
     throw new UsageError(`--network must be stub or live, got "${network}"`);
-  }
-  if (values['net-log'] && network === 'stub') {
-    throw new UsageError(NET_LOG_NEEDS_LIVE);
   }
   let seed: number | undefined;
   if (values.seed !== undefined) {

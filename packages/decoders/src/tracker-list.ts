@@ -22,6 +22,12 @@ export const trackerList: readonly TrackerEntry[] = [
   {
     vendor: 'linkedin',
     host: 'px.ads.linkedin.com',
+    paths: ['/wa'],
+    source: 'https://www.linkedin.com/help/lms/answer/a425696',
+  },
+  {
+    vendor: 'linkedin',
+    host: 'px.ads.linkedin.com',
     source: 'https://www.linkedin.com/help/lms/answer/a425696',
   },
   {

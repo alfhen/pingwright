@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { parseTrackerList, trackerDocsDomains, trackerFor, trackerList } from './index.ts';
+import { trackerCollection, parseTrackerList, trackerDocsDomains, trackerFor, trackerList } from './index.ts';
 
 const at = (url: string) => trackerFor({ url });
 
@@ -74,4 +74,11 @@ test.each([
   [[{ ...ok, x: 1 }], 'unknown field "x"'],
 ])('rejects an invalid list %#', (json, message) => {
   expect(() => parseTrackerList(json)).toThrow(message);
+});
+
+test('a script or document request to the LinkedIn /wa path is a collection endpoint', () => {
+  for (const resourceType of ['script', 'document', 'stylesheet']) {
+    expect(trackerCollection({ url: 'https://px.ads.linkedin.com/wa/?pid=1', resourceType })?.vendor).toBe('linkedin');
+  }
+  expect(trackerCollection({ url: 'https://px.ads.linkedin.com/insight.min.js', resourceType: 'script' })).toBeUndefined();
 });

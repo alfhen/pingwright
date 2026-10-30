@@ -211,11 +211,11 @@ function idValue(hit: Hit, name: string): boolean | null | undefined {
   return prop === 'matchesIdentity' ? hash.matchesIdentity : undefined;
 }
 
-/** A `host:` rule matches the host with its port (`127.0.0.1:4173`) or the bare hostname (`127.0.0.1`). */
+/** A `host:` rule matches the host with its port (`127.0.0.1:4173`) or the bare hostname (`127.0.0.1`). An IPv6 host may be written with or without brackets (`::1`, `[::1]`). */
 function hostForms(url: string): string[] {
   try {
     const { host, hostname } = new URL(url);
-    return [host, hostname];
+    return [host, hostname, hostname.replace(/^\[|\]$/g, '')];
   } catch {
     return [''];
   }
@@ -373,12 +373,15 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
 }
 
 function flagHost(flag: Flag, ctx: Context): string {
-  const url = ctx.requests.get(flag.recordIds[0] ?? '')?.url ?? /\s(\S+)$/.exec(flag.detail)?.[1] ?? '';
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return '';
+  const urls = [ctx.requests.get(flag.recordIds[0] ?? '')?.url, /\s(\S+)$/.exec(flag.detail)?.[1]];
+  for (const url of urls) {
+    try {
+      if (url) return new URL(url).hostname;
+    } catch {
+      continue;
+    }
   }
+  return '';
 }
 
 function countByHost(flags: readonly Flag[], ctx: Context): string {

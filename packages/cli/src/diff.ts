@@ -1,5 +1,5 @@
 import { readRun, type RunRecords } from '@pingwright/core';
-import { diffRuns, type DiffKey, type DiffResult } from '@pingwright/expect';
+import { diffRuns, type ChangedHit, type DiffKey, type DiffResult } from '@pingwright/expect';
 import type { DiffArgs } from './args.ts';
 import type { Io } from './run.ts';
 
@@ -19,6 +19,12 @@ function where(key: DiffKey, step: string, rawPage?: string | null): string {
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
+function recordedPages(c: ChangedHit): string {
+  if (!c.key.page || (c.a.page === null && c.b.page === null)) return '';
+  const differs = [c.a.page, c.b.page].some((p) => p !== null && pathOf(p) !== c.key.page);
+  return differs ? `, recorded as ${c.a.page ?? '(none)'} -> ${c.b.page ?? '(none)'}` : '';
+}
+
 function add(tree: Tree, key: DiffKey, line: string): void {
   const event = key.event || '(no event)';
   const vendors = tree.get(key.epoch) ?? new Map();
@@ -30,21 +36,25 @@ function add(tree: Tree, key: DiffKey, line: string): void {
   tree.set(key.epoch, vendors);
 }
 
-export function formatDiff(result: DiffResult, a: string, b: string): string {
+export function formatDiff(result: DiffResult, a: string, b: string, options: { allFlags?: boolean } = {}): string {
   const tree: Tree = new Map();
   for (const h of result.added) add(tree, h.key, `added${where(h.key, h.step, h.page)}: ${h.hitId}`);
   for (const h of result.removed) add(tree, h.key, `removed${where(h.key, h.step, h.page)}: ${h.hitId}`);
   for (const c of result.changed) {
     const changes = [...c.consent, ...c.ids].map((v) => `${v.field} ${v.a} -> ${v.b}`).join(', ');
     const moved = c.a.step === c.b.step ? '' : `, step "${c.a.step}" -> "${c.b.step}"`;
-    add(tree, c.key, `changed${where(c.key, '')}${moved}: ${changes} (${c.a.hitId} -> ${c.b.hitId})`);
+    const step = c.a.step === c.b.step ? c.a.step : '';
+    add(tree, c.key, `changed${where(c.key, step)}${moved}${recordedPages(c)}: ${changes} (${c.a.hitId} -> ${c.b.hitId})`);
   }
 
-  for (const m of result.countMismatches) add(tree, m.key, `count ${m.a} -> ${m.b} (pairing by order)`);
+  for (const m of result.countMismatches) add(tree, m.key, `count ${m.a} -> ${m.b}${where(m.key, '')} (pairing by order)`);
+
+  const shownFlags = options.allFlags ? result.flags : result.flags.filter((f) => !f.allowed);
+  const hiddenFlags = result.flags.length - shownFlags.length;
 
   const out = [`Diff ${a} -> ${b}`];
   for (const warning of result.warnings) out.push(`Warning: ${warning}`);
-  if (tree.size === 0 && result.flags.length === 0) out.push('No differences.');
+  if (tree.size === 0 && shownFlags.length === 0) out.push('No differences.');
   for (const [epoch, vendors] of [...tree].sort(([x], [y]) => x.localeCompare(y))) {
     out.push('', `Epoch ${epoch}`);
     for (const [vendor, events] of [...vendors].sort(([x], [y]) => x.localeCompare(y))) {
@@ -55,10 +65,11 @@ export function formatDiff(result: DiffResult, a: string, b: string): string {
       }
     }
   }
-  if (result.flags.length) {
+  if (shownFlags.length) {
     out.push('', 'Flags');
-    for (const f of result.flags) out.push(`  ${f.kind} ${f.host || '(no host)'}: ${f.a} -> ${f.b}`);
+    for (const f of shownFlags) out.push(`  ${f.kind} ${f.host || '(no host)'}: ${f.a} -> ${f.b}`);
   }
+  if (hiddenFlags) out.push('', `${hiddenFlags} flag count change${hiddenFlags === 1 ? '' : 's'} for hosts allowed by allowUnknownDestination not shown (use --all-flags)`);
   return `${out.join('\n')}\n`;
 }
 
@@ -78,6 +89,6 @@ export async function diffCommand(args: DiffArgs, io: Io): Promise<number> {
   for (const [path, run] of [[args.a, a], [args.b, b]] as const) {
     if (run.truncatedAtLine) result.warnings.push(`${path}: truncated at line ${run.truncatedAtLine}; later records are missing from the diff`);
   }
-  io.stdout(args.json ? `${JSON.stringify(result, null, 2)}\n` : formatDiff(result, args.a, args.b));
+  io.stdout(args.json ? `${JSON.stringify(result, null, 2)}\n` : formatDiff(result, args.a, args.b, { allFlags: args.allFlags }));
   return 0;
 }

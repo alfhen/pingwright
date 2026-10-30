@@ -14,12 +14,12 @@ steps:
       "#note": Berlin
 `;
 
-test('declared fields replace generated ones and literal fill values become extra', () => {
+test('declared fields replace generated ones and literal fill values are not extra up front', () => {
   const identity = scenarioIdentity(parseScenario(yaml), 1);
   const generated = createIdentity(1);
   expect(identity.phone).toBe('+46701740620');
   expect(identity.email).toBe(generated.email);
-  expect(identity.extra).toEqual(['Berlin']);
+  expect(identity.extra).toBeUndefined();
 });
 
 test('a scenario without literals or declared fields gives the plain identity', () => {

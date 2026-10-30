@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unload beacons without tags</title>
+</head>
+<body>
+<h1>Unload beacons</h1>
+<button id="add-to-cart" type="button">Add to cart</button>
+<iframe id="pw-unload-pixel" sandbox="allow-scripts" src="/web-pixels@0.0.0-fixture/sandbox/unload/" style="width:0;height:0;border:0"></iframe>
+<script>
+  document.getElementById('add-to-cart').addEventListener('click', function () {
+    document.getElementById('pw-unload-pixel').contentWindow.postMessage({ event: 'add_to_cart', href: location.href }, '*');
+  });
+</script>
+</body>
+</html>
