@@ -2,11 +2,13 @@
 
 Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Reports of which tags fired are planned.
 
-> **Status: 0.1 (`0.1.0`).** 0.1 plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
+> **Status: 0.2 release candidate (`0.2.0-rc.1`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.2 adds a GTM workspace override, `pingwright diff`, a Pinterest decoder, stubbing of known tracker hosts and a Shopify checkout pattern. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
 > **In 0.1:** `pingwright run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
-> **Not built yet:** MCP server, `diff`, `report`, GTM reporters and overrides, `server` network mode, Shopify bridge, Pinterest and Microsoft UET decoders, Firefox and WebKit.
+> **In 0.2:** `--gtm-override` runs the page against an unpublished GTM web workspace, also through a Stape-style custom loader; `pingwright diff` compares two runs; a Pinterest decoder; a curated tracker list (LinkedIn, Microsoft UET, X, Reddit) that is stubbed and recorded as minimal hits, extendable with `--tracker-list`; a record schema version; a Shopify checkout pattern ([docs/shopify-checkout.md](docs/shopify-checkout.md)).
+>
+> **Not built yet:** MCP server, `report`, GTM tag-firing reporters, `server` network mode, Shopify bridge, a full Microsoft UET decoder, Firefox and WebKit.
 
 ## Why
 
@@ -20,17 +22,17 @@ Pingwright is built so that a coding agent, a CI job or a person can answer thes
 
 - What did the site send to each vendor, before and after the visitor's consent choice?
 - Which tags fired for each event, and which expected tags did not? (Planned, not built in 0.1.)
-- Does an unpublished GTM workspace behave as intended, before you publish it? (Not built yet.)
+- Does an unpublished GTM workspace behave as intended, before you publish it? Run the same scenario with and without `--gtm-override` and compare the two records with `pingwright diff`. (In 0.2.)
 
 ## What it does
 
 1. **Plays a visitor.** A Playwright browser opens your site, answers the consent banner (accept, reject, or no answer), visits pages, fills forms with a fake identity and adds to cart. Steps that a tool must not do, such as paying or logging in, are handoff steps: a person acts in a visible window while recording continues.
 2. **Records requests** from the page and from all iframes, including sandboxed iframes such as Shopify custom pixels. Capture from service workers works in Chromium only, and requests to the collector origin from dedicated workers are captured too. Each run reports which sources it covered.
-3. **Decodes hits.** Vendor plugins turn raw requests into readable hits: GA4 events and consent state, Google Ads, Meta and Stape server-container traffic. Pinterest and Microsoft UET are not built yet.
+3. **Decodes hits.** Vendor plugins turn raw requests into readable hits: GA4 events and consent state, Google Ads, Meta and Stape server-container traffic. Pinterest is decoded in 0.2. Hosts on the tracker list, such as LinkedIn, Microsoft UET, X and Reddit, give minimal hits with the vendor name. A full Microsoft UET decoder is not built yet.
 4. **Reports tag firing (not built yet).** An optional GTM template reports which tags fired or failed for each event, in the web container and the server container. Agents get this without a Google sign-in. Given the container's tag list, Pingwright also reports which expected tags did not fire.
 5. **Checks expectations.** Each scenario lists what must and must not happen, for example "no Meta request before consent" or "GA4 hits after a reject carry no user ID". Pingwright reports pass or fail, with the evidence. A rule on a vendor without a 0.1 decoder, such as Pinterest, matches nothing: a `mustNot` rule on it passes vacuously and a `must` rule fails unless its `count` allows zero hits.
 6. **Checks hashing.** Because Pingwright knows the fake identity it typed, it can check that the hashed email and phone sent to Google and Meta are correct.
-7. **Compares runs (not built yet).** `pingwright diff` shows what changed per vendor and per event between two runs, for example before and after a GTM change.
+7. **Compares runs.** `pingwright diff` shows what changed per vendor and per event between two runs, for example before and after a GTM change.
 
 ## A scenario
 
@@ -58,7 +60,7 @@ pingwright run scenarios/undecided-visitor.yml --site https://staging.example.co
 ## Install
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v0.1.0
+npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.1
 pingwright install-browser
 ```
 
@@ -66,7 +68,7 @@ Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the g
 
 ## Quick start
 
-1. `npm i -g --install-links github:alfhen/pingwright#v0.1.0`
+1. `npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.1`
 2. `pingwright install-browser`
 3. Write `scenario.yml`:
 
@@ -83,9 +85,50 @@ Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the g
 4. `pingwright run scenario.yml --site https://staging.example.com`
 5. Read the summary, and the full record in `runs/run_<id>.jsonl`.
 
-`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys in 0.1 are `ga4`, `google-ads`, `meta` and `sgtm`. A scenario that names any other vendor is rejected when it is parsed.
+`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys are `ga4`, `google-ads`, `meta`, `pinterest`, `sgtm`, and every vendor on the tracker list (`linkedin`, `microsoft-uet`, `x`, `reddit`) or in a `--tracker-list` file. A scenario that names any other vendor is rejected when it is parsed.
 
-Stub mode is the default: known collection endpoints are recorded and answered locally. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run. The registrable domain of `--site` is first party: for `--site https://www.shop.co.uk`, `shop.co.uk` and every `*.shop.co.uk` host are not unknown. Data-carrying requests to those subdomains that no decoder matches, such as server-side GTM on `sgtm.shop.co.uk/collect`, are listed as `firstPartySubdomain` flags, grouped by host. They do not fail the run. Hosts without a registrable domain, such as IP addresses and `localhost`, are first party only as the exact `--site` host. If a site serves its own assets from another domain, list it under `options: { firstPartyHosts: ['i.example-cdn.com', '*.example-static.com'] }`. To accept specific unknown hosts without calling them first party, use `options: { allowUnknownDestination: ['tracker.example.net'] }`; every other unknown destination still fails. `allowUnknownDestination: true` allows all of them, and the summary still lists them. A request sent while a sandboxed `srcdoc` iframe is loading can escape stubbing and recording (see [design §5.3](docs/design.md)). Use `--network live` to let everything through. In 0.1, Pingwright decodes GA4, Google Ads, Meta and Stape traffic. Hits to other vendors, such as Pinterest, Microsoft UET or TikTok, are not stubbed: they pass through and can only show up as `unknownDestination` flags.
+Stub mode is the default: known collection endpoints are recorded and answered locally. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run. The registrable domain of `--site` is first party: for `--site https://www.shop.co.uk`, `shop.co.uk` and every `*.shop.co.uk` host are not unknown. Data-carrying requests to those subdomains that no decoder matches, such as server-side GTM on `sgtm.shop.co.uk/collect`, are listed as `firstPartySubdomain` flags, grouped by host. They do not fail the run. Hosts without a registrable domain, such as IP addresses and `localhost`, are first party only as the exact `--site` host. If a site serves its own assets from another domain, list it under `options: { firstPartyHosts: ['i.example-cdn.com', '*.example-static.com'] }`. To accept specific unknown hosts without calling them first party, use `options: { allowUnknownDestination: ['tracker.example.net'] }`; every other unknown destination still fails. `allowUnknownDestination: true` allows all of them, and the summary still lists them. A request sent while a sandboxed `srcdoc` iframe is loading can escape stubbing and recording (see [design §5.3](docs/design.md)). Use `--network live` to let everything through. Pingwright decodes GA4, Google Ads, Meta, Pinterest and Stape traffic, and stubs the hosts on the tracker list. Hits to other vendors, such as TikTok, are not stubbed unless you add them with `--tracker-list`: they pass through and can only show up as `unknownDestination` flags.
+
+## Override and diff quick start
+
+Run one scenario against the published container and against an unpublished workspace, then compare.
+
+1. Get the preview values for the workspace from the GTM UI, a GTM API client or a GTM MCP server. Pingwright never calls the GTM API. Write them to `override.json`:
+
+   ```json
+   {"container": "GTM-XXXXXXX", "gtmAuth": "…", "gtmPreview": "env-12"}
+   ```
+
+2. Run the scenario twice:
+
+   ```bash
+   pingwright run scenario.yml --site https://staging.example.com --out runs/published
+   pingwright run scenario.yml --site https://staging.example.com --out runs/workspace --gtm-override override.json
+   ```
+
+3. Compare the two records:
+
+   ```bash
+   pingwright diff runs/published/run_<id>.jsonl runs/workspace/run_<id>.jsonl
+   ```
+
+`diff` lists added, removed and changed hits per consent epoch, vendor and event, and changed flag counts per host. Add `--by-page` to pair hits page by page, or `--json` for the full result. It exits 0 whether or not the runs differ; the exit code of each `run` tells you whether its rules passed.
+
+The override fetches the workspace build of `gtm.js?id=<container>` and answers the page with it. If no request matched, or the build did not return 200, the run exits 2. The `gtmAuth` value never appears in the record or in any output. For a site that loads the container through a Stape-style custom loader, the override works through the loader by default. Add `"loader": {"replace": "<script URL>"}` to replace the loader script instead. Details are in [docs/cli.md](docs/cli.md).
+
+## Tracker list
+
+In `stub` mode, Pingwright stubs and records requests to a curated list of tracker hosts, so a pixel without a decoder no longer leaks to the vendor. The list is small, kept in the repo, and each entry links to the vendor's own docs. A listed request becomes a minimal hit with the vendor name, so rules, flags and `diff` work on it. Add your own entries with `--tracker-list`:
+
+```json
+[{"vendor": "acme", "host": "t.example.com", "paths": ["/collect"], "source": "https://docs.example.com/pixel"}]
+```
+
+```bash
+pingwright run scenario.yml --site https://staging.example.com --tracker-list trackers.json
+```
+
+`vendor` is a lowercase key you can then use in `expect` rules. `host` is an exact host or `*.domain`. `paths` is optional. See [docs/cli.md](docs/cli.md) for the matching rules.
 
 ## Safe by default
 
@@ -96,27 +139,27 @@ Stub mode is the default: known collection endpoints are recorded and answered l
 
 ## For agents
 
-Not built yet. Pingwright will ship an MCP server. An agent can run a scenario, query the records, read tag firing per event, and compare runs. Every record has a stable ID, and every result names the run and step.
+The MCP server is not built yet. It will let an agent run a scenario, query the records, read tag firing per event, and compare runs. Today an agent can call the CLI: `run --json` and `diff --json` print structured results. Every record has a stable ID, and every result names the run and step.
 
-Pingwright will not change GTM containers or sign in to Google. An agent that edits a workspace with a GTM API client (for example a GTM MCP server) passes the workspace preview values and the expected tag list to Pingwright for one run.
+Pingwright will not change GTM containers or sign in to Google. An agent that edits a workspace with a GTM API client (for example a GTM MCP server) passes the workspace preview values to Pingwright for one run with `--gtm-override`.
 
 ## Packages
 
 | Package | Job | State |
 | --- | --- | --- |
-| `core` | IDs, clock, record types, JSONL run store, fake identity | 0.1 |
-| `recorder` | Launch the browser, play steps, capture requests, responses, cookies and dataLayer events | 0.1 |
-| `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.1 (GA4, Google Ads, Meta, Stape, server-container data client) |
+| `core` | IDs, clock, record types, record schema version, JSONL run store, fake identity | 0.2 |
+| `recorder` | Launch the browser, play steps, capture requests, responses, cookies and dataLayer events, GTM override | 0.2 |
+| `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.2 (GA4, Google Ads, Meta, Pinterest, Stape, server-container data client, tracker list) |
 | `consent` | Banner handling through DuckDuckGo autoconsent, Consent Mode probe, epochs | 0.1 |
-| `expect` | Scenario format and expectations | 0.1 (no `diff` yet) |
-| `cli` | `pingwright run`, `install-browser` | 0.1 |
+| `expect` | Scenario format, expectations, diff engine | 0.2 |
+| `cli` | `pingwright run`, `diff`, `install-browser` | 0.2 |
 | `gtm` | Tag-firing reporter templates, workspace preview loading | not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
 | `mcp` | MCP server | not built yet |
 
 ## Related tools
 
-- **EDPS website-evidence-collector** records cookies and beacons, including before consent. Pingwright adds vendor decoding and expectations. Diffs and tag reports are planned.
+- **EDPS website-evidence-collector** records cookies and beacons, including before consent. Pingwright adds vendor decoding, expectations and diffs. Tag reports are planned.
 - **DuckDuckGo autoconsent** handles consent banners. Pingwright uses it.
 - **Snowplow Micro** does local, assertable event collection for Snowplow trackers.
 - **ObservePoint**, **DataTrue** and **Trackingplan** are commercial services for tag auditing and monitoring.
