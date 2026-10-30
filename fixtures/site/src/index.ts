@@ -27,6 +27,7 @@ const pages: Record<string, string> = {
   '/unload-beacons': 'unload-beacons.html',
   '/unload-beacons-bare': 'unload-beacons-bare.html',
   '/unload-gap': 'unload-gap.html',
+  '/unload-request-body': 'unload-request-body.html',
   '/stable-ids': 'stable-ids.html',
   '/shared-hashes': 'shared-hashes.html',
   '/sgtm-data-tag': 'sgtm-data-tag.html',

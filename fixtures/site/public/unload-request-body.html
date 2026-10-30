@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unload Request body</title>
+</head>
+<body>
+<nav><a href="/?next">Next</a></nav>
+<h1>Unload Request body</h1>
+<p>On pagehide the page sends a batched GA4 body as a keepalive fetch built from a Request.</p>
+<script>
+  addEventListener('pagehide', function () {
+    var body = 'en=add_to_cart&ep.via=request\nen=view_item&ep.via=request';
+    var request = new Request('https://sgtm.pingwright.invalid/g/collect?v=2&tid=G-PWTEST0001&cid=3333333333.4444444444&gcs=G100', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      body: body,
+      keepalive: true,
+    });
+    fetch(request).catch(function () {});
+  });
+</script>
+</body>
+</html>
