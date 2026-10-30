@@ -67,6 +67,8 @@ During a `handoff` step, requests that are not tracking hits are stored without 
 
 Payments and log-ins are handoff steps on any host other than `localhost`, `127.0.0.1` or `::1`. Filling a card or password field on another host fails the run.
 
+A `host:` rule in `expect` matches the request's host with its port (`127.0.0.1:4173`) or its bare hostname (`127.0.0.1`). It is an exact, case-sensitive match on one of the two forms. `ids.hashes` matches a hit with any hashed ID present, and `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` read one hashed parameter. Any other name under `ids.hashes` is a scenario error. A `possibleRealData` failure lists the first five findings and a count of the rest.
+
 ### GTM override
 
 `--gtm-override <file>` takes JSON with the values of a GTM preview. Pingwright never calls the GTM API, so you supply them.
@@ -94,7 +96,7 @@ Compares two runs of the same scenario, for example one with a GTM override and 
 | `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. |
 | `--json` | Prints the full diff result as JSON instead of the text summary. |
 
-The text summary is grouped by consent epoch label, then vendor, then event. Under each event it lists hits that were added (only in the second run), removed (only in the first), and changed. A changed hit is one that pairs up but differs in a consent field, in `gcs` or `gcd`, or in whether an ID is present. Hits are paired by epoch, vendor, event and step, in time order. A line at the end lists flag counts that changed per host.
+The text summary is grouped by consent epoch label, then vendor, then event. Under each event it lists hits that were added (only in the second run), removed (only in the first), and changed. A changed hit is one that pairs up but differs in a consent field, in `gcs` or `gcd`, or in whether an ID is present. Hits are paired by epoch, vendor, event and step, in time order. When a key has a different number of hits in the two runs, its event gets a line such as `count 2 -> 1 (pairing by order)`, because the pairing may then match the wrong hits. A line at the end lists flag counts that changed per host.
 
 Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missing, is not JSONL, or does not start with a `run` record exits 2 with a message that names the file. A run record with a newer schema version than Pingwright knows prints a warning and the diff goes on. A file whose last line is cut off (a crashed run) is read up to that line, and the diff prints a warning that names the file and the line.
 

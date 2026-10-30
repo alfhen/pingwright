@@ -184,7 +184,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
 
   const checkVars = (value: string, path: Path) => {
     for (const m of value.matchAll(/\{(\w+)\}/g)) {
-      if (!(m[1]! in vars)) fail(path, `uses {${m[1]}} but vars has no "${m[1]}"`);
+      if (!Object.hasOwn(vars, m[1]!)) fail(path, `uses {${m[1]}} but vars has no "${m[1]}"`);
     }
   };
   if (start) checkVars(start, ['start']);
@@ -329,7 +329,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         else if (typeof v === 'string' && CONSENT_VALUES.includes(v)) filter.consent[field] = v as ConsentValue;
         else fail(p, `must be one of ${CONSENT_VALUES.join(', ')}`);
       } else if (k.startsWith('ids.')) {
-        if (v === true) filter.ids[k.slice(4)] = 'present';
+        const name = k.slice(4);
+        if (/^hashes(?:\.|$)/.test(name) && !/^hashes(?:\.[^.]+(?:\.matchesIdentity)?)?$/.test(name)) {
+          fail(p, 'is not valid, expected ids.hashes, ids.hashes.<param> or ids.hashes.<param>.matchesIdentity');
+        } else if (v === true) filter.ids[k.slice(4)] = 'present';
         else if (v === false) filter.ids[k.slice(4)] = 'absent';
         else if (typeof v === 'string' || typeof v === 'number') filter.ids[k.slice(4)] = String(v);
         else fail(p, 'must be present, absent or a value');
