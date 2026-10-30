@@ -59,6 +59,7 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `cartRequest` | Regular expression matched against request URLs. In an `addToCart` step, a matching request counts as a cart change, for a site whose cart endpoint the built-in check does not know. |
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
+| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl` and `possibleRealData`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
 
 Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. Values typed into card and password fields are not added. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
 
@@ -133,8 +134,17 @@ Prints the version.
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Every expectation and built-in check passed. |
+| 0 | Every expectation and built-in check passed, or failed only as a `warn` check. |
 | 1 | At least one expectation or built-in check failed. |
 | 2 | Usage error, invalid scenario, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `pingwright install-browser`. |
 
 The JSONL file is still written when a step fails, up to the failing step.
+
+A built-in check can be set to `warn` with `options.builtins`. A warned check still runs. Its `result` record keeps the evidence and has `severity: "warn"`. The text summary shows it as `WARN` with its message. It does not change the exit code. `expect` rules are not affected. Use it for a failure you accept, such as `sandboxPageUrl` on a Shopify custom pixel, so that a clean run exits 0 in CI:
+
+```yaml
+options:
+  builtins: { sandboxPageUrl: warn }
+```
+
+The `--json` summary has `severity` on each built-in result. `pass` is true when every result passed, warnings included. `ok` is true when the exit code is 0, so a CI script can read `ok`.
