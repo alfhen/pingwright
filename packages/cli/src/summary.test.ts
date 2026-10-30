@@ -130,6 +130,7 @@ test('epoch durations are rounded: ms under a second, seconds with one decimal a
   expect(formatDuration(849.6)).toBe('850 ms');
   expect(formatDuration(5628.000244140625)).toBe('5.6 s');
   expect(formatDuration(1000)).toBe('1.0 s');
+  expect(formatDuration(999.6)).toBe('1.0 s');
   const summary: Summary = {
     runId: 'run_1',
     path: 'runs/run_1.jsonl',

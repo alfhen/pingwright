@@ -78,7 +78,8 @@ function parseUrl(text: string | undefined): URL | undefined {
 }
 
 export function formatDuration(ms: number): string {
-  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+  const rounded = Math.round(ms);
+  return rounded < 1000 ? `${rounded} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
 export function formatSummary(summary: Summary): string {
