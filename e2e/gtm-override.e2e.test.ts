@@ -176,3 +176,50 @@ test('a bad override file exits 2 without repeating its content', async () => {
   expect(invalid.stderr).toContain('container must');
   expect(invalid.stderr).not.toContain(auth);
 });
+
+async function expectNoAuth(r: CliRun): Promise<void> {
+  const text = await readFile(r.path!, 'utf8');
+  for (const form of forms) {
+    expect(text, form).not.toContain(form);
+    expect(r.stdout, form).not.toContain(form);
+    expect(r.stderr, form).not.toContain(form);
+  }
+}
+
+const loaderUrl = () => `${site.sgtmUrl}/pwstape?pk=${encodeURIComponent(b64('/gtm.js?id=GTM-PWTEST1'))}`;
+
+test.each([
+  ['the page', 'gtm-loader'],
+  ['a sandboxed iframe', 'gtm-loader-sandbox'],
+])('a Stape-style loader in %s serves the workspace build and is recorded as way loader', async (_name, scenarioName) => {
+  site.receivedGtmAuth.length = 0;
+  const r = await runCli(scenarioName, ['--gtm-override', await overrideFile()], testOrigin());
+  expect(r.code).not.toBe(2);
+  const { run, hits, requests } = r.records!;
+  expect(run.gtmOverride!.applied).toEqual([
+    { way: 'loader', loader: 'stape', url: loaderUrl(), status: 200, loses: 'nothing known; the loader script runs unchanged' },
+  ]);
+  expect(ga4(hits, 'workspace_only').length).toBeGreaterThan(0);
+  expect(meta(hits, 'AddToCart')).toEqual([]);
+  expect(requests.some((q) => q.url === loaderUrl())).toBe(true);
+  expect(site.receivedGtmAuth).toContain(auth);
+  await expectNoAuth(r);
+}, 90_000);
+
+test('the sandboxed iframe loader runs the published build without an override', async () => {
+  const r = await runCli('gtm-loader-sandbox', [], testOrigin());
+  expect(r.code).not.toBe(2);
+  expect(ga4(r.records!.hits, 'container_event').length).toBeGreaterThan(0);
+  expect(ga4(r.records!.hits, 'workspace_only')).toEqual([]);
+}, 90_000);
+
+test('loader.replace swaps the loader script for the workspace build and records way replace', async () => {
+  const r = await runCli('gtm-loader', ['--gtm-override', await overrideFile({ loader: { replace: loaderUrl() } })], testOrigin());
+  expect(r.code).not.toBe(2);
+  const { run, hits } = r.records!;
+  expect(run.gtmOverride!.applied).toEqual([
+    { way: 'replace', url: loaderUrl(), status: 200, loses: 'everything the loader does beyond fetching the container' },
+  ]);
+  expect(ga4(hits, 'workspace_only').length).toBeGreaterThan(0);
+  await expectNoAuth(r);
+}, 90_000);

@@ -11,6 +11,7 @@ import {
   type CollectorReport,
   type ConsentEpoch,
   type DataLayerEvent,
+  type GtmOverrideApplied,
   type Hit,
   type Id,
   type Identity,
@@ -23,7 +24,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
-import { decodeRequest, isCollectionEndpoint } from '@pingwright/decoders';
+import { decodeRequest, isCollectionEndpoint, unwrapStapeLoader } from '@pingwright/decoders';
 import {
   chromium,
   type APIResponse,
@@ -45,6 +46,7 @@ import { chromeUserAgent } from './user-agent.ts';
 import {
   isGtmJsUrl,
   matchesGtmContainer,
+  matchesLoaderContainer,
   parseGtmOverride,
   parseTestGtmOrigin,
   previewFetchUrl,
@@ -90,6 +92,14 @@ export interface RunResult {
   records: RunRecords;
   /** Why the GTM override failed: no request matched, or a preview fetch was not 200. Absent when it worked or none was given. */
   gtmOverrideFailure?: string;
+}
+
+function sameUrl(a: string, b: string): boolean {
+  try {
+    return new URL(a).href === new URL(b).href;
+  } catch {
+    return false;
+  }
 }
 
 function redactHeaders(headers: Record<string, string>): Record<string, string> {
@@ -384,26 +394,38 @@ export class Recorder {
     await route.continue();
   }
 
-  /** Answers a gtm.js request with the preview build, or from the test origin. Returns false when the request is not one of those. */
+  /** Answers a gtm.js request, directly or through a loader, with the preview build, or from the test origin. Returns false when the request is not one of those. */
   private async routeGtm(route: Route, record: Request): Promise<boolean> {
     const { gtmOverride, testGtmOrigin } = this;
     // record.url may be redacted during a handoff window; match on the live URL.
     const liveUrl = route.request().url();
-    const matched = gtmOverride !== undefined && matchesGtmContainer(liveUrl, gtmOverride.container);
-    if (!matched && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
-    const target = matched ? previewFetchUrl(gtmOverride, testGtmOrigin) : testOriginUrl(liveUrl, testGtmOrigin!);
+    const applied = gtmOverride === undefined ? undefined : this.appliedWay(liveUrl, record, gtmOverride);
+    if (!applied && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
+    const target = applied ? previewFetchUrl(gtmOverride!, testGtmOrigin) : testOriginUrl(liveUrl, testGtmOrigin!);
     let response: APIResponse;
     try {
       response = await route.fetch({ url: target });
     } catch (error) {
-      if (matched) this.run.gtmOverride!.applied.push({ way: 'direct', url: record.url, status: 0 });
+      if (applied) this.run.gtmOverride!.applied.push({ ...applied, status: 0 });
       this.fetchErrors.push(error instanceof Error ? error.message : String(error));
       await route.abort('failed');
       return true;
     }
-    if (matched) this.run.gtmOverride!.applied.push({ way: 'direct', url: record.url, status: response.status() });
+    if (applied) this.run.gtmOverride!.applied.push({ ...applied, status: response.status() });
     await route.fulfill({ response });
     return true;
+  }
+
+  private appliedWay(liveUrl: string, record: Request, override: GtmOverrideInput): Omit<GtmOverrideApplied, 'status'> | undefined {
+    if (matchesGtmContainer(liveUrl, override.container)) return { way: 'direct', url: record.url };
+    if (override.loader && sameUrl(liveUrl, override.loader.replace)) {
+      return { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' };
+    }
+    const inner = unwrapStapeLoader({ ...record, url: liveUrl });
+    if (inner && matchesLoaderContainer(inner.url, override.container)) {
+      return { way: 'loader', loader: 'stape', url: record.url, loses: 'nothing known; the loader script runs unchanged' };
+    }
+    return undefined;
   }
 
   private gtmFailure(): string | undefined {
