@@ -55,13 +55,13 @@ flowchart TB
 
 `pingwright run` plays the scenario in Chromium, then prints a summary, writes a record file and sets the exit code.
 
-The summary lists the hits, the consent epochs and each check with PASS or FAIL. [Reading a run's results](./reading-results.md) explains it line by line.
+The summary lists the hits, the consent epochs and each check with PASS, FAIL or WARN. [Reading a run's results](./reading-results.md) explains it line by line.
 
 ## The exit code
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Every expectation and built-in check passed. |
+| 0 | Every expectation and built-in check passed, or failed only as a `warn` check. |
 | 1 | At least one expectation or built-in check failed. |
 | 2 | The run could not finish. For example, the scenario is not valid, or no banner was shown. |
 

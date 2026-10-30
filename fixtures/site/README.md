@@ -57,7 +57,7 @@ The choice is stored in the first-party cookie `pw_consent` (`accept` or `reject
 - `/thank-you`: GA4 `purchase` (`transaction_id` `fixture-order-0001`), Meta `Purchase`, Google Ads conversion `send_to` `AW-000000001/fake-label`.
 - Mock Stape loader, on every page, to `sgtmUrl`: `/pwstape?pk=<base64 of '/gtag/js?id=G-PWTEST0001'>` (script), `/pwstape?pk=<base64 of '/g/collect?v=2&tid=G-PWTEST0001&cid=...&en=page_view&dl=...'>`, and `/pwstape?pk=<base64 of '/data?v=2&tid=...&dtdc=<base64 JSON>'>`. The `dtdc` JSON has `page_location` and `page_hostname`.
 - Unknown destination: an image from every page to `thirdPartyUrl/unknown-pixel?x=1`.
-- Sandboxed iframe at `/web-pixels@0.0.0-fixture/sandbox/modern/` (`sandbox="allow-scripts allow-forms"`): POSTs JSON `{source:'fixture-pixel', event:'page_viewed', href}` to `https://collector.pingwright.invalid/report`, and POSTs a GA4-style hit to `https://region1.google-analytics.com/g/collect` with `dl` set to its own sandbox URL. Both use `mode: 'no-cors'` and a simple content type, because an opaque-origin frame cannot pass a CORS preflight. The collector origin does not resolve, so a test must answer it with `context.route`.
+- Sandboxed iframe at `/web-pixels@0.0.0-fixture/sandbox/modern/` (the hash comes from the page's `?pixel=<hash>` query and defaults to `0.0.0-fixture`; the server answers any `/web-pixels@<hash>/sandbox/modern/` path, so a test can change the hash between two runs) (`sandbox="allow-scripts allow-forms"`): POSTs JSON `{source:'fixture-pixel', event:'page_viewed', href}` to `https://collector.pingwright.invalid/report`, and POSTs a GA4-style hit to `https://region1.google-analytics.com/g/collect` with `dl` set to its own sandbox URL. Both use `mode: 'no-cors'` and a simple content type, because an opaque-origin frame cannot pass a CORS preflight. The collector origin does not resolve, so a test must answer it with `context.route`.
 
 ## Fake GTM containers
 
@@ -78,7 +78,7 @@ Differences between the builds, seen on the pages below:
 | --- | --- | --- |
 | Consent Mode default | all four signals `denied` | `ad_storage` `granted`, the other three `denied` |
 | Undecided GA4 `page_view` `gcs` | `G100` | `G110` |
-| GA4 events | `page_view`, `container_event` | also `workspace_only` |
+| GA4 events | `page_view`, `container_event` | also `workspace_only`, and `ws_echo` (sent through `sgtmUrl` on every container page except `/container/direct`) |
 | Meta events | `PageView`, `ViewContent`, `AddToCart` | no `AddToCart` |
 | Echoes `gtm_auth` | no | yes, on every container page except `/container/direct`: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
 

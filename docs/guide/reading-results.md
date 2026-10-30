@@ -37,7 +37,7 @@ The summary has five parts:
 | Hits | Each vendor and event, and how many times it was sent. |
 | Consent epochs | The periods of consent in the run. |
 | Flags | Things worth a look. Some flags have a built-in check that fails the run, such as `unknownDestination`. Other flags only inform. |
-| Expectations | Your expectations and the built-in checks, each with PASS or FAIL. |
+| Expectations | Your expectations and the built-in checks, each with PASS, FAIL or WARN. |
 | Record | The path of the record file. |
 
 
