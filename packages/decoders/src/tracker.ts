@@ -1,4 +1,5 @@
 import { isLibraryLoadPath, type Hit, type Request } from '@pingwright/core';
+import { isSandboxPageUrl } from './sandbox.ts';
 import { defaultHitId, type NewHitId } from './decoder.ts';
 import { trackerFor, trackerList, type TrackerEntry } from './tracker-list.ts';
 
@@ -46,7 +47,7 @@ export function decodeTracker(req: Request, list: readonly TrackerEntry[] = trac
       event: firstParam(params, EVENT_PARAMS),
       consent: { ads: 'unknown', analytics: 'unknown', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} },
       ids: {},
-      page: firstParam(params, PAGE_PARAMS) ?? req.frameUrl,
+      page: firstParam(params, PAGE_PARAMS) ?? (isSandboxPageUrl(req.frameUrl) ? null : req.frameUrl),
       transport: 'tracker-list',
       params: {},
     },

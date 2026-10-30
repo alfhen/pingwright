@@ -81,3 +81,11 @@ test('a request that a real decoder matches gives only that decoder hit', () => 
 test('an unlisted host gives no hit', () => {
   expect(decodeRequest(req('https://unlisted.example.net/p?event=x'), undefined, user)).toEqual([]);
 });
+
+test('a sandbox frame URL is not reported as the page a tracker received', () => {
+  const [hit] = decodeRequest(
+    req('https://px.ads.linkedin.com/wa/?pid=1', { frameUrl: 'https://shop.example.com/web-pixels@x/sandbox/modern/' }),
+  );
+  expect(hit?.vendor).toBe('linkedin');
+  expect(hit?.page).toBeNull();
+});
