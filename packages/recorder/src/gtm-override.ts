@@ -1,4 +1,5 @@
-import type { GtmOverrideTag } from '@pingwright/core';
+import type { GtmOverrideApplied, GtmOverrideTag, Request } from '@pingwright/core';
+import { unwrapStapeLoader } from '@pingwright/decoders';
 
 export const GTM_ORIGIN = 'https://www.googletagmanager.com';
 export const TEST_GTM_ORIGIN_ENV = 'PINGWRIGHT_TEST_GTM_ORIGIN';
@@ -115,13 +116,70 @@ export function matchesLoaderContainer(inner: string, container: string): boolea
   }
 }
 
-export function previewFetchUrl(override: GtmOverrideInput, origin: string = GTM_ORIGIN): string {
-  const q = `id=${encodeURIComponent(override.container)}&gtm_auth=${encodeURIComponent(override.gtmAuth)}&gtm_preview=${encodeURIComponent(override.gtmPreview)}&gtm_cookies_win=x`;
-  return `${origin}/gtm.js?${q}`;
+/** `pageParams` are the matched request's parameters. `l` (the data layer name) and `gtm_debug` are copied, because the build reads the data layer that `l` names. */
+export function previewFetchUrl(override: GtmOverrideInput, origin: string = GTM_ORIGIN, pageParams?: URLSearchParams): string {
+  const q = new URLSearchParams({ id: override.container, gtm_auth: override.gtmAuth, gtm_preview: override.gtmPreview, gtm_cookies_win: 'x' });
+  for (const name of ['l', 'gtm_debug']) {
+    const value = pageParams?.get(name);
+    if (value) q.set(name, value);
+  }
+  return `${origin}/gtm.js?${q.toString()}`;
+}
+
+export interface GtmMatch {
+  applied: Omit<GtmOverrideApplied, 'status'>;
+  /** Parameters of the request that carries the container id. Empty for way 'replace'. */
+  pageParams: URLSearchParams;
+}
+
+function sameUrl(a: string, b: string): boolean {
+  try {
+    return new URL(a).href === new URL(b).href;
+  } catch {
+    return false;
+  }
+}
+
+/** `liveUrl` is the request as sent. `record.url` may be redacted, so it is only reported. */
+export function matchGtmRequest(liveUrl: string, record: Request, override: GtmOverrideInput): GtmMatch | undefined {
+  if (matchesGtmContainer(liveUrl, override.container)) {
+    return { applied: { way: 'direct', url: record.url }, pageParams: new URL(liveUrl).searchParams };
+  }
+  if (override.loader && sameUrl(liveUrl, override.loader.replace)) {
+    return {
+      applied: { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' },
+      pageParams: new URLSearchParams(),
+    };
+  }
+  const inner = unwrapStapeLoader({ ...record, url: liveUrl });
+  if (inner && matchesLoaderContainer(inner.url, override.container)) {
+    return {
+      applied: { way: 'loader', loader: 'stape', url: record.url, loses: 'nothing known; the loader script runs unchanged' },
+      pageParams: new URL(inner.url).searchParams,
+    };
+  }
+  return undefined;
 }
 
 /** The page's own gtm.js request, fetched from the test origin instead. */
 export function testOriginUrl(requestUrl: string, origin: string): string {
   const u = new URL(requestUrl);
   return `${origin}${u.pathname}${u.search}`;
+}
+
+/** Why the override did not take effect, or undefined when it did. */
+export function gtmFailureMessage(override: GtmOverrideInput, applied: GtmOverrideApplied[], fetchError?: string): string | undefined {
+  const { container } = override;
+  const replace = override.loader?.replace;
+  if (applied.length === 0) {
+    return `no container request matched: the page never requested https://www.googletagmanager.com/gtm.js?id=${container}, a Stape-style loader for it${replace ? `, or ${replace}` : ''}`;
+  }
+  const bad = applied.find((a) => a.status !== 200);
+  if (bad) {
+    if (bad.status === 0) return `the preview build of ${container} could not be fetched${fetchError ? `: ${fetchError}` : ''}`;
+    const hint = bad.status === 404 ? ' (the environment may have no version)' : '';
+    return `the preview build of ${container} returned status ${bad.status}${hint}`;
+  }
+  if (replace && !applied.some((a) => a.way === 'replace')) return `loader.replace was set but the page never requested ${replace}`;
+  return undefined;
 }
