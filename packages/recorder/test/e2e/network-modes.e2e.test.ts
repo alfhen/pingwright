@@ -420,7 +420,7 @@ test('a POST that a 303 turns into a GET reaches the server the same way in stub
 for (const [name, path] of [
   ['a POST, 303, then cross-origin 307', '/post-303-307'],
   ['a PUT, 303, then cross-origin 302', '/put-303-302'],
-]) {
+] as const) {
   test(`${name} reaches the other host as a GET without the body in stub and live mode`, async () => {
     const seen = async (mode: 'stub' | 'live') => {
       otherBodies = [];
