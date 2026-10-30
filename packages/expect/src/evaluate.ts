@@ -294,7 +294,7 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
 
-const UNMATCHED_HEADLINE = 'Expected every hashed email or phone value to match the run identity.';
+const UNMATCHED_HEADLINE = 'Expected every hashed identity value to match the run identity.';
 const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address|user_data\.email_address)$/;
 const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number|user_data\.phone_number)$/;
 const FIELD_PARAMS: Record<string, (identity: Identity) => string> = {
@@ -305,6 +305,24 @@ const FIELD_PARAMS: Record<string, (identity: Identity) => string> = {
   'user_data.postal_code': (i) => i.zip,
   'user_data.country': (i) => i.country,
 };
+
+const FIELD_LABELS: Record<string, string> = {
+  'user_data.first_name': 'first name',
+  'user_data.last_name': 'last name',
+  'user_data.street': 'street',
+  'user_data.city': 'city',
+  'user_data.postal_code': 'postal code',
+  'user_data.country': 'country',
+};
+
+function fieldLabel(name: string): string {
+  return EMAIL_PARAM.test(name) ? 'email' : PHONE_PARAM.test(name) ? 'phone' : (FIELD_LABELS[name] ?? name);
+}
+
+function joinLabels(labels: Set<string>): string {
+  const all = [...labels];
+  return all.length > 1 ? `${all.slice(0, -1).join(', ')} and ${all.at(-1)}` : (all[0] ?? '');
+}
 
 const PLAIN_ADDRESS_PARAMS = new Set(['user_data.city', 'user_data.postal_code', 'user_data.country']);
 const DIGEST_SHAPE = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/i;
@@ -318,8 +336,8 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   if (!identity) {
     return {
       pass: false,
-      evidence: [],
-      headline: 'Expected every hashed email or phone value to match the run identity, but it could not be checked.',
+      evidence: hits.map((h) => h.id),
+      headline: 'Expected every hashed identity value to match the run identity, but it could not be checked.',
       message: 'no run identity was given, so the hashes could not be checked.',
     };
   }
@@ -333,6 +351,8 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const withHash: string[] = [];
   const wrong: string[] = [];
   const unhashed: string[] = [];
+  const wrongFields = new Set<string>();
+  const unhashedFields = new Set<string>();
   for (const hit of hits) {
     let seen = false;
     let bad = false;
@@ -354,20 +374,28 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       if (known.has(value)) continue;
       bad = true;
       const typed = value.trim().toLowerCase();
-      if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) raw = true;
+      if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) {
+        raw = true;
+        unhashedFields.add(fieldLabel(name));
+      } else {
+        wrongFields.add(fieldLabel(name));
+      }
     }
     if (seen) withHash.push(hit.id);
     if (bad) wrong.push(hit.id);
     if (raw) unhashed.push(hit.id);
   }
+  const several = hits.length > 1;
+  const they = several ? 'they' : 'it';
+  const of = (n: number) => (several ? ` (${n} of ${hits.length} hits)` : '');
   if (unhashed.length) {
-    return { pass: false, evidence: unhashed, headline: UNMATCHED_HEADLINE, message: `${unhashed.length} hit(s) carried an email or phone that is unhashed.` };
+    return { pass: false, evidence: unhashed, headline: UNMATCHED_HEADLINE, message: `${they} carried an unhashed ${joinLabels(unhashedFields)}${of(unhashed.length)}.` };
   }
   if (wrong.length) {
-    return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message: `the hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
+    return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message: `the hashed ${joinLabels(wrongFields)} values ${they} carried do not match the run identity${of(wrong.length)}.` };
   }
   if (!withHash.length) {
-    return { pass: false, evidence: hits.map((h) => h.id), message: 'it carried no hashed email or phone values.' };
+    return { pass: false, evidence: hits.map((h) => h.id), message: `${several ? 'none of them carried any' : 'it carried no'} hashed email, phone, name or address value.` };
   }
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }

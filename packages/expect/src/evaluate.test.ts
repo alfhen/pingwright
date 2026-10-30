@@ -259,19 +259,19 @@ test('identity.hashesMatch', () => {
   expect(failed.evidence).toEqual([bad.hit.id]);
   const none = ev([hit({ vendor: 'meta' })]);
   expect(none.message).toBe(
-    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: it carried no hashed email or phone values.',
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: it carried no hashed email, phone, name or address value.',
   );
   expect(none.message).not.toContain('found 1 matching hit');
   expect(failed.message).toBe(
-    'Expected every hashed email or phone value to match the run identity. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email or phone values in 1 hit(s) do not match the run identity.',
+    'Expected every hashed identity value to match the run identity. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email values they carried do not match the run identity (1 of 2 hits).',
   );
   const noIdentity = evaluate([good.hit, good.req], parseScenario(`start: /\n${q}`))[0]!;
   expect(noIdentity.message).toBe(
-    'Expected every hashed email or phone value to match the run identity, but it could not be checked. 1 hit matched vendor, but identity.hashesMatch failed: no run identity was given, so the hashes could not be checked.',
+    'Expected every hashed identity value to match the run identity, but it could not be checked. 1 hit matched vendor, but identity.hashesMatch failed: no run identity was given, so the hashes could not be checked.',
   );
   const unhashed = ev([hit({ vendor: 'meta', params: { 'ud[em]': identity.email } })]);
   expect(unhashed.message).toBe(
-    'Expected every hashed email or phone value to match the run identity. 1 hit matched vendor, but identity.hashesMatch failed: 1 hit(s) carried an email or phone that is unhashed.',
+    'Expected every hashed identity value to match the run identity. 1 hit matched vendor, but identity.hashesMatch failed: it carried an unhashed email.',
   );
   for (const m of [none, failed, noIdentity, unhashed]) expect(m.message).not.toMatch(/found [1-9]/);
   const digitsPhone = hit({ vendor: 'meta', params: {
@@ -287,6 +287,28 @@ test('identity.hashesMatch', () => {
   expect(ev([good, hit({ vendor: 'meta', params: { 'ud[em]': em.hex.toUpperCase() } })]).pass).toBe(false);
   expect(ev([good, hit({ vendor: 'meta', params: { 'ud[em]': 'a'.repeat(40) } })]).pass).toBe(false);
   expect(ev([hit({ vendor: 'meta', params: { hashedEmail: em.hex } })]).pass).toBe(true);
+});
+
+test('identity.hashesMatch messages name the failing field and the evidence', () => {
+  const em = hashEmail(identity.email);
+  const q = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: sgtm, identity.hashesMatch: true }');
+  const run = (hits: ReturnType<typeof hit>[], ctx: { identity?: typeof identity } = { identity }) =>
+    evaluate(hits.flatMap((h) => [h.hit, h.req]), q, ctx)[0]!;
+  const wrongName = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex, 'user_data.first_name': hashEmail('Other').hex } });
+  const r1 = run([wrongName]);
+  expect(r1.message).toContain('the hashed first name values it carried do not match the run identity.');
+  expect(r1.message).not.toContain('email');
+  const wrongCity = hit({ vendor: 'sgtm', params: { 'user_data.city': hashEmail('Other').hex, 'user_data.postal_code': hashEmail('00000').hex } });
+  const r2 = run([wrongCity, wrongName]);
+  expect(r2.message).toContain('the hashed city, postal code and first name values they carried do not match');
+  expect(r2.evidence).toEqual([wrongCity.hit.id, wrongName.hit.id]);
+  const rawName = hit({ vendor: 'sgtm', params: { 'user_data.first_name': identity.firstName } });
+  expect(run([rawName]).message).toContain('it carried an unhashed first name.');
+  const none = run([hit({ vendor: 'sgtm' }), hit({ vendor: 'sgtm' })]);
+  expect(none.message).toContain('none of them carried any hashed email, phone, name or address value.');
+  const a = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex } });
+  const b = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex } });
+  expect(run([a, b], {}).evidence).toEqual([a.hit.id, b.hit.id]);
 });
 
 test('identity.hashesMatch with a count that allows zero hits', () => {

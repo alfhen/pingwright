@@ -7,7 +7,7 @@
 </head>
 <body>
 <h1>Server container Data Tag</h1>
-<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields, <code>?form=list</code> sends <code>user_data</code> with lists.</p>
+<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields with an empty phone and hashed postal code and country, <code>?form=list</code> sends <code>user_data</code> with lists.</p>
 <script>
 (function () {
   var form = new URLSearchParams(location.search).get('form') || 'top';
@@ -23,7 +23,9 @@
     first_name: stored['first-name'] || '',
     last_name: stored['last-name'] || '',
     street: stored.address1 || '',
-    city: stored.city || ''
+    city: stored.city || '',
+    postal_code: stored.zip || '',
+    country: stored.country || 'DE'
   };
   var names = Object.keys(fields);
   Promise.all(names.map(function (k) { return sha256Hex(fields[k]); })).then(function (hashes) {
@@ -49,11 +51,11 @@
         email_address: h.email_address,
         first_name: h.first_name,
         last_name: h.last_name,
-        phone_number: h.phone_number,
+        phone_number: '',
         street: h.street,
         city: h.city,
-        postal_code: stored.zip || '',
-        country: 'DE'
+        postal_code: h.postal_code,
+        country: h.country
       };
     }
     fetch(window.__PW_FIXTURE.sgtmUrl + '/data?v=2&event=purchase', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }).catch(function () {});
