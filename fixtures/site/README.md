@@ -117,11 +117,11 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 ## Server container Data Tag page
 
-`/sgtm-data-tag` posts a `purchase` body to `sgtmUrl/data?v=2&event=purchase` (a JSON body sent as `text/plain`). The values are SHA-256 hashes of the identity typed in the checkout form, read from `sessionStorage` (`pw_checkout`), so a scenario fills `/checkout` and then visits this page. `?form=top` (default) is the Stape Data Tag protocol 2 shape: `email_address`, `first_name`, `last_name`, `street`, `city`, `postal_code` and `country` as hashed top-level fields, and an empty `phone_number`. `?form=list` sends a `user_data` object with `email_address` and `phone_number` as one-item lists and `address` as a one-item list of objects.
+`/sgtm-data-tag` posts a `purchase` body to `sgtmUrl/data?v=2&event=purchase` (a JSON body sent as `text/plain`). The values are SHA-256 hashes of the identity typed in the checkout form, read from `sessionStorage` (`pw_checkout`), so a scenario fills `/checkout` and then visits this page. `?form=top` (default) is the Stape Data Tag protocol 2 shape: `email_address`, `first_name`, `last_name`, `street`, `city`, `postal_code` and `country` as hashed top-level fields, and an empty `phone_number`. `?wrong=postal` or `?wrong=country` hashes `00000` or `FR` for that one field, so a run must fail `identity.hashesMatch`. `?form=list` sends a `user_data` object with `email_address` and `phone_number` as one-item lists and `address` as a one-item list of objects.
 
 ## Shared hashes page
 
-`/shared-hashes` loads the shop banner and the script `/assets/app-<64 hex>.js` (served from `assets/hashed-app.js`). After 1.5 s it sends a GraphQL persisted-query POST (`{"id":"<hex>"}`) to `thirdPartyUrl/graphql/persisted`, and a GET to the same path with `id` and an `extensions` query holding `persistedQuery.sha256Hash`. All hex values are made up. With `?leak=email` it also sends `em=<hash of other.person@example.com>` to `thirdPartyUrl/shared-hashes/collect`.
+`/shared-hashes` loads the shop banner and the script `/assets/app-<64 hex>.js` (served from `assets/hashed-app.js`). After 1.5 s it sends a GraphQL persisted-query POST (`{"id":"<hex>"}`) to `thirdPartyUrl/graphql/persisted`, and a GET to the same path with `id` and an `extensions` query holding `persistedQuery.sha256Hash`. All hex values are made up. With `?leak=email` it also sends `em=<hash of other.person@example.com>` to `thirdPartyUrl/shared-hashes/collect`. `?leak=nested` sends the hash of the same address as `variables.customer.id` on the persisted-query POST, and `?leak=pixel` requests an image at `thirdPartyUrl/shared-hashes/u-<hash>.gif`.
 
 ## Meta Purchase without hashes page
 
