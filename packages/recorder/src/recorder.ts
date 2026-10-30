@@ -42,6 +42,17 @@ import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
+import {
+  isGtmJsUrl,
+  matchesGtmContainer,
+  parseGtmOverride,
+  parseTestGtmOrigin,
+  previewFetchUrl,
+  testOriginUrl,
+  TEST_GTM_ORIGIN_ENV,
+  type GtmOverrideInput,
+} from './gtm-override.ts';
+import { Scrubber } from './gtm-scrub.ts';
 
 export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
@@ -65,6 +76,8 @@ export interface RecorderOptions {
   autoconsent?: ConsentOptions;
   /** Test only: replaces the Chrome user agent. */
   userAgentOverride?: string;
+  /** Serves the container's workspace build in place of the published one for this run only. */
+  gtmOverride?: GtmOverrideInput;
 }
 
 export interface StepActivity {
@@ -75,6 +88,8 @@ export interface StepActivity {
 export interface RunResult {
   path: string;
   records: RunRecords;
+  /** Why the GTM override failed: no request matched, or a preview fetch was not 200. Absent when it worked or none was given. */
+  gtmOverrideFailure?: string;
 }
 
 function redactHeaders(headers: Record<string, string>): Record<string, string> {
@@ -141,21 +156,26 @@ export class Recorder {
   private currentStepId: Id<'stp'> | null = null;
   private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
+  private readonly fetchErrors: string[] = [];
 
   private constructor(
     private readonly options: RecorderOptions,
     private readonly browser: Browser,
     readonly context: BrowserContext,
+    private readonly gtmOverride: GtmOverrideInput | undefined,
+    private readonly testGtmOrigin: string | undefined,
   ) {}
 
   static async launch(options: RecorderOptions): Promise<Recorder> {
+    const testGtmOrigin = parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
+    const gtmOverride = options.gtmOverride === undefined ? undefined : parseGtmOverride(options.gtmOverride);
     const browser = await chromium.launch({ channel: 'chromium', headless: !options.headed });
     try {
       const context = await browser.newContext({
         userAgent: options.userAgentOverride ?? chromeUserAgent(browser.version()),
         serviceWorkers: options.serviceWorkers ?? 'allow',
       });
-      const recorder = new Recorder(options, browser, context);
+      const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin);
       await recorder.init();
       return recorder;
     } catch (error) {
@@ -184,7 +204,16 @@ export class Recorder {
       pingwrightVersion: PINGWRIGHT_VERSION,
       browser: { name: 'chromium', version: this.browser.version() },
       networkMode: this.options.networkMode,
-      gtmOverride: null,
+      gtmOverride: this.gtmOverride
+        ? {
+            container: this.gtmOverride.container,
+            gtmPreview: this.gtmOverride.gtmPreview,
+            gtmAuth: '[redacted]',
+            expectedTags: this.gtmOverride.expectedTags ?? [],
+            applied: [],
+          }
+        : null,
+      ...(this.testGtmOrigin ? { testGtmOrigin: this.testGtmOrigin } : {}),
       containerVersions: {},
       identity: null,
       coverage: selfTest.coverage,
@@ -341,6 +370,7 @@ export class Recorder {
   private async handleRoute(route: Route): Promise<void> {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
+    if (record && (await this.routeGtm(route, record))) return;
     if (record && this.options.networkMode !== 'live' && (isCollectionEndpoint(record) || isKnownVendorCollection(record))) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
@@ -352,6 +382,40 @@ export class Recorder {
       return;
     }
     await route.continue();
+  }
+
+  /** Answers a gtm.js request with the preview build, or from the test origin. Returns false when the request is not one of those. */
+  private async routeGtm(route: Route, record: Request): Promise<boolean> {
+    const { gtmOverride, testGtmOrigin } = this;
+    // record.url may be redacted during a handoff window; match on the live URL.
+    const liveUrl = route.request().url();
+    const matched = gtmOverride !== undefined && matchesGtmContainer(liveUrl, gtmOverride.container);
+    if (!matched && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
+    const target = matched ? previewFetchUrl(gtmOverride, testGtmOrigin) : testOriginUrl(liveUrl, testGtmOrigin!);
+    let response: APIResponse;
+    try {
+      response = await route.fetch({ url: target });
+    } catch (error) {
+      if (matched) this.run.gtmOverride!.applied.push({ way: 'direct', url: record.url, status: 0 });
+      this.fetchErrors.push(error instanceof Error ? error.message : String(error));
+      await route.abort('failed');
+      return true;
+    }
+    if (matched) this.run.gtmOverride!.applied.push({ way: 'direct', url: record.url, status: response.status() });
+    await route.fulfill({ response });
+    return true;
+  }
+
+  private gtmFailure(): string | undefined {
+    const applied = this.run.gtmOverride?.applied;
+    if (!applied) return undefined;
+    const { container } = this.run.gtmOverride!;
+    if (applied.length === 0) return `no container request matched: the page never requested https://www.googletagmanager.com/gtm.js?id=${container}`;
+    const bad = applied.find((a) => a.status !== 200);
+    if (!bad) return undefined;
+    if (bad.status === 0) return `the preview build of ${container} could not be fetched${this.fetchErrors[0] ? `: ${this.fetchErrors[0]}` : ''}`;
+    const hint = bad.status === 404 ? ' (the environment may have no version)' : '';
+    return `the preview build of ${container} returned status ${bad.status}${hint}`;
   }
 
   /**
@@ -594,7 +658,7 @@ export class Recorder {
       routedRequestIds: this.routed,
     });
     const consentEpochs = this.buildConsentEpochs();
-    const records: RunRecords = {
+    let records: RunRecords = {
       run: this.run,
       steps: this.steps,
       requests,
@@ -609,25 +673,31 @@ export class Recorder {
       collectorReports: this.collectorReports.filter((r): r is CollectorReport => r.type === 'collectorReport'),
       invalidReports: this.collectorReports.filter((r): r is InvalidReport => r.type === 'invalidReport'),
     };
-    const writer = await RunWriter.create(this.options.outDir, this.run);
+    const gtmOverrideFailure = this.gtmFailure();
+    // Last step: decoding, flags and the built-in checks have seen the raw records.
+    const scrubber = this.gtmOverride ? new Scrubber(this.gtmOverride.gtmAuth) : undefined;
+    if (scrubber) records = scrubber.records(records);
+    const writer = await RunWriter.create(this.options.outDir, records.run);
     try {
       for (const record of [
-        ...requests,
-        ...this.steps,
-        ...this.checkpoints,
-        ...this.responses,
-        ...hits,
-        ...this.dataLayerEvents,
-        ...consentEpochs,
-        ...this.collectorReports,
-        ...flags,
+        ...records.requests,
+        ...records.steps,
+        ...records.checkpoints,
+        ...records.responses,
+        ...records.hits,
+        ...records.dataLayerEvents,
+        ...records.consentEpochs,
+        ...records.collectorReports,
+        ...records.invalidReports,
+        ...records.flags,
       ]) {
         await writer.append(record);
       }
     } finally {
       await writer.close();
     }
-    return { path: writer.path, records };
+    const failure = gtmOverrideFailure && scrubber ? scrubber.text(gtmOverrideFailure) : gtmOverrideFailure;
+    return { path: writer.path, records, ...(failure ? { gtmOverrideFailure: failure } : {}) };
   }
 }
 

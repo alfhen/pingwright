@@ -1,0 +1,7 @@
+start: /container/noversion
+steps:
+  - wait: 4s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true }
