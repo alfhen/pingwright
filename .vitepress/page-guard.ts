@@ -7,7 +7,6 @@ export const publishedPages = [
   'docs/cli.md',
   'docs/shopify-checkout.md',
   'docs/design.md',
-  'docs/release.md',
 ];
 
 export function unlistedPages(pages: readonly string[]): string[] {
