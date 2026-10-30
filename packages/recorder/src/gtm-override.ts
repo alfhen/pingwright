@@ -142,8 +142,9 @@ export function testOriginUrl(requestUrl: string, origin: string): string {
   return `${origin}${u.pathname}${u.search}`;
 }
 
-export function matchesLoaderPattern(url: string, loader: { match?: string } | undefined): boolean {
-  return loader?.match !== undefined && new RegExp(loader.match).test(url);
+/** Only script requests match, so a host-wide pattern cannot capture the server container's data requests. */
+export function matchesLoaderPattern(url: string, resourceType: string, loader: { match?: string } | undefined): boolean {
+  return resourceType === 'script' && loader?.match !== undefined && new RegExp(loader.match).test(url);
 }
 
 const GOOGLE_HOST = /(^|\.)(googletagmanager|google-analytics|googleadservices|doubleclick)\.(com|net)$/;

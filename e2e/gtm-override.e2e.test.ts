@@ -271,3 +271,13 @@ test('a loader script for another container exits 2 and the message lists the sc
   expect(r.records!.run.gtmOverride!.applied).toEqual([]);
   await expectNoAuth(r);
 }, 90_000);
+
+test('a cross-origin script that redirects to a collection endpoint is not hidden by the loader sniff', async () => {
+  const r = await runCli('gtm-redirect-script', ['--gtm-override', await overrideFile()], testOrigin());
+  const { requests, flags } = r.records!;
+  const hop = requests.find((q) => q.url?.startsWith(`${site.sgtmUrl}/g/collect`));
+  expect(hop).toBeDefined();
+  const flagged = flags.some((f) => f.kind === 'stubBypass' && f.recordIds.includes(hop!.id));
+  expect(hop!.outcome === 'stubbed' || flagged).toBe(true);
+  await expectNoAuth(r);
+}, 90_000);

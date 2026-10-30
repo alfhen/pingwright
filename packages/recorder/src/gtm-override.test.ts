@@ -112,10 +112,13 @@ test('loader accepts replace, match or both, and refuses an empty or bad one', (
 });
 
 test('the loader pattern is tested against the script URL', () => {
-  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', { match: '/[a-z]+\\.js\\?' })).toBe(true);
-  expect(matchesLoaderPattern('https://load.example.com/abcd.css', { match: '/[a-z]+\\.js\\?' })).toBe(false);
-  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', {})).toBe(false);
-  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', undefined)).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', 'script', { match: '/[a-z]+\\.js\\?' })).toBe(true);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.css', 'script', { match: '/[a-z]+\\.js\\?' })).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', 'script', {})).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', 'script', undefined)).toBe(false);
+  for (const type of ['fetch', 'xhr', 'image', 'ping', 'beacon', 'other']) {
+    expect(matchesLoaderPattern('https://load.example.com/data', type, { match: 'load\\.example\\.com' }), type).toBe(false);
+  }
 });
 
 test('only scripts with a query on non-Google hosts are loader candidates', () => {

@@ -23,6 +23,8 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
+import { hostMatches } from '@pingwright/expect';
+import { getDomain } from 'tldts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint, trackerList, unwrapStapeLoader, type TrackerEntry } from '@pingwright/decoders';
 import {
@@ -437,14 +439,37 @@ export class Recorder {
 
   private isUnseenLoaderCandidate(liveUrl: string, record: Request): boolean {
     if (this.loaderCandidates.get(liveUrl) === false) return false;
-    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl)) return false;
+    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl) || !this.isLoaderHost(liveUrl)) return false;
     return !isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record);
   }
 
-  /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails, so the request goes the normal way. */
+  /**
+   * Only hosts that can hold a Stape custom domain are sniffed: the site's registrable domain, a listed first-party
+   * host, or a loopback host when the site is loopback. Other scripts stay with Chromium, because the sniff fetch
+   * goes through Playwright's cookie jar.
+   */
+  private isLoaderHost(url: string): boolean {
+    try {
+      const siteHost = new URL(this.options.site).hostname;
+      const host = new URL(url).hostname;
+      const loopback = (h: string) => ['localhost', '127.0.0.1', '[::1]'].includes(h);
+      if (loopback(siteHost)) return loopback(host);
+      if (hostMatches(host, this.options.firstPartyHosts ?? [])) return true;
+      const domain = getDomain(siteHost, { allowPrivateDomains: true });
+      return domain !== null && getDomain(host, { allowPrivateDomains: true }) === domain;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails or redirects, so Chromium follows the request and the recorder sees every hop. */
   private async sniffLoader(route: Route, liveUrl: string, container: string): Promise<{ response: APIResponse; matched: boolean } | undefined> {
     try {
-      const response = await route.fetch();
+      const response = await route.fetch({ maxRedirects: 0 });
+      if (response.status() >= 300 && response.status() < 400) {
+        this.loaderCandidates.set(liveUrl, false);
+        return undefined;
+      }
       const matched = response.ok() && bodyHasContainer(await response.text(), container);
       this.loaderCandidates.set(liveUrl, matched);
       return { response, matched };
@@ -458,7 +483,7 @@ export class Recorder {
     if (override.loader?.replace !== undefined && sameUrl(liveUrl, override.loader.replace)) {
       return { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' };
     }
-    if (matchesLoaderPattern(liveUrl, override.loader)) {
+    if (matchesLoaderPattern(liveUrl, record.resourceType, override.loader)) {
       return { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' };
     }
     const inner = unwrapStapeLoader({ ...record, url: liveUrl });

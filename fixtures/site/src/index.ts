@@ -32,6 +32,7 @@ const pages: Record<string, string> = {
   '/container/sandbox': 'container-sandbox.html',
   '/container/stape-script': 'container-stape-script.html',
   '/container/sandbox-script': 'container-sandbox-script.html',
+  '/container/redirect-script': 'container-redirect-script.html',
 };
 
 const pixelPath = '/web-pixels@0.0.0-fixture/sandbox/modern/';
@@ -121,7 +122,9 @@ function sgtmHandler(thirdPartyUrl: string, received: string[]) {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const real = url.pathname === '/pwstape' ? decodeBase64(url.searchParams.get('pk')) : '';
     const scriptReal = /^\/[a-z0-9-]+\.js$/.test(url.pathname) ? deobfuscate(url.searchParams.get('k')) : '';
-    if (scriptReal.startsWith('/gtm.js')) {
+    if (/^\/pwredir-[a-z0-9]+\.js$/.test(url.pathname)) {
+      res.writeHead(302, { location: '/g/collect?v=2&tid=G-PWTEST0001&cid=5555555555.6666666666&en=redirect_hit' }).end();
+    } else if (scriptReal.startsWith('/gtm.js')) {
       sendContainer(res, new URL(scriptReal, 'http://127.0.0.1').searchParams, thirdPartyUrl, received);
     } else if (real.startsWith('/gtm.js')) {
       sendContainer(res, new URL(real, 'http://127.0.0.1').searchParams, thirdPartyUrl, received);
