@@ -257,9 +257,23 @@ test('identity.hashesMatch', () => {
   const failed = ev([good, bad]);
   expect(failed.pass).toBe(false);
   expect(failed.evidence).toEqual([bad.hit.id]);
-  expect(ev([hit({ vendor: 'meta' })]).message).toContain('no hashed values');
+  const none = ev([hit({ vendor: 'meta' })]);
+  expect(none.message).toBe(
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: it carried no hashed email or phone values.',
+  );
+  expect(none.message).not.toContain('found 1 matching hit');
+  expect(failed.message).toBe(
+    'Expected every hashed email or phone value to match the run identity. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email or phone values in 1 hit(s) do not match the run identity.',
+  );
   const noIdentity = evaluate([good.hit, good.req], parseScenario(`start: /\n${q}`))[0]!;
-  expect(noIdentity.message).toContain('no run identity');
+  expect(noIdentity.message).toBe(
+    'Expected every hashed email or phone value to match the run identity, but it could not be checked. 1 hit matched vendor, but identity.hashesMatch failed: no run identity was given, so the hashes could not be checked.',
+  );
+  const unhashed = ev([hit({ vendor: 'meta', params: { 'ud[em]': identity.email } })]);
+  expect(unhashed.message).toBe(
+    'Expected every hashed email or phone value to match the run identity. 1 hit matched vendor, but identity.hashesMatch failed: 1 hit(s) carried an email or phone that is unhashed.',
+  );
+  for (const m of [none, failed, noIdentity, unhashed]) expect(m.message).not.toMatch(/found [1-9]/);
   const digitsPhone = hit({ vendor: 'meta', params: {
     'ud[em]': em.hex, 'ud[ph]': hashEmail(identity.phone.replace(/\D/g, '')).hex,
     'ud[fn]': hashEmail(identity.firstName).hex, 'ud[ln]': hashEmail(identity.lastName).hex,
@@ -273,6 +287,27 @@ test('identity.hashesMatch', () => {
   expect(ev([good, hit({ vendor: 'meta', params: { 'ud[em]': em.hex.toUpperCase() } })]).pass).toBe(false);
   expect(ev([good, hit({ vendor: 'meta', params: { 'ud[em]': 'a'.repeat(40) } })]).pass).toBe(false);
   expect(ev([hit({ vendor: 'meta', params: { hashedEmail: em.hex } })]).pass).toBe(true);
+});
+
+test('identity.hashesMatch with a count that allows zero hits', () => {
+  for (const count of ['0', "'<=3'", "'<2'"]) {
+    const q = `expect:\n  must:\n    - { vendor: meta, count: ${count}, identity.hashesMatch: true }`;
+    const r = evaluate([], parseScenario(`start: /\n${q}`), { identity })[0]!;
+    expect(r.pass).toBe(true);
+    expect(r.message).not.toContain('identity.hashesMatch failed');
+  }
+});
+
+test('identity.hashesMatch with a count that allows zero and hits without hashes', () => {
+  for (const count of ["'<=3'", "'>=0'"]) {
+    const q = `expect:\n  must:\n    - { vendor: meta, count: ${count}, identity.hashesMatch: true }`;
+    const hits = [hit({ vendor: 'meta' }), hit({ vendor: 'meta' })];
+    const r = evaluate(hits.flatMap((h) => [h.hit, h.req]), parseScenario(`start: /\n${q}`), { identity })[0]!;
+    expect(r.pass).toBe(false);
+    expect(r.message).toContain('2 hits matched vendor, but identity.hashesMatch failed');
+    expect(r.message).not.toContain('found 0');
+    expect(r.message).not.toContain('matching all conditions');
+  }
 });
 
 test('built-in unknownDestination fails with evidence unless allowed', () => {
