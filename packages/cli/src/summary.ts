@@ -11,6 +11,8 @@ export interface Summary {
 }
 
 const EVIDENCE_CAP = 5;
+const PATH_EXAMPLES = 3;
+const GROUPED_KINDS = new Set(['unknownDestination', 'firstPartySubdomain']);
 
 export function countHits(hits: RunRecords['hits']): Summary['hits'] {
   const out: Summary['hits'] = {};
@@ -38,6 +40,37 @@ export function exitCodeFor(results: Result[]): 0 | 1 {
   return results.every((r) => r.pass) ? 0 : 1;
 }
 
+function formatFlags(flags: Summary['flags']): string[] {
+  const lines: string[] = [];
+  const groups = new Map<string, { kind: string; host: string; count: number; paths: Set<string> }>();
+  for (const f of flags) {
+    const url = GROUPED_KINDS.has(f.kind) ? parseUrl(/\s(\S+)$/.exec(f.detail)?.[1]) : undefined;
+    if (!url) {
+      lines.push(`  ${f.kind}: ${f.detail}`);
+      continue;
+    }
+    const key = `${f.kind} ${url.host}`;
+    const group = groups.get(key) ?? { kind: f.kind, host: url.host, count: 0, paths: new Set() };
+    group.count += 1;
+    group.paths.add(url.pathname);
+    groups.set(key, group);
+  }
+  for (const { kind, host, count, paths } of groups.values()) {
+    const shown = [...paths].slice(0, PATH_EXAMPLES);
+    const more = paths.size - shown.length;
+    lines.push(`  ${kind}: ${host} x${count} (${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''})`);
+  }
+  return lines;
+}
+
+function parseUrl(text: string | undefined): URL | undefined {
+  try {
+    return text ? new URL(text) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
   lines.push('Hits');
@@ -52,7 +85,7 @@ export function formatSummary(summary: Summary): string {
   }
   lines.push('Flags');
   if (summary.flags.length === 0) lines.push('  none');
-  for (const f of summary.flags) lines.push(`  ${f.kind}: ${f.detail}`);
+  lines.push(...formatFlags(summary.flags));
   lines.push('Expectations');
   for (const r of summary.results) {
     lines.push(`  ${r.pass ? 'PASS' : 'FAIL'} ${r.expectation}`);

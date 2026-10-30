@@ -58,6 +58,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       site: args.site,
       scenario: basename(args.scenario),
       parsed,
+      firstPartyHosts: parsed.options.firstPartyHosts,
       seed: args.seed,
       headed: args.headed,
       autoconsent: args.autoconsentRules.length ? { ruleFiles: args.autoconsentRules } : undefined,

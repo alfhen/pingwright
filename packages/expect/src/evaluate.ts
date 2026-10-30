@@ -8,6 +8,7 @@ import {
   type ConsentEpoch,
   type ConsentState,
   type ConsentValue,
+  type Flag,
   type HashForms,
   type Hit,
   type Identity,
@@ -18,6 +19,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { isSandboxPageUrl } from '@pingwright/decoders';
+import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario } from './scenario.ts';
 
 export type EvalEpoch = ConsentEpoch;
@@ -299,6 +301,24 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
 
+function flagHost(flag: Flag, ctx: Context): string {
+  const url = ctx.requests.get(flag.recordIds[0] ?? '')?.url ?? /\s(\S+)$/.exec(flag.detail)?.[1] ?? '';
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function countByHost(flags: readonly Flag[], ctx: Context): string {
+  const counts = new Map<string, number>();
+  for (const f of flags) {
+    const host = flagHost(f, ctx) || '(unknown host)';
+    counts.set(host, (counts.get(host) ?? 0) + 1);
+  }
+  return [...counts].map(([host, n]) => `${host} x${n}`).join(', ');
+}
+
 function builtInChecks(
   records: readonly Input[],
   scenario: Scenario,
@@ -308,18 +328,21 @@ function builtInChecks(
   const flags = records.filter((r) => r.type === 'flag');
 
   const unknown = flags.filter((f) => f.kind === 'unknownDestination');
-  if (scenario.options.allowUnknownDestination) {
-    add('builtin: unknownDestination', true, unknown.map((f) => f.id), `Unknown destinations allowed by the scenario; ${unknown.length} flagged.`);
-  } else {
-    add(
-      'builtin: unknownDestination',
-      unknown.length === 0,
-      unknown.flatMap((f) => [f.id, ...f.recordIds]),
-      unknown.length === 0
-        ? 'Expected no requests to unknown destinations, found none.'
-        : `Expected no requests to unknown destinations, found ${unknown.length}: ${unknown.map((f) => f.detail).join('; ')}.`,
-    );
-  }
+  const allow = scenario.options.allowUnknownDestination;
+  const allowedHosts = Array.isArray(allow) ? allow : [];
+  const isAllowed = (f: (typeof unknown)[number]) => allow === true || hostMatches(flagHost(f, ctx), allowedHosts);
+  const blocked = unknown.filter((f) => !isAllowed(f));
+  const allowedCount = unknown.length - blocked.length;
+  add(
+    'builtin: unknownDestination',
+    blocked.length === 0,
+    blocked.length === 0 ? unknown.map((f) => f.id) : blocked.flatMap((f) => [f.id, ...f.recordIds]),
+    blocked.length > 0
+      ? `Expected no requests to unknown destinations, found ${blocked.length}: ${countByHost(blocked, ctx)}.`
+      : unknown.length > 0
+        ? `Unknown destinations allowed by the scenario; ${allowedCount} flagged.`
+        : 'Expected no requests to unknown destinations, found none.',
+  );
 
   const sandboxed = ctx.hits.filter((h) => isSandboxPageUrl(h.page));
   add(

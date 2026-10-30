@@ -127,7 +127,11 @@ Why unknown destinations pass rather than being blocked: blocking by host stops 
 
 Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, an empty 200 JavaScript response for scripts (gtag.js sends some Ads hits as script requests), and an empty 200 HTML response for documents (such as `td.doubleclick.net` iframes). The CORS headers echo the request `Origin` and allow credentials. Reports mark stubbed requests with `outcome: stubbed`. In `live` mode every request continues and has `outcome: passed`.
 
-**Unknown destination rule.** A request is flagged `unknownDestination` when its host is not the site's host, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
+**Unknown destination rule.** A request is flagged `unknownDestination` when its host is not first party, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
+
+**First party.** The registrable domain of the `--site` host, found with the Public Suffix List (`tldts`, private suffixes included), is first party: `--site https://www.shop.co.uk` makes `shop.co.uk` and every `*.shop.co.uk` host first party. A host with no registrable domain (an IP address, `localhost`) is first party only as the exact `--site` host. `options.firstPartyHosts` adds hosts or `*.domain` wildcards. A wildcard matches subdomains at any depth, not the bare domain.
+
+**`firstPartySubdomain` flag.** A request that would be flagged `unknownDestination` except that its host is first party, and that is not to the exact `--site` host, gets the informational flag `firstPartySubdomain` instead. This keeps server-side GTM on a custom subdomain (for example `sgtm.shop.com/collect`) visible. It never fails a run. The terminal summary groups it, and `unknownDestination`, by host with a count and a few example paths.
 
 **Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js on the fixture site with consent denied (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds. An aborted request is described below.
 
@@ -199,7 +203,7 @@ For `consent: none`, Pingwright asserts that a banner was detected and shown, th
 "Before consent" needs a precise meaning.
 
 - **One clock.** The init script records dataLayer pushes and banner events with `performance.timeOrigin + performance.now()`. Request times are converted to the same clock.
-- **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. A run can have several epochs, for example accept and then withdraw.
+- **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. Defaults before the first decision set the undecided state. The first decision is the first banner action or the first Consent Mode update, whichever comes first, even an update that grants nothing. A default after the first decision is ignored, because within one document an update takes precedence over a later default and the recording cannot tell a new page's default from a pixel iframe's. A default with a `region` list is ignored, because the test machine's region does not say which visitors it covers. A run can have several epochs, for example accept and then withdraw.
 - **Google hits** are judged by the consent value inside the hit (`gcs`, `gcd`), not by timing. This handles hits that were queued before an update and sent after it.
 - **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself.
 
@@ -365,11 +369,11 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 15. Milestones
 
-1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output.
-2. **0.2:** MCP server (schema frozen first), `diff`, `pinterest` and `microsoft-uet` decoders.
-3. **0.3:** web tag-firing reporter template, GTM override per run, expected tag lists.
-4. **0.4:** Shopify platform, collector origin bridge.
-5. **0.5:** `server` mode, server reporter, sink reader.
+1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
+2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
+3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
+4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
+5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
 
 Deferred: HTML report, sink setup commands, a replay page.
 
@@ -379,7 +383,7 @@ Where the code in 0.1 differs from the design above:
 
 - **`sgtm-data-client` is minimal.** It decodes only `/data` requests that carry a `dtdc` parameter, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
 - **Only Meta and Google hosts are stubbed by host.** Hits to vendors without a 0.1 decoder (Pinterest, Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
-- **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`. The rule for what is flagged is in §5.3.
+- **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`, or a list of hosts or `*.domain` wildcards. With a list, only requests to those hosts pass and every other unknown destination still fails. `options.firstPartyHosts` marks more hosts as first party. The rule for what is flagged, and what first party means, is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
 - **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes. Only release tags carry a built `dist/`, so install from a tag, not a branch (`docs/release.md`). A tarball from `pnpm install && pnpm build && pnpm pack` also works (`docs/cli.md`).
@@ -402,7 +406,7 @@ Where the code in 0.1 differs from the design above:
 | --- | --- |
 | [EDPS website-evidence-collector](https://github.com/EU-EDPS/website-evidence-collector) | Open source. Records cookies and beacons, including before consent. Pingwright adds vendor decoding, expectations, diffs and tag reports. |
 | [DuckDuckGo autoconsent](https://github.com/duckduckgo/autoconsent) | Used by Pingwright for banners. |
-| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | Possible source for classifying unknown destinations. |
+| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | A source for classifying unknown destinations. Its data is CC BY-NC-SA 4.0 (non-commercial), so Pingwright neither ships it nor derives entries from it. |
 | Playwright MCP | Gives agents raw browser and network access. Pingwright adds decoding and assertions on top. |
 | Snowplow Micro | The same idea for Snowplow trackers only. |
 | ObservePoint, DataTrue, Trackingplan | Commercial auditing and monitoring. |

@@ -279,10 +279,23 @@ test('built-in unknownDestination fails with evidence unless allowed', () => {
   const check = failing.find((r) => r.expectation === 'builtin: unknownDestination')!;
   expect(check.pass).toBe(false);
   expect(check.evidence).toEqual([flag.id, 'req_X']);
-  expect(check.message).toContain('127.0.0.1:9100');
+  expect(check.message).toContain('127.0.0.1 x1');
   const allowed = evaluate([flag], parseScenario('start: /\noptions: { allowUnknownDestination: true }'));
   expect(allowed.find((r) => r.expectation === 'builtin: unknownDestination')!.pass).toBe(true);
   expect(evaluate([], parseScenario('start: /'), { identity }).every((r) => r.pass)).toBe(true);
+});
+
+test('allowUnknownDestination as a host list passes only those hosts', () => {
+  const mk = (url: string): Flag => ({ type: 'flag', id: newId('flag'), runId, kind: 'unknownDestination', recordIds: [], detail: `GET ${url}` });
+  const flags = [mk('https://i.guim.co.uk/a?x=1'), mk('https://img.shopifycdn.com/b?x=1'), mk('https://tracker.example.net/c?x=1')];
+  const check = (opts: string) =>
+    evaluate(flags, parseScenario(`start: /\noptions: { allowUnknownDestination: ${opts} }`)).find((r) => r.expectation === 'builtin: unknownDestination')!;
+  const partial = check("['i.guim.co.uk', '*.shopifycdn.com']");
+  expect(partial.pass).toBe(false);
+  expect(partial.message).toContain('tracker.example.net x1');
+  expect(partial.message).not.toContain('guim');
+  expect(check("['i.guim.co.uk', '*.shopifycdn.com', 'tracker.example.net']").pass).toBe(true);
+  expect(check("['shopifycdn.com']").pass).toBe(false);
 });
 
 test('built-in sandbox page URL check', () => {

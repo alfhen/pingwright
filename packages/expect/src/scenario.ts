@@ -1,6 +1,7 @@
 import type { ConsentValue, NetworkMode, RequestOutcome } from '@pingwright/core';
 import { vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
+import { isHostPattern } from './hosts.ts';
 
 export type ConsentField = 'analytics' | 'ads' | 'adUserData' | 'adPersonalization';
 
@@ -59,7 +60,9 @@ export interface ScenarioOptions {
   seed?: number;
   consentTimeout?: number;
   graceWindow?: number;
-  allowUnknownDestination?: boolean;
+  /** `true` allows every unknown destination. A list allows only those hosts or `*.domain` wildcards. */
+  allowUnknownDestination?: boolean | string[];
+  firstPartyHosts?: string[];
 }
 
 export interface Scenario {
@@ -89,7 +92,13 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts'];
+
+const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
+
+function isHostList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every(isHostPattern);
+}
 
 type Path = (string | number)[];
 
@@ -389,8 +398,11 @@ export function parseScenario(text: string): Scenario {
           if (typeof v === 'number' && Number.isInteger(v)) options.seed = v;
           else fail(p, 'must be an integer');
         } else if (k === 'allowUnknownDestination') {
-          if (typeof v === 'boolean') options.allowUnknownDestination = v;
-          else fail(p, 'must be true or false');
+          if (typeof v === 'boolean' || isHostList(v)) options.allowUnknownDestination = v;
+          else fail(p, `must be true, false or a list of hosts${HOST_HINT}`);
+        } else if (k === 'firstPartyHosts') {
+          if (isHostList(v)) options.firstPartyHosts = v;
+          else fail(p, `must be a list of hosts${HOST_HINT}`);
         } else {
           const ms = parseDuration(v);
           if (ms === undefined) fail(p, 'must be a duration such as 4s or 500ms');

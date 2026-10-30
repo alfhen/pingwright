@@ -20,12 +20,14 @@ export interface RunArgs {
   json: boolean;
 }
 
-export type Command = RunArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help' };
+export type Command = RunArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
 
 export const USAGE = `Usage:
   pingwright run <scenario.yml> --site <url> [options]
   pingwright install-browser
   pingwright --version
+
+Run "pingwright run --help" for the options of run.
 
 Options for run:
   --site <url>               The site to test (required)
@@ -36,6 +38,25 @@ Options for run:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
+`;
+
+export const RUN_USAGE = `Usage: pingwright run <scenario.yml> --site <url> [options]
+
+Plays the scenario in Chromium, records every request, checks the expectations
+and writes one JSONL record.
+
+Options:
+  --site <url>               The site to test (required)
+  --network stub|live        stub (default) answers tracking requests locally; live sends them
+  --out <dir>                Directory for the JSONL record (default: runs)
+  --seed <n>                 Seed for the fake identity
+  --headed                   Show the browser window
+  --autoconsent-rules <file> Extra autoconsent rules (repeatable)
+  --var <k=v>                Scenario variable (repeatable)
+  --json                     Print a JSON summary on stdout
+  -h, --help                 Show this help
+
+Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
 `;
 
 export function parseCli(argv: string[]): Command {
@@ -63,6 +84,7 @@ export function parseCli(argv: string[]): Command {
   const { values, positionals } = parsed;
   if (values.version) return { command: 'version' };
   const [command, ...rest] = positionals;
+  if (values.help && command === 'run') return { command: 'help', topic: 'run' };
   if (values.help || command === undefined) return { command: 'help' };
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');

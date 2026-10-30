@@ -37,6 +37,8 @@ test('other commands', () => {
   expect(parseCli(['--version'])).toEqual({ command: 'version' });
   expect(parseCli(['install-browser'])).toEqual({ command: 'install-browser' });
   expect(parseCli([])).toEqual({ command: 'help' });
+  expect(parseCli(['run', '--help'])).toEqual({ command: 'help', topic: 'run' });
+  expect(parseCli(['--help'])).toEqual({ command: 'help' });
 });
 
 test.each([

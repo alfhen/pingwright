@@ -2,6 +2,7 @@ import {
   newId,
   nodeNow,
   readVersion,
+  pageTimeToEpoch,
   RunWriter,
   type CaptureCoverage,
   type Checkpoint,
@@ -53,6 +54,8 @@ export interface RecorderOptions {
   /** The site under test. Requests to other hosts can be flagged as unknown destinations. */
   site: string;
   scenario?: string;
+  /** Hosts or `*.domain` wildcards treated as first party besides the site's registrable domain. */
+  firstPartyHosts?: string[];
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
@@ -360,16 +363,20 @@ export class Recorder {
     if (error !== undefined) step.error = error;
   }
 
-  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. */
+  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. Banner times are page-clock readings. */
   recordBanner(result: BannerResult): void {
     if (result.result !== 'ok' || result.action === 'none') return;
-    this.bannerEvents.push({ t: result.t, tEnd: result.tEnd, action: result.action });
+    this.bannerEvents.push({
+      t: pageTimeToEpoch(result.t, this.clockOffset),
+      tEnd: pageTimeToEpoch(result.tEnd, this.clockOffset),
+      action: result.action,
+    });
   }
 
   private buildConsentEpochs(): ConsentEpoch[] {
     // The page's consent state comes from its main frame. A gtag call in an embedded frame has its own state.
     const mainFrameEvents = this.dataLayerEvents.filter((e) => this.mainFrameEventIds.has(e.id));
-    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents), { startT: this.run.startedAt });
+    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents, Math.min(...this.bannerEvents.map((b) => b.t))), { startT: this.run.startedAt });
     return drafts.map((epoch) => ({
       type: 'consentEpoch',
       id: newId('consentEpoch'),
@@ -433,6 +440,7 @@ export class Recorder {
       runId: this.runId,
       networkMode: this.options.networkMode,
       siteUrl: this.options.site,
+      firstPartyHosts: this.options.firstPartyHosts,
       requests,
       hits,
       routedRequestIds: this.routed,
