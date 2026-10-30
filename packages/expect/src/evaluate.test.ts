@@ -289,6 +289,15 @@ test('identity.hashesMatch', () => {
   expect(ev([hit({ vendor: 'meta', params: { hashedEmail: em.hex } })]).pass).toBe(true);
 });
 
+test('identity.hashesMatch with a count that allows zero hits', () => {
+  for (const count of ['0', "'<=3'", "'<2'"]) {
+    const q = `expect:\n  must:\n    - { vendor: meta, count: ${count}, identity.hashesMatch: true }`;
+    const r = evaluate([], parseScenario(`start: /\n${q}`), { identity })[0]!;
+    expect(r.pass).toBe(true);
+    expect(r.message).not.toContain('identity.hashesMatch failed');
+  }
+});
+
 test('built-in unknownDestination fails with evidence unless allowed', () => {
   const flag: Flag = { type: 'flag', id: newId('flag'), runId, kind: 'unknownDestination', recordIds: ['req_X'], detail: 'GET http://127.0.0.1:9100/x' };
   const failing = evaluate([flag], parseScenario('start: /'));

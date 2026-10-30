@@ -117,7 +117,7 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
   const count = rule.count ?? { op: '>=' as const, n: 1 };
   const pass = countHolds(count, hits.length);
   const message = `Expected ${describeCount(count)} matching hits${where}, ${found}.${vacuous ? ` ${vacuous}` : ''}`;
-  if (pass && rule.hashesMatch) {
+  if (pass && rule.hashesMatch && hits.length > 0) {
     const check = checkHashes(hits, ctx);
     if (check.pass) return { pass: true, evidence: check.evidence, message: `${message} ${check.message}` };
     const matched = `${hits.length} hit${hits.length === 1 ? '' : 's'} matched ${describeSelector(rule.filter)}${where}`;
