@@ -1,24 +1,19 @@
 import { expect, test } from 'vitest';
-import { run } from './cli-helpers.ts';
+import { run, runCli, scenario, site, outDir } from './cli-helpers.ts';
 
 const mustRule = (results: { expectation: string; pass: boolean }[]) => results.find((r) => r.expectation.startsWith('must:'))!;
 
-test('--net-log records the beacon and the keepalive POST a sandboxed frame sends on unload', async () => {
-  const { records, code } = await run('unload-beacons', ['--net-log']);
-  expect(code).toBeLessThanOrEqual(1);
-  const late = records!.requests.filter((r) => r.captured === 'netlog');
-  expect(late.map((r) => new URL(r.url).searchParams.get('ep.via')).sort()).toEqual(['beacon', 'keepalive']);
-  expect(late.every((r) => r.method === 'POST' && r.initiator === 'unload')).toBe(true);
-  const hits = records!.hits.filter((h) => h.vendor === 'ga4' && h.event === 'add_to_cart');
-  expect(hits.map((h) => h.requestId).sort()).toEqual(late.map((r) => r.id).sort());
-  expect(hits.every((h) => h.consent.analytics === 'denied')).toBe(true);
-  expect(mustRule(records!.results).pass).toBe(true);
-  expect(records!.flags.some((f) => f.kind === 'stubBypass')).toBe(false);
-  expect(late.every((r) => r.outcome === 'stubbed')).toBe(true);
-  expect(records!.flags.some((f) => f.kind === 'unloadGap')).toBe(false);
-}, 90_000);
+test('--net-log is refused in stub mode and no run starts', async () => {
+  for (const extra of [[], ['--network', 'stub']]) {
+    const result = await runCli(['run', scenario('unload-beacons'), '--site', site.url, '--out', outDir, '--net-log', ...extra]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('--net-log needs --network live');
+    expect(result.stderr).toContain('leave the machine');
+    expect(result.records).toBeUndefined();
+  }
+});
 
-test('without --net-log the missing hit is reported as a gap in the summary', async () => {
+test('the missing hit is reported as a gap in the summary', async () => {
   const { records } = await run('unload-beacons');
   expect(records!.requests.some((r) => r.captured === 'netlog')).toBe(false);
   expect(records!.hits.some((h) => h.event === 'add_to_cart')).toBe(false);

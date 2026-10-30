@@ -33,7 +33,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | `--out <dir>` | Directory for the record, `runs` by default. The file is `<dir>/run_<id>.jsonl`. |
 | `--seed <n>` | Seed for the fake identity. Overrides `options.seed`. |
 | `--headed` | Show the browser window. Scenarios with a `handoff` step are always headed. |
-| `--net-log` | Launches Chromium with `--log-net-log` and records collection requests that a frame sends while it unloads, which no browser hook reports. They carry `captured: "netlog"` and no body. In `stub` mode they do not leave the machine: the frame sends them to a reserved host that does not resolve, and the record keeps the original URL with outcome `stubbed`. Off by default. See design §5.3. |
+| `--net-log` | Launches Chromium with `--log-net-log` and records collection requests that a frame sends while it unloads, which no browser hook reports. They carry `captured: "netlog"` and no body. Needs `--network live`: the command refuses it in `stub` mode with exit code 2, because those requests would leave the machine. Off by default. See design §5.3. |
 | `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
 | `--tracker-list <file>` | Adds tracker entries to the built-in list. See below. |

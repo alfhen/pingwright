@@ -47,7 +47,7 @@ Options for run:
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
-  --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log
+  --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
@@ -66,7 +66,7 @@ Options:
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
-  --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log
+  --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
@@ -131,6 +131,9 @@ export function parseCli(argv: string[]): Command {
   const network = values.network;
   if (network !== undefined && network !== 'stub' && network !== 'live') {
     throw new UsageError(`--network must be stub or live, got "${network}"`);
+  }
+  if (values['net-log'] && network !== 'live') {
+    throw new UsageError('--net-log needs --network live. In stub mode it would let the requests a frame sends while it unloads leave the machine.');
   }
   let seed: number | undefined;
   if (values.seed !== undefined) {

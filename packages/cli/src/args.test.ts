@@ -24,6 +24,13 @@ test('parses run with every option', () => {
   });
 });
 
+test('--net-log is refused unless --network live', () => {
+  const base = ['run', 's.yml', '--site', 'http://localhost:3000', '--net-log'];
+  expect(() => parseCli(base)).toThrow(/--net-log needs --network live/);
+  expect(() => parseCli([...base, '--network', 'stub'])).toThrow(UsageError);
+  expect(parseCli([...base, '--network', 'live'])).toMatchObject({ netLog: true });
+});
+
 test('run defaults', () => {
   expect(parseCli(['run', 's.yml', '--site', 'https://example.com'])).toMatchObject({
     network: undefined,

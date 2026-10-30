@@ -46,7 +46,7 @@ import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { parseNetLog, type NetLogRequest } from './netlog.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
-import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, unwrapUnloadSink, type UnloadSendPayload } from './unload.ts';
+import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
   bodyHasContainer,
@@ -93,6 +93,7 @@ export interface RecorderOptions {
   /**
    * Launches Chromium with `--log-net-log` and adds collection requests that no context hook saw (those a frame
    * sends while it unloads) to the record, with `captured: 'netlog'`. Their bodies are not in the log. Off by default.
+   * Needs `networkMode: 'live'`: in stub mode those sends would reach the network.
    */
   netLog?: boolean;
 }
@@ -198,6 +199,9 @@ export class Recorder {
   static async launch(options: RecorderOptions): Promise<Recorder> {
     const testGtmOrigin = parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
     const gtmOverride = options.gtmOverride === undefined ? undefined : parseGtmOverride(options.gtmOverride);
+    if (options.netLog && options.networkMode !== 'live') {
+      throw new Error('netLog needs networkMode "live": in stub mode the requests a frame sends while it unloads would leave the machine.');
+    }
     let netLogPath: string | undefined;
     if (options.netLog) {
       await mkdir(options.outDir, { recursive: true });
@@ -267,7 +271,7 @@ export class Recorder {
     this.consent = await installConsent(context, this.options.autoconsent);
     if (this.options.networkMode !== 'live') {
       await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
-      await context.addInitScript(unloadInitScript(this.options.netLog === true));
+      await context.addInitScript(unloadInitScript);
     }
     context.on('request', (request) => void this.recordFor(request));
     context.on('requestfailed', (request) => {
@@ -398,8 +402,7 @@ export class Recorder {
       seen.set(key, (seen.get(key) ?? 0) + 1);
     }
     for (const raw of entries) {
-      const original = unwrapUnloadSink(raw.url);
-      const entry = original === null ? raw : { ...raw, url: original, status: null, failure: null };
+      const entry = raw;
       const key = `${entry.method} ${entry.url}`;
       const count = seen.get(key) ?? 0;
       if (count > 0) {
@@ -422,11 +425,10 @@ export class Recorder {
         initiator: 'unload',
         headers: redactHeaders(entry.headers),
         postData: null,
-        outcome: original !== null ? 'stubbed' : entry.failure ? 'failed' : 'passed',
+        outcome: entry.failure ? 'failed' : 'passed',
         captured: 'netlog',
         ...(entry.failure ? { failure: entry.failure } : {}),
       };
-      if (original !== null) this.routed.add(record.id);
       this.extraRequests.push(record);
       if (entry.status !== null) this.recordResponseFor(record, entry.status, []);
     }
