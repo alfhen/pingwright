@@ -102,7 +102,7 @@ export function buildEpochs(
   modeChanges: readonly ConsentModeChange[],
   options: EpochOptions,
 ): EpochDraft[] {
-  const sorted = [...modeChanges].sort((a, b) => a.t - b.t);
+  const sorted = [...modeChanges].sort((a, b) => a.t - b.t || Number(a.command === 'update') - Number(b.command === 'update'));
   const firstUpdateT = sorted.find((c) => c.command === 'update')?.t ?? Infinity;
   const firstDecisionT = Math.min(firstUpdateT, ...banners.map((b) => b.t));
   // States are rebuilt here so a default the caller left in cannot leak into later updates.
@@ -111,7 +111,7 @@ export function buildEpochs(
   const updates: ConsentModeChange[] = [];
   for (const change of sorted) {
     if (change.command === 'default') {
-      if (change.t >= firstDecisionT) continue;
+      if (change.t > firstDecisionT) continue;
       initial = running = { ...running, ...change.signals };
     } else {
       running = { ...running, ...change.signals };

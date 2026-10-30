@@ -416,3 +416,12 @@ describe('later Consent Mode defaults', () => {
     });
   });
 });
+
+describe('buildEpochs same-tick default', () => {
+  test('keeps a default pushed in the same tick as the first update', () => {
+    const changes = consentModeChanges([push(10, 'update', granted), push(10, 'default', denied)]);
+    const epochs = buildEpochs([], changes, { startT: 0 });
+    expect(epochs[0]?.state).toEqual({ analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
+    expect(epochs[1]?.label).toBe('granted');
+  });
+});
