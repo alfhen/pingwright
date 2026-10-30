@@ -63,14 +63,20 @@ test('sgtm-data-tag-top: an empty phone and hashed postal code and country pass 
 }, 120_000);
 
 test.each([
-  ['postal', 'postal code'],
-  ['country', 'country'],
-])('a Data Tag purchase with a wrong hashed %s fails identity.hashesMatch', async (field, label) => {
+  ['postal', 'postal code', 'user_data.postal_code'],
+  ['country', 'country', 'user_data.country'],
+])('a Data Tag purchase with a wrong hashed %s fails identity.hashesMatch and names only that field', async (field, label, param) => {
   const r = await run(`sgtm-data-tag-wrong-${field}`);
   expect(r.code).toBe(1);
   const rule = r.records!.results.find((x) => x.expectation.includes('hashesMatch'))!;
   expect(rule.pass).toBe(false);
-  expect(rule.message).toContain(`the hashed ${label} values it carried do not match the run identity`);
+  expect(rule.message).toContain(`the hashed ${label} values it carried do not match the run identity. Not matching: ${param}. Matching: `);
+  const matching = /Matching: (.*)\.$/.exec(rule.message ?? '')![1]!;
+  expect(matching).toContain('email');
+  expect(matching).toContain('first name');
+  expect(matching).toContain('last name');
+  expect(matching).not.toContain(label);
+  expect(rule.message).not.toMatch(/phone/);
 }, 120_000);
 
 test('sgtm-data-tag-list: the first address object supplies street and city', async () => {

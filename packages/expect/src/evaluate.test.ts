@@ -263,7 +263,7 @@ test('identity.hashesMatch', () => {
   );
   expect(none.message).not.toContain('found 1 matching hit');
   expect(failed.message).toBe(
-    'Expected every hashed identity value to match the run identity. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email values they carried do not match the run identity (1 of 2 hits).',
+    'Expected every hashed identity value to match the run identity. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email values they carried do not match the run identity (1 of 2 hits). Not matching: ud[em]. Matching: phone.',
   );
   const noIdentity = evaluate([good.hit, good.req], parseScenario(`start: /\n${q}`))[0]!;
   expect(noIdentity.message).toBe(
@@ -296,8 +296,7 @@ test('identity.hashesMatch messages name the failing field and the evidence', ()
     evaluate(hits.flatMap((h) => [h.hit, h.req]), q, ctx)[0]!;
   const wrongName = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex, 'user_data.first_name': hashEmail('Other').hex } });
   const r1 = run([wrongName]);
-  expect(r1.message).toContain('the hashed first name values it carried do not match the run identity.');
-  expect(r1.message).not.toContain('email');
+  expect(r1.message).toContain('the hashed first name values it carried do not match the run identity. Not matching: user_data.first_name. Matching: email.');
   const wrongCity = hit({ vendor: 'sgtm', params: { 'user_data.city': hashEmail('Other').hex, 'user_data.postal_code': hashEmail('00000').hex } });
   const r2 = run([wrongCity, wrongName]);
   expect(r2.message).toContain('the hashed city, postal code and first name values they carried do not match');
@@ -309,6 +308,23 @@ test('identity.hashesMatch messages name the failing field and the evidence', ()
   const a = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex } });
   const b = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex } });
   expect(run([a, b], {}).evidence).toEqual([a.hit.id, b.hit.id]);
+});
+
+test('identity.hashesMatch names a wrong country and the fields that match when phone is empty', () => {
+  const q = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: sgtm, identity.hashesMatch: true }');
+  const dataTag = hit({ vendor: 'sgtm', params: {
+    'user_data.email_address': hashEmail(identity.email).hex,
+    'user_data.phone_number': '',
+    'user_data.first_name': hashEmail(identity.firstName).hex,
+    'user_data.last_name': hashEmail(identity.lastName).hex,
+    'user_data.country': hashEmail('zz').hex,
+  } });
+  const r = evaluate([dataTag.hit, dataTag.req], q, { identity })[0]!;
+  expect(r.pass).toBe(false);
+  expect(r.message).toContain(
+    'the hashed country values it carried do not match the run identity. Not matching: user_data.country. Matching: email, first name and last name.',
+  );
+  expect(r.message).not.toMatch(/phone/);
 });
 
 test('identity.hashesMatch with a count that allows zero hits', () => {
