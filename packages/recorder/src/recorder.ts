@@ -21,10 +21,12 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
+import { getDomain } from 'tldts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint } from '@pingwright/decoders';
 import {
   chromium,
+  type APIResponse,
   type Browser,
   type BrowserContext,
   type Page,
@@ -90,6 +92,8 @@ function redactQuery(url: string): string {
     return url;
   }
 }
+
+const MAX_FOLLOWED_HOPS = 10;
 
 function frameUrlOf(request: PwRequest): string | null {
   try {
@@ -341,44 +345,82 @@ export class Recorder {
 
   /**
    * Playwright never routes the hops of a redirect chain, so a redirect to a collection endpoint would reach the
-   * network in stub mode. The first response is fetched without following redirects. A 3xx whose target is a
-   * collection request is answered with the stub. Any other response goes to the browser untouched, so the
-   * browser follows redirects itself and frame URLs and `redirected` stay true to a real visit. Only a second
-   * or later hop to a collection endpoint can still leave the machine.
+   * network in stub mode. Only same-site, non-navigation requests are fetched here. Playwright's request client
+   * keeps its own cookie jar, which matches Chromium's rules only when request, frame and site share a registrable
+   * domain, and a fulfilled document loses its loopback address space. Everything else goes to Chromium untouched,
+   * and a redirect from it to a collection endpoint can still leave the machine (flagged `stubBypass`). Hops are
+   * followed here while they stay on the site, and the first collection hop gets the stub.
    */
   private async routeWithRedirectCheck(route: Route, first: Request): Promise<void> {
     const original = route.request();
-    let response;
+    if (!this.isSameSiteRequest(original)) {
+      await route.continue();
+      return;
+    }
+    let method = first.method;
+    let postData: Buffer | null = original.postDataBuffer();
+    let url = first.url;
+    let response: APIResponse;
     try {
       response = await route.fetch({ maxRedirects: 0, timeout: 0 });
     } catch (error) {
       await route.abort(abortCode(error));
       return;
     }
-    const location = response.headers().location;
-    const status = response.status();
-    if (location && status >= 300 && status < 400) {
+    for (let hops = 0; hops < MAX_FOLLOWED_HOPS; hops++) {
+      const location = response.headers().location;
+      const status = response.status();
+      if (!location || status < 300 || status >= 400) break;
       let next: URL | null = null;
       try {
-        next = new URL(location, first.url);
+        next = new URL(location, url);
       } catch {
         // An unparsable Location is the browser's to reject.
       }
-      if (next && /^https?:$/.test(next.protocol)) {
-        const toGet = [301, 302].includes(status) ? first.method === 'POST' : status === 303 && first.method !== 'HEAD';
-        const hop = this.hopRecord(first, next.href, toGet ? 'GET' : first.method, original.headers(), toGet ? null : original.postDataBuffer());
-        if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
-          hop.outcome = 'stubbed';
-          this.routed.add(hop.id);
-          this.extraRequests.push(hop);
-          const stub = stubResponse(first);
-          this.recordResponseFor(hop, stub.status);
-          await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
-          return;
-        }
+      if (!next || !/^https?:$/.test(next.protocol)) break;
+      const toGet = [301, 302].includes(status) ? method === 'POST' : status === 303 && method !== 'HEAD';
+      if (toGet) {
+        method = 'GET';
+        postData = null;
       }
+      const hop = this.hopRecord(first, next.href, method, original.headers(), postData);
+      if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
+        hop.outcome = 'stubbed';
+        this.routed.add(hop.id);
+        this.extraRequests.push(hop);
+        const stub = stubResponse(first);
+        this.recordResponseFor(hop, stub.status);
+        await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
+        return;
+      }
+      if (!this.isSameSiteUrl(next.href)) break;
+      try {
+        response = await route.fetch({ url: next.href, method, postData: postData ?? undefined, maxRedirects: 0, timeout: 0 });
+      } catch (error) {
+        await route.abort(abortCode(error));
+        return;
+      }
+      url = next.href;
     }
     await route.fulfill({ response });
+  }
+
+  private isSameSiteUrl(url: string): boolean {
+    try {
+      const host = new URL(url).hostname;
+      const siteHost = new URL(this.options.site).hostname;
+      if (host === siteHost) return true;
+      const domain = getDomain(siteHost, { allowPrivateDomains: true });
+      return domain !== null && getDomain(host, { allowPrivateDomains: true }) === domain;
+    } catch {
+      return false;
+    }
+  }
+
+  private isSameSiteRequest(request: PwRequest): boolean {
+    if (request.isNavigationRequest()) return false;
+    const frame = frameUrlOf(request);
+    return frame !== null && this.isSameSiteUrl(request.url()) && (frame === 'about:blank' || this.isSameSiteUrl(frame));
   }
 
   private hopRecord(first: Request, url: string, method: string, headers: Record<string, string>, postData: Buffer | null): Request {

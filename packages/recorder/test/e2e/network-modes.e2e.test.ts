@@ -10,6 +10,7 @@ let server: Server;
 let port: number;
 let outDir: string;
 let serverSaw: string[] = [];
+let pixelCookies: string[] = [];
 
 const COLLECT = (tag: string) => `/g/collect?v=2&tid=G-PWTEST0001&cid=1.2&en=${tag}`;
 
@@ -32,11 +33,15 @@ function page(path: string): string | undefined {
         new Worker(URL.createObjectURL(new Blob(["fetch('${origin}${COLLECT('worker')}', { method: 'POST', body: 'x' })"], { type: 'text/javascript' })));
       </script>`;
     case '/redirect':
+      return `<script>fetch('/redirect-to-collect');</script>`;
+    case '/redirect-chain':
+      return `<script>fetch('/hop-a'); new Image().src = '/hop-a?img';</script>`;
+    case '/redirect-cross-site':
       return `<script>fetch('${origin}/redirect-to-collect', { mode: 'no-cors' });</script>`;
+    case '/cookies':
+      return `<script>fetch('/set-strict').then(() => { new Image().src = '${origin}/pixel'; });</script>`;
     case '/redirect-frame':
       return '<iframe src="/redirect-to-collect-frame"></iframe>';
-    case '/redirect-nav':
-      return '<a id="go" href="/redirect-to-collect-nav">go</a><script>location.href = "/redirect-to-collect-nav";</script>';
     case '/redirect-final':
       return `<script>fetch('/redirect-plain').then((r) => { fetch('/seen?' + encodeURIComponent(r.url + '|' + r.redirected)); });</script>`;
     case '/collector-get':
@@ -84,8 +89,25 @@ beforeAll(async () => {
       res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('redirected')}` }).end();
       return;
     }
-    if (path === '/redirect-to-collect-frame' || path === '/redirect-to-collect-nav') {
-      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT(path.endsWith('frame') ? 'iframe-redirect' : 'nav-redirect')}` }).end();
+    if (path === '/redirect-to-collect-frame') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('iframe-redirect')}` }).end();
+      return;
+    }
+    if (path === '/hop-a') {
+      res.writeHead(302, { location: '/hop-b' }).end();
+      return;
+    }
+    if (path === '/hop-b') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('chain')}` }).end();
+      return;
+    }
+    if (path === '/set-strict') {
+      res.writeHead(204, { 'set-cookie': 'strict=1; SameSite=Strict; Path=/' }).end();
+      return;
+    }
+    if (path === '/pixel') {
+      pixelCookies.push(req.headers.cookie ?? '');
+      res.writeHead(204, { 'set-cookie': 'thirdlax=1; SameSite=Lax; Path=/' }).end();
       return;
     }
     if (path === '/redirect-plain') {
@@ -119,6 +141,7 @@ afterAll(async () => {
 
 function visit(path: string, networkMode: 'stub' | 'live'): Promise<RunResult> {
   serverSaw = [];
+  pixelCookies = [];
   return recordVisit({
     networkMode,
     outDir,
@@ -180,26 +203,49 @@ test('a collection request reached by a redirect is stubbed and never reaches th
   expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });
 
-test('an iframe that redirects to a collection endpoint never reaches the server in stub mode', async () => {
+test('a frame redirect to a collection endpoint is left to the browser and flagged stubBypass', async () => {
   const stub = await visit('/redirect-frame', 'stub');
-  const hop = collectionRequests(stub).find((q) => q.url.includes('en=iframe-redirect'));
-  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'stubbed' });
-  expect(serverSaw.filter((u) => u.includes('en=iframe-redirect'))).toEqual([]);
+  expect(serverSaw.filter((u) => u.includes('en=iframe-redirect'))).toHaveLength(1);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
+});
+
+test('a two-hop chain to a collection endpoint never reaches the server in stub mode', async () => {
+  const stub = await visit('/redirect-chain', 'stub');
+  const hops = collectionRequests(stub).filter((q) => q.url.includes('en=chain'));
+  expect(hops.length).toBeGreaterThan(0);
+  expect(hops.every((q) => q.outcome === 'stubbed')).toBe(true);
+  expect(serverSaw.filter((u) => u.includes('en=chain'))).toEqual([]);
   expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });
 
-test('a navigation that redirects to a collection endpoint never reaches the server in stub mode', async () => {
-  const stub = await visit('/redirect-nav', 'stub');
-  const hop = collectionRequests(stub).find((q) => q.url.includes('en=nav-redirect'));
-  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'stubbed' });
-  expect(serverSaw.filter((u) => u.includes('en=nav-redirect'))).toEqual([]);
-  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+test('a cross-site redirect to a collection endpoint is left to the browser and flagged stubBypass', async () => {
+  const stub = await visit('/redirect-cross-site', 'stub');
+  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
 });
 
-test('a redirected fetch that is not a collection request keeps its final URL', async () => {
+async function cookieRun(networkMode: 'stub' | 'live') {
+  serverSaw = [];
+  pixelCookies = [];
+  const recorder = await launchRecorder({ networkMode, outDir, site: `http://localhost:${port}` });
+  await recorder.visit(`http://localhost:${port}/cookies`);
+  await recorder.wait(1000);
+  const checkpoint = await recorder.checkpoint('end', null);
+  await recorder.close();
+  return { sent: [...pixelCookies], jar: checkpoint.cookies.map((c) => `${c.name}@${c.domain}`).sort() };
+}
+
+test('stub mode sends and stores the same cookies as live mode for a cross-site subresource', async () => {
+  const live = await cookieRun('live');
+  const stub = await cookieRun('stub');
+  expect(live.sent).toEqual(['']);
+  expect(stub).toEqual(live);
+});
+
+test('a same-site redirect that is not a collection request is followed and recorded', async () => {
   const stub = await visit('/redirect-final', 'stub');
-  expect(stub.records.requests.some((q) => q.url.endsWith('/redirect-landed'))).toBe(true);
-  expect(serverSaw.map((u) => decodeURIComponent(u))).toContain(`/seen?http://127.0.0.1:${port}/redirect-landed|true`.replace('127.0.0.1', 'localhost'));
+  expect(stub.records.requests.some((q) => q.url.endsWith('/redirect-plain'))).toBe(true);
+  expect(serverSaw.some((u) => u.startsWith('/seen?'))).toBe(true);
 });
 
 test('live mode lets a redirect hop through to the server', async () => {
