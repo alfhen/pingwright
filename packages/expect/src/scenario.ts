@@ -497,7 +497,7 @@ const PHONE_SHAPE = /^(?:\+\d{8,15}|\+?[\d\s]*\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\+?\d
 // Sweden 070-174 06 05 to 06 99 (PTS, https://pts.se/),
 // UK drama numbers (Ofcom, https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama).
 const FICTIONAL_PHONE = [
-  /^1?\d{3}55501\d\d$/,
+  /^1\d{3}55501\d\d$/,
   /^4670174(?:060[5-9]|06[1-9]\d)$/,
   /^447700900\d{3}$/,
   /^442079460\d{3}$/,
@@ -511,5 +511,7 @@ function looksLikeRealData(value: string): 'email' | 'phone' | undefined {
   const text = value.trim();
   if (!PHONE_SHAPE.test(text)) return undefined;
   const digits = text.replace(/\D/g, '');
-  return FICTIONAL_PHONE.some((range) => range.test(digits)) ? undefined : 'phone';
+  const international = digits.length > 10 || text.startsWith('+');
+  const nationalUs = !international && /^\d{3}55501\d\d$/.test(digits);
+  return nationalUs || FICTIONAL_PHONE.some((range) => range.test(digits)) ? undefined : 'phone';
 }
