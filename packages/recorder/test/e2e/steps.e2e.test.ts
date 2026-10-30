@@ -260,7 +260,7 @@ describe('consent: withdraw', () => {
   test('rejects after the cookie settings link reopened the banner', async () => {
     const parsed = parseScenario(`${ACCEPT}  - click: "#pw-cookie-settings"\n  - consent: withdraw\n  - wait: 1s\n`);
     const { records } = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed });
-    expect(records.consentEpochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
+    expect(records.consentEpochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'withdrawn']);
   });
 });
 
