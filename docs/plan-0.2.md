@@ -192,7 +192,7 @@ Acceptance:
 
 `diffRuns(a, b)` takes two loaded runs and returns a JSON result.
 
-It pairs hits by a match key: epoch label, vendor, event and step label, plus the page path when `byPage` is set. Inside each key it pairs in time order.
+It pairs hits by a match key: epoch label, vendor, event and step label, plus the page path when `byPage` is set. Later PRs removed the step label from the key, strip the `/web-pixels@…/sandbox/` prefix from the page path, and use the frame URL for a hit with no page (design §15.2). Inside each key it pairs in time order.
 
 It reports:
 
