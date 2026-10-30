@@ -24,7 +24,6 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/build.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
