@@ -132,7 +132,34 @@ describe('scan', () => {
 
   it('does not flag short plus-grouped numbers as phones', () => {
     const id = createIdentity(42);
-    for (const text of ['ep.tz=+5+30&en=x', 'q=+1+2', 'v=+2024+10+29', 'v=+20241029+1']) expect(scan(text, id), text).toEqual([]);
+    for (const text of ['ep.tz=+5+30&en=x', 'q=+1+2', 'v=+2024+10+29', 'v=+20241029+1', 'n=+1234567890123456']) expect(scan(text, id), text).toEqual([]);
+  });
+
+  it('does not flag numbers after a form-encoded space that follows punctuation', () => {
+    const id = createIdentity(42);
+    for (const text of [
+      'dt=Check-in%3A+2024-10-29',
+      'cd%5Bcontent_name%5D=Delivery+-+29.10.2024',
+      'ep.range=2024-10-29+-+2024-11-05',
+      'dt=Seats:+12-34-56-78',
+      new URLSearchParams({ dt: 'Order: 100000001' }).toString(),
+      'cd[content_name]=Order+-+100000001',
+      'x=Order+%23+100000001+%7C+My+Shop',
+      'x=Invoice+%2F+20241029001',
+      'note=Ref%3A+20241029',
+    ]) expect(scan(text, id), text).toEqual([]);
+  });
+
+  it('does not flag phone-shaped parts of prefixed ids', () => {
+    const id = createIdentity(42);
+    for (const text of ['ep.transaction_id=ORD-123-456-7890', 'ep.item_id=SKU-555-123-4567']) expect(scan(text, id), text).toEqual([]);
+  });
+
+  it('still flags foreign phones at the start of a value', () => {
+    const id = createIdentity(42);
+    for (const text of ['ph=+4420 7946 0958', '{"ph":"+44 20 7946 0958"}', 'href=tel:+442079460958', 'ph=%2B442079460958']) {
+      expect(scan(text, id).some((m) => m.kind === 'phone'), text).toBe(true);
+    }
   });
 
   it('finds an encoded foreign email next to a stray percent sign', () => {
