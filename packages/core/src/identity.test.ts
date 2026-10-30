@@ -387,6 +387,16 @@ describe('scan fixes', () => {
     }
   });
 
+  it('does not count an always-exempt key as a second request (#220)', () => {
+    const h = sha256('other.person@example.com').hex;
+    const stable = findStableHashes([
+      { requestId: 'r1', text: `client_id=${h}` },
+      { requestId: 'r2', text: `external_id=${h}` },
+    ]);
+    expect(stable.has(h)).toBe(false);
+    expect(scan(`external_id=${h}`, id, { stableHashes: stable })).toEqual([{ kind: 'hash', value: h }]);
+  });
+
   it('never treats a hash as stable when any occurrence is not under an ID key (#220)', () => {
     const h = sha256('other.person@example.com').hex;
     const sources = (extra: string) => [
