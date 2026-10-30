@@ -43,7 +43,6 @@ import { chromeUserAgent } from './user-agent.ts';
 
 export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
-const MAX_REDIRECTS = 20;
 const REDACTED_VALUE = '[redacted]';
 
 const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
@@ -333,62 +332,53 @@ export class Recorder {
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
       return;
     }
-    if (record && this.options.networkMode !== 'live' && record.resourceType !== 'document') {
-      await this.followRedirects(route, record);
+    if (record && this.options.networkMode !== 'live') {
+      await this.routeWithRedirectCheck(route, record);
       return;
     }
     await route.continue();
   }
 
   /**
-   * Playwright never routes the later hops of a redirect chain, so a hop to a collection endpoint would reach
-   * the network in stub mode. The chain is followed here instead, one routed fetch per hop, and the page gets
-   * the final response, or the stub when a hop is a collection request. Documents are navigations: their URL
-   * must stay the one the browser follows, so they continue and a collection hop is flagged stubBypass.
+   * Playwright never routes the hops of a redirect chain, so a redirect to a collection endpoint would reach the
+   * network in stub mode. The first response is fetched without following redirects. A 3xx whose target is a
+   * collection request is answered with the stub. Any other response goes to the browser untouched, so the
+   * browser follows redirects itself and frame URLs and `redirected` stay true to a real visit. Only a second
+   * or later hop to a collection endpoint can still leave the machine.
    */
-  private async followRedirects(route: Route, first: Request): Promise<void> {
-    let url = first.url;
-    let method = first.method;
-    let headers = route.request().headers();
-    let postData = route.request().postDataBuffer();
-    let current: Request | null = null;
-    for (let hops = 0; ; hops++) {
-      let response;
+  private async routeWithRedirectCheck(route: Route, first: Request): Promise<void> {
+    const original = route.request();
+    let response;
+    try {
+      response = await route.fetch({ maxRedirects: 0, timeout: 0 });
+    } catch (error) {
+      await route.abort(abortCode(error));
+      return;
+    }
+    const location = response.headers().location;
+    const status = response.status();
+    if (location && status >= 300 && status < 400) {
+      let next: URL | null = null;
       try {
-        response = await route.fetch({ url, method, headers, postData: postData ?? undefined, maxRedirects: 0 });
+        next = new URL(location, first.url);
       } catch {
-        await route.abort();
-        return;
+        // An unparsable Location is the browser's to reject.
       }
-      const location = response.headers().location;
-      if (current) this.recordResponseFor(current, response.status(), this.setCookieNames(response));
-      if (response.status() < 300 || response.status() >= 400 || !location || hops >= MAX_REDIRECTS) {
-        await route.fulfill({ response });
-        return;
-      }
-      const next = new URL(location, url);
-      if (!/^https?:$/.test(next.protocol)) {
-        await route.fulfill({ response });
-        return;
-      }
-      if ([301, 302].includes(response.status()) ? method === 'POST' : response.status() === 303 && method !== 'HEAD') {
-        method = 'GET';
-        postData = null;
-        headers = Object.fromEntries(Object.entries(headers).filter(([k]) => !k.toLowerCase().startsWith('content-')));
-      }
-      if (next.origin !== new URL(url).origin) delete headers.authorization;
-      url = next.href;
-      const hop = this.hopRecord(first, url, method, headers, postData);
-      current = hop;
-      this.routed.add(hop.id);
-      if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
-        hop.outcome = 'stubbed';
-        this.recordResponseFor(hop, stubResponse(hop).status);
-        const stub = stubResponse(first);
-        await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
-        return;
+      if (next && /^https?:$/.test(next.protocol)) {
+        const toGet = [301, 302].includes(status) ? first.method === 'POST' : status === 303 && first.method !== 'HEAD';
+        const hop = this.hopRecord(first, next.href, toGet ? 'GET' : first.method, original.headers(), toGet ? null : original.postDataBuffer());
+        if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
+          hop.outcome = 'stubbed';
+          this.routed.add(hop.id);
+          this.extraRequests.push(hop);
+          const stub = stubResponse(first);
+          this.recordResponseFor(hop, stub.status);
+          await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
+          return;
+        }
       }
     }
+    await route.fulfill({ response });
   }
 
   private hopRecord(first: Request, url: string, method: string, headers: Record<string, string>, postData: Buffer | null): Request {
@@ -404,19 +394,11 @@ export class Recorder {
       postData: body,
       outcome: 'passed',
     });
-    this.extraRequests.push(record);
     return record;
   }
 
-  private recordResponseFor(record: Request, status: number, setCookieNames: string[] = []): void {
-    this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status, setCookieNames });
-  }
-
-  private setCookieNames(response: { headersArray(): { name: string; value: string }[] }): string[] {
-    return response
-      .headersArray()
-      .filter((h) => h.name.toLowerCase() === 'set-cookie')
-      .map((h) => h.value.split('=')[0]!.trim());
+  private recordResponseFor(record: Request, status: number): void {
+    this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status, setCookieNames: [] });
   }
 
   get site(): string {
@@ -589,4 +571,13 @@ export async function recordVisit(options: RecordVisitOptions): Promise<RunResul
     throw error;
   }
   return recorder.close();
+}
+
+function abortCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (message.includes('ERR_CONNECTION_REFUSED') || message.includes('ECONNREFUSED')) return 'connectionrefused';
+  if (message.includes('ERR_NAME_NOT_RESOLVED') || message.includes('ENOTFOUND')) return 'namenotresolved';
+  if (message.includes('ETIMEDOUT') || message.includes('ERR_TIMED_OUT')) return 'timedout';
+  if (message.includes('ECONNRESET') || message.includes('ERR_CONNECTION_RESET')) return 'connectionreset';
+  return 'failed';
 }
