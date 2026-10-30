@@ -62,10 +62,11 @@ afterAll(async () => {
 const guides = ['docs/guide/what-it-checks', 'docs/guide/first-run', 'docs/guide/reading-results'];
 
 test('builds the landing page as /, the README as /readme, the guides and every published doc', () => {
-  for (const page of ['index', 'readme', ...guides, 'docs/cli', 'docs/design', 'docs/shopify-checkout', 'docs/release']) {
+  for (const page of ['index', 'readme', ...guides, 'docs/cli', 'docs/design', 'docs/shopify-checkout']) {
     expect(existsSync(join(dist, `${page}.html`)), page).toBe(true);
   }
   expect(existsSync(join(dist, 'docs/plan-0.2.html'))).toBe(false);
+  expect(existsSync(join(dist, 'docs/release.html'))).toBe(false);
   expect(existsSync(join(dist, 'AGENTS.html'))).toBe(false);
 });
 
@@ -98,7 +99,7 @@ test('built pages make no requests to other hosts', async () => {
     if (new URL(request.url()).hostname !== '127.0.0.1') outside.push(request.url());
   });
   const page = await context.newPage();
-  for (const path of ['/', '/readme', ...guides.map((g) => `/${g}`), '/docs/cli', '/docs/design', '/docs/shopify-checkout', '/docs/release']) {
+  for (const path of ['/', '/readme', ...guides.map((g) => `/${g}`), '/docs/cli', '/docs/design', '/docs/shopify-checkout']) {
     await page.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: 'networkidle' });
   }
   await context.close();

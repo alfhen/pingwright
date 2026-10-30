@@ -310,7 +310,7 @@ D3 and D4 both touch the workflow, so they go one after the other.
 - **Mermaid `11.17.2`** draws diagrams, bundled from the site's own files and loaded only on pages that have a diagram.
 - **`/` is a VitePress home page** (`docs/index.md`). The README cannot carry the front matter that GitHub would show as a table, so it is published at `/readme`.
 - **VitePress `2.0.0-alpha.20`**, pinned exactly. Bump it on purpose, never by range.
-- **User docs only:** the README, `cli.md`, `shopify-checkout.md`, `design.md` and `release.md`. Plans, proposals and `AGENTS.md` stay in the repo.
+- **User docs only:** the README, `cli.md`, `shopify-checkout.md` and `design.md`. Plans, proposals, `release.md` and `AGENTS.md` are for maintainers and stay in the repo.
 - **Web Storage is allowed** for the two VitePress UI keys (`vitepress:local-search-detailed-list`, `vitepress-theme-appearance`). They never leave the browser. The dogfood check still fails on any cookie.
 - **A CSP is a later PR.** VitePress adds inline scripts, so a `<meta>` policy needs their hashes **(verify)**.
 - **`ci.yml` gets SHA-pinned actions in its own PR.** Dependabot for actions comes with it.
