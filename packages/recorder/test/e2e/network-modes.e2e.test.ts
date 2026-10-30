@@ -114,6 +114,8 @@ function page(path: string): string | undefined {
           });
         });
       </script>`;
+    case '/long-chain':
+      return `<script>fetch('/long/1').catch(() => {});</script>`;
     case '/put-303-302':
       return `<script>fetch('/s303', { method: 'PUT', headers: { 'content-type': 'text/plain' }, body: 'put=secret' }).catch(() => {});</script>`;
     case '/post-303-307':
@@ -166,6 +168,11 @@ beforeAll(async () => {
     }
     if (path === '/redir-auth') {
       res.writeHead(307, { location: `http://localhost:${otherPort}/echo` }).end();
+      return;
+    }
+    if (path.startsWith('/long/')) {
+      const n = Number(path.slice('/long/'.length));
+      res.writeHead(302, { location: n < 11 ? `/long/${n + 1}` : COLLECT('longchain') }).end();
       return;
     }
     if (path === '/s303') {
@@ -432,6 +439,12 @@ for (const [name, path] of [
     expect(await seen('stub')).toEqual(live);
   });
 }
+
+test('a collection endpoint right after the followed-hop limit is still stubbed', async () => {
+  const stub = await visit('/long-chain', 'stub');
+  expect(serverSaw.some((u) => u.includes('en=longchain'))).toBe(false);
+  expect(collectionRequests(stub).find((q) => q.url.includes('en=longchain'))).toMatchObject({ outcome: 'stubbed' });
+});
 
 test('live mode lets a redirect hop through to the server', async () => {
   serverSaw = [];

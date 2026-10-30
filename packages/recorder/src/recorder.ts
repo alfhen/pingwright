@@ -384,7 +384,7 @@ export class Recorder {
       return;
     }
     this.recordApiResponse(current, response);
-    for (let hops = 0; hops < MAX_FOLLOWED_HOPS; hops++) {
+    for (let hops = 0; hops <= MAX_FOLLOWED_HOPS; hops++) {
       const location = response.headers().location;
       const status = response.status();
       if (!location || status < 300 || status >= 400) break;
@@ -411,7 +411,8 @@ export class Recorder {
         await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
         return;
       }
-      if (!this.isSameOriginUrl(next.href)) break;
+      // The hop past the limit is still checked above, so a collection endpoint there is stubbed, not handed back.
+      if (hops === MAX_FOLLOWED_HOPS || !this.isSameOriginUrl(next.href)) break;
       this.extraRequests.push(hop);
       this.routed.add(hop.id);
       current = hop;
