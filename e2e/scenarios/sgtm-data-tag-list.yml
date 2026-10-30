@@ -1,0 +1,25 @@
+start: /products/fake-tee
+identity:
+  phone: "+46701740620"
+steps:
+  - consent: accept
+  - addToCart: "#add-to-cart"
+  - visit: /checkout
+    label: checkout
+  - fill:
+      "#email": email
+      "#first-name": firstName
+      "#last-name": lastName
+      "#phone": phone
+      "#address1": address1
+      "#city": Berlin
+      "#zip": zip
+      "#country": DE
+  - click: "#continue"
+  - visit: /sgtm-data-tag?form=list
+    label: data-tag
+  - wait: 3s
+expect:
+  must:
+    - { vendor: sgtm, event: purchase, identity.hashesMatch: true }
+options: { seed: 1, allowUnknownDestination: true }
