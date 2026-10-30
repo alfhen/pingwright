@@ -6,3 +6,4 @@ export * from './google-ads.ts';
 export * from './sgtm-data-client.ts';
 export * from './stape-custom-loader.ts';
 export * from './registry.ts';
+export * from './tracker-list.ts';
