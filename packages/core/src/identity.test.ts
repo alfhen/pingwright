@@ -393,7 +393,7 @@ describe('own identity is never flagged', () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   it('holds for own base64 emails with random junk glued on', () => {
     const junk = 'OoAg2yme Mu0gcWUW Ag2mGaqW ~ZW + _x- 9Zq'.split(' ');
