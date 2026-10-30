@@ -21,7 +21,7 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' && v !== 
 
 const hasId = (v: unknown): boolean => str(v) !== undefined || (typeof v === 'number' && Number.isFinite(v));
 
-const USER_DATA_FIELDS = ['email_address', 'phone_number', 'first_name', 'last_name', 'street', 'city', 'region', 'postal_code', 'country'];
+const USER_DATA_FIELDS = ['email_address', 'phone_number', 'first_name', 'last_name', 'street', 'city', 'postal_code', 'country'];
 
 function isObject(v: unknown): v is Json {
   return v !== null && typeof v === 'object' && !Array.isArray(v);

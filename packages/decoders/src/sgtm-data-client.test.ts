@@ -109,3 +109,10 @@ test('reads the first object of an address list and the first string of email an
     'user_data.postal_code': 'x',
   });
 });
+
+test('does not expose a region field as user_data.region', () => {
+  const top = post({ event_name: 'purchase', region: 'BE', city: HASH });
+  expect(top?.params['user_data.region']).toBeUndefined();
+  const nested = post({ event_name: 'purchase', user_data: { address: { region: 'BE', city: HASH } } });
+  expect(nested?.params['user_data.region']).toBeUndefined();
+});
