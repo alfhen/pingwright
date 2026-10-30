@@ -7,7 +7,7 @@
 
 Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Reports of which tags fired are planned.
 
-> **Status: 0.2 release candidate (`0.2.0-rc.1`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.2 adds a GTM workspace override, `pingwright diff`, a Pinterest decoder, stubbing of known tracker hosts and a Shopify checkout pattern. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
+> **Status: 0.2 release candidate (`0.2.0-rc.2`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.2 adds a GTM workspace override, `pingwright diff`, a Pinterest decoder, stubbing of known tracker hosts and a Shopify checkout pattern. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
 > **In 0.1:** `pingwright run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
@@ -65,7 +65,7 @@ pingwright run scenarios/undecided-visitor.yml --site https://staging.example.co
 ## Install
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.1
+npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.2
 pingwright install-browser
 ```
 
@@ -73,7 +73,7 @@ Node 22.18 or later. `--install-links` is needed: without it, npm 10 links the g
 
 ## Quick start
 
-1. `npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.1`
+1. `npm i -g --install-links github:alfhen/pingwright#v0.2.0-rc.2`
 2. `pingwright install-browser`
 3. Write `scenario.yml`:
 
