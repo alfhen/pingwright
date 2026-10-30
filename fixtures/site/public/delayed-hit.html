@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Delayed hit</title>
+</head>
+<body>
+<h1>Delayed hit</h1>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var delay = Number(q.get('delay') || 1500);
+  var gcs = q.get('gcs') || 'G100';
+  setTimeout(function () {
+    new Image().src =
+      'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view&gcs=' +
+      gcs + '&dl=' + encodeURIComponent(location.href);
+  }, delay);
+})();
+</script>
+</body>
+</html>

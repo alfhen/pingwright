@@ -8,7 +8,7 @@ import { formatDiff } from './diff.ts';
 import { main } from './main.ts';
 
 const empty: DiffResult = { warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] };
-const key = (epoch: string, vendor: string, event: string) => ({ epoch, vendor, event, step: '' });
+const key = (epoch: string, vendor: string, event: string) => ({ epoch, vendor, event });
 
 test('parses diff with its options', () => {
   expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--by-page', '--json'])).toEqual({ command: 'diff', a: 'a.jsonl', b: 'b.jsonl', byPage: true, json: true });
@@ -20,13 +20,13 @@ test('groups by epoch, then vendor, then event', () => {
   const text = formatDiff(
     {
       ...empty,
-      added: [{ key: key('undecided', 'ga4', 'workspace_only'), hitId: 'hit_2', t: 1 }],
-      removed: [{ key: key('undecided', 'meta', 'AddToCart'), hitId: 'hit_9', t: 2 }],
+      added: [{ key: key('undecided', 'ga4', 'workspace_only'), hitId: 'hit_2', t: 1, step: 'consent-1' }],
+      removed: [{ key: key('undecided', 'meta', 'AddToCart'), hitId: 'hit_9', t: 2, step: '' }],
       changed: [
         {
           key: key('undecided', 'ga4', 'page_view'),
-          a: { hitId: 'hit_1', t: 0 },
-          b: { hitId: 'hit_3', t: 0 },
+          a: { hitId: 'hit_1', t: 0, step: 'start' },
+          b: { hitId: 'hit_3', t: 0, step: 'consent-1' },
           consent: [{ field: 'gcs', a: 'G100', b: 'G111' }],
           ids: [],
         },
@@ -42,9 +42,9 @@ test('groups by epoch, then vendor, then event', () => {
       'Epoch undecided',
       '  ga4',
       '    page_view',
-      '      changed: gcs G100 -> G111 (hit_1 -> hit_3)',
+      '      changed, step "start" -> "consent-1": gcs G100 -> G111 (hit_1 -> hit_3)',
       '    workspace_only',
-      '      added: hit_2',
+      '      added (step "consent-1"): hit_2',
       '  meta',
       '    AddToCart',
       '      removed: hit_9',
