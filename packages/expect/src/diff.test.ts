@@ -100,18 +100,47 @@ test('reports a key whose counts differ and pairs in time order', () => {
   expect(d.changed).toEqual([]);
 });
 
-test('matches by step label, not step id', () => {
+function addStep(run: RunRecords, label: string, index = 0): Step {
+  const s: Step = { type: 'step', id: newId('step'), runId: run.run.id, index, label, startedAt: 0, endedAt: null };
+  run.steps.push(s);
+  return s;
+}
+
+test('pairs a hit that lands in a different step in each run', () => {
   const a = makeRun();
   const b = makeRun();
-  const step = (run: RunRecords): Step => {
-    const s: Step = { type: 'step', id: newId('step'), runId: run.run.id, index: 0, label: 'checkout', startedAt: 0, endedAt: null };
-    run.steps.push(s);
-    return s;
-  };
-  addHit(a, { stepId: step(a).id });
-  addHit(b, { stepId: step(b).id });
+  addHit(a, { stepId: addStep(a, 'start').id, t: 2000 });
+  addHit(b, { stepId: addStep(b, 'consent-1').id, t: 4000 });
   const d = diffRuns(a, b);
   expect(d.added).toEqual([]);
+  expect(d.removed).toEqual([]);
+  expect(d.countMismatches).toEqual([]);
+  expect(d.changed).toEqual([]);
+});
+
+test('a changed hit keeps the step of each side', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addHit(a, { stepId: addStep(a, 'start').id });
+  addHit(b, { stepId: addStep(b, 'consent-1').id, consent: { ...consent, raw: { gcs: 'G111' } } });
+  const d = diffRuns(a, b);
+  expect(d.changed).toHaveLength(1);
+  expect(d.changed[0]).toMatchObject({ a: { step: 'start' }, b: { step: 'consent-1' } });
+  expect(d.changed[0]!.key).not.toHaveProperty('step');
+});
+
+test('pairs hits of a group by order, whatever their steps', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addHit(a, { t: 10 });
+  addHit(a, { t: 20 });
+  const sb = addStep(b, 'late');
+  addHit(b, { t: 30, stepId: sb.id });
+  addHit(b, { t: 40, stepId: sb.id });
+  addHit(b, { t: 50, stepId: sb.id });
+  const d = diffRuns(a, b);
+  expect(d.added).toHaveLength(1);
+  expect(d.added[0]!.t).toBe(50);
   expect(d.removed).toEqual([]);
 });
 

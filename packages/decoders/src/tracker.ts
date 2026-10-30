@@ -11,6 +11,7 @@ const PAGE_PARAMS = ['dl', 'page_location', 'page_url', 'url', 'u', 'loc', 'href
  * The listed entry for a request that stub mode answers locally and that decodes to a tracker hit. An entry with
  * paths counts for every resource type, because collection also arrives as JSONP scripts and iframe pixels. An
  * entry for a whole host leaves library loads and other script, stylesheet, font and document loads alone.
+ * An image or other request to a whole host with no query and no body is stubbed but gives no hit.
  */
 export function trackerCollection(
   req: Pick<Request, 'url' | 'resourceType'>,
@@ -21,6 +22,11 @@ export function trackerCollection(
   if (entry.paths) return entry;
   if (isLibraryLoadPath(new URL(req.url).pathname)) return undefined;
   return LOADS.has(req.resourceType) ? undefined : entry;
+}
+
+function carriesData(req: Pick<Request, 'url' | 'resourceType' | 'postData'>): boolean {
+  if (req.resourceType !== 'image' && req.resourceType !== 'other') return true;
+  return new URL(req.url).search.length > 1 || !!req.postData;
 }
 
 function firstParam(params: URLSearchParams, names: readonly string[]): string | null {
@@ -34,6 +40,7 @@ function firstParam(params: URLSearchParams, names: readonly string[]): string |
 export function decodeTracker(req: Request, list: readonly TrackerEntry[] = trackerList, newHitId: NewHitId = defaultHitId): Hit[] {
   const entry = trackerCollection(req, list);
   if (!entry) return [];
+  if (!entry.paths && !carriesData(req)) return [];
   const params = new URL(req.url).searchParams;
   return [
     {
