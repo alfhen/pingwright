@@ -3,11 +3,19 @@
 ## Install
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v<version>
+npm i -g pingwright@next
 pingwright install-browser
 ```
 
-`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes.
+`@next` is the newest release candidate. Pingwright needs Node 22.18 or later.
+
+You can also install a release from its git tag:
+
+```bash
+npm i -g --install-links github:alfhen/pingwright#v<version>
+```
+
+`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes. Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 Or build a tarball in a checkout and install that:
 
@@ -15,8 +23,6 @@ Or build a tarball in a checkout and install that:
 pnpm install && pnpm build && pnpm pack
 npm i -g ./pingwright-<version>.tgz
 ```
-
-Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 `install-browser` runs the Playwright CLI that ships with Pingwright, so the Chromium revision matches.
 

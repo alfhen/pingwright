@@ -1,5 +1,7 @@
 import { h } from 'vue';
 import DefaultTheme from 'vitepress/theme-without-fonts';
+import '@fontsource/jost/latin-500.css';
+import '@fontsource/jost/latin-600.css';
 import './brand.css';
 
 export default {
