@@ -71,7 +71,7 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
    - A host-based rule can name them, for example `{ host: ct.pinterest.com, before: consent }`.
    - Acceptance: a fixture page sends a pixel request to a listed tracker host that has no decoder. The request is `stubbed`, a host rule matches it, and its script load still passes.
 
-5. **Fix the checks that fail on every real run.** These fixes and those in item 8 are already in progress as issue batches. They ship first in `0.1.0-rc.2`, ahead of 0.2, because #46 is a stub-mode leak in a tagged release. 0.2 inherits them.
+5. **Fix the checks that fail on every real run.** These fixes and those in item 8 are already in progress as issue batches. They ship first, ahead of 0.2, because #46 is a stub-mode leak in a tagged release (they shipped in `0.1.0`). 0.2 inherits them.
    - #46: decode Stape data-client POST requests (JSON body, event in the query string), and stub them. In 0.1 they reach the real server container.
    - #114: `possibleRealData` must not flag random IDs or hashed client IDs.
    - #112: subdomains of the site are not third party by default.
@@ -103,7 +103,7 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
    - No new automation of payment. The handoff rule in §5.4 stays as it is.
    - The payment handoff waits for a person, so this pattern can't run unattended in CI or from an agent session. It is a field-run pattern. Its fixture-site version, which pays on localhost, runs in CI.
 
-8. **Usable output on real sites.** In progress, and ships in `0.1.0-rc.2` (see item 5).
+8. **Usable output on real sites.** Ships ahead of 0.2, with item 5 (in `0.1.0`).
    - #116: group flags by host in the text summary.
    - #115: record why a request failed.
    - #117: `addToCart` checks that something was added to the cart.
@@ -116,7 +116,7 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
 
 ## 4. Milestones after this change
 
-1. **0.1:** as released in `0.1.0-rc.1`. `0.1.0-rc.2` adds the field-test fixes (items 5 and 8) and the other open issue fixes.
+1. **0.1:** as released in `0.1.0-rc.1`. The field-test fixes (items 5 and 8) and the other open issue fixes shipped in `0.1.0` instead of an rc.2.
 2. **0.2:** GTM override (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts, withdrawal epochs, Shopify checkout pattern.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.

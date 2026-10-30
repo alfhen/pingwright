@@ -1,6 +1,6 @@
 # Pingwright design
 
-Status: revision 5, for release candidate 0.1.0-rc.1. Milestone 0.1 is built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1.
+Status: revision 6, for release 0.1.0. Milestone 0.1 is built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0.
 
 ## 1. Problem
 
