@@ -47,7 +47,7 @@ Options for run:
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
-  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview)
+  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
@@ -65,7 +65,7 @@ Options:
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
-  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview)
+  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout

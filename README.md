@@ -26,7 +26,7 @@ Tracking setups break quietly. A trigger change lets a pixel fire before consent
 Pingwright is built so that a coding agent, a CI job or a person can answer these questions with one command and get structured results:
 
 - What did the site send to each vendor, before and after the visitor's consent choice?
-- Which tags fired for each event, and which expected tags did not? (Planned, not built in 0.1.)
+- Which tags fired for each event, and which expected tags did not? (Planned, not built yet.)
 - Does an unpublished GTM workspace behave as intended, before you publish it? Run the same scenario with and without `--gtm-override` and compare the two records with `pingwright diff`. (In 0.2.)
 
 ## What it does
@@ -158,7 +158,7 @@ Pingwright will not change GTM containers or sign in to Google. An agent that ed
 | `consent` | Banner handling through DuckDuckGo autoconsent, Consent Mode probe, epochs | 0.1 |
 | `expect` | Scenario format, expectations, diff engine | 0.2 |
 | `cli` | `pingwright run`, `diff`, `install-browser` | 0.2 |
-| `gtm` | Tag-firing reporter templates, workspace preview loading | not built yet |
+| `gtm` | Tag-firing reporter templates | not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
 | `mcp` | MCP server | not built yet |
 
