@@ -138,6 +138,7 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
       firstPartyHosts: parsed.options.firstPartyHosts,
       seed: args.seed,
       headed: args.headed,
+      netLog: args.netLog,
       autoconsent: args.autoconsentRules.length ? { ruleFiles: args.autoconsentRules } : undefined,
       gtmOverride,
       trackerList: trackers,

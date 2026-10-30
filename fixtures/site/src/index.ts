@@ -24,6 +24,7 @@ const pages: Record<string, string> = {
   '/thank-you': 'thank-you.html',
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
+  '/unload-beacons': 'unload-beacons.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',
@@ -34,6 +35,7 @@ const pages: Record<string, string> = {
 
 const pixelPath = '/web-pixels@0.0.0-fixture/sandbox/modern/';
 const containerPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container/';
+const unloadPixelPath = '/web-pixels@0.0.0-fixture/sandbox/unload/';
 
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -72,6 +74,8 @@ function shopHandler(config: string) {
       await sendFile(res, 'pixel.html');
     } else if (path === containerPixelPath) {
       await sendFile(res, 'container-frame.html');
+    } else if (path === unloadPixelPath) {
+      await sendFile(res, 'unload-pixel.html');
     } else if (page) {
       await sendFile(res, page);
     } else if (/^\/assets\/[a-z-]+\.(js|css)$/.test(path)) {

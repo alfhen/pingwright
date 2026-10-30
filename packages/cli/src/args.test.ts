@@ -5,7 +5,7 @@ test('parses run with every option', () => {
   expect(
     parseCli([
       'run', 's.yml', '--site', 'http://localhost:3000', '--network', 'live', '--out', 'o', '--seed', '7', '--headed',
-      '--autoconsent-rules', 'a.json', '--autoconsent-rules', 'b.json', '--var', 'product=tee', '--var', 'q=a=b', '--gtm-override', 'g.json', '--tracker-list', 't.json', '--json',
+      '--autoconsent-rules', 'a.json', '--autoconsent-rules', 'b.json', '--var', 'product=tee', '--var', 'q=a=b', '--gtm-override', 'g.json', '--tracker-list', 't.json', '--json', '--net-log',
     ]),
   ).toEqual({
     command: 'run',
@@ -15,6 +15,7 @@ test('parses run with every option', () => {
     out: 'o',
     seed: 7,
     headed: true,
+    netLog: true,
     autoconsentRules: ['a.json', 'b.json'],
     gtmOverride: 'g.json',
     trackerList: 't.json',
@@ -29,6 +30,7 @@ test('run defaults', () => {
     out: 'runs',
     seed: undefined,
     headed: false,
+    netLog: false,
     autoconsentRules: [],
     vars: {},
     json: false,

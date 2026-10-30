@@ -18,10 +18,13 @@ export interface UnloadSendPayload {
  * unloading, sendBeacon and keepalive fetch are answered in the page. Each one is queued in
  * sessionStorage until the binding call is acknowledged, and the next document in the tab replays the queue.
  * A send is not recorded if the tab never loads another document of the same origin and is not flushed by close().
+ * A frame without sessionStorage (a sandboxed one without allow-same-origin) cannot queue, so its sends are lost:
+ * swallowed, and not recorded. With `passUnqueueable` they go to the network instead, for the net log to show.
  */
-export const unloadInitScript = `(() => {
+export const unloadInitScript = (passUnqueueable: boolean): string => `(() => {
   const binding = ${JSON.stringify(UNLOAD_BINDING)};
   const STORE = '__pingwrightUnloadQueue';
+  const passThrough = ${passUnqueueable} && (() => { try { sessionStorage.getItem(STORE); return false; } catch { return true; } })();
   let leaving = false;
   const isLeaving = () => leaving || document.visibilityState === 'hidden';
   addEventListener('pagehide', () => { leaving = true; }, true);
@@ -76,14 +79,14 @@ export const unloadInitScript = `(() => {
   };
   const beacon = navigator.sendBeacon;
   navigator.sendBeacon = function (url, data) {
-    if (!isLeaving()) return beacon.call(this, url, data);
+    if (passThrough || !isLeaving()) return beacon.call(this, url, data);
     enqueue('POST', url, 'ping', data, null);
     return true;
   };
   const nativeFetch = window.fetch;
   window.fetch = function (input, init) {
     const keepalive = (init && init.keepalive) || (input instanceof Request && input.keepalive);
-    if (!keepalive || !isLeaving()) return nativeFetch.apply(this, arguments);
+    if (!keepalive || passThrough || !isLeaving()) return nativeFetch.apply(this, arguments);
     const url = input instanceof Request ? input.url : input;
     const method = (init && init.method) || (input instanceof Request ? input.method : 'GET');
     let contentType = null;
