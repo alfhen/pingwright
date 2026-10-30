@@ -235,3 +235,17 @@ test('unload gap: ignore takes names and globs', () => {
   expect(gap({ ...input, ignore: ['add_to_car'] })).toHaveLength(1);
   expect(gap({ ...input, ignore: ['x.*'] })).toHaveLength(1);
 });
+
+test('unload gap: a GA4 hit after the next navigation does not cover the event', () => {
+  const hits = [sgtmHit('product_added_to_cart', 1100), ga4Hit('begin_checkout', 9000)];
+  expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits, navigations: [4000, 8000] })).toHaveLength(1);
+});
+
+test('unload gap: a same-name GA4 hit on a later page does not cover a lost one', () => {
+  const hits = [ga4Hit('add_to_cart', 21000)];
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits, navigations: [4000, 30000] })).toHaveLength(1);
+});
+
+test('unload gap: a GA4 hit just after the navigation starts still covers the event', () => {
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('add_to_cart', 4500)], navigations: [4000] })).toEqual([]);
+});

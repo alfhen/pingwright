@@ -96,6 +96,7 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, track
 
 /** GA4 holds hits for a visitor who has not consented for about 5 s, then flushes them as the page unloads. */
 const UNLOAD_GAP_WINDOW_MS = 10_000;
+const UNLOAD_GAP_SLACK_MS = 1_000;
 
 const GA4_EVENTS = new Set([
   'add_payment_info', 'add_shipping_info', 'add_to_cart', 'add_to_wishlist', 'begin_checkout', 'generate_lead', 'login', 'purchase', 'refund',
@@ -136,7 +137,7 @@ export function buildUnloadGapFlags({ runId, events, hits, navigations, ignore =
     const ga4Name = GA4_EVENTS.has(name);
     if (!ga4Name && !hits.some((h) => h.event === name)) continue;
     if (!ga4Name && ga4Hits.length === 0) continue;
-    if (ga4Hits.some((h) => h.t >= event.t && h.event !== null && (h.event === name || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
+    if (ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event !== null && (h.event === name || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
     const seconds = ((navigation - event.t) / 1000).toFixed(1);
     flags.push(
       flag(
