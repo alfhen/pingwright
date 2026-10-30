@@ -677,3 +677,17 @@ test('possibleRealData does not skip a digest after "=" or in a pixel file name'
   expect(realDataPasses(request({ url: `https://px.tracker.example/tr/u-${email}.json`, resourceType: 'ping' }))).toBe(false);
   expect(realDataPasses(request({ url: `https://shop.example.com/img/logo-${email}.png`, resourceType: 'image' }))).toBe(true);
 });
+
+test('a builtin set to warn still runs and records its severity', () => {
+  const bad = hit({ page: SANDBOX });
+  const find = (yaml: string) => run(yaml, [bad]).find((r) => r.expectation === 'builtin: sandboxPageUrl')!;
+  const warned = find('start: /\noptions: { builtins: { sandboxPageUrl: warn } }');
+  expect(warned).toMatchObject({ pass: false, severity: 'warn', evidence: [bad.hit.id] });
+  expect(find('start: /').severity).toBe('fail');
+});
+
+test('builtins rejects unknown names and severities', () => {
+  expect(() => parseScenario('start: /\noptions: { builtins: { nope: warn } }')).toThrow(/unknown builtin check/);
+  expect(() => parseScenario('start: /\noptions: { builtins: { sandboxPageUrl: off } }')).toThrow(/fail or warn/);
+  expect(() => parseScenario('start: /\noptions: { builtins: warn }')).toThrow(/mapping/);
+});

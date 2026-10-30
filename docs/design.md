@@ -335,7 +335,7 @@ Scenario files are YAML. An expectation is a filter over records, plus a rule.
 | `tags.mustFire`, `tags.mustNotFire` | Over tag reports, by tag ID or name pattern. An unknown name is "cannot evaluate", not a pass or fail. |
 | `identity.hashesMatch` | Hashed identity fields sent to a vendor match the run's fake identity (§13) |
 
-Every run also gets built-in checks. `unknownDestination` fails the run when a request goes to a host that is not first party and that no decoder or tracker-list entry matches (§5.3). `options.firstPartyHosts` lists more first-party hosts or `*.domain` wildcards. `options.allowUnknownDestination` is `true` for all, or a host list for only those hosts (§15.1).
+Every run also gets built-in checks. `unknownDestination` fails the run when a request goes to a host that is not first party and that no decoder or tracker-list entry matches (§5.3). `options.firstPartyHosts` lists more first-party hosts or `*.domain` wildcards. `options.allowUnknownDestination` is `true` for all, or a host list for only those hosts (§15.1). `options.builtins` sets the severity of each built-in check (`unknownDestination`, `sandboxPageUrl`, `possibleRealData`) to `fail` (the default) or `warn`. A warned check still runs and is recorded as a `result` with its evidence and `severity: warn`. It shows as `WARN` and does not change the exit code. There is no `off`: a check that is hidden cannot be audited, and `warn` keeps the evidence.
 
 Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`), `transport`, `host`, `outcome` and `params.*`.
 

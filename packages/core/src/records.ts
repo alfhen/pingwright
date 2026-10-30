@@ -218,7 +218,11 @@ export interface Result {
   pass: boolean;
   evidence: string[];
   message?: string;
+  /** Set on built-in checks. A failed `warn` result does not change the exit code. Absent means `fail`. */
+  severity?: Severity;
 }
+
+export type Severity = 'fail' | 'warn';
 
 export type FlagKind =
   | 'unknownDestination'

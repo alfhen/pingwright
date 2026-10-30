@@ -18,11 +18,12 @@ import {
   type Run,
   type Request,
   type Result,
+  type Severity,
   type Step,
 } from '@pingwright/core';
 import { isSandboxPageUrl } from '@pingwright/decoders';
 import { hostMatches } from './hosts.ts';
-import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario } from './scenario.ts';
+import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
 export type EvalEpoch = ConsentEpoch;
 
@@ -63,8 +64,8 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
   };
 
   const results: Result[] = [];
-  const add = (expectation: string, pass: boolean, evidence: string[], message: string) =>
-    results.push({ type: 'result', id: newId('result'), runId, expectation, pass, evidence, message });
+  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity) =>
+    results.push({ type: 'result', id: newId('result'), runId, expectation, pass, evidence, message, ...(severity && { severity }) });
 
   for (const kind of ['mustNot', 'must'] as const)
     for (const rule of scenario.expect[kind]) {
@@ -393,8 +394,10 @@ function builtInChecks(
   records: readonly Input[],
   scenario: Scenario,
   ctx: Context,
-  add: (expectation: string, pass: boolean, evidence: string[], message: string) => void,
+  addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity) => void,
 ) {
+  const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string) =>
+    addResult(`builtin: ${name}`, pass, evidence, message, scenario.options.builtins?.[name] ?? 'fail');
   const flags = records.filter((r) => r.type === 'flag');
 
   const unknown = flags.filter((f) => f.kind === 'unknownDestination');
@@ -404,7 +407,7 @@ function builtInChecks(
   const blocked = unknown.filter((f) => !isAllowed(f));
   const allowedCount = unknown.length - blocked.length;
   add(
-    'builtin: unknownDestination',
+    'unknownDestination',
     blocked.length === 0,
     blocked.length === 0 ? unknown.map((f) => f.id) : blocked.flatMap((f) => [f.id, ...f.recordIds]),
     blocked.length > 0
@@ -416,7 +419,7 @@ function builtInChecks(
 
   const sandboxed = ctx.hits.filter((h) => isSandboxPageUrl(h.page));
   add(
-    'builtin: sandboxPageUrl',
+    'sandboxPageUrl',
     sandboxed.length === 0,
     sandboxed.map((h) => h.id),
     sandboxed.length === 0
@@ -434,7 +437,7 @@ function builtInChecks(
   const more = problems.length > MAX_LISTED ? `; and ${problems.length - MAX_LISTED} more` : '';
   if (!ctx.identity && real.length === 0) {
     add(
-      'builtin: possibleRealData',
+      'possibleRealData',
       false,
       [],
       'Cannot check for data that is not from the run identity: no identity was given and no possibleRealData flags exist.',
@@ -442,7 +445,7 @@ function builtInChecks(
     return;
   }
   add(
-    'builtin: possibleRealData',
+    'possibleRealData',
     problems.length === 0,
     evidence,
     problems.length === 0
