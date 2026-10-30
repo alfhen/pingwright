@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   newId,
@@ -43,7 +43,7 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags, buildUnloadGapFlags } from './flags.ts';
-import { mergeNetLog, parseNetLog, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
@@ -186,6 +186,7 @@ export class Recorder {
     private readonly gtmOverride: GtmOverrideInput | undefined,
     private readonly testGtmOrigin: string | undefined,
     private readonly netLogPath: string | undefined,
+    private readonly removeNetLogDir: (() => void) | undefined,
   ) {
     this.trackers = [...(options.trackerList ?? []), ...trackerList];
   }
@@ -197,9 +198,11 @@ export class Recorder {
       throw new Error('netLog needs networkMode "live": in stub mode the requests a frame sends while it unloads would leave the machine.');
     }
     let netLogPath: string | undefined;
+    let removeNetLogDir: (() => void) | undefined;
     if (options.netLog) {
-      await mkdir(options.outDir, { recursive: true });
-      netLogPath = join(options.outDir, `netlog-${randomUUID()}.json`);
+      const dir = await mkdtemp(join(tmpdir(), 'pingwright-netlog-'));
+      netLogPath = join(dir, 'netlog.json');
+      removeNetLogDir = watchNetLogDir(dir);
     }
     const browser = await chromium.launch({
       channel: 'chromium',
@@ -211,12 +214,12 @@ export class Recorder {
         userAgent: options.userAgentOverride ?? chromeUserAgent(browser.version()),
         serviceWorkers: options.serviceWorkers ?? 'allow',
       });
-      const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin, netLogPath);
+      const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin, netLogPath, removeNetLogDir);
       await recorder.init();
       return recorder;
     } catch (error) {
       await browser.close();
-      if (netLogPath) await rm(netLogPath, { force: true });
+      removeNetLogDir?.();
       throw error;
     }
   }
@@ -395,7 +398,7 @@ export class Recorder {
     } catch {
       return undefined;
     } finally {
-      await rm(this.netLogPath, { force: true });
+      this.removeNetLogDir?.();
     }
   }
 
@@ -752,7 +755,7 @@ export class Recorder {
 
     const netLog = await this.readNetLog();
     if (netLog) {
-      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId);
+      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId, this.navigations);
       this.extraRequests.push(...added);
       this.responses.push(...responses);
     }

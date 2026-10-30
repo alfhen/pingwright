@@ -1,7 +1,11 @@
+import { existsSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { newId, type Request, type Step } from '@pingwright/core';
 import { decodeRequest, trackerList } from '@pingwright/decoders';
-import { mergeNetLog, parseNetLog, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 
 const constants = {
   logEventTypes: { URL_REQUEST_START_JOB: 1, HTTP_TRANSACTION_SEND_REQUEST_HEADERS: 2, HTTP_TRANSACTION_READ_RESPONSE_HEADERS: 3, REQUEST_ALIVE: 4 },
@@ -51,7 +55,8 @@ const GA4 = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&en=
 const step = (startedAt: number): Step => ({ type: 'step', id: newId('step'), runId, index: 0, label: 's', startedAt, endedAt: null });
 const entry = (over: Partial<NetLogRequest> = {}): NetLogRequest => ({ t: 1000, method: 'POST', url: GA4, headers: {}, status: 204, failure: null, ...over });
 const recordedRequest = (over: Partial<Request> = {}): Request => ({ type: 'request', id: newId('request'), runId, stepId: null, t: 900, method: 'POST', url: GA4, resourceType: 'ping', frameUrl: null, headers: {}, postData: null, outcome: 'stubbed', ...over }) as Request;
-const merge = (entries: NetLogRequest[], recorded: Request[] = [], steps: Step[] = []) => mergeNetLog(entries, recorded, steps, trackerList, runId);
+const merge = (entries: NetLogRequest[], recorded: Request[] = [], steps: Step[] = [], navigations: number[] = []) =>
+  mergeNetLog(entries, recorded, steps, trackerList, runId, navigations);
 
 test('skips an entry that a recorded request already accounts for', () => {
   expect(merge([entry()], [recordedRequest()]).requests).toEqual([]);
@@ -75,7 +80,7 @@ test('takes the step from the latest step that started before the entry', () => 
 
 test('a network failure gives outcome failed and no response', () => {
   const { requests, responses } = merge([entry({ status: null, failure: 'ERR_ABORTED' })]);
-  expect(requests[0]).toMatchObject({ outcome: 'failed', failure: 'ERR_ABORTED', captured: 'netlog', initiator: 'unload' });
+  expect(requests[0]).toMatchObject({ outcome: 'failed', failure: 'ERR_ABORTED', captured: 'netlog', initiator: 'netlog' });
   expect(responses).toEqual([]);
 });
 
@@ -94,4 +99,26 @@ test('the added GA4 request decodes to an add_to_cart hit', () => {
   const [request] = merge([entry()]).requests;
   const hits = decodeRequest(request!, undefined, trackerList);
   expect(hits.map((h) => h.event)).toContain('add_to_cart');
+});
+
+test('an OPTIONS entry is not added', () => {
+  expect(merge([entry({ method: 'OPTIONS' })]).requests).toEqual([]);
+});
+
+test('initiator is unload only shortly after a top-level navigation began', () => {
+  expect(merge([entry({ t: 1000 })], [], [], [900]).requests[0]?.initiator).toBe('unload');
+  expect(merge([entry({ t: 1000 })], [], [], [1200]).requests[0]?.initiator).toBe('netlog');
+  expect(merge([entry({ t: 100000 })], [], [], [900]).requests[0]?.initiator).toBe('netlog');
+  expect(merge([entry()]).requests[0]?.initiator).toBe('netlog');
+});
+
+test('watchNetLogDir removes the directory on demand and on exit handlers', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-netlog-test-'));
+  await writeFile(join(dir, 'netlog.json'), '{}');
+  const before = process.listenerCount('exit');
+  const remove = watchNetLogDir(dir);
+  expect(process.listenerCount('exit')).toBe(before + 1);
+  remove();
+  expect(existsSync(dir)).toBe(false);
+  expect(process.listenerCount('exit')).toBe(before);
 });

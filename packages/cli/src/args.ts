@@ -135,9 +135,6 @@ export function parseCli(argv: string[]): Command {
   if (network !== undefined && network !== 'stub' && network !== 'live') {
     throw new UsageError(`--network must be stub or live, got "${network}"`);
   }
-  if (values['net-log'] && network === 'stub') {
-    throw new UsageError(NET_LOG_NEEDS_LIVE);
-  }
   let seed: number | undefined;
   if (values.seed !== undefined) {
     seed = Number(values.seed);
