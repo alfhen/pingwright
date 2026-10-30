@@ -17,6 +17,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**', '**/.claude/**'],
           testTimeout: 60_000,
           hookTimeout: 60_000,
+          fileParallelism: false,
         },
       },
     ],

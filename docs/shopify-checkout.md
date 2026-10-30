@@ -6,11 +6,11 @@ Use a test store or a store with test payments on, a test card and a test accoun
 
 1. Product: `start` on a product page.
 2. Add to cart: `addToCart` clicks the button and checks that the cart changed (a `/cart/add` request or an `add_to_cart` event).
-3. Checkout: `visit: /checkout`.
+3. Checkout: `visit: /checkout`, labelled `checkout`.
 4. Fill the identity: `fill` with fake identity names (`email`, `firstName`, ...).
 5. Delivery country: set it explicitly. Shopify guesses the country from the machine's location.
 6. Payment: a `handoff` step. The person enters the test card and submits.
-7. Thank-you: a `wait` for the order page, labelled `thank-you`. Purchase hits fire when the order page loads, before this wait ends, so anchor purchase rules on `after: pay`.
+7. Thank-you: a `wait` for the order page, labelled `thank-you`. Purchase hits fire when the order page loads, while the person is still in the handoff. A handoff step ends only when the person presses Enter, so a rule with `after: pay` would miss them. Anchor purchase rules on `after: checkout`, a step that ends before the handoff starts.
 8. Hashes: `identity.hashesMatch` on the purchase hits.
 
 Selectors differ per store and theme. Check them on your own checkout and adjust.
@@ -21,6 +21,7 @@ steps:
   - consent: accept
   - addToCart: "form[action$='/cart/add'] [type=submit]"
   - visit: /checkout
+    label: checkout
   - fill:
       "#email": email
       "input[name=firstName]": firstName
@@ -36,7 +37,7 @@ steps:
     label: thank-you
 expect:
   must:
-    - { vendor: ga4, event: purchase, after: pay }
+    - { vendor: ga4, event: purchase, after: checkout }
     - { vendor: meta, event: Purchase, identity.hashesMatch: true }
 ```
 

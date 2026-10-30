@@ -3,6 +3,7 @@ steps:
   - consent: accept
   - addToCart: "#add-to-cart"
   - visit: /checkout?pattern=1
+    label: checkout
   - fill:
       "#email": "someone.else@example.com"
       "#first-name": firstName

@@ -3,6 +3,7 @@ steps:
   - consent: accept
   - addToCart: "#add-to-cart"
   - visit: /checkout?pattern=1
+    label: checkout
   - fill:
       "#email": email
       "#first-name": firstName
@@ -23,6 +24,6 @@ steps:
     label: thank-you
 expect:
   must:
-    - { vendor: ga4, event: purchase, after: pay }
+    - { vendor: ga4, event: purchase, after: checkout }
     - { vendor: meta, event: Purchase, identity.hashesMatch: true }
 options: { seed: 1, allowUnknownDestination: true }
