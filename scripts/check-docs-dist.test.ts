@@ -20,6 +20,17 @@ describe('findExternalRefs', () => {
     expect(findExternalRefs('a.css', 'a{background:url(/local.png)}')).toEqual([]);
   });
 
+  it('flags the VitePress preload stylesheet form', () => {
+    expect(findExternalRefs('a.html', '<link rel="preload stylesheet" href="https://evil.example.com/a.css" as="style">')).toHaveLength(1);
+    expect(findExternalRefs('a.html', '<link rel="preload stylesheet" href="/assets/a.css" as="style">')).toEqual([]);
+  });
+
+  it('flags srcset, modulepreload and icon links', () => {
+    expect(findExternalRefs('a.html', '<source srcset="/a.png 1x, https://evil.example.com/b.png 2x">')).toHaveLength(1);
+    expect(findExternalRefs('a.html', '<link rel="modulepreload" href="https://evil.example.com/a.js">')).toHaveLength(1);
+    expect(findExternalRefs('a.html', '<link rel="icon" href="https://evil.example.com/a.ico">')).toHaveLength(1);
+  });
+
   it('flags Google Fonts anywhere', () => {
     expect(findExternalRefs('a.js', 'x="fonts.googleapis.com"')).toEqual(['fonts.googleapis.com']);
   });
