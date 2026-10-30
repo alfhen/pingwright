@@ -71,7 +71,7 @@ test('flags unknown destinations, sandbox page URLs and unrouted collection requ
 
 const meta = 'https://www.facebook.com/tr/?id=100000000000001&ev=PageView';
 
-function bypassFlags(request: Request, networkMode: 'stub' | 'live') {
+function bypassFlags(request: Request, networkMode: 'stub' | 'server' | 'live') {
   return buildFlags({
     runId: request.runId,
     networkMode,
@@ -87,6 +87,10 @@ test('an unrouted known vendor collection request is a stubBypass, and a redirec
   expect(flags).toHaveLength(1);
   expect(flags[0]?.detail).toContain('redirect');
   expect(bypassFlags(req(meta), 'stub')).toHaveLength(1);
+});
+
+test('server mode flags stubBypass like stub mode', () => {
+  expect(bypassFlags(req(meta, { initiator: 'redirect' }), 'server')).toHaveLength(1);
 });
 
 test('live mode never flags stubBypass', () => {

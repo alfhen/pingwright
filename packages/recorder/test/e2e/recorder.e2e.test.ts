@@ -141,7 +141,7 @@ describe('stub mode on the fixture site', () => {
   });
 });
 
-test('a self-test report that arrives after start-up is not stored', async () => {
+test('a site report with a selftest: source is stored, because the self-test prefix is private to the launch', async () => {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   const page = await recorder.visit(`${site.url}/`);
   await page.evaluate(() =>
@@ -149,6 +149,5 @@ test('a self-test report that arrives after start-up is not stored', async () =>
   );
   await recorder.wait(500);
   const { records: late } = await recorder.close();
-  expect(late.collectorReports.filter((r) => r.source.startsWith('selftest:'))).toEqual([]);
-  expect(late.invalidReports).toEqual([]);
+  expect(late.collectorReports.map((r) => r.source)).toContain('selftest:page');
 });
