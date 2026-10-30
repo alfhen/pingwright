@@ -130,6 +130,11 @@ describe('scan', () => {
     expect(scan('ph=%2B45+12+34+56+78&x=1', id)).toEqual([{ kind: 'phone', value: '+45+12+34+56+78' }]);
   });
 
+  it('does not flag short plus-grouped numbers as phones', () => {
+    const id = createIdentity(42);
+    for (const text of ['ep.tz=+5+30&en=x', 'q=+1+2', 'v=+2024+10+29', 'v=+20241029+1']) expect(scan(text, id), text).toEqual([]);
+  });
+
   it('finds an encoded foreign email next to a stray percent sign', () => {
     const id = createIdentity(42);
     const found = scan('note=10%&em=jane%40shop.example.net', id);

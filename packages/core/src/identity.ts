@@ -294,6 +294,9 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     }
     for (const m of variant.match(PHONE) ?? []) {
       const digits = m.replace(/\D/g, '');
+      if (digits.length < 8 || digits.length > 15) continue;
+      // In the form-encoded "+cc+nn+nn" shape the first group is a country code, which has 1 to 3 digits.
+      if (/^\+\d+\+/.test(m) && !/^\+\d{1,3}\+/.test(m)) continue;
       if (!digits.includes(own.phoneDigits) && !digits.includes(own.phoneDigits.slice(1))) add('phone', m);
     }
     // The decoded variant carries the same hex, with its key readable.
