@@ -34,6 +34,17 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined;
 }
 
+function flatten(prefix: string, value: unknown, out: Record<string, string>): void {
+  const s = text(value);
+  if (s !== undefined) {
+    if (prefix) out[prefix === 'event_id' ? 'eventId' : prefix] = s;
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [k, child] of Object.entries(value)) flatten(prefix ? `${prefix}.${k}` : k, child, out);
+  }
+}
+
 function bracketKeys(name: string): { group: string; path: string } | undefined {
   const m = /^(ed|pd)((?:\[[^\]]+\])+)$/.exec(name);
   if (!m?.[1] || !m[2]) return undefined;
@@ -53,10 +64,7 @@ export const pinterest: Decoder = {
     const params: Record<string, string> = {};
     const tid = p.get('tid');
     if (tid) params.tagId = tid;
-    for (const [k, v] of Object.entries(ed)) {
-      const s = text(v);
-      if (s !== undefined) params[k === 'event_id' ? 'eventId' : k] = s;
-    }
+    flatten('', ed, params);
     let em = text(pd.em);
     for (const [name, value] of p) {
       const key = bracketKeys(name);

@@ -172,7 +172,6 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 | `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts, and the `googletagmanager.com/td` collection endpoint. Reads user id (`userId` or `uid`), `oid` as `transaction_id`, and `ep.`/`epn.` params. Multi-hop chains are recorded as linked requests. |
 | `meta` | `facebook.com/tr`: `ev`, `id`, `eid`, every `ud[*]` field, and multipart beacon bodies. |
 | `pinterest` | `ct.pinterest.com/v3/` and `/user/`: `event`, `tid`, `ed` (event data, `event_id` as `eventId`), `pd.em` (hashed email) and `ad.loc` (page). In `stub` mode every path on `ct.pinterest.com` is stubbed. |
-| `pinterest` | `ct.pinterest.com`: `event`, `tid`, `pd` presence. |
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
 | `tiktok`, `criteo`, `snapchat`, `linkedin` | Later. |
 | `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` or `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. |
@@ -390,7 +389,7 @@ Deferred: HTML report, sink setup commands, a replay page.
 Where the code in 0.1 differs from the design above:
 
 - **`sgtm-data-client` is minimal.** It decodes `/data` requests that came through the Stape loader, or that carry a non-empty `dtdc` object, `v` with `event` or `en`, or a JSON POST body with `event_name` and `page_location`, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
-- **Only Meta and Google hosts are stubbed by host.** Hits to vendors without a 0.1 decoder (Pinterest, Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
+- **Only Meta, Google and Pinterest hosts are stubbed by host.** Hits to vendors without a decoder (Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
 - **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`, or a list of hosts or `*.domain` wildcards. With a list, only requests to those hosts pass and every other unknown destination still fails. `options.firstPartyHosts` marks more hosts as first party. The rule for what is flagged, and what first party means, is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.

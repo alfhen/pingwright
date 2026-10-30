@@ -119,6 +119,12 @@ test('docs img layout: bracketed ed[...] and pd[em]', () => {
   });
 });
 
+test('JSON ed nested values flatten to the same dotted keys as the img layout', () => {
+  const ed = { value: 10, event_id: 'eid-1', line_items: [{ product_id: 'sku-1' }] };
+  const [hit] = decodeRequest(req(v3({ tid: TID, event: 'checkout', ed: json(ed) })));
+  expect(hit?.params).toMatchObject({ value: '10', eventId: 'eid-1', 'line_items.0.product_id': 'sku-1' });
+});
+
 test('no pd.em means no id; empty or bad JSON is ignored', () => {
   const [a] = decodeRequest(req(v3({ tid: TID, event: 'init', pd: json({ em: '' }) })));
   expect(a?.ids).toEqual({});
