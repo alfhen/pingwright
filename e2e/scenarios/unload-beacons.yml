@@ -1,0 +1,9 @@
+start: /unload-beacons
+steps:
+  - consent: reject
+  - addToCart: "#add-to-cart"
+  - visit: /
+expect:
+  must:
+    - { vendor: ga4, event: add_to_cart, consent.analytics: denied, in: epoch(denied) }
+options: { seed: 1, allowUnknownDestination: true }

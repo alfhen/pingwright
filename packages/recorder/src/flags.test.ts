@@ -1,6 +1,6 @@
-import { newId, type Hit, type Request } from '@pingwright/core';
+import { newId, type DataLayerEvent, type Hit, type Request } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { buildFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
+import { buildFlags, buildUnloadGapFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
 
 function req(url: string, over: Partial<Request> = {}): Request {
   return {
@@ -158,4 +158,49 @@ test('a first-party subdomain request becomes firstPartySubdomain, not unknownDe
 test('first-party subdomain requests that cannot carry data are not flagged', () => {
   const script = req('https://cdn.shop.example.com/a.js?v=1', { resourceType: 'script' });
   expect(isFirstPartySubdomain(script, { siteHost: 'www.shop.example.com' })).toBe(false);
+});
+
+function pushed(event: string | null, t: number, over: Partial<DataLayerEvent> = {}): DataLayerEvent {
+  return {
+    type: 'dataLayerEvent',
+    id: newId('dataLayerEvent'),
+    runId: newId('run'),
+    stepId: null,
+    t,
+    event,
+    gtmUniqueEventId: null,
+    args: [{ event }],
+    isConsentCommand: false,
+    ...over,
+  };
+}
+
+function ga4Hit(event: string, t: number): Hit {
+  return { type: 'hit', id: newId('hit'), runId: newId('run'), stepId: null, requestId: newId('request'), t, vendor: 'ga4', event } as Hit;
+}
+
+const gap = (over: Partial<Parameters<typeof buildUnloadGapFlags>[0]>) =>
+  buildUnloadGapFlags({ runId: newId('run'), events: [], hits: [], navigations: [], ...over });
+
+test('unload gap: an event from a frame shortly before a navigation, with no hit after it, is flagged', () => {
+  const event = pushed('add_to_cart', 1000);
+  const flags = gap({ events: [event], navigations: [4000] });
+  expect(flags).toHaveLength(1);
+  expect(flags[0]).toMatchObject({ kind: 'unloadGap', recordIds: [event.id] });
+  expect(flags[0]!.detail).toContain('3.0 s');
+});
+
+test.each([
+  ['a hit of that name was recorded after the event', { events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('add_to_cart', 2000)], navigations: [4000] }],
+  ['the navigation came more than 10 s later', { events: [pushed('add_to_cart', 1000)], navigations: [12000] }],
+  ['no navigation followed', { events: [pushed('add_to_cart', 1000)], navigations: [500] }],
+  ['a gtm.* event', { events: [pushed('gtm.js', 1000)], navigations: [2000] }],
+  ['a consent command', { events: [pushed(null, 1000, { isConsentCommand: true })], navigations: [2000] }],
+  ['an event without a name', { events: [pushed(null, 1000)], navigations: [2000] }],
+])('unload gap: not flagged when %s', (_name, input) => {
+  expect(gap(input)).toEqual([]);
+});
+
+test('unload gap: a hit of another name does not clear the event', () => {
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('page_view', 2000)], navigations: [3000] })).toHaveLength(1);
 });

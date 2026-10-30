@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   newId,
   nodeNow,
@@ -39,7 +42,9 @@ import {
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
-import { buildFlags } from './flags.ts';
+import { buildFlags, buildUnloadGapFlags } from './flags.ts';
+import { mergeNetLog, parseNetLog, type NetLogRequest } from './netlog.ts';
+import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
@@ -64,7 +69,6 @@ export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
 const REDACTED_VALUE = '[redacted]';
 
-const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
 
 export interface RecorderOptions {
   networkMode: Extract<NetworkMode, 'stub' | 'live'>;
@@ -86,6 +90,12 @@ export interface RecorderOptions {
   gtmOverride?: GtmOverrideInput;
   /** Tracker entries added to the built-in list. */
   trackerList?: readonly TrackerEntry[];
+  /**
+   * Launches Chromium with `--log-net-log` and adds collection requests that no context hook saw (those a frame
+   * sends while it unloads) to the record, with `captured: 'netlog'`. Their bodies are not in the log. Off by default.
+   * Needs `networkMode: 'live'`: in stub mode those sends would reach the network.
+   */
+  netLog?: boolean;
 }
 
 export interface StepActivity {
@@ -99,12 +109,6 @@ export interface RunResult {
   records: RunRecords;
   /** Why the GTM override failed: no request matched, or a preview fetch was not 200. Absent when it worked or none was given. */
   gtmOverrideFailure?: string;
-}
-
-function redactHeaders(headers: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(headers).map(([k, v]) => [k, REDACTED_HEADERS.has(k.toLowerCase()) ? '[redacted]' : v]),
-  );
 }
 
 function redactRefererQuery(headers: Record<string, string>): Record<string, string> {
@@ -173,6 +177,7 @@ export class Recorder {
   private readonly loaderCandidates = new Map<string, boolean>();
   private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
+  private readonly navigations: number[] = [];
 
   private constructor(
     private readonly options: RecorderOptions,
@@ -180,6 +185,7 @@ export class Recorder {
     readonly context: BrowserContext,
     private readonly gtmOverride: GtmOverrideInput | undefined,
     private readonly testGtmOrigin: string | undefined,
+    private readonly netLogPath: string | undefined,
   ) {
     this.trackers = [...(options.trackerList ?? []), ...trackerList];
   }
@@ -187,17 +193,30 @@ export class Recorder {
   static async launch(options: RecorderOptions): Promise<Recorder> {
     const testGtmOrigin = parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
     const gtmOverride = options.gtmOverride === undefined ? undefined : parseGtmOverride(options.gtmOverride);
-    const browser = await chromium.launch({ channel: 'chromium', headless: !options.headed });
+    if (options.netLog && options.networkMode !== 'live') {
+      throw new Error('netLog needs networkMode "live": in stub mode the requests a frame sends while it unloads would leave the machine.');
+    }
+    let netLogPath: string | undefined;
+    if (options.netLog) {
+      await mkdir(options.outDir, { recursive: true });
+      netLogPath = join(options.outDir, `netlog-${randomUUID()}.json`);
+    }
+    const browser = await chromium.launch({
+      channel: 'chromium',
+      headless: !options.headed,
+      ...(netLogPath ? { args: [`--log-net-log=${netLogPath}`] } : {}),
+    });
     try {
       const context = await browser.newContext({
         userAgent: options.userAgentOverride ?? chromeUserAgent(browser.version()),
         serviceWorkers: options.serviceWorkers ?? 'allow',
       });
-      const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin);
+      const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin, netLogPath);
       await recorder.init();
       return recorder;
     } catch (error) {
       await browser.close();
+      if (netLogPath) await rm(netLogPath, { force: true });
       throw error;
     }
   }
@@ -314,6 +333,7 @@ export class Recorder {
     };
     record = this.redactForHandoff(record);
     this.requests.set(request, record);
+    if (request.isNavigationRequest() && isTopLevelFrameRequest(request)) this.navigations.push(record.t);
     return record;
   }
 
@@ -366,6 +386,17 @@ export class Recorder {
     this.routed.add(record.id);
     this.extraRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
+  }
+
+  private async readNetLog(): Promise<NetLogRequest[] | undefined> {
+    if (!this.netLogPath) return undefined;
+    try {
+      return parseNetLog(await readFile(this.netLogPath, 'utf8'));
+    } catch {
+      return undefined;
+    } finally {
+      await rm(this.netLogPath, { force: true });
+    }
   }
 
   private async recordResponse(response: PwResponse): Promise<void> {
@@ -719,6 +750,12 @@ export class Recorder {
     await this.browser.close();
     await Promise.allSettled([...this.pending]);
 
+    const netLog = await this.readNetLog();
+    if (netLog) {
+      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId);
+      this.extraRequests.push(...added);
+      this.responses.push(...responses);
+    }
     const requests = [...this.requests.values(), ...this.extraRequests];
     const hits: Hit[] = requests.flatMap((r) => decodeRequest(r, undefined, this.trackers));
     const flags = buildFlags({
@@ -732,6 +769,12 @@ export class Recorder {
       identity: this.run.identity,
       routedRequestIds: this.routed,
     });
+    if (!this.netLogPath) {
+      const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
+      flags.push(...buildUnloadGapFlags({ runId: this.runId, events: embedded, hits, navigations: this.navigations }));
+    } else if (!netLog) {
+      flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
+    }
     const consentEpochs = this.buildConsentEpochs();
     let records: RunRecords = {
       run: this.run,

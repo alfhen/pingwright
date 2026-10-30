@@ -103,6 +103,8 @@ export interface Request {
   failure?: string;
   /** Set when `postData` and the URL's query values were replaced because a person was typing during a handoff. */
   redacted?: 'handoff';
+  /** Absent when a browser hook saw the request. `netlog`: found in Chromium's net log only, so `postData` is null. */
+  captured?: 'netlog';
 }
 
 export interface Response {
@@ -224,6 +226,8 @@ export type FlagKind =
   | 'possibleRealData'
   | 'sandboxPageUrl'
   | 'stubBypass'
+  | 'unloadGap'
+  | 'netLogUnreadable'
   | (string & {});
 
 export interface Flag {

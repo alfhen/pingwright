@@ -1,0 +1,8 @@
+start: /meta-purchase-no-hash
+steps:
+  - consent: accept
+  - wait: 3s
+expect:
+  must:
+    - { vendor: meta, event: Purchase, identity.hashesMatch: true }
+options: { seed: 1, allowUnknownDestination: true }

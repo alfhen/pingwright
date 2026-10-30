@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meta purchase without hashes</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<h1>Meta purchase without hashes</h1>
+<p>Sends a Meta Purchase hit that carries no ud[em] or ud[ph] values.</p>
+<script>
+(function () {
+  setTimeout(function () {
+    new Image().src =
+      'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&cd[value]=10&cd[currency]=EUR&dl=' +
+      encodeURIComponent(location.href);
+  }, 800);
+})();
+</script>
+</body>
+</html>

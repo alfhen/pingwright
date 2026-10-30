@@ -15,6 +15,7 @@ export interface RunArgs {
   out: string;
   seed: number | undefined;
   headed: boolean;
+  netLog: boolean;
   autoconsentRules: string[];
   gtmOverride: string | undefined;
   trackerList: string | undefined;
@@ -46,6 +47,7 @@ Options for run:
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
+  --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
@@ -64,6 +66,7 @@ Options:
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
+  --net-log                  Capture requests a frame sends while it unloads, from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
@@ -75,6 +78,9 @@ Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
 
 Scenario format: https://github.com/alfhen/pingwright/blob/main/docs/design.md#11-expectations
 `;
+
+export const NET_LOG_NEEDS_LIVE =
+  '--net-log needs --network live. In stub mode it would let the requests a frame sends while it unloads leave the machine.';
 
 export function parseCli(argv: string[]): Command {
   let parsed;
@@ -88,6 +94,7 @@ export function parseCli(argv: string[]): Command {
         out: { type: 'string' },
         seed: { type: 'string' },
         headed: { type: 'boolean' },
+        'net-log': { type: 'boolean' },
         'autoconsent-rules': { type: 'string', multiple: true },
         'gtm-override': { type: 'string' },
         'tracker-list': { type: 'string' },
@@ -128,6 +135,9 @@ export function parseCli(argv: string[]): Command {
   if (network !== undefined && network !== 'stub' && network !== 'live') {
     throw new UsageError(`--network must be stub or live, got "${network}"`);
   }
+  if (values['net-log'] && network === 'stub') {
+    throw new UsageError(NET_LOG_NEEDS_LIVE);
+  }
   let seed: number | undefined;
   if (values.seed !== undefined) {
     seed = Number(values.seed);
@@ -147,6 +157,7 @@ export function parseCli(argv: string[]): Command {
     out: values.out ?? 'runs',
     seed,
     headed: values.headed ?? false,
+    netLog: values['net-log'] ?? false,
     autoconsentRules: values['autoconsent-rules'] ?? [],
     gtmOverride: values['gtm-override'],
     trackerList: values['tracker-list'],
