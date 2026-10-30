@@ -158,14 +158,19 @@ test('a collection request from a dedicated worker is stubbed and never reaches 
   expect(records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });
 
-// Playwright routes only the first URL of a redirect chain, so the hop reaches the local server and must be flagged.
-test('a collection request reached by a redirect is flagged stubBypass in stub mode and not in live mode', async () => {
+test('a collection request reached by a redirect is stubbed and never reaches the server in stub mode', async () => {
   const stub = await visit('/redirect', 'stub');
   const hop = collectionRequests(stub).find((q) => q.url.includes('en=redirected'));
-  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'passed' });
-  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
-  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass').flatMap((f) => f.recordIds)).toContain(hop!.id);
+  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'stubbed' });
+  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toEqual([]);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+test('live mode lets a redirect hop through to the server', async () => {
   const live = await visit('/redirect', 'live');
+  const hop = collectionRequests(live).find((q) => q.url.includes('en=redirected'));
+  expect(hop).toMatchObject({ outcome: 'passed' });
+  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
   expect(live.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });
 

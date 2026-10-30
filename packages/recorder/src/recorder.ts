@@ -36,13 +36,14 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags } from './flags.ts';
-import { runSelfTest, SELFTEST_SOURCE_PREFIX } from './selftest.ts';
+import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 
 export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
+const MAX_REDIRECTS = 20;
 const REDACTED_VALUE = '[redacted]';
 
 const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
@@ -111,9 +112,10 @@ export class Recorder {
   consent!: ConsentDriver;
   private run!: Run;
   private clockOffset = 0;
+  private selfTestPrefix = '';
   private collectorHandler: CollectorHandler = () => undefined;
   private readonly requests = new Map<PwRequest, Request>();
-  private readonly unloadRequests: Request[] = [];
+  private readonly extraRequests: Request[] = [];
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
   private readonly responses: Response[] = [];
@@ -158,6 +160,7 @@ export class Recorder {
     const selfTest = await runSelfTest(context, (h) => (this.collectorHandler = h));
     this.coverage = selfTest.coverage;
     this.clockOffset = selfTest.clockOffset;
+    this.selfTestPrefix = selfTest.sourcePrefix;
     this.collectorHandler = (parsed, body, t) => this.storeReport(parsed, body, t);
     this.run = {
       type: 'run',
@@ -181,7 +184,7 @@ export class Recorder {
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
-    if (this.options.networkMode === 'stub') {
+    if (this.options.networkMode !== 'live') {
       await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
       await context.addInitScript(unloadInitScript);
     }
@@ -199,7 +202,7 @@ export class Recorder {
   private storeReport(parsed: ParsedReport, body: string, t: number): void {
     if (this.closed) return;
     // The self-test page keeps sending until it is closed, so a late report can arrive after the handler swap.
-    if (parsed.ok && parsed.source.startsWith(SELFTEST_SOURCE_PREFIX)) return;
+    if (parsed.ok && parsed.source.startsWith(this.selfTestPrefix)) return;
     if (parsed.ok) {
       this.collectorReports.push({
         type: 'collectorReport',
@@ -299,7 +302,7 @@ export class Recorder {
     };
     record = this.redactForHandoff(record, payload.queuedAt);
     this.routed.add(record.id);
-    this.unloadRequests.push(record);
+    this.extraRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
   }
 
@@ -324,13 +327,96 @@ export class Recorder {
   private async handleRoute(route: Route): Promise<void> {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
-    if (record && this.options.networkMode === 'stub' && (isCollectionEndpoint(record) || isKnownVendorCollection(record))) {
+    if (record && this.options.networkMode !== 'live' && (isCollectionEndpoint(record) || isKnownVendorCollection(record))) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
       return;
     }
+    if (record && this.options.networkMode !== 'live' && record.resourceType !== 'document') {
+      await this.followRedirects(route, record);
+      return;
+    }
     await route.continue();
+  }
+
+  /**
+   * Playwright never routes the later hops of a redirect chain, so a hop to a collection endpoint would reach
+   * the network in stub mode. The chain is followed here instead, one routed fetch per hop, and the page gets
+   * the final response, or the stub when a hop is a collection request. Documents are navigations: their URL
+   * must stay the one the browser follows, so they continue and a collection hop is flagged stubBypass.
+   */
+  private async followRedirects(route: Route, first: Request): Promise<void> {
+    let url = first.url;
+    let method = first.method;
+    let headers = route.request().headers();
+    let postData = route.request().postDataBuffer();
+    let current: Request | null = null;
+    for (let hops = 0; ; hops++) {
+      let response;
+      try {
+        response = await route.fetch({ url, method, headers, postData: postData ?? undefined, maxRedirects: 0 });
+      } catch {
+        await route.abort();
+        return;
+      }
+      const location = response.headers().location;
+      if (current) this.recordResponseFor(current, response.status(), this.setCookieNames(response));
+      if (response.status() < 300 || response.status() >= 400 || !location || hops >= MAX_REDIRECTS) {
+        await route.fulfill({ response });
+        return;
+      }
+      const next = new URL(location, url);
+      if (!/^https?:$/.test(next.protocol)) {
+        await route.fulfill({ response });
+        return;
+      }
+      if ([301, 302].includes(response.status()) ? method === 'POST' : response.status() === 303 && method !== 'HEAD') {
+        method = 'GET';
+        postData = null;
+        headers = Object.fromEntries(Object.entries(headers).filter(([k]) => !k.toLowerCase().startsWith('content-')));
+      }
+      if (next.origin !== new URL(url).origin) delete headers.authorization;
+      url = next.href;
+      const hop = this.hopRecord(first, url, method, headers, postData);
+      current = hop;
+      this.routed.add(hop.id);
+      if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
+        hop.outcome = 'stubbed';
+        this.recordResponseFor(hop, stubResponse(hop).status);
+        const stub = stubResponse(first);
+        await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
+        return;
+      }
+    }
+  }
+
+  private hopRecord(first: Request, url: string, method: string, headers: Record<string, string>, postData: Buffer | null): Request {
+    const body = postData === null ? null : postData.toString('utf8').slice(0, MAX_POST_DATA);
+    const record = this.redactForHandoff({
+      ...first,
+      id: newId('request'),
+      t: nodeNow(),
+      method,
+      url,
+      initiator: 'redirect',
+      headers: redactHeaders(headers),
+      postData: body,
+      outcome: 'passed',
+    });
+    this.extraRequests.push(record);
+    return record;
+  }
+
+  private recordResponseFor(record: Request, status: number, setCookieNames: string[] = []): void {
+    this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status, setCookieNames });
+  }
+
+  private setCookieNames(response: { headersArray(): { name: string; value: string }[] }): string[] {
+    return response
+      .headersArray()
+      .filter((h) => h.name.toLowerCase() === 'set-cookie')
+      .map((h) => h.value.split('=')[0]!.trim());
   }
 
   get site(): string {
@@ -353,7 +439,7 @@ export class Recorder {
   /** What the recorder has seen so far while the step ran. */
   stepActivity(step: Step): StepActivity {
     return {
-      requests: [...this.requests.values(), ...this.unloadRequests].filter((r) => r.stepId === step.id),
+      requests: [...this.requests.values(), ...this.extraRequests].filter((r) => r.stepId === step.id),
       dataLayerEvents: this.dataLayerEvents.filter((e) => e.stepId === step.id),
     };
   }
@@ -429,12 +515,12 @@ export class Recorder {
 
   /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
   async close(): Promise<RunResult> {
-    if (this.options.networkMode === 'stub') await this.flushUnloadQueues();
+    if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
     this.closed = true;
     await this.browser.close();
     await Promise.allSettled([...this.pending]);
 
-    const requests = [...this.requests.values(), ...this.unloadRequests];
+    const requests = [...this.requests.values(), ...this.extraRequests];
     const hits: Hit[] = requests.flatMap((r) => decodeRequest(r));
     const flags = buildFlags({
       runId: this.runId,

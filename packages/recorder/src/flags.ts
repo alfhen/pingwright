@@ -74,7 +74,7 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, reque
     } else if (isFirstPartySubdomain(req, scope)) {
       flags.push(flag(runId, 'firstPartySubdomain', [req.id], `${req.method} ${req.url}`));
     }
-    if (networkMode === 'stub' && !routedRequestIds.has(req.id) && (isCollectionEndpoint(req) || isKnownVendorCollection(req))) {
+    if (networkMode !== 'live' && !routedRequestIds.has(req.id) && (isCollectionEndpoint(req) || isKnownVendorCollection(req))) {
       const why = req.initiator === 'redirect' ? 'It followed a redirect' : 'It was not routed';
       flags.push(flag(runId, 'stubBypass', [req.id], `${why}, so it was not stubbed: ${req.url}`));
     }
