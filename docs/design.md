@@ -329,7 +329,7 @@ Every result includes record IDs, the run ID and the step label. Errors say what
 
 **Leak detection instead of masking.** Pingwright does not try to mask personal data. It flags it. Any email, phone number or hashed identifier in a recording that does not come from the run's identity is reported as `possibleRealData`, with the request and step. Detection runs after decoding (base64, URL encoding), so encoded values are found too. One gap: in image, script, stylesheet, font and media requests, a path segment of the form `/<64 hex>.<ext>` is not checked, because content-addressed assets use that name. A hashed identifier sent as a pixel file name in that form is therefore not flagged.
 
-The scanner never flags the run identity's own values; that rule wins over catching more encoded leaks. A base64 value glued to unseparated text (for example `abc<base64>xyz`) is not detected. Values separated by `/`, `_`, `-` or `+` are. A standard-base64 SHA-256 digest that starts with `/` is flagged only after `=`, `:` or a quote, so one after a `.` (as in `tv.1~em.<digest>`) is missed. One that ends with `/` is also missed.
+The scanner never flags the run identity's own values; that rule wins over catching more encoded leaks. A base64 value glued to unseparated text (for example `abc<base64>xyz`) is not detected. Values separated by `/`, `_`, `-` or `+` are. A standard-base64 SHA-256 digest that starts with `/` is flagged only after `=`, `:` or a quote, and only when it holds no other `/`, because a 43-character relative URL path looks the same. A digest that starts with `/` and holds another `/` is missed, as is one after a `.` (as in `tv.1~em.<digest>`) and one that ends with `/`.
 
 Real data can still appear through:
 

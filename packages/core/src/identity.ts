@@ -215,7 +215,7 @@ const SLASH_LEAD_BEFORE = new Set(['=', ':', '"', "'"]);
 function isWholeValue(text: string, start: number, token: string): boolean {
   if (token.endsWith('/')) return false;
   const before = text[start - 1];
-  if (token.startsWith('/') && (before === undefined || !SLASH_LEAD_BEFORE.has(before))) return false;
+  if (token.startsWith('/') && (token.includes('/', 1) || before === undefined || !SLASH_LEAD_BEFORE.has(before))) return false;
   const after = text[start + token.length];
   const startsOk = before === undefined || DIGEST_BEFORE.has(before) || (before === '.' && !token.includes('/'));
   const endsOk = after === undefined || DIGEST_AFTER.has(after) || /\s/.test(after);

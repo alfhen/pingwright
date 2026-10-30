@@ -212,6 +212,14 @@ describe('scan fixes', () => {
     }
   });
 
+  it('does not flag 43-character relative paths under dp, ep.page_path and JSON keys (#114)', () => {
+    const path = '/products/BlueShirt-2024/Variant9X12345abcd';
+    expect(path).toHaveLength(43);
+    expect(scan(`dp=${path}`, id)).toEqual([]);
+    expect(scan(JSON.stringify({ page_path: path }), id)).toEqual([]);
+    expect(scan(`ep.page_path=${encodeURIComponent(path)}`, id)).toEqual([]);
+  });
+
   it('does not flag base64 text that happens to be 32 bytes long (#29)', () => {
     const path = '/gtag/js?id=G-PWTEST0001&l=dl123';
     expect(Buffer.from(path)).toHaveLength(32);
@@ -399,7 +407,7 @@ describe('foreign digests in base64', () => {
     let slash = 0;
     for (let i = 0; plus < 5 || slash < 5; i++) {
       const form = sha256(`lead${i}@shop.example.net`).base64.replace(/=+$/, '');
-      if (!/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form) || form.endsWith('/')) continue;
+      if (!/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form) || form.endsWith('/') || form.indexOf('/', 1) > 0) continue;
       if (form.startsWith('+')) plus++;
       else if (form.startsWith('/')) slash++;
       else continue;
@@ -413,7 +421,7 @@ describe('foreign digests in base64', () => {
     for (let i = 0; i < 400; i++) {
       const bytes = Buffer.from(sha256(`foreign${i}@shop.example.net`).hex, 'hex');
       for (const form of [bytes.toString('base64').replace(/=+$/, ''), bytes.toString('base64url')]) {
-        if (/\/$/.test(form) || !/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form)) continue;
+        if (/\/$/.test(form) || (form.startsWith('/') && form.indexOf('/', 1) > 0) || !/[a-z]/.test(form) || !/[A-Z]/.test(form) || !/\d/.test(form)) continue;
         expect(scan(`em=${form}`, me), form).toEqual([{ kind: 'hash', value: form }]);
       }
     }
