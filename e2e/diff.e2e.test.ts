@@ -103,13 +103,23 @@ test('diff --by-page pairs sandboxed pixel hits across runs whose web-pixels has
   expect(await readFile(a, 'utf8')).toContain('/web-pixels@hasha1/sandbox/modern/');
   expect(await readFile(b, 'utf8')).toContain('/web-pixels@hashb2/sandbox/modern/');
 
-  const json = JSON.parse((await diff([a, b, '--by-page', '--json'])).stdout) as Record<string, unknown[]> & {
-    countMismatches: { key: { page?: string } }[];
-  };
-  expect(json).toMatchObject({ added: [], removed: [], changed: [] });
-  // Hit counts on the top page depend on timing between two runs. The sandboxed pixel fires once per load.
-  expect(json.countMismatches.filter((m) => m.key.page !== '/collections/all')).toEqual([]);
-  expect((await diff([a, b, '--by-page'])).stdout).not.toMatch(/\b(added|removed|changed)\b/);
+  for (const [file, hash] of [[a, 'hasha1'], [b, 'hashb2']] as const) {
+    const sandboxed = (await readFile(file, 'utf8'))
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { type: string; page?: string | null })
+      .filter((r) => r.type === 'hit' && r.page?.includes(`/web-pixels@${hash}/`));
+    expect(sandboxed.length).toBeGreaterThan(0);
+  }
+
+  type Keyed = { key: { page?: string } };
+  const json = JSON.parse((await diff([a, b, '--by-page', '--json'])).stdout) as Record<'added' | 'removed' | 'changed' | 'countMismatches', Keyed[]>;
+  // Hit counts on the top page depend on timing between two runs, so only the sandboxed pixel (page "/" once the prefix is stripped) is compared.
+  const sandboxedOnly = (list: Keyed[]) => list.filter((e) => e.key.page !== '/collections/all');
+  expect(sandboxedOnly(json.added)).toEqual([]);
+  expect(sandboxedOnly(json.removed)).toEqual([]);
+  expect(sandboxedOnly(json.changed)).toEqual([]);
+  expect(sandboxedOnly(json.countMismatches)).toEqual([]);
 }, 120_000);
 
 test('diff pairs a hit that lands in a different step in each run, and still reports a real change', async () => {
