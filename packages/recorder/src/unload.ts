@@ -18,6 +18,8 @@ export interface UnloadSendPayload {
  * unloading, sendBeacon and keepalive fetch are answered in the page. Each one is queued in
  * sessionStorage until the binding call is acknowledged, and the next document in the tab replays the queue.
  * A send is not recorded if the tab never loads another document of the same origin and is not flushed by close().
+ * A frame without sessionStorage (a sandboxed one without allow-same-origin) cannot queue, so its sends are lost:
+ * swallowed, and not recorded.
  */
 export const unloadInitScript = `(() => {
   const binding = ${JSON.stringify(UNLOAD_BINDING)};

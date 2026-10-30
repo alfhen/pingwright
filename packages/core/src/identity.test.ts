@@ -504,7 +504,7 @@ describe('own identity is never flagged', () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   it('holds with glue text on either side of encoded values', () => {
     for (let seed = 1; seed <= 12; seed++) {

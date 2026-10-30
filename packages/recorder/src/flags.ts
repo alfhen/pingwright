@@ -1,4 +1,4 @@
-import { newId, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request } from '@pingwright/core';
+import { newId, type DataLayerEvent, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request } from '@pingwright/core';
 import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import { findForeignData, hostMatches } from '@pingwright/expect';
 import { getDomain } from 'tldts';
@@ -90,6 +90,43 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, track
   }
   if (identity) {
     for (const leak of findForeignData(requests, hits, identity)) flags.push(flag(runId, 'possibleRealData', leak.evidence, leak.detail));
+  }
+  return flags;
+}
+
+/** GA4 holds hits for a visitor who has not consented for about 5 s, then flushes them as the page unloads. */
+const UNLOAD_GAP_WINDOW_MS = 10_000;
+
+export interface UnloadGapInput {
+  runId: Id<'run'>;
+  /** dataLayer events pushed from frames other than the main frame. */
+  events: readonly DataLayerEvent[];
+  hits: readonly Hit[];
+  /** Times at which the main frame started a navigation. */
+  navigations: readonly number[];
+}
+
+/**
+ * An event pushed in an embedded frame shortly before the page navigated, with no hit of that name recorded since,
+ * may have been flushed by the frame as it unloaded. Chromium does not report those requests to the browser context.
+ */
+export function buildUnloadGapFlags({ runId, events, hits, navigations }: UnloadGapInput): Flag[] {
+  const flags: Flag[] = [];
+  for (const event of events) {
+    const name = event.event;
+    if (name === null || event.isConsentCommand || name.startsWith('gtm.')) continue;
+    const navigation = navigations.find((n) => n >= event.t);
+    if (navigation === undefined || navigation - event.t > UNLOAD_GAP_WINDOW_MS) continue;
+    if (hits.some((h) => h.event === name && h.t >= event.t)) continue;
+    const seconds = ((navigation - event.t) / 1000).toFixed(1);
+    flags.push(
+      flag(
+        runId,
+        'unloadGap',
+        [event.id],
+        `A frame pushed "${name}" ${seconds} s before the page navigated and no ${name} hit was recorded after it. The frame may have sent the hit while unloading, which is not captured without --net-log (design §5.3).`,
+      ),
+    );
   }
   return flags;
 }

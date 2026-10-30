@@ -24,6 +24,7 @@ const pages: Record<string, string> = {
   '/thank-you': 'thank-you.html',
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
+  '/unload-beacons': 'unload-beacons.html',
   '/stable-ids': 'stable-ids.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
   '/delayed-hit': 'delayed-hit.html',
@@ -39,6 +40,7 @@ const pages: Record<string, string> = {
 };
 
 const containerPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container/';
+const unloadPixelPath = '/web-pixels@0.0.0-fixture/sandbox/unload/';
 const containerScriptPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container-script/';
 
 const contentTypes: Record<string, string> = {
@@ -78,6 +80,8 @@ function shopHandler(config: string) {
       await sendFile(res, 'pixel.html');
     } else if (path === containerPixelPath) {
       await sendFile(res, 'container-frame.html');
+    } else if (path === unloadPixelPath) {
+      await sendFile(res, 'unload-pixel.html');
     } else if (path === containerScriptPixelPath) {
       await sendFile(res, 'container-frame-script.html');
     } else if (page) {

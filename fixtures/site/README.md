@@ -95,6 +95,10 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 - `/container/sandbox-script`: the same loader script inside a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/container-script/`).
 - `/container/sandbox`: a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/container/`) with the same Stape-style loader. Real gtag.js cannot run in an opaque-origin frame, so the frame sends the same GA4 and Meta events itself, as a custom pixel does. Its GA4 `dl` is the sandbox URL.
 
+## Unload beacons page
+
+`/unload-beacons` has the banner and a sandboxed iframe (`sandbox="allow-scripts"`, `/web-pixels@0.0.0-fixture/sandbox/unload/`) that, like GA4 for a visitor who has not consented, holds an `add_to_cart` hit and flushes it in `pagehide`, as one `navigator.sendBeacon` and one `fetch` with `keepalive`, to `https://sgtm.pingwright.invalid/g/collect` (`ep.via=beacon` or `keepalive`, `gcs=G100`). The host does not resolve, so nothing leaves the machine even when stub mode does not catch the requests. `#add-to-cart` tells the frame to hold the hit. The page also loads `site.js`, so it has the usual banner, gtag and modern pixel.
+
 ## Pinterest page
 
 `/pinterest` loads the standard Pinterest tag snippet and the real `s.pinimg.com/ct/core.js` (needs internet access). Tag ID `2612345678901`, fake email `pinterest-fixture@example.com`. On load, with no consent step, it fires `init`, `pagevisit`, `addtocart` and `checkout` to `ct.pinterest.com`. Stub collection paths so no hit leaves the machine. The page has no banner, on purpose.
