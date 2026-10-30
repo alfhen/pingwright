@@ -13,6 +13,18 @@ test('a stable hashed client ID under many keys and an hmac parameter pass possi
   expect(real?.pass).toBe(true);
 }, 90_000);
 
+test('persisted-query IDs and a hashed asset name pass possibleRealData', async () => {
+  const real = await realDataResult('shared-hashes');
+  expect(real?.message).toContain('found none');
+  expect(real?.pass).toBe(true);
+}, 90_000);
+
+test('a hashed non-identity email on a tracking request still fails possibleRealData next to persisted-query IDs', async () => {
+  const real = await realDataResult('shared-hashes-leak');
+  expect(real?.pass).toBe(false);
+  expect(real?.message).toContain('not from the run identity');
+}, 90_000);
+
 test('a hashed non-identity email under external_id still fails possibleRealData', async () => {
   const real = await realDataResult('stable-ids-leak');
   expect(real?.pass).toBe(false);

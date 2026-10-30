@@ -26,6 +26,7 @@ const pages: Record<string, string> = {
   '/tracker': 'tracker.html',
   '/unload-beacons': 'unload-beacons.html',
   '/stable-ids': 'stable-ids.html',
+  '/shared-hashes': 'shared-hashes.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
   '/delayed-hit': 'delayed-hit.html',
   '/container/direct': 'container-direct.html',
@@ -86,6 +87,8 @@ function shopHandler(config: string) {
       await sendFile(res, 'container-frame-script.html');
     } else if (page) {
       await sendFile(res, page);
+    } else if (/^\/assets\/app-[0-9a-f]{64}\.js$/.test(path)) {
+      await sendFile(res, 'assets/hashed-app.js');
     } else if (/^\/assets\/[a-z-]+\.(js|css)$/.test(path)) {
       await sendFile(res, path.slice(1));
     } else {
