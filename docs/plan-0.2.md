@@ -118,7 +118,7 @@ Acceptance: unit tests for:
 
 `--gtm-override <file>` takes the JSON in design §8.2. `container` must match `^GTM-[A-Z0-9]+$`.
 
-The recorder matches requests to `https://www.googletagmanager.com/gtm.js` with `id=<container>`. It ignores other parameters such as `l=`, and does not match another container, `gtag/js` or `ns.html`. It fetches the preview build at `https://www.googletagmanager.com/gtm.js?id=<container>&gtm_auth=<auth>&gtm_preview=<env>&gtm_cookies_win=x` with `route.fetch`, then fulfils the original request with the response. The page's own request URL is never changed.
+The recorder matches requests to `https://www.googletagmanager.com/gtm.js` with `id=<container>`. It ignores other parameters such as `l=`, and does not match another container, `gtag/js` or `ns.html`. It fetches the preview build at `https://www.googletagmanager.com/gtm.js?id=<container>&gtm_auth=<auth>&gtm_preview=<env>&gtm_cookies_win=x` with `route.fetch`, then fulfils the original request with the response. The page's own request URL is never changed. Later PRs added `l` and `gtm_debug` from the matched request to that fetch URL, and a third exit-2 failure: `loader.replace` is set and the page never requested that URL (design §8.2).
 
 The test-only GTM origin:
 
@@ -132,7 +132,7 @@ The run record:
 
 - `gtmOverride` stores `container`, `gtmPreview`, `gtmAuth: "[redacted]"` and `expectedTags` (stored, not evaluated).
 - `gtmOverride.applied` lists each match: `{way: "direct", url, status}`.
-- If no request matched, or a preview fetch was not 200, the run fails with exit 2, and the message says which. A 404 says the environment may have no version. The JSONL is still written, with `applied` filled in.
+- If no request matched, a preview fetch was not 200, or `loader.replace` was never requested, the run fails with exit 2, and the message says which. A 404 says the environment may have no version. The JSONL is still written, with `applied` filled in.
 
 Redaction: the recorder scrubs the `gtmAuth` value in `Recorder.close()`, as its last step, before records are returned to callers or written. Decoding and flags run on the raw records first, so a redacted `pk` or body keeps its hit, and the published and workspace runs diff alike. A flag whose URL is redacted whole keeps the URL's origin, so a built-in check can still name the host. `evaluate` re-runs the built-in checks on the scrubbed records. The in-memory records also feed `evaluate` and the CLI summary. The scrub decodes before it searches:
 
@@ -192,7 +192,7 @@ Acceptance:
 
 `diffRuns(a, b)` takes two loaded runs and returns a JSON result.
 
-It pairs hits by a match key: epoch label, vendor, event and step label, plus the page path when `byPage` is set. Inside each key it pairs in time order.
+It pairs hits by a match key: epoch label, vendor, event and step label, plus the page path when `byPage` is set. Later PRs removed the step label from the key, strip the `/web-pixels@…/sandbox/` prefix from the page path, and use the frame URL for a hit with no page (design §15.2). Inside each key it pairs in time order.
 
 It reports:
 
