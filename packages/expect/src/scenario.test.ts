@@ -203,3 +203,9 @@ test('cartRequest is a regular expression', () => {
   expect(parseScenario("start: /\noptions: { cartRequest: '/api/basket/' }").options.cartRequest).toBe('/api/basket/');
   expect(() => parseScenario("start: /\noptions: { cartRequest: '(' }")).toThrow(/cartRequest/);
 });
+
+test('unloadGapIgnore is a list of event names or globs', () => {
+  expect(parseScenario("start: /\noptions: { unloadGapIgnore: ['consent_*', item_added] }").options.unloadGapIgnore).toEqual(['consent_*', 'item_added']);
+  expect(() => parseScenario('start: /\noptions: { unloadGapIgnore: consent_* }')).toThrow(/unloadGapIgnore/);
+  expect(() => parseScenario("start: /\noptions: { unloadGapIgnore: [''] }")).toThrow(/unloadGapIgnore/);
+});

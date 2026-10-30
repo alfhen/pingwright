@@ -25,6 +25,7 @@ const pages: Record<string, string> = {
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
   '/unload-beacons': 'unload-beacons.html',
+  '/unload-gap': 'unload-gap.html',
   '/stable-ids': 'stable-ids.html',
   '/shared-hashes': 'shared-hashes.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
@@ -42,6 +43,7 @@ const pages: Record<string, string> = {
 
 const containerPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container/';
 const unloadPixelPath = '/web-pixels@0.0.0-fixture/sandbox/unload/';
+const gapPixelPath = '/web-pixels@0.0.0-fixture/sandbox/gap/';
 const containerScriptPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container-script/';
 
 const contentTypes: Record<string, string> = {
@@ -83,6 +85,8 @@ function shopHandler(config: string) {
       await sendFile(res, 'container-frame.html');
     } else if (path === unloadPixelPath) {
       await sendFile(res, 'unload-pixel.html');
+    } else if (path === gapPixelPath) {
+      await sendFile(res, 'gap-pixel.html');
     } else if (path === containerScriptPixelPath) {
       await sendFile(res, 'container-frame-script.html');
     } else if (page) {
