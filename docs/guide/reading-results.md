@@ -96,9 +96,9 @@ Programs can read the file, or the output of `pingwright run --json`. The [desig
 
 ```mermaid
 flowchart TB
-  a["Run A<br/>before the change"] --> d["pingwright diff"]
-  b["Run B<br/>after the change"] --> d
-  d --> r["Added hits<br/>Removed hits<br/>Changed hits"]
+  a["Run A<br/>(before)"] --> d["pingwright diff"]
+  b["Run B<br/>(after)"] --> d
+  d --> r["Added, removed<br/>and changed hits"]
 ```
 
 `pingwright diff` pairs the hits of run A with the hits of run B, and lists hits that were added, removed or changed.

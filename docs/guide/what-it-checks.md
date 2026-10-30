@@ -10,7 +10,7 @@ A tracking setup can break and show no error. A small change can make a vendor r
 
 ```mermaid
 flowchart TB
-  scenario["Scenario<br/>what the visitor does"] --> browser["Pingwright plays<br/>the visitor in Chromium"]
+  scenario["Scenario"] --> browser["Pingwright plays<br/>the visitor in Chromium"]
   site["Your site"] <--> browser
   browser --> record["Record of every<br/>tracking request"]
   record --> check["Check against<br/>your expectations"]

@@ -39,16 +39,16 @@ Pingwright makes this checkable by a program: a coding agent, a CI job, or a per
 
 ```mermaid
 flowchart TB
-  input["Scenario and run options<br/>(GTM preview, expected tags)"] --> recorder["Recorder (Playwright)"]
-  recorder -->|loads site| page["Page, iframes and workers<br/>consent banner, platform sandbox,<br/>web GTM reporter"]
-  recorder -->|"requests, responses, cookies,<br/>consent epochs, dataLayer"| store[("Run store (in-process)")]
-  page -->|"posts to the collector origin,<br/>answered by context.route"| store
-  page -->|hits| sgtm["Server GTM"]
-  sgtm -->|hits| vendors["Vendors"]
-  sgtm -->|signed server tag reports| sink["Sink<br/>(your tunnel or your Worker)"]
+  input["Scenario and<br/>run options"] --> recorder["Recorder<br/>(Playwright)"]
+  recorder --> page["Page, iframes<br/>and workers"]
+  page -->|"collector origin,<br/>answered by<br/>context.route"| store[("Run store")]
+  recorder -->|records| store
+  page --> sgtm["Server GTM"]
+  sgtm -->|"tag reports"| sink["Sink"]
   sink --> store
-  store --> jsonl["runs/&lt;id&gt;.jsonl"]
-  store --> decoders["Decoders"] --> expect["Expect"] --> report["Report and diff"]
+  store --> decoders["Decoders"]
+  decoders --> expect["Expect"]
+  expect --> report["Report and diff"]
   report --> front["CLI and MCP server"]
 ```
 

@@ -46,9 +46,7 @@ Replace the address with your own site. Use a test or staging site when you can.
 flowchart TB
   a["scenario.yml<br/>and --site"] --> b["pingwright run"]
   b --> c["Chromium plays<br/>the visitor"]
-  c --> d["Record file<br/>runs/run_ID.jsonl"]
-  b --> e["Text summary"]
-  b --> f["Exit code<br/>0, 1 or 2"]
+  c --> d["Text summary,<br/>record file<br/>runs/run_ID.jsonl,<br/>exit code 0, 1 or 2"]
 ```
 
 `pingwright run` plays the scenario in Chromium, then prints a summary, writes a record file and sets the exit code.

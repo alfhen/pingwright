@@ -6,7 +6,6 @@ const props = defineProps<{ code: string }>();
 const source = computed(() => decodeURIComponent(props.code));
 const { isDark } = useData();
 const svg = ref('');
-const minWidth = ref('0');
 const failed = ref(false);
 const sequence = Math.random().toString(36).slice(2);
 let renders = 0;
@@ -71,8 +70,6 @@ async function render() {
     });
     const result = await mermaid.render(`mermaid-${sequence}-${run}`, source.value);
     if (run === renders) {
-      const width = Number(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/.exec(result.svg)?.[1] ?? 0);
-      minWidth.value = `${Math.round(width * 0.75)}px`;
       svg.value = result.svg;
     }
   } catch {
@@ -86,7 +83,7 @@ watch(isDark, render);
 
 <template>
   <div class="mermaid-diagram">
-    <div v-if="svg" class="mermaid-svg" :style="{ '--mermaid-min': minWidth }" v-html="svg" />
+    <div v-if="svg" class="mermaid-svg" v-html="svg" />
     <pre v-else class="mermaid-source"><code>{{ source }}</code></pre>
     <p v-if="failed" class="mermaid-error">The diagram could not be drawn. Its source is shown instead.</p>
   </div>

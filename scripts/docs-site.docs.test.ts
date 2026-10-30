@@ -129,6 +129,24 @@ test('a page with a diagram draws an svg, in light and dark mode, without outsid
   expect(outside).toEqual([]);
 });
 
+test('diagrams fit a 390 px phone screen without sideways scrolling', async () => {
+  const context = await browser!.newContext({
+    userAgent: chromeUserAgent(browser!.version()),
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  for (const path of ['/docs/design', ...guides.map((g) => `/${g}`)]) {
+    await page.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: 'networkidle' });
+    await page.locator('.mermaid-svg svg').first().waitFor();
+    const overflowing = await page.locator('.mermaid-svg').evaluateAll((boxes) =>
+      boxes.filter((box) => box.scrollWidth > box.clientWidth).map((box) => `${box.scrollWidth} > ${box.clientWidth}`),
+    );
+    expect(overflowing, path).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), path).toBe(true);
+  }
+  await context.close();
+});
+
 test('pages without a diagram do not load the diagram code', async () => {
   const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
   const scripts: { url: string; bytes: number }[] = [];
