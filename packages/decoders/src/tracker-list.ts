@@ -23,18 +23,6 @@ export const trackerDocsDomains: Readonly<Record<string, readonly string[]>> = {
 
 export const trackerList: readonly TrackerEntry[] = [
   {
-    vendor: 'tiktok',
-    host: 'business-api.tiktok.com',
-    paths: ['/open_api/v1.3/event/track'],
-    source: 'https://business-api.tiktok.com/portal/docs/events-api-2.0/v1.3',
-  },
-  {
-    vendor: 'snap',
-    host: 'tr.snapchat.com',
-    paths: ['/v3'],
-    source: 'https://developers.snap.com/marketing-api/Conversions-API/UsingTheAPI',
-  },
-  {
     vendor: 'linkedin',
     host: 'px.ads.linkedin.com',
     paths: ['/wa'],
@@ -56,12 +44,6 @@ export const trackerList: readonly TrackerEntry[] = [
     vendor: 'reddit',
     host: 'alb.reddit.com',
     source: 'https://business.reddithelp.com/articles/Knowledge/reddit-pixel',
-  },
-  {
-    vendor: 'criteo',
-    host: 'widget.criteo.com',
-    paths: ['/m/event'],
-    source: 'https://developers.criteo.com/mobile-integrations/docs/mobile-endpoint-specification',
   },
 ];
 

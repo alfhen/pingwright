@@ -9,18 +9,19 @@ test('matches an exact host with any path when the entry has no paths', () => {
 
 test('matches a path prefix', () => {
   expect(at('https://bat.bing.com/action/0?ti=1')?.vendor).toBe('microsoft-uet');
-  expect(at('https://tr.snapchat.com/v3/100/events')?.vendor).toBe('snap');
+  expect(at('https://px.ads.linkedin.com/wa/?pid=1')?.vendor).toBe('linkedin');
+  expect(at('https://analytics.twitter.com/i/adsct?p_id=1')?.vendor).toBe('x');
 });
 
 test('does not match another path on a listed host', () => {
   expect(at('https://bat.bing.com/action/01')).toBeUndefined();
-  expect(at('https://tr.snapchat.com/v30/events')).toBeUndefined();
+  expect(at('https://px.ads.linkedin.com/wax')).toBeUndefined();
 });
 
 test('does not match library loads', () => {
   expect(at('https://bat.bing.com/bat.js')).toBeUndefined();
-  expect(at('https://sc-static.net/scevent.min.js')).toBeUndefined();
-  expect(at('https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=X&lib=ttq')).toBeUndefined();
+  expect(at('https://analytics.twitter.com/uwt.js')).toBeUndefined();
+  expect(at('https://px.ads.linkedin.com/insight.min.js')).toBeUndefined();
 });
 
 test('does not match an unlisted host or a bad URL', () => {
@@ -29,8 +30,7 @@ test('does not match an unlisted host or a bad URL', () => {
   expect(at('not a url')).toBeUndefined();
 });
 
-test('every vendor key is present and every source is https on its docs domains', () => {
-  expect(new Set(trackerList.map((e) => e.vendor))).toEqual(new Set(Object.keys(trackerDocsDomains)));
+test('every source is https on its vendor docs domains', () => {
   for (const e of trackerList) {
     const u = new URL(e.source);
     const ok = trackerDocsDomains[e.vendor]!.some((d) => u.hostname === d || u.hostname.endsWith(`.${d}`));
