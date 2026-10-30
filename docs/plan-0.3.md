@@ -99,9 +99,9 @@ The 0.1 and 0.2 rules still hold (docs/plan-0.1.md, docs/plan-0.2.md, AGENTS.md)
 
 More for 0.3:
 
-- **Names and counts only.** No cookie value, no identity value (plain or hashed), no `gtmAuth` appears in a record field, a rule message, a summary, the suite manifest or the HTML report. Evidence is request, hit and result IDs and field names.
-- **Field names are data too.** A name that does not look like a field name (longer than 64 characters, or with characters outside `A-Z a-z 0-9 _ . [ ] -`) is stored as `(other)`. This keeps a value that was used as a JSON key out of the record.
-- **Each PR names its leak test.** A test feeds a fake email (`pw-fixture@example.com`), its SHA-256 and a fake cookie value through the feature, and asserts none of them appears in any output.
+- **Names and counts only, for what 0.3 adds.** No cookie value, no identity value (plain or hashed) and no `gtmAuth` appears in `Hit.fields`, `Hit.idFields`, a rule or check message, the terminal summary, `suite.json` or the HTML report. Evidence is request, hit and result IDs and field names. Older record fields still hold values: `Request.url`, `Request.postData` and `Hit.params` (for example the hashed email that the Meta and server decoders copy into `params` for `identity.hashesMatch`). 0.3 does not change them. See concern 22.
+- **Field names are data too.** A data tag can use a value as a JSON key. The guard checks each dotted segment of a name. A segment is stored as `(other)` when it is over 64 characters, has characters outside `A-Z a-z 0-9 _ [ ] -`, is hex of 32 or more characters, is base64url of 22 or more characters, is six or more digits, or contains `@`. This keeps hashes, phone numbers, customer numbers and emails out of `fields`, the messages and the report.
+- **Each PR names its leak test.** A test feeds a fake email (`pw-fixture@example.com`), its SHA-256 and a fake cookie value through the feature, and asserts none of them appears in what that PR adds (see the names rule above).
 - **Each rule PR proves its e2e fails when the feature is broken.** The PR description says how it checked.
 - **New fixture pages only.** Existing fixture pages and e2e tests do not change.
 
@@ -123,19 +123,22 @@ No new record type. `Response.setCookieNames` already exists.
 
 ### `Hit.fields`
 
-The sorted, unique names of non-empty fields in the decoded payload of the hit. The payload is the query string, the body (JSON, form-encoded, or GA4's batched lines, merged) and the decoded `dtdc` object.
+The sorted, unique names of non-empty fields in the decoded payload of that one hit. The payload is the query string that the request shares, the body (JSON or form-encoded) and the decoded `dtdc` object. For a GA4 request with a batched body, each line is its own hit. Its `fields` are the shared query fields plus that line's own fields.
 
 - Nested names use dots: `user_data.email_address`. Array items collapse to `[]`: `items[].price`.
 - A field is non-empty when its value is not `""`, `null`, `undefined`, `[]` or `{}`.
 - Values are never stored.
-- A GA4 batched body gives the union over all lines.
+- A field that only one line of a batched GA4 body has is never put on the other lines' hits.
 
 ### `Hit.idFields`
 
 The subset of `fields` that the decoder takes to be an identifier:
 
 - a name on the decoder's identifier list (table in the R06 entry), or
-- a field whose value is shaped like a hash: 64 hex characters, or a base64url string of 43 characters. The check happens in the decoder. Only the name is stored.
+- a field whose value is 64 hex characters, under any name, or
+- a field under a listed identity key (`ud[*]`, `user_data.*`, `em`, `ph`, the client-ID hash names) whose value is a base64 or base64url digest.
+
+The check happens in the decoder. Only the name is stored. This is the same split as `possibleRealData` (design §13): a base64 digest under another key cannot be told from a 43-character slug, token or event ID, so it is not flagged.
 
 ## Design notes
 
@@ -203,7 +206,7 @@ What it flags. A hit that has a field in `Hit.idFields` while the consent signal
 
 | Class | Names (exact, or glob) | Signal that must not be denied |
 | --- | --- | --- |
-| Analytics id | `user_id`, `uid`, `up.user_id`, any other field with a hash-shaped value (64 hex, or 43 base64url) | `analytics` |
+| Analytics id | `user_id`, `uid`, `up.user_id`, any other field with a 64-hex value | `analytics` |
 | Ads identity | `external_id`, `ud`, `ud[*]`, `user_data`, `user_data.*`, `em`, `ph`, `hashed_email`, `customer_hashed`, `cookieData` | `adUserData`, or `ads` for vendors that have no `adUserData` (Meta) |
 | Client-ID hash | `clientIdHash`, `client_id_hash`, `cid_hash` | `analytics` |
 
@@ -321,7 +324,7 @@ Record changes. None beyond R01.
 
 ### What the report test checks
 
-A unit test renders a run record whose request bodies, hit params and cookie list contain the fake email, its SHA-256, a fake cookie value and the redacted `gtmAuth` marker. It asserts that none of them is in the output, that the output has no `http:` or `https:` text inside an attribute or `url()`, and that it has no `<script`. An e2e runs a scenario on the fixture and checks the report the same way.
+A unit test renders a run record whose request bodies, hit params and cookie list contain the fake email, its SHA-256, a fake cookie value and the redacted `gtmAuth` marker. The record also has a data tag field keyed by the SHA-256 and one keyed by a phone number. It asserts that none of them is in the output, that the output has no `http:` or `https:` text inside an attribute or `url()`, and that it has no `<script`. An e2e runs a scenario on the fixture and checks the report the same way.
 
 ## Smallest design that would have caught each problem
 
@@ -367,7 +370,7 @@ Cost. One new field (`Checkpoint.t`). One rule key. One option (`serverHosts`) a
 
 What happened. `ids.user_id` covered GA4 User-ID only. Other identifiers went out as custom parameters, hashed `user_data.*` and client-ID hashes.
 
-Smallest design. The decoders flag identifier-like fields into `Hit.idFields`, by a documented name list and by hash-shaped values. One built-in check compares them with the consent state. It uses the severity machinery that exists.
+Smallest design. The decoders flag identifier-like fields into `Hit.idFields`, by a documented name list and by 64-hex values. One built-in check compares them with the consent state. It uses the severity machinery that exists.
 
 Left out on purpose:
 
@@ -415,18 +418,18 @@ Cost. One new command with one flag. No new dependency. No record change beyond 
 ### Wave 1
 
 **R01 Record schema version 2 and hit field names.** Touches: `packages/core`, `packages/decoders`, the checkpoint creation line in `packages/recorder`.
-Sets `RECORD_SCHEMA_VERSION` to 2 and updates its doc comment. Adds `Hit.fields`, `Hit.idFields`, `Checkpoint.t` and `Run.variant` as optional fields. The decoders (`ga4`, `google-ads`, `meta`, `pinterest`, `sgtm-data-client`, `tracker`) fill `fields` from the query, JSON and form bodies, GA4 batched lines and `dtdc`, with the dot and `[]` naming, the empty-value rule and the 64-character name cap. They fill `idFields` from `packages/decoders/src/identifiers.ts`, which holds the name lists of the R06 table and the hash-shape check. `body.only` ignore lists are exported from each decoder. A reader that meets a version 1 record leaves the new fields undefined. Design §4 and the README of `core` get the new fields.
-Acceptance: unit tests for each decoder's `fields` (nested names, arrays, empty values, batched GA4 lines, a `dtdc` payload, an over-long name stored as `(other)`); `idFields` for a name match and for a hash-shaped value under a neutral name; a test that no value appears in any `Hit` (a fake email and its SHA-256 sent in a body are present in the request and absent from the hit JSON); reading a version 1 file gives undefined fields and no error; reading a newer version still warns.
+Sets `RECORD_SCHEMA_VERSION` to 2 and updates its doc comment. Adds `Hit.fields`, `Hit.idFields`, `Checkpoint.t` and `Run.variant` as optional fields. The decoders (`ga4`, `google-ads`, `meta`, `pinterest`, `sgtm-data-client`, `tracker`) fill `fields` per hit from the query, JSON and form bodies, that hit's own GA4 body line and `dtdc`, with the dot and `[]` naming, the empty-value rule and the field-name guard. They fill `idFields` from `packages/decoders/src/identifiers.ts`, which holds the name lists of the R06 table and the hash-shape check. `body.only` ignore lists are exported from each decoder. A reader that meets a version 1 record leaves the new fields undefined. Design §4 and the README of `core` get the new fields.
+Acceptance: unit tests for each decoder's `fields` (nested names, arrays, empty values, a batched GA4 body where each line's hit has only its own line's fields plus the query, a `dtdc` payload, name segments that look like values stored as `(other)`: over 64 characters, hex of 32 or more, base64url of 22 or more, six or more digits, or an `@`); `idFields` for a name match, for a 64-hex value under a neutral name, and for a 43-character base64url value under a neutral name (not flagged) and under `user_data.*` (flagged); a test that no value appears in any `Hit` (a fake email and its SHA-256 sent in a body are present in the request and absent from the hit JSON); reading a version 1 file gives undefined fields and no error; reading a newer version still warns.
 
 **R02 Fixture pages for 0.3.** Touches: `fixtures/site`.
-New pages and routes. Existing pages do not change. All values are fake: the identity is the run's generated one, with `example.com` mail. The pages:
+New pages and routes, each added to the router map in `fixtures/site/src/index.ts` and so served without an extension (`/sgtm-leak`, not `/sgtm-leak`). Existing pages do not change. The new pages load the banner and a Consent Mode default, but not the sandboxed pixel and not the unknown pixel, so `sandboxPageUrl` and `unknownDestination` stay quiet and an exit 0 is possible. If a scenario needs a page that does load `site.js`, it sets `builtins: { sandboxPageUrl: warn }`. Each page's README entry names the consent step a scenario needs (accept or reject), because Meta and server hits are judged by the epoch. All values are fake: the identity is the run's generated one, with `example.com` mail. The pages:
 
-- `/sgtm-leak.html`: a data tag that posts the whole fake dataLayer (`event_name`, `page_location`, `page_title`, `email`, `phone`, `address`, `cookie_data`, `clientIdHash` as a fake 64-hex) to the mock Stape host `/data` as a JSON body. `?mode=allowlist` posts only `event_name`, `page_location`, `page_title`, `page_referrer`. It sends once on load (undecided epoch) and again after the consent answer.
-- `/identifiers.html`: sends, per `?state=denied|granted`, a GA4 `/g/collect` hit with `uid` and a custom `ep.token` holding a fake 64-hex, a Meta `/tr` hit with `ud[em]` and `external_id`, and an sgtm `/data` hit with `user_data.email_address` and `external_id`. A negative control sends a `cid`-only GA4 hit and a Meta hit with `fbp`.
-- `/cookies.html` and routes: the shop host answers `/session/start` with `Set-Cookie: _pwid=<fake>` (a non-collection path, so it passes in stub mode). `?when=before` calls it before the banner is answered, `?when=after` only after. A script sets `_ga_PWTEST` through `document.cookie`. The mock Stape host answers `/pwstape-cookie/data` with `Set-Cookie: _pwdcid=<fake>`; only a `server` mode run lets it through.
-- `/tiles.html`: colour tiles titled `White (01)` and `Black (02)`. `?theme=button` uses `role=button`. `?theme=radio` uses `role=radio`. `?theme=plain` uses a `div` with a `title`.
-- `/select.html`: a `<select name=countryCode>` with options by value and label (`DE` / `Germany`). `?broken=1` has a handler that resets the select to its default after a change, like a framework that overrides it. A `div` shows the current value for the test.
-- `/handoff.html`: a small form and a link to a second page, so a navigation during a handoff can be tested.
+- `/sgtm-leak`: a data tag that posts the whole fake dataLayer (`event_name`, `page_location`, `page_title`, `email`, `phone`, `address`, `cookie_data`, `clientIdHash` as a fake 64-hex) to the mock Stape host `/data` as a JSON body. `?mode=allowlist` posts only `event_name`, `page_location`, `page_title`, `page_referrer`. It sends once on load (undecided epoch) and again after the consent answer.
+- `/identifiers`: sends, per `?state=denied|granted`, a GA4 `/g/collect` hit with `uid` and a custom `ep.token` holding a fake 64-hex, a Meta `/tr` hit with `ud[em]` and `external_id`, and an sgtm `/data` hit with `user_data.email_address` and `external_id`. A negative control sends a `cid`-only GA4 hit and a Meta hit with `fbp`.
+- `/cookies` and routes: the shop host answers `/session/start` with `Set-Cookie: _pwid=<fake>` (a non-collection path, so it passes in stub mode). `?when=before` calls it before the banner is answered, `?when=after` only after. A script sets `_ga_PWTEST` through `document.cookie`. A page script requests the Stape loader form `sgtmUrl/pwstape?pk=<base64 of /data?v=2&event=page_view>` on the mock Stape host. The host answers it with `Set-Cookie: _pwdcid=<fake>`. Stub mode stubs it, because the decoder matches the loader form, so only a `server` mode run lets the cookie through. The scenario sets `allowUnknownDestination` for the mock host, or lists it in `serverHosts`, so the unknown-destination check does not fire.
+- `/tiles`: colour tiles titled `White (01)` and `Black (02)`. `?theme=button` uses `role=button`. `?theme=radio` uses `role=radio`. `?theme=plain` uses a `div` with a `title`.
+- `/select`: a `<select name=countryCode>` with options by value and label (`DE` / `Germany`). `?broken=1` has a handler that resets the select to its default after a change, like a framework that overrides it. A `div` shows the current value for the test.
+- `/handoff`: a small form and a link to a second page, so a navigation during a handoff can be tested.
 
 The fixture README lists pages, query switches and the expected hits.
 Acceptance: fixture unit tests for each route's headers and bodies (the `Set-Cookie` on `/session/start`, the leaking body, the allowlist body). A raw Playwright e2e loads each new page in `stub` mode and asserts that the expected requests are recorded, and that the sgtm leak body has the fake `email` field. No Pingwright feature is used.
@@ -435,28 +438,28 @@ Acceptance: fixture unit tests for each route's headers and bodies (the `Set-Coo
 
 **R03 Rules on payload fields (#350).** Touches: `packages/expect`, `docs/cli.md`.
 Adds `body.has`, `body.only` and `body.ignore` to the schema parser and the evaluator, as in the design notes. Unknown shapes are scenario errors with a line number (a string where a list is needed, an empty list, a name over 64 characters, `body.only` with `body.has` in one entry). The semantics of `body.only` over all selected hits are in `evaluate.ts`. A rule on a hit with `fields` undefined (a version 1 record) fails with `cannot evaluate: field names not recorded` for `must` and does not pass silently for `mustNot`. docs/cli.md gets a "Rules on payload fields" section with the default ignore lists.
-Acceptance: unit tests for the parser and for the evaluator: `body.has` with a plain name, a dotted name, a glob; `body.only` where one of two selected hits has an outside field (must fails); `mustNot` plus `body.has` in an epoch; the ignore lists; `fields` undefined. A leak test asserts the failure message holds the field names and never the values. E2E: a scenario on `/sgtm-leak.html` with `mustNot body.has [email, phone] in epoch(denied)` exits 1 and names `email` and `phone` in the evidence. The same scenario on `?mode=allowlist` exits 0. A `body.only` entry exits 0 for the allowlist page and 1 for the leaking one. The e2e fails when `Hit.fields` is empty (checked by temporarily clearing it in the PR's own run).
+Acceptance: unit tests for the parser and for the evaluator: `body.has` with a plain name, a dotted name, a glob; `body.only` where one of two selected hits has an outside field (must fails); `mustNot` plus `body.has` in an epoch; the ignore lists; `fields` undefined. A leak test asserts the failure message holds the field names and never the values. E2E: a scenario on `/sgtm-leak` with `mustNot body.has [email, phone] in epoch(denied)` exits 1, the `mustNot` result has `pass: false`, and the evidence is the leaking hit IDs with `email` and `phone` in the message; no other result fails. The same scenario on `?mode=allowlist` exits 0 and the result has `pass: true`. A `body.only` entry exits 0 for the allowlist page and 1 for the leaking one. The e2e fails when `Hit.fields` is empty (checked by temporarily clearing it in the PR's own run).
 
-**R04 Done control for handoff steps (#357).** Touches: `packages/recorder` (`steps.ts` handoff branch and a new `handoff-overlay.ts`), `docs/cli.md`.
+**R04 Done control for handoff steps (#357).** Touches: `packages/recorder` (`steps.ts` handoff branch and a new `handoff-overlay.ts`). Its docs go to R11.
 In the headed window a small fixed pill shows the handoff text and a "Done" button. Design:
 
 - It is installed with `context.addInitScript` and stays dormant. A context-level `exposeBinding` (`__pwHandoffState`) tells it whether a handoff is waiting, and `__pwHandoffDone` ends the wait. The init script asks the binding on every document start in the top frame, so the pill survives navigations during the handoff. It is never added in sandboxed iframes.
 - It lives in an open shadow root on a single host element with the id `pingwright-handoff`. It is a corner pill (collapsed to one line, draggable), so it does not cover checkout fields. It makes no network request. It is not drawn outside the page DOM: that would need CDP or a browser flag, and AGENTS.md forbids both. This is the known cost.
 - Enter in the terminal keeps working. The first of the two ends the wait. While waiting, a reminder line prints to the terminal every 60 s (`Still waiting for the handoff: <text>`).
 - During a handoff the recorder already redacts bodies. The overlay adds no recorded request, and its DOM is not read.
-Acceptance: unit tests for the state machine (done from the button, done from stdin, both, reminders on a fake clock). E2E on `/handoff.html` through the library entry (headless, which the CLI never uses for handoff, so CI needs no display): the handoff waits, the test clicks the pill's Done button, the run goes on. A second case navigates to the second page during the handoff and the pill is there. A third asserts no request in the record has the overlay host in its URL. The test fails if the binding is not exposed.
+Acceptance: unit tests for the state machine (done from the button, done from stdin, both, reminders on a fake clock). E2E on `/handoff` through the library entry (headless, which the CLI never uses for handoff, so CI needs no display): the handoff waits, the test clicks the pill's Done button, the run goes on. A second case navigates to the second page during the handoff and the pill is there. A third asserts no request in the record has the overlay host in its URL. The test fails if the binding is not exposed.
 
-**R05 HTML report for one run (#354).** Touches: `packages/cli/src/report/` (new), `packages/cli/src/main.ts`, `packages/cli/src/args.ts`, `docs/cli.md`.
+**R05 HTML report for one run (#354).** Touches: `packages/cli/src/report/` (new), `packages/cli/src/main.ts`, `packages/cli/src/args.ts`. Its docs go to R11.
 Builds the report model and the renderer for a single `.jsonl` file, with `--html`. The timeline marks `full`, `ping`, `nothing`, `leak`. A `leak` mark needs `idFields` (R06 fills the rule evidence later; until then `leak` comes from `idFields` plus a denied state, which the model computes itself). A version 1 record renders with `not recorded` notes. Exit code 2 for a missing file or a file that is not a run record, as `diff` does.
-Acceptance: unit tests for the model (epoch splitting, the four marks, counts), the renderer (escaping of a scenario with `<script>` in an event name and a step label; no `<script`, no `http` inside an attribute or `url()`; the CSP meta tag present), and the leak test described above. E2E: run a fixture scenario on `/identifiers.html?state=denied`, then `report --html`. The file exists, has a `leak` mark for the sgtm row, and contains none of the fake email, its hash or the fake token. It fails if the renderer prints `params`.
+Acceptance: unit tests for the model (epoch splitting, the four marks, counts), the renderer (escaping of a scenario with `<script>` in an event name and a step label; no `<script`, no `http` inside an attribute or `url()`; the CSP meta tag present), and the leak test described above. E2E: run a fixture scenario on `/identifiers?state=denied`, then `report --html`. The file exists, has a `leak` mark for the sgtm row, and contains none of the fake email, its hash or the fake token. It fails if the renderer prints `params`.
 
 ### Wave 3
 
 **R06 `deniedIdentifiers` built-in check (#352).** Touches: `packages/expect`, `packages/decoders/src/identifiers.ts` (list only, no logic change), `docs/cli.md`.
 Adds the name to `BUILTIN_NAMES`, the check in `evaluate.ts`, the `options.identifierFields` option and its validation, and the docs table of identifier names and their consent signals. The check uses the hit's consent state first and the epoch state when the hit's state is `unknown`.
-Acceptance: unit tests for each class in the table (flagged when denied, not flagged when granted, not flagged when unknown in both), the negative controls (`cid`, `fbp`), `identifierFields`, `builtins: { deniedIdentifiers: warn }` giving `severity: "warn"` and exit 0, and a version 1 record (the check reports `cannot evaluate`). The leak test asserts no value in the message. E2E: `/identifiers.html?state=denied` exits 1 with the three vendors named. `?state=granted` exits 0. With `warn`, exit 0 and the result is `WARN`. It fails if `idFields` is cleared.
+Acceptance: unit tests for each class in the table (flagged when denied, not flagged when granted, not flagged when unknown in both), the negative controls (`cid`, `fbp`), `identifierFields`, `builtins: { deniedIdentifiers: warn }` giving `severity: "warn"` and exit 0, and a version 1 record (the check reports `cannot evaluate`). The leak test asserts no value in the message, and covers hash-keyed and digit-keyed field names. E2E: `/identifiers?state=denied` after a reject step, exits 1, the `deniedIdentifiers` result has `pass: false`, and the evidence is the GA4, Meta and server hit IDs with the field names `uid`, `ud[em]`, `external_id`. `?state=granted` after an accept step exits 0 and the result passes. With `warn`, exit 0 and the result is `WARN`. It fails if `idFields` is cleared.
 
-**R07 `suite` command (#353).** Touches: `packages/cli/src/suite.ts` (new), `packages/cli/src/main.ts`, `packages/cli/src/args.ts`, `docs/cli.md`.
+**R07 `suite` command (#353).** Touches: `packages/cli/src/suite.ts` (new), `packages/cli/src/run.ts`, `packages/cli/src/main.ts`, `packages/cli/src/args.ts`. Its docs go to R11.
 As in the design notes. The scenario scan, the up-front validation, variants, the table, the manifest, the diff summary and the exit code. `run.ts` exports a function the suite calls; the refactor keeps `run` behaviour and its tests unchanged.
 Acceptance: unit tests for argument parsing (variant names, `name=file`, the reserved `published`, duplicate names), the scan (non-YAML files ignored, one invalid scenario exits 2 before any run), the exit code order, the table text, a skipped handoff scenario, and a manifest that holds no path or value (the override file path and a fake `gtmAuth` are absent). E2E on the fixture container pages (Q02): two scenarios by two variants (`published` and a `workspace` override file with fake values). The manifest has four cells, the diff between `published` and `workspace` shows the `workspace_only` event as added, the table has four cells, and the exit code is 1 when the workspace run breaks a rule and 0 when it does not. `gtmAuth` appears nowhere in the output directory. The e2e fails if the suite uses different seeds per variant (the diff would show identity changes).
 
@@ -464,9 +467,9 @@ Acceptance: unit tests for argument parsing (variant names, `name=file`, the res
 
 **R08 Cookie rules and `server` mode (#351).** Touches: `packages/expect`, `packages/cli/src/run.ts`, `packages/recorder` (the stub decision for `serverHosts`), `docs/cli.md`, `docs/design.md` §5.3.
 Adds the `cookie` key and its time logic, the stub-mode message, `options.serverHosts` with its validation, and the `server` network mode: `stub` plus pass-through for the listed hosts. Removes the "not available yet" exit for `server` when `serverHosts` is set. A hosted host in `serverHosts` prints a warning on stderr. The `serverHosts` hosts are first party for the unknown-destination check only if they already are by the rule in design §5.3.
-Acceptance: unit tests for glob matching, `before`, `after` and `in` on response cookies, on checkpoint cookies (with `Checkpoint.t`), the stub-mode message, and `serverHosts` validation. A leak test sets a fake cookie value and asserts it appears nowhere. E2E: `/cookies.html?when=before` with `mustNot { cookie: _pwid, before: consent }` exits 1 and the evidence is the request ID of `/session/start`. `?when=after` exits 0. `_ga_PWTEST` is found through a checkpoint. In `stub` mode, `_pwdcid` from the mock Stape host is not seen, and the pass message says why. With `--network server` and `serverHosts` set to the mock host, the same rule exits 1. The e2e fails if the stubbed response is allowed to carry cookies, or if `server` mode stubs the host.
+Acceptance: unit tests for glob matching, `before`, `after` and `in` on response cookies, on checkpoint cookies (with `Checkpoint.t`), the stub-mode message, and `serverHosts` validation. A leak test sets a fake cookie value and asserts it appears nowhere. E2E: `/cookies?when=before` with `mustNot { cookie: _pwid, before: consent }` exits 1, the cookie result has `pass: false`, and the evidence is the request ID of `/session/start`. `?when=after` exits 0 and the result passes. `_ga_PWTEST` is found through a checkpoint. In `stub` mode, `_pwdcid` from the loader request on the mock Stape host is not seen, the result passes, and the pass message says why. With `--network server` and `serverHosts` set to the mock host, the same rule has `pass: false` and exit 1. The e2e fails if the stubbed response is allowed to carry cookies, or if `server` mode stubs the host.
 
-**R09 Report for a suite (#354).** Touches: `packages/cli/src/report/` only, and `docs/cli.md`.
+**R09 Report for a suite (#354).** Touches: `packages/cli/src/report/` only. Its docs go to R11.
 `report <suite dir>` reads `suite.json` and the records it names, and renders one page with a section per scenario and a diff section per variant pair, from the `diff` engine. A missing record in the manifest is a warning in the page, not a crash. The page header gets the variant names and the exit code.
 Acceptance: unit tests for the multi-run model and for a manifest that points at a missing record. E2E on the R07 suite output: the page lists both variants, shows `workspace_only` as added, and passes the same no-value and no-network assertions as R05. It fails if the diff section is empty.
 
@@ -487,11 +490,12 @@ Locators. The `click`, `wait` and `select` steps accept an object as well as a s
 
 Select. `select: { "select[name=countryCode]": DE }` chooses by value, then by label. After the change it reads the select's value and checks it. If it is not the requested option, the step fails with `value not applied (still: <option label>)`. The option label may be a country or size name. It is a label, not a typed value. The chosen value does not join the run identity. Using `fill` on a select is unchanged.
 
-Acceptance: unit tests for the parser (valid and invalid objects, empty `any`), `getByRole` mapping on a fake page, `any` order, the closest-match list (cap, cut, families), and `select` success and failure messages. E2E: `/tiles.html?theme=button` and `?theme=radio` both pass with `{ role: radio, name }` only on the radio theme, and the `any` list passes on both. A scenario with a wrong role times out and the error lists `White (01)` and `Black (02)`. `/select.html` passes with `select: DE`, and `?broken=1` fails with `value not applied (still: …)`. The e2e fails if `select` does not read the value back.
+Acceptance: unit tests for the parser (valid and invalid objects, empty `any`), `getByRole` mapping on a fake page, `any` order, the closest-match list (cap, cut, families), and `select` success and failure messages. E2E: `/tiles?theme=button` and `?theme=radio` both pass with `{ role: radio, name }` only on the radio theme, and the `any` list passes on both. A scenario with a wrong role times out and the error lists `White (01)` and `Black (02)`. `/select` passes with `select: DE`, and `?broken=1` fails with `value not applied (still: …)`. The e2e fails if `select` does not read the value back.
 
 ### Wave 6
 
-**R11 Docs and rc.1 prep.** Touches: `README.md`, `docs/`, `package.json` files.
+**R11 Docs and rc.1 prep.** Touches: `README.md`, `docs/` (including `docs/cli.md`), `package.json` files.
+- writes the docs/cli.md sections for the Done control (R04), `report` (R05, R09) and `suite` (R07), because only one PR per wave touches docs/cli.md (R03, R06, R08, R10);
 - updates the README: what 0.3 covers, a `suite` and `report` quick start, the new rules;
 - marks 0.3 built in design §15 and adds §15.3 "Differences in 0.3". The section includes the 0.4 list from this plan;
 - marks each PR in this plan with its number;
@@ -508,7 +512,7 @@ Then run `scripts/release.sh 0.3.0-rc.1` on main and push the tag. Then do a fie
 | Claim | Where | Resolved in |
 | --- | --- | --- |
 | `Response.setCookieNames` is recorded for every passed response, for all hosts, and is empty for stubbed ones | #351 | Checked in code for 0.3 planning: `recorder.ts` `recordResponse` and the stub path (empty list). R08 asserts it in a unit test. |
-| A GA4 batched body can be merged into one field list without reading values | R01 | R01 unit test. |
+| Each line of a GA4 batched body gives its own hit with only its own fields plus the shared query, and no value is read | R01 | R01 unit test. |
 | An `addInitScript` overlay survives navigations in the top frame and does not cover Shopify checkout fields | R04 | R04 e2e covers navigation on the fixture. Covering fields is a field question for the rc.1 run. |
 | A closed or open shadow root host is enough to keep site CSS from changing the overlay | R04 | R04 e2e. |
 | `getByRole` plus the accessibility tree gives the role and name list for the closest matches in Playwright 1.64.1 | R10 | R10 e2e. |
@@ -540,4 +544,4 @@ These are points in the issues that are wrong, conflict with the design or the r
 19. **#360: per-store `vars` is not enough for a multi-market suite.** Banners, delivery countries and checkout flows differ per market, so the scenario also needs the country and consent tweaks per store. That needs field data from a second market. Moved to 0.4. R07's manifest has `labels` for it.
 20. **#361: the Playwright WebKit build is not Safari.** The claim that it shows ITP behaviour is unproven. A cookie-lifetime report that is wrong is worse than none. A probe PR comes first.
 21. **#362: an inline-YAML tool lets an agent choose what the browser visits.** The server must refuse non-loopback payment steps, run no handoff, never write override values to disk, and return summaries only. It adds a dependency. All of that is shaped by what `suite` and `report` output. Moved to 0.4.
-22. **Existing, not in the issues.** `DataLayerEvent.args` stores pushed arguments, which can hold values (for example a `purchase` event with an email). The report never reads it. A later PR should decide whether the record should keep values at all, since the rule "names and counts only" now covers more of the tool. Not built in 0.3.
+22. **Existing, not in the issues.** `DataLayerEvent.args` stores pushed arguments, which can hold values (for example a `purchase` event with an email). The report never reads it. A later PR should decide whether the record should keep values at all, since the rule "names and counts only" now covers more of the tool. Not built in 0.3. The same holds for `Request.url`, `Request.postData` and `Hit.params`: the 0.3 rule covers only the new fields, messages, manifest and report.
