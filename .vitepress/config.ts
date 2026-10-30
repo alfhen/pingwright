@@ -1,11 +1,33 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitepress';
-import type MarkdownIt from 'markdown-it';
+import { defineConfig, type DefaultTheme, type MarkdownRenderer as MarkdownIt } from 'vitepress';
 import { brandAssets } from './brand-assets.ts';
 import { mermaidFences } from './mermaid.ts';
-import { unlistedPages } from './page-guard.ts';
+import { sidebarPages, unlistedPages } from './page-guard.ts';
 
 const repo = 'https://github.com/alfhen/pingwright';
+
+const rewrites = { 'docs/index.md': 'index.md', 'README.md': 'readme.md' };
+
+const sidebar: DefaultTheme.SidebarItem[] = [
+  { text: 'Home', link: '/' },
+  {
+    text: 'Guides',
+    items: [
+      { text: 'What Pingwright checks', link: '/docs/guide/what-it-checks' },
+      { text: 'Your first run', link: '/docs/guide/first-run' },
+      { text: "Reading a run's results", link: '/docs/guide/reading-results' },
+    ],
+  },
+  {
+    text: 'Reference',
+    items: [
+      { text: 'README', link: '/readme' },
+      { text: 'CLI', link: '/docs/cli' },
+      { text: 'Shopify checkout', link: '/docs/shopify-checkout' },
+      { text: 'Design', link: '/docs/design' },
+    ],
+  },
+];
 
 // Links to repo files that are not pages go to GitHub, so dead link checks stay on for everything else.
 function repoFileLinks(md: MarkdownIt) {
@@ -64,7 +86,7 @@ export default defineConfig({
     'docs/proposal-*.md',
     'docs/release.md',
   ],
-  rewrites: { 'docs/index.md': 'index.md', 'README.md': 'readme.md' },
+  rewrites,
   cleanUrls: true,
   ignoreDeadLinks: false,
   useWebFonts: false,
@@ -81,7 +103,7 @@ export default defineConfig({
   },
   markdown: { config: markdownSetup },
   buildEnd(siteConfig) {
-    const extra = unlistedPages(siteConfig.pages);
+    const extra = unlistedPages(siteConfig.pages, sidebarPages(sidebar, rewrites));
     if (extra.length) throw new Error(`Pages not in the published list: ${extra.join(', ')}`);
   },
   themeConfig: {
@@ -91,26 +113,7 @@ export default defineConfig({
       { text: 'CLI', link: '/docs/cli' },
       { text: 'GitHub', link: repo },
     ],
-    sidebar: [
-      { text: 'Home', link: '/' },
-      {
-        text: 'Guides',
-        items: [
-          { text: 'What Pingwright checks', link: '/docs/guide/what-it-checks' },
-          { text: 'Your first run', link: '/docs/guide/first-run' },
-          { text: "Reading a run's results", link: '/docs/guide/reading-results' },
-        ],
-      },
-      {
-        text: 'Reference',
-        items: [
-          { text: 'README', link: '/readme' },
-          { text: 'CLI', link: '/docs/cli' },
-          { text: 'Shopify checkout', link: '/docs/shopify-checkout' },
-          { text: 'Design', link: '/docs/design' },
-        ],
-      },
-    ],
+    sidebar,
     search: { provider: 'local' },
     socialLinks: [{ icon: 'github', link: repo }],
   },

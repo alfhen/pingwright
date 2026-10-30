@@ -1,12 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { unlistedPages } from '../.vitepress/page-guard.ts';
+import { sidebarPages, unlistedPages } from '../.vitepress/page-guard.ts';
+
+const rewrites = { 'docs/index.md': 'index.md', 'README.md': 'readme.md' };
+const sidebar = [
+  { text: 'Home', link: '/' },
+  { text: 'Guides', items: [{ text: 'First run', link: '/docs/guide/first-run' }] },
+  { text: 'Reference', items: [{ text: 'README', link: '/readme' }, { text: 'CLI', link: '/docs/cli' }] },
+  { text: 'Elsewhere', link: 'https://example.com/' },
+];
+
+describe('sidebarPages', () => {
+  it('maps sidebar links back to source pages', () => {
+    expect(sidebarPages(sidebar, rewrites)).toEqual(['docs/index.md', 'docs/guide/first-run.md', 'README.md', 'docs/cli.md']);
+  });
+});
 
 describe('unlistedPages', () => {
-  it('accepts the published pages', () => {
-    expect(unlistedPages(['README.md', 'docs/cli.md', 'docs/design.md'])).toEqual([]);
+  const published = sidebarPages(sidebar, rewrites);
+
+  it('accepts the pages the sidebar links to', () => {
+    expect(unlistedPages(['README.md', 'docs/cli.md'], published)).toEqual([]);
   });
 
-  it('reports any other page', () => {
-    expect(unlistedPages(['README.md', 'docs/notes.md', 'runs/x/report.md'])).toEqual(['docs/notes.md', 'runs/x/report.md']);
+  it('reports a page the sidebar does not link to', () => {
+    expect(unlistedPages(['README.md', 'docs/notes.md', 'runs/x/report.md'], published)).toEqual(['docs/notes.md', 'runs/x/report.md']);
   });
 });
