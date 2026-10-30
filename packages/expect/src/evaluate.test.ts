@@ -351,11 +351,11 @@ test('possibleRealData ignores random hashes under exempt keys in raw Meta and G
   const meta = new URLSearchParams({ id: '100000000000001', ev: 'PageView', 'ud[external_id]': h, 'cd[user_id]': h });
   expect(passes(request({ url: `https://www.facebook.com/tr/?${meta}` }))).toBe(true);
   const boundary = '----pw';
-  const multipart = `--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n100000000000001\r\n--${boundary}\r\nContent-Disposition: form-data; name="ev"\r\n\r\nPageView\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[external_id]"\r\n\r\n${h}\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[client_id_hash]"\r\n\r\n${h}\r\n--${boundary}--\r\n`;
+  const multipart = `--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n100000000000001\r\n--${boundary}\r\nContent-Disposition: form-data; name="ev"\r\n\r\nPageView\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[external_id]"\r\n\r\n${h}\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[uid]"\r\n\r\n${h}\r\n--${boundary}--\r\n`;
   expect(
     passes(request({ method: 'POST', url: 'https://www.facebook.com/tr/', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, postData: multipart, resourceType: 'ping' })),
   ).toBe(true);
-  const ga4 = new URLSearchParams({ v: '2', tid: 'G-PWTEST0001', cid: '1.2', en: 'purchase', uid: h, 'ep.client_id_hash': h });
+  const ga4 = new URLSearchParams({ v: '2', tid: 'G-PWTEST0001', cid: '1.2', en: 'purchase', uid: h, 'ep.external_id': h });
   expect(passes(request({ url: `https://www.google-analytics.com/g/collect?${ga4}` }))).toBe(true);
 });
 

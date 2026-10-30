@@ -176,7 +176,8 @@ export interface HashSource {
 
 /**
  * Hex digests that act as a stable client ID: every occurrence in the run is under an ID-like key, and the value
- * repeats under two or more key names or in two or more requests. A digest seen once, unkeyed, or under any
+ * repeats under two or more repeat-only key names (snake_case and camelCase spellings count once) or in two
+ * or more requests; always-exempt keys do not count as a second key. A digest seen once, unkeyed, or under any
  * other key (em, ph, ud[...]) is never stable. A hashed email repeated under several ID keys cannot be told
  * from a client ID by shape, so it is skipped too; the same hash under an identity key is still reported.
  */
@@ -192,7 +193,7 @@ export function findStableHashes(sources: Iterable<HashSource>): Set<string> {
         if (!entry) seen.set(hash, (entry = { keys: new Set(), requests: new Set(), allIdLike: true }));
         const idLike = name !== undefined && (REUSABLE_ID_KEYS.has(name) || NON_PERSONAL_HASH_KEYS.has(name));
         if (!idLike) entry.allIdLike = false;
-        else entry.keys.add(name);
+        else if (REUSABLE_ID_KEYS.has(name)) entry.keys.add(name.replace(/_/g, ''));
         entry.requests.add(requestId);
       }
     }

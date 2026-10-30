@@ -372,6 +372,21 @@ describe('scan fixes', () => {
     expect(scan(`uid=${h}`, id, { stableHashes: twice })).toEqual([]);
   });
 
+  it('does not count always-exempt keys or spelling variants as a second key (#220)', () => {
+    const h = sha256('other.person@example.com').hex;
+    for (const text of [
+      `external_id=${h}&client_id=${h}`,
+      `uid=${h}&state=${h}`,
+      `external_id=${h}&hmac=${h}`,
+      `external_id=${h}&externalId=${h}`,
+      `user_id=${h}&userId=${h}`,
+    ]) {
+      const stable = findStableHashes([{ requestId: 'r1', text }]);
+      expect(stable.has(h), text).toBe(false);
+      expect(scan(text, id, { stableHashes: stable }), text).toEqual([{ kind: 'hash', value: h }]);
+    }
+  });
+
   it('never treats a hash as stable when any occurrence is not under an ID key (#220)', () => {
     const h = sha256('other.person@example.com').hex;
     const sources = (extra: string) => [
