@@ -74,7 +74,7 @@ test('warns when an input file is cut off', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'pw-diff-'));
   const run = {
     type: 'run',
-    id: 'run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    id: 'run_0123456789ABCDEFGHJKMNPQRS',
     scenario: 'checkout',
     site: 'http://localhost:1234',
     startedAt: 1_800_000_000_000,

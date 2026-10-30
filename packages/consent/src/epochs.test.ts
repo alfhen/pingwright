@@ -72,6 +72,17 @@ describe('consentModeChanges', () => {
 });
 
 describe('buildEpochs', () => {
+  test('a default after the first decision does not leak into later states when the caller omits firstDecisionT', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', denied),
+      push(5000, 'default', { analytics_storage: 'granted' }),
+      push(20000, 'update', { ad_storage: 'granted' }),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1010, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.at(-1)?.state.analytics).toBe('denied');
+    expect(epochs.at(-1)?.state.ads).toBe('granted');
+  });
+
   test('undecided only', () => {
     const epochs = buildEpochs([], consentModeChanges([push(10, 'default', denied)]), { startT: 0 });
     expect(epochs).toHaveLength(1);

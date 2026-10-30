@@ -366,8 +366,23 @@ describe('scan fixes', () => {
     expect(scan(`ud[em]=${h}`, id)).toEqual([{ kind: 'hash', value: h }]);
   });
 
-  it('keeps the country option as a label only (#32)', () => {
+  it('keeps US-shaped data for a country without a format (#32)', () => {
     expect(createIdentity(1, { country: 'DK' }).phone).toMatch(/^\+1/);
+  });
+
+  it('localises zip and phone for Sweden (#32)', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const i = createIdentity(seed, { country: 'SE' });
+      expect(i.country).toBe('SE');
+      expect(i.zip).toMatch(/^\d{3} \d{2}$/);
+      expect(i.phone).toMatch(/^\+4670174\d{4}$/);
+      expect(i.email).toMatch(/^[a-z0-9.]+@example\.com$/);
+    }
+  });
+
+  it('does not flag a Swedish identity\'s own values', () => {
+    const i = createIdentity(3, { country: 'SE' });
+    expect(scan(`em=${i.email}&ph=${i.phone}&zp=${i.zip}`, i)).toEqual([]);
   });
 });
 

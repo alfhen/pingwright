@@ -11,6 +11,8 @@ export interface ConsentModeChange {
   command: 'default' | 'update';
   /** State after the command, with earlier commands merged in. */
   state: ConsentState;
+  /** Only the signals this command set. */
+  signals: Partial<ConsentState>;
 }
 
 export const unknownConsent: ConsentState = {
@@ -46,12 +48,12 @@ export function consentModeChanges(pushes: readonly ConsentPush[], firstDecision
     // An update or banner decision wins over a later default, so a default after one must not leak into later states.
     if (command === 'default' && (updated || push.t >= firstDecisionT)) continue;
     if (command === 'update') updated = true;
-    const next = { ...state };
+    const delta: Partial<ConsentState> = {};
     for (const [signal, field] of Object.entries(signalToField)) {
-      if (signal in signals) next[field] = toValue((signals as Record<string, unknown>)[signal]);
+      if (signal in signals) delta[field] = toValue((signals as Record<string, unknown>)[signal]);
     }
-    state = next;
-    changes.push({ t: push.t, command, state });
+    state = { ...state, ...delta };
+    changes.push({ t: push.t, command, state, signals: delta });
   }
   return changes;
 }
