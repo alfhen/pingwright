@@ -60,6 +60,19 @@ test('groups unknown and first-party flags by host with counts and a few paths',
   expect(text).not.toContain('?x=1');
 });
 
+test('groups sandboxPageUrl flags by vendor with a count and an example path', () => {
+  const sandbox = 'https://shop.example.com/web-pixels@abc/sandbox/modern/checkout';
+  const flags = [
+    ...[1, 2, 3].map((n) => ({ kind: 'sandboxPageUrl', detail: `ga4 received ${sandbox}?n=${n} as the page` })),
+    { kind: 'sandboxPageUrl', detail: `meta received ${sandbox} as the page` },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('sandboxPageUrl: ga4 x3 (/web-pixels@abc/sandbox/modern/checkout)');
+  expect(text).toContain('sandboxPageUrl: meta x1 (/web-pixels@abc/sandbox/modern/checkout)');
+  expect(text).not.toContain('received');
+  expect(text).not.toContain('?n=');
+});
+
 test('shows evidence for passing expectations, capped', () => {
   const ids = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7'];
   const summary: Summary = {

@@ -50,13 +50,14 @@ function formatFlags(flags: Summary['flags']): string[] {
   const lines: string[] = [];
   const groups = new Map<string, { kind: string; host: string; count: number; paths: Set<string> }>();
   for (const f of flags) {
-    const url = GROUPED_KINDS.has(f.kind) ? parseUrl(/\s(\S+)$/.exec(f.detail)?.[1]) : undefined;
-    if (!url) {
+    const target = groupTarget(f);
+    if (!target) {
       lines.push(`  ${f.kind}: ${f.detail}`);
       continue;
     }
-    const key = `${f.kind} ${url.host}`;
-    const group = groups.get(key) ?? { kind: f.kind, host: url.host, count: 0, paths: new Set() };
+    const { label, url } = target;
+    const key = `${f.kind} ${label}`;
+    const group = groups.get(key) ?? { kind: f.kind, host: label, count: 0, paths: new Set() };
     group.count += 1;
     group.paths.add(url.pathname);
     groups.set(key, group);
@@ -67,6 +68,19 @@ function formatFlags(flags: Summary['flags']): string[] {
     lines.push(`  ${kind}: ${host} x${count} (${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''})`);
   }
   return lines;
+}
+
+function groupTarget(flag: Summary['flags'][number]): { label: string; url: URL } | undefined {
+  if (GROUPED_KINDS.has(flag.kind)) {
+    const url = parseUrl(/\s(\S+)$/.exec(flag.detail)?.[1]);
+    return url && { label: url.host, url };
+  }
+  if (flag.kind === 'sandboxPageUrl') {
+    const match = /^(\S+) received (\S+) as the page$/.exec(flag.detail);
+    const url = parseUrl(match?.[2]);
+    return match && url ? { label: match[1]!, url } : undefined;
+  }
+  return undefined;
 }
 
 function parseUrl(text: string | undefined): URL | undefined {

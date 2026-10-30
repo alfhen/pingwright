@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { rootVersion, run, runCli, scenario, site, UNKNOWN } from './cli-helpers.ts';
+import { rootVersion, run, runCli, runText, scenario, site, UNKNOWN } from './cli-helpers.ts';
 
 test('usage errors exit 2', async () => {
   expect((await runCli(['run'])).code).toBe(2);
@@ -40,3 +40,18 @@ test('run --help prints the help of run', async () => {
   expect(r.code).toBe(0);
   expect(r.stdout).toContain('Usage: pingwright run <scenario.yml>');
 });
+
+test('text summary groups sandboxPageUrl flags into one line per vendor', async () => {
+  const json = await run('checkout');
+  const flagged = json.records!.flags.filter((f) => f.kind === 'sandboxPageUrl');
+  expect(flagged.length).toBeGreaterThan(1);
+  const { stdout } = await runText('checkout');
+  const lines = stdout.split('\n').filter((l) => l.startsWith('  sandboxPageUrl:'));
+  expect(lines.length).toBeGreaterThan(0);
+  expect(lines.length).toBeLessThan(flagged.length);
+  expect(lines.every((l) => /^ {2}sandboxPageUrl: \S+ x\d+ \(\/\S+/.test(l))).toBe(true);
+  expect(new Set(lines.map((l) => l.split(' ')[3])).size).toBe(lines.length);
+  const total = lines.reduce((n, l) => n + Number(/ x(\d+) /.exec(l)![1]), 0);
+  expect(total).toBe(flagged.length);
+  expect(stdout).not.toContain('as the page');
+}, 180_000);

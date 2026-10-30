@@ -62,3 +62,5 @@ export const ga4 = (hits: Hit[], event: string) => hits.filter((h) => h.vendor =
 export const SANDBOX = 'builtin: sandboxPageUrl';
 
 export const UNKNOWN = 'builtin: unknownDestination';
+
+export const runText = (name: string) => runCli(['run', scenario(name), '--site', site.url, '--out', outDir]);
