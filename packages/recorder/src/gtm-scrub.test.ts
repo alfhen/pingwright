@@ -44,3 +44,10 @@ test('strings in objects and arrays are redacted whole', () => {
 test('text keeps the line but redacts the secret, and a decoded form redacts the line', () => {
   expect(scrub.text(`bad ${secret} here\nfine\nenc ${b64(secret)}`)).toBe(`bad ${REDACTED} here\nfine\n${REDACTED}`);
 });
+
+test('a flag whose URL is redacted whole keeps the origin', () => {
+  const detail = `GET https://tracker.example.net/${secret}/x?a=1`;
+  const flag = { type: 'flag', id: 'flg_1', runId: 'run_1', kind: 'unknownDestination', recordIds: [], detail };
+  const out = scrub.records({ requests: [], flags: [flag] } as never).flags[0]!;
+  expect(out.detail).toBe(`GET https://tracker.example.net/${REDACTED}`);
+});

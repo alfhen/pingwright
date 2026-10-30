@@ -80,6 +80,20 @@ export class Scrubber {
     return this.value(out);
   }
 
+  /** Flag detail ends with a URL. A whole-redacted URL keeps its origin so the host can still be reported. */
+  private flagDetail(detail: string): string {
+    const split = /^(.*\s)(https?:\/\/\S+)$/s.exec(detail);
+    if (!split) return this.value(detail);
+    const url = this.url(split[2]!);
+    if (url !== REDACTED) return this.value(split[1]!) + url;
+    try {
+      const origin = new URL(split[2]!).origin;
+      return this.value(split[1]!) + (containsSecret(origin, this.secret) ? REDACTED : `${origin}/${REDACTED}`);
+    } catch {
+      return REDACTED;
+    }
+  }
+
   /** A form-encoded body (one or more lines) loses only the values that hold the secret. Any other body is redacted whole. */
   body(body: string): string {
     const lines = body.split('\n');
@@ -107,9 +121,10 @@ export class Scrubber {
   }
 
   records(records: RunRecords): RunRecords {
-    const { requests, ...rest } = records;
+    const { requests, flags, ...rest } = records;
     return {
       ...this.deep(rest),
+      flags: flags.map((f) => ({ ...this.deep({ ...f, detail: '' }), detail: this.flagDetail(f.detail) })),
       requests: requests.map((r) => ({
         ...this.deep({ ...r, url: '', postData: null }),
         url: this.url(r.url),
