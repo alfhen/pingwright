@@ -71,12 +71,12 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | --- | --- |
 | `Run` | `id` (`run_…`), `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride`, `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
 | `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt` |
-| `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`) |
+| `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`), `failure` (Playwright's error text for a failed request), `redacted` (`handoff` when a handoff step replaced the body and query values) |
 | `Response` | `id` (`res_…`), `requestId`, `status`, `setCookieNames[]` |
 | `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params` |
 | `DataLayerEvent` | `id` (`dle_…`), `runId`, `stepId`, `t`, `event`, `gtmUniqueEventId`, `args` (the pushed arguments, JSON-safe), `isConsentCommand` |
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
-| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied` or `mixed`) |
+| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
 | `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `evidence[]` (record IDs) |
 
@@ -108,11 +108,11 @@ Every profile:
 ### 5.2 Capture
 
 - All hooks are on the browser context: `context.on('request')`, `context.on('response')` and `context.route`. Page-level hooks miss service-worker traffic.
-- Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading, which are usually neither routed nor reported (§9), and sends from `pagehide` or `visibilitychange`, which the page answers itself in stub mode (§5.3).
+- Covered: the page and all frames, including sandboxed iframes, except requests a sandboxed `srcdoc` iframe sends while it is loading, and under machine load for at least 1.5 s after (no safe delay was found), which are neither routed nor reported (§9), and sends from `pagehide` or `visibilitychange`, which the page answers itself in stub mode (§5.3).
 - Service workers: Playwright reports and routes their requests on the context, in Chromium only. Requests to update a service worker's own script cannot be routed. Option: `serviceWorkers: 'block'`.
-- Dedicated workers: **verified** on Chromium 156.0.8078.4 with Playwright 1.64.1. Requests to the collector origin are routed and seen from a worker on the page and from a worker inside a sandboxed iframe (`collector-origin.e2e.test.ts`). Requests from a dedicated worker to an ordinary host are recorded (`network-modes.e2e.test.ts`, the dedicated worker test), and the startup self-test reports `dedicatedWorker` coverage (`recorder.e2e.test.ts`).
-- A startup self-test loads a routed page at `https://selftest.pingwright.invalid/`. The page, a sandboxed iframe and a dedicated worker each send a report to the collector origin. The run states its capture coverage: `{page, iframe, dedicatedWorker, serviceWorker: 'chromium-only'}`. Self-test reports are not stored. The self-test does not probe early iframe requests: a probe cannot tell a request that bypassed capture from one that was never sent (§5.3).
-- An init script hooks `dataLayer.push` and records each push with a timestamp on the shared clock (§7.3).
+- Dedicated workers: **verified** on Chromium 156.0.8078.4 with Playwright 1.64.1. Requests to the collector origin are routed and seen from a worker on the page and from a worker inside a sandboxed iframe (`collector-origin.e2e.test.ts`). Requests from a dedicated worker to an ordinary host are recorded (`network-modes.e2e.test.ts`, the dedicated worker test), and the startup self-test reports `dedicatedWorker` coverage (`recorder.e2e.test.ts`). A collection request from a dedicated worker is stubbed in `stub` mode and never reaches the server (`network-modes.e2e.test.ts`).
+- A startup self-test loads a routed page at `https://selftest.pingwright.invalid/`. The page, a sandboxed iframe and a dedicated worker each send a report to the collector origin. The run states its capture coverage: `{page, iframe, dedicatedWorker, serviceWorker: 'chromium-only'}`. Self-test reports are not stored, also when one arrives after the self-test page is closed. The self-test does not probe early iframe requests: a probe cannot tell a request that bypassed capture from one that was never sent (§5.3).
+- An init script hooks `dataLayer.push` and records each push with a timestamp on the shared clock (§7.3). A push over 10000 characters when serialised is recorded with its top levels, deeper values replaced by `"[truncated]"`, so the event name, ids and consent command survive. Consent epochs use only pushes from the main frame; a `gtag('consent', ...)` call in an embedded frame is recorded but does not change the page's consent state.
 - Checkpoints run at the end of each step and after each consent action.
 
 ### 5.3 Network modes
@@ -123,31 +123,40 @@ Every profile:
 | `server` | As `stub`, but requests to the configured server-container hosts pass through. Required for server-side tag reports, server-set cookies and the server preview header. |
 | `live` | Everything goes through. Test hits reach real vendor accounts. |
 
-Why unknown destinations pass rather than being blocked: blocking by host stops vendor libraries from loading, which hides the very hits a test is looking for, and makes a broken setup look compliant. Flagging them makes them visible without changing the site's behaviour.
+Why unknown destinations pass rather than being blocked: blocking by host stops vendor libraries from loading, which hides the very hits a test is looking for, and makes a broken setup look compliant. Flagging them makes them visible without changing the site's behaviour. Requests that `stub` mode stubs by vendor host or path (Meta `/tr`, Ads `rmkt`, `ccm` and `viewthroughconversion`) are known destinations, not unknown ones.
 
 Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, an empty 200 JavaScript response for scripts (gtag.js sends some Ads hits as script requests), and an empty 200 HTML response for documents (such as `td.doubleclick.net` iframes). The CORS headers echo the request `Origin` and allow credentials. Reports mark stubbed requests with `outcome: stubbed`. In `live` mode every request continues and has `outcome: passed`.
 
-**Unknown destination rule.** A request is flagged `unknownDestination` when its host is not the site's host, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
+**Unknown destination rule.** A request is flagged `unknownDestination` when its host is not first party, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
 
-**Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds:
+**First party.** The registrable domain of the `--site` host, found with the Public Suffix List (`tldts`, private suffixes included), is first party: `--site https://www.shop.co.uk` makes `shop.co.uk` and every `*.shop.co.uk` host first party. A host with no registrable domain (an IP address, `localhost`) is first party only as the exact `--site` host. `options.firstPartyHosts` adds hosts or `*.domain` wildcards. A wildcard matches subdomains at any depth, not the bare domain.
 
-- GA4 sent each event once, as a `POST` through `fetch`. It did not retry on another transport, such as an image or a beacon.
-- A gtag `event_callback` fired in under 1.5 s of the `gtag('event')` call (the test's bound), without waiting for any response. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
-- GA4 sent events other than `page_view` several seconds after the call (seen in a probe, not asserted by the test).
+**`firstPartySubdomain` flag.** A request that would be flagged `unknownDestination` except that its host is first party, and that is not to the exact `--site` host, gets the informational flag `firstPartySubdomain` instead. This keeps server-side GTM on a custom subdomain (for example `sgtm.shop.com/collect`) visible. It never fails a run. The terminal summary groups it, and `unknownDestination`, by host with a count and a few example paths.
+
+**Stubbing side effects (verified).** On Chromium 156.0.8078.4 with Playwright 1.64.1 and the real gtag.js on the fixture site with consent denied (`packages/recorder/test/e2e/stubbing-side-effects.e2e.test.ts`), the same results held for a 204, a 1x1 GIF and a 204 delayed by 2 seconds. An aborted request is described below.
+
+- GA4 sent each event once (`page_view`, `view_item`), as a `POST` through `fetch` to `/g/collect`. It did not retry on another transport, such as an image or a beacon.
+- A gtag `event_callback` fired within 1.5 s of the GA4 hit being sent, without waiting for any response; with the delayed stub it fired before the stub answered. A stub therefore does not change callback timing. A site that waits on a tag callback does not wait for the vendor, with or without stubbing.
+- GA4 can batch several events in one POST body, one event per line, so a check must read every line of the body. The stubbing test does not assert this; the GA4 decoder test covers a batched body.
+- When the request is aborted, GA4 still sent each event once as `POST` through `fetch`, but the Google Ads hits (`/ccm/collect`) were retried as `GET` image requests.
 
 Other vendors were not tested in 0.1.
 
 **Unload-time sends.** The findings in this paragraph come from one-off probes on Chromium 156.0.8078.4 with Playwright 1.64.1. Only the workaround is covered by a test. Chromium neither routes nor reports requests a page sends from `pagehide` or `visibilitychange` (`sendBeacon` and `fetch` with `keepalive` to a local server and to the collector origin; the server received them and `context.on('request')` saw none). Binding calls from those handlers are lost too. In a probe, real gtag.js sent a GA4 `fetch` with `keepalive` at that moment on every same-tab navigation, so without a fix stub mode would leak it. In `stub` mode the init script therefore answers `sendBeacon` and `fetch` with `keepalive` locally while the page is hidden or unloading. It queues each one in `sessionStorage` until the binding call is acknowledged, and the next same-origin document in the tab, or `close()`, replays the queue. These requests are recorded with `initiator: unload` and `outcome: stubbed`. Limits: every unload-time beacon is swallowed, not only collection endpoints. A send is unrecorded, though still not sent, if the tab navigates to another origin, or comes from a sandboxed iframe without `allow-same-origin`. Other transports used during unload (image, XHR) are not covered. Test of the workaround: `network-modes.e2e.test.ts`.
 
-**Limit: early iframe requests.** A request sent while a sandboxed `srcdoc` iframe is loading is usually not routed, so it is not stubbed and reaches the network. It is then also not reported by `context.on('request')`. Locally on Chromium 156.0.8078.4 with Playwright 1.64.1 this happened in 5 of 5 runs of `network-modes.e2e.test.ts` (the srcdoc test). On CI the same request was once routed and stubbed, so the outcome depends on timing. The test accepts either outcome and logs which one it saw. The recorder cannot record or flag such a request, so a collection hit sent this way can leave the machine unrecorded in `stub` mode. The recorder still flags any collection request it sees but did not route as `stubBypass`.
+**Limit: early iframe requests.** A request sent while a sandboxed `srcdoc` iframe is loading, or under machine load for at least 1.5 s after it (no safe delay was found), is usually not routed, so it is not stubbed and reaches the network. It is then also not reported by `context.on('request')`. Locally on Chromium 156.0.8078.4 with Playwright 1.64.1 this happened in 5 of 5 runs of `network-modes.e2e.test.ts` (the srcdoc test). On CI the same request was once routed and stubbed, so the outcome depends on timing. The test accepts either outcome and logs which one it saw. The recorder cannot record or flag such a request, so a collection hit sent this way can leave the machine unrecorded in `stub` mode. The recorder still flags any collection request it sees but did not route as `stubBypass`, in `stub` mode only.
+
+**Limit: redirects.** Playwright calls a route handler only for the first URL of a redirect chain. In `stub` mode a request that redirects to a collection endpoint reaches the network for that hop. The recorder sees the hop and flags it `stubBypass` when it is a collection endpoint or a known vendor collection path. Test: `network-modes.e2e.test.ts`.
 
 ### 5.4 Steps
 
 `visit`, `click`, `fill` (from the fake identity, §13), `consent` (`accept`, `reject`, `none`, or a named choice), `wait`, `addToCart` (through the platform adapter or a selector), `evaluate`, `checkpoint`, and `handoff`.
 
-The scenario's `start` is played first, as step 0 labelled `start`. A step may carry `label: <name>`; the default is the kind and the step's index (`click-3`), and a checkpoint is named by its value. Labels are unique, and `after:` must name one. Each Request, Hit and DataLayerEvent carries the id of the step that was running when it was recorded, and a step that ends records a checkpoint of the cookies. A `fill` on a card or password field (autocomplete `cc-*`, `type=password`, or a name or id matching card, cvc, cvv, iban or password) fails unless the page host is loopback.
+The scenario's `start` is played first, as step 0 labelled `start`. A step may carry `label: <name>`; the default is the kind and the step's index (`click-3`), and a checkpoint is named by its value. Labels are unique, and `after:` must name one. Each Request, Hit and DataLayerEvent carries the id of the step that was running when it was recorded, and a step that ends records a checkpoint of the cookies. A `fill` on a card or password field (autocomplete `cc-*`, `type=password`, or a name or id matching card, cvc, cvv, iban or password) fails unless the page host is loopback. An `evaluate` step is no way around this: while it runs, such fields in non-loopback frames refuse plain writes through the value setters, setAttribute, setAttributeNS and Attr.value, and the step fails; a field left changed is cleared. This is a guard, not a sandbox. A script that works around it (HTML parsing such as innerHTML, a setter taken from another frame, frames created during the script, writes after the step returns, redefining the setters, execCommand, setRangeText) can still send a value. Do not rely on it to keep card data off a site. `addToCart` clicks the selector and then fails with "click did not add to cart" unless the step recorded a cart request (a POST to `/cart/add`, `/cart/change`, `/cart/update` or `/cart.js`, or a cart mutation) or an `add_to_cart` dataLayer event within 5 s.
 
 `handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done. Pingwright never automates payment or log-in on a hosted site. The one exception is a loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, where no real payment can happen. There, a scenario may fill a fake payment form so the test suite can cover a whole checkout.
+
+While a handoff waits, a person types real-looking values into the page. Requests sent in that time that do not decode as tracking hits are stored without their body and with every query value replaced by `[redacted]`, and carry `redacted: handoff`. Tracking hits keep theirs, so a purchase made during a handoff is still checked.
 
 ## 6. Decoders
 
@@ -155,9 +164,9 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 
 | Decoder | Notes |
 | --- | --- |
-| `ga4` | Event name (`en`), parameters (`ep.*`, `epn.*`), `uid` presence, `cid`, measurement ID (`tid`), batched bodies. Consent from `gcs` and `gcd`. |
-| `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts. Multi-hop chains are recorded as linked requests. |
-| `meta` | `facebook.com/tr`: `ev`, `id`, `eid`. |
+| `ga4` | Event name (`en`), parameters (`ep.*`, `epn.*`), `uid` presence, `cid`, measurement ID (`tid`), batched bodies. Matches `/g/collect` under a path prefix too. Consent from `gcs` and `gcd`. |
+| `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts, and the `googletagmanager.com/td` collection endpoint. Reads user id (`userId` or `uid`), `oid` as `transaction_id`, and `ep.`/`epn.` params. Multi-hop chains are recorded as linked requests. |
+| `meta` | `facebook.com/tr`: `ev`, `id`, `eid`, every `ud[*]` field, and multipart beacon bodies. |
 | `pinterest` | `ct.pinterest.com`: `event`, `tid`, `pd` presence. |
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
 | `tiktok`, `criteo`, `snapchat`, `linkedin` | Later. |
@@ -194,13 +203,13 @@ For `consent: none`, Pingwright asserts that a banner was detected and shown, th
 "Before consent" needs a precise meaning.
 
 - **One clock.** The init script records dataLayer pushes and banner events with `performance.timeOrigin + performance.now()`. Request times are converted to the same clock.
-- **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. A run can have several epochs, for example accept and then withdraw.
+- **Epochs.** Each banner action defines a window from a short lead before it starts to a pair window (default 2 s) after it ends. Consent Mode updates inside the window belong to that decision. The epoch starts at the earliest of the action end and those updates, is labelled by the action, and takes the last Consent Mode state in the window (the action's own state if no update came). An update outside every window that changes state starts its own epoch with source `consentMode`, except that while undecided an update that grants nothing only updates the undecided state. Defaults before the first decision set the undecided state. The first decision is the first banner action or the first Consent Mode update, whichever comes first, even an update that grants nothing. A default after the first decision is ignored, because within one document an update takes precedence over a later default and the recording cannot tell a new page's default from a pixel iframe's. A default with a `region` list is ignored, because the test machine's region does not say which visitors it covers. A run can have several epochs, for example accept and then withdraw. An epoch after the undecided one gets the label `withdrawn` when it denies a signal that any earlier decided epoch granted. `withdrawn` is a label, not a consent state: the epoch keeps its state (`denied` or `mixed`).
 - **Google hits** are judged by the consent value inside the hit (`gcs`, `gcd`), not by timing. This handles hits that were queued before an update and sent after it.
-- **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself.
+- **Other vendors** are judged by the epoch their request falls in. A configurable grace window (default 50 ms) covers tags that legitimately fire on the consent-update event itself. A withdrawn epoch gets no grace window, because a hit just before it was sent while consent was still granted.
 
-`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what rules read: `before: consent` and `epoch(granted)` or `epoch(denied)` on non-Google hits use it.
+`state` is the Consent Mode state at the end of the window and may be `mixed`. `label` is what `before: consent`, `epoch(label=<label>)` and `epoch(undecided)` (for every vendor) and, on non-Google hits, `epoch(granted)` and `epoch(denied)` read. A withdrawn epoch also records the label it had before (`outcome`), and `epoch(granted)` and `epoch(denied)` read that on non-Google hits.
 
-Rules: `before: consent` means "in the first epoch, while the state is undecided". `in: epoch(<state>)` matches hits in any epoch with that state.
+Rules: `before: consent` means "in the first epoch, while the state is undecided". `in: epoch(<state>)` matches hits in any epoch with that state, so `epoch(denied)` matches a first reject and a withdrawal. `in: epoch(label=<label>)` matches by label; `epoch(label=withdrawn)` matches only a withdrawal.
 
 ## 8. GTM
 
@@ -266,10 +275,10 @@ Setup commands for the tunnel and the Worker are deferred until after the first 
 
 - **Collector origin.** The platform bridge and the web reporter post to a reserved origin, `https://collector.pingwright.invalid/`. The recorder answers these requests itself through `context.route`. No DNS lookup, private address, certificate or browser flag is involved, so Chrome's local-network checks do not apply.
   - **Verified** on Chromium 156.0.8078.4 with Playwright 1.64.1, no browser flags (`packages/recorder/test/e2e/collector-origin.e2e.test.ts`). `context.route` answers the collector origin, and `context.on('request')` sees it, from: page `fetch`, `navigator.sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe (`sandbox="allow-scripts"`), a sandboxed cross-site iframe (top page on `localhost`, iframe on `127.0.0.1`, so out of process), and a worker inside a sandboxed iframe. It also works from a sandboxed iframe on a page served as `https://shop.pingwright.test/` through `context.route`. Firefox and WebKit were not tested.
-  - **Direct fetch.** From that same public-looking page, a sandboxed iframe's `fetch` to `http://localhost:<port>` fails and the server is never reached. This was the same in every run. A local listener would not work there.
-  - **Early requests.** A request sent while a sandboxed `srcdoc` iframe is still loading is usually neither routed nor reported by `context.on('request')`; on CI it was once routed (§5.3). This holds for every destination, not only the collector. In probes the collector request failed with `ERR_NAME_NOT_RESOLVED` (5 of 5 runs). A request to a local server (`/g/collect?early`) with a stubbing route in place was not routed and reached the server (3 of 3 runs). Requests sent 100 ms after load (20 ms in a probe) were captured. `context.on('request')` also does not see such a request (§5.3). The recorder must not rely on reports sent during iframe load, and in stub mode such a request can leave the machine unrecorded.
+  - **Direct fetch.** From that same public-looking page, a sandboxed iframe's `fetch` to `http://localhost:<port>` fails and the server is never reached. This was the same in every run. A local listener would not work there. The cause is Chromium's Local Network Access check, which blocks a request from a public page to a loopback address: Chromium logs a loopback permission denial for it, and the test asserts that message. As a control, the same fetch from a sandboxed iframe on a `localhost` top page succeeds and reaches the server, since LNA only blocks public to local.
+  - **Early requests.** A request sent while a sandboxed `srcdoc` iframe is still loading is usually neither routed nor reported by `context.on('request')`; on CI it was once routed (§5.3). This holds for every destination, not only the collector. In probes the collector request failed with `ERR_NAME_NOT_RESOLVED` (5 of 5 runs). A request to a local server (`/g/collect?early`) with a stubbing route in place was not routed and reached the server (3 of 3 runs). Sends after the load event are captured when the machine is idle, but not reliably under load: with 12 browser contexts running in parallel, a single send 100 ms after load bypassed `context.route` in 34 of 40 runs, 500 ms after load in 4 of 40, and 1.5 s after load in 2 of 40. The failed `fetch` was neither routed nor reported (`ERR_NAME_NOT_RESOLVED`, no `requestfailed` event). `context.on('request')` also does not see such a request (§5.3). The recorder must not rely on reports sent during iframe load, and in stub mode such a request can leave the machine unrecorded.
 - **Authorisation.** Because the requests never leave the browser context, nothing outside the test browser can write to the run store. The run ID is a label, not a credential.
-- **Validation.** Every incoming report is checked against a schema. Invalid reports are kept as `invalidReport` records, not dropped silently.
+- **Validation.** Every incoming report is checked against a schema. Invalid reports are kept as `invalidReport` records, not dropped silently. A request that is not a POST, such as an image or a GET beacon, is kept as an invalid report with its URL. CORS preflights are answered but not recorded.
 - **Sink reader.** Server reports are read from the configured sink with the sink's credentials.
 - **Correlation.** The run ID travels in a cookie and, for server-container hosts, in the signed run token header. It does not travel in URL parameters, which redirects and checkouts drop.
 - **Storage.** Each run is written to `runs/<id>.jsonl`. There is no fixed in-memory cap.
@@ -295,7 +304,8 @@ Scenario files are YAML. An expectation is a filter over records, plus a rule.
 | `must` | At least one match (or `count`) |
 | `mustNot` | No match |
 | `before: consent` | Only in the first epoch, while undecided (§7.3) |
-| `in: epoch(<state>)` | Only in epochs with that consent state |
+| `in: epoch(<state>)` | Only in epochs with that consent state, withdrawn epochs included |
+| `in: epoch(label=<label>)` | Only in epochs with that label: `undecided`, `granted`, `denied`, `mixed` or `withdrawn` |
 | `after: <step>` | Only after a named step |
 | `tags.mustFire`, `tags.mustNotFire` | Over tag reports, by tag ID or name pattern. An unknown name is "cannot evaluate", not a pass or fail. |
 | `identity.hashesMatch` | Hashed identity fields sent to a vendor match the run's fake identity (§13) |
@@ -362,11 +372,11 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 15. Milestones
 
-1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output.
-2. **0.2:** MCP server (schema frozen first), `diff`, `pinterest` and `microsoft-uet` decoders.
-3. **0.3:** web tag-firing reporter template, GTM override per run, expected tag lists.
-4. **0.4:** Shopify platform, collector origin bridge.
-5. **0.5:** `server` mode, server reporter, sink reader.
+1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
+2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
+3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
+4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
+5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
 
 Deferred: HTML report, sink setup commands, a replay page.
 
@@ -374,9 +384,9 @@ Deferred: HTML report, sink setup commands, a replay page.
 
 Where the code in 0.1 differs from the design above:
 
-- **`sgtm-data-client` is minimal.** It decodes only `/data` requests that carry a `dtdc` parameter, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
+- **`sgtm-data-client` is minimal.** It decodes `/data` requests that came through the Stape loader, or that carry a non-empty `dtdc` object, `v` with `event` or `en`, or a JSON POST body with `event_name` and `page_location`, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
 - **Only Meta and Google hosts are stubbed by host.** Hits to vendors without a 0.1 decoder (Pinterest, Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
-- **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`. The rule for what is flagged is in §5.3.
+- **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`, or a list of hosts or `*.domain` wildcards. With a list, only requests to those hosts pass and every other unknown destination still fails. `options.firstPartyHosts` marks more hosts as first party. The rule for what is flagged, and what first party means, is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
 - **Install from git needs `--install-links`.** With npm 10, a global git install without it links to a temporary clone that npm deletes. Only release tags carry a built `dist/`, so install from a tag, not a branch (`docs/release.md`). A tarball from `pnpm install && pnpm build && pnpm pack` also works (`docs/cli.md`).
@@ -399,7 +409,7 @@ Where the code in 0.1 differs from the design above:
 | --- | --- |
 | [EDPS website-evidence-collector](https://github.com/EU-EDPS/website-evidence-collector) | Open source. Records cookies and beacons, including before consent. Pingwright adds vendor decoding, expectations, diffs and tag reports. |
 | [DuckDuckGo autoconsent](https://github.com/duckduckgo/autoconsent) | Used by Pingwright for banners. |
-| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | Possible source for classifying unknown destinations. |
+| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | A source for classifying unknown destinations. Its data is CC BY-NC-SA 4.0 (non-commercial), so Pingwright neither ships it nor derives entries from it. |
 | Playwright MCP | Gives agents raw browser and network access. Pingwright adds decoding and assertions on top. |
 | Snowplow Micro | The same idea for Snowplow trackers only. |
 | ObservePoint, DataTrue, Trackingplan | Commercial auditing and monitoring. |

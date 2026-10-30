@@ -1,8 +1,9 @@
 import {
   newId,
   nodeNow,
+  readVersion,
+  pageTimeToEpoch,
   RunWriter,
-  readRun,
   type CaptureCoverage,
   type Checkpoint,
   type CheckpointCookie,
@@ -35,13 +36,14 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags } from './flags.ts';
-import { runSelfTest } from './selftest.ts';
+import { runSelfTest, SELFTEST_SOURCE_PREFIX } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 
-export const PINGWRIGHT_VERSION = '0.1.0-rc.1';
+export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
+const REDACTED_VALUE = '[redacted]';
 
 const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
 
@@ -52,6 +54,8 @@ export interface RecorderOptions {
   /** The site under test. Requests to other hosts can be flagged as unknown destinations. */
   site: string;
   scenario?: string;
+  /** Hosts or `*.domain` wildcards treated as first party besides the site's registrable domain. */
+  firstPartyHosts?: string[];
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
@@ -59,6 +63,11 @@ export interface RecorderOptions {
   autoconsent?: ConsentOptions;
   /** Test only: replaces the Chrome user agent. */
   userAgentOverride?: string;
+}
+
+export interface StepActivity {
+  requests: Request[];
+  dataLayerEvents: DataLayerEvent[];
 }
 
 export interface RunResult {
@@ -70,6 +79,16 @@ function redactHeaders(headers: Record<string, string>): Record<string, string> 
   return Object.fromEntries(
     Object.entries(headers).map(([k, v]) => [k, REDACTED_HEADERS.has(k.toLowerCase()) ? '[redacted]' : v]),
   );
+}
+
+function redactQuery(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const key of new Set(parsed.searchParams.keys())) parsed.searchParams.set(key, REDACTED_VALUE);
+    return parsed.href;
+  } catch {
+    return url;
+  }
 }
 
 function frameUrlOf(request: PwRequest): string | null {
@@ -99,12 +118,14 @@ export class Recorder {
   private readonly routed = new Set<string>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
+  private readonly mainFrameEventIds = new Set<string>();
   private readonly collectorReports: (CollectorReport | InvalidReport)[] = [];
   private readonly pending = new Set<Promise<unknown>>();
   private readonly steps: Step[] = [];
   private readonly checkpoints: Checkpoint[] = [];
   private readonly bannerEvents: BannerEvent[] = [];
   private currentStepId: Id<'stp'> | null = null;
+  private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
 
   private constructor(
@@ -152,9 +173,11 @@ export class Recorder {
       identity: null,
       coverage: selfTest.coverage,
     };
-    await context.exposeBinding(DATALAYER_BINDING, (_source, payload: DataLayerPayload) => {
+    await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);
-      if (event) this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
+      if (!event) return;
+      this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
+      if (source.frame === source.page.mainFrame()) this.mainFrameEventIds.add(event.id);
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
@@ -165,13 +188,18 @@ export class Recorder {
     context.on('request', (request) => void this.recordFor(request));
     context.on('requestfailed', (request) => {
       const record = this.recordFor(request);
-      if (record && record.outcome === 'passed') record.outcome = 'failed';
+      if (!record) return;
+      if (record.outcome === 'passed') record.outcome = 'failed';
+      const errorText = request.failure()?.errorText;
+      if (errorText) record.failure = errorText;
     });
     context.on('response', (response) => this.track(this.recordResponse(response)));
   }
 
   private storeReport(parsed: ParsedReport, body: string, t: number): void {
     if (this.closed) return;
+    // The self-test page keeps sending until it is closed, so a late report can arrive after the handler swap.
+    if (parsed.ok && parsed.source.startsWith(SELFTEST_SOURCE_PREFIX)) return;
     if (parsed.ok) {
       this.collectorReports.push({
         type: 'collectorReport',
@@ -206,7 +234,7 @@ export class Recorder {
     // The collector and self-test origins are Pingwright's own channel, not site traffic.
     if (!/^https?:/.test(url) || url.startsWith(COLLECTOR_ORIGIN) || url.startsWith(SELFTEST_ORIGIN)) return undefined;
     const body = request.postData();
-    const record: Request = {
+    let record: Request = {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
@@ -221,14 +249,40 @@ export class Recorder {
       postData: body === null ? null : body.slice(0, MAX_POST_DATA),
       outcome: 'passed',
     };
+    record = this.redactForHandoff(record);
     this.requests.set(request, record);
     return record;
+  }
+
+  /** A person is typing during a handoff, so only requests that decode as tracking hits keep their body and query. */
+  private redactForHandoff(record: Request, at = Date.now()): Request {
+    if (!this.duringHandoff(at)) return record;
+    if (isCollectionEndpoint(record) || isKnownVendorCollection(record) || decodeRequest(record).length > 0) return record;
+    return {
+      ...record,
+      url: redactQuery(record.url),
+      postData: record.postData === null ? null : REDACTED_VALUE,
+      redacted: 'handoff',
+    };
+  }
+
+  private duringHandoff(at: number): boolean {
+    return this.handoffWindows.some((w) => at >= w.from && (w.to === null || at <= w.to));
+  }
+
+  /** Requests sent while a handoff is active, including unload sends queued then and replayed later, are stored without their typed values. */
+  setHandoff(active: boolean): void {
+    if (active) this.handoffWindows.push({ from: Date.now(), to: null });
+    else {
+      const open = this.handoffWindows.find((w) => w.to === null);
+      if (open) open.to = Date.now();
+    }
   }
 
   private recordUnloadSend(payload: UnloadSendPayload): void {
     if (this.closed || this.unloadKeys.has(payload.key)) return;
     this.unloadKeys.add(payload.key);
-    const record: Request = {
+    let record: Request = {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
@@ -239,10 +293,11 @@ export class Recorder {
       resourceType: payload.resourceType,
       frameUrl: payload.frameUrl,
       initiator: 'unload',
-      headers: {},
+      headers: redactHeaders(payload.headers ?? {}),
       postData: payload.postData === null ? null : payload.postData.slice(0, MAX_POST_DATA),
       outcome: 'stubbed',
     };
+    record = this.redactForHandoff(record, payload.queuedAt);
     this.routed.add(record.id);
     this.unloadRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
@@ -295,19 +350,33 @@ export class Recorder {
     return step;
   }
 
+  /** What the recorder has seen so far while the step ran. */
+  stepActivity(step: Step): StepActivity {
+    return {
+      requests: [...this.requests.values(), ...this.unloadRequests].filter((r) => r.stepId === step.id),
+      dataLayerEvents: this.dataLayerEvents.filter((e) => e.stepId === step.id),
+    };
+  }
+
   endStep(step: Step, error?: string): void {
     step.endedAt = nodeNow();
     if (error !== undefined) step.error = error;
   }
 
-  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. */
+  /** Keeps a banner action for the run's epochs. Only actions that were carried out count. Banner times are page-clock readings. */
   recordBanner(result: BannerResult): void {
     if (result.result !== 'ok' || result.action === 'none') return;
-    this.bannerEvents.push({ t: result.t, tEnd: result.tEnd, action: result.action });
+    this.bannerEvents.push({
+      t: pageTimeToEpoch(result.t, this.clockOffset),
+      tEnd: pageTimeToEpoch(result.tEnd, this.clockOffset),
+      action: result.action,
+    });
   }
 
   private buildConsentEpochs(): ConsentEpoch[] {
-    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(this.dataLayerEvents), { startT: this.run.startedAt });
+    // The page's consent state comes from its main frame. A gtag call in an embedded frame has its own state.
+    const mainFrameEvents = this.dataLayerEvents.filter((e) => this.mainFrameEventIds.has(e.id));
+    const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents, Math.min(...this.bannerEvents.map((b) => b.t))), { startT: this.run.startedAt });
     return drafts.map((epoch) => ({
       type: 'consentEpoch',
       id: newId('consentEpoch'),
@@ -369,11 +438,29 @@ export class Recorder {
     const hits: Hit[] = requests.flatMap((r) => decodeRequest(r));
     const flags = buildFlags({
       runId: this.runId,
+      networkMode: this.options.networkMode,
       siteUrl: this.options.site,
+      firstPartyHosts: this.options.firstPartyHosts,
       requests,
       hits,
       routedRequestIds: this.routed,
     });
+    const consentEpochs = this.buildConsentEpochs();
+    const records: RunRecords = {
+      run: this.run,
+      steps: this.steps,
+      requests,
+      responses: this.responses,
+      hits,
+      dataLayerEvents: this.dataLayerEvents,
+      tagReports: [],
+      consentEpochs,
+      checkpoints: this.checkpoints,
+      results: [],
+      flags,
+      collectorReports: this.collectorReports.filter((r): r is CollectorReport => r.type === 'collectorReport'),
+      invalidReports: this.collectorReports.filter((r): r is InvalidReport => r.type === 'invalidReport'),
+    };
     const writer = await RunWriter.create(this.options.outDir, this.run);
     try {
       for (const record of [
@@ -383,7 +470,7 @@ export class Recorder {
         ...this.responses,
         ...hits,
         ...this.dataLayerEvents,
-        ...this.buildConsentEpochs(),
+        ...consentEpochs,
         ...this.collectorReports,
         ...flags,
       ]) {
@@ -392,7 +479,7 @@ export class Recorder {
     } finally {
       await writer.close();
     }
-    return { path: writer.path, records: await readRun(writer.path) };
+    return { path: writer.path, records };
   }
 }
 

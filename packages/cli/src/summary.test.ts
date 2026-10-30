@@ -1,7 +1,11 @@
 import type { Hit, Result } from '@pingwright/core';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { countHits, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
+import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
 
 const hit = (vendor: string, event: string | null) => ({ vendor, event }) as Hit;
@@ -41,6 +45,21 @@ test('formats failures with message and evidence, and the record path', () => {
   expect(text.trimEnd().endsWith('Record: runs/run_1.jsonl')).toBe(true);
 });
 
+test('groups unknown and first-party flags by host with counts and a few paths', () => {
+  const flags = [
+    ...['a', 'b', 'c', 'd', 'a'].map((p) => ({ kind: 'unknownDestination', detail: `GET https://t.example.net/${p}?x=1` })),
+    { kind: 'unknownDestination', detail: 'POST https://u.example.net/p' },
+    { kind: 'firstPartySubdomain', detail: 'POST https://sgtm.example.com/collect' },
+    { kind: 'stubBypass', detail: 'It was not routed: https://x.test/' },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('unknownDestination: t.example.net x5 (/a, /b, /c and 1 more)');
+  expect(text).toContain('unknownDestination: u.example.net x1 (/p)');
+  expect(text).toContain('firstPartySubdomain: sgtm.example.com x1 (/collect)');
+  expect(text).toContain('stubBypass: It was not routed: https://x.test/');
+  expect(text).not.toContain('?x=1');
+});
+
 test('shows evidence for passing expectations, capped', () => {
   const ids = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7'];
   const summary: Summary = {
@@ -63,6 +82,45 @@ test('main prints the version and exits 2 on a usage error', async () => {
   const io = { stdout: (t: string) => void out.push(t), stderr: (t: string) => void err.push(t) };
   expect(await main(['--version'], io)).toBe(0);
   expect(out.join('')).toBe(`${readVersion()}\n`);
+  out.length = 0;
+  expect(await main(['run', '--help'], io)).toBe(0);
+  expect(out.join('')).toContain('Usage: pingwright run <scenario.yml>');
+  expect(out.join('')).not.toContain('install-browser');
   expect(await main(['run', 's.yml'], io)).toBe(2);
   expect(err.join('')).toContain('--site is required');
+});
+
+test('shows the withdrawn label with the state in the epochs lines', () => {
+  const summary: Summary = {
+    runId: 'run_1',
+    path: 'runs/run_1.jsonl',
+    pass: true,
+    hits: {},
+    epochs: [
+      { label: 'undecided', startT: 0, endT: 10 },
+      { label: 'withdrawn', state: 'mixed', startT: 10, endT: null },
+    ],
+    flags: [],
+    results: [],
+  };
+  const text = formatSummary(summary);
+  expect(text).toContain('  undecided (10 ms)');
+  expect(text).toContain('  withdrawn, mixed (to end)');
+});
+
+test('prints a scenario warning to stderr before running', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-warn-'));
+  try {
+    const scenario = join(dir, 'scenario.yml');
+    await writeFile(scenario, 'start: /\nsteps:\n  - fill: { "#email": "jane.doe@gmail.com" }\n');
+    const stderr: string[] = [];
+    const code = await runCommand(
+      { command: 'run', scenario, site: 'http://localhost:1', network: undefined, out: dir, seed: undefined, headed: false, autoconsentRules: [], vars: { undeclared: 'x' }, json: false },
+      { stdout: () => {}, stderr: (text) => stderr.push(text) },
+    );
+    expect(code).toBe(2);
+    expect(stderr.join('')).toContain('Warning: line 3');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

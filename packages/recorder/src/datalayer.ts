@@ -10,10 +10,26 @@ export const dataLayerInitScript = `(() => {
   const binding = ${JSON.stringify(DATALAYER_BINDING)};
   const MAX = 10000;
   const clock = () => performance.timeOrigin + performance.now();
+  const plain = (k, v) => (typeof v === 'function' || v instanceof Node ? undefined : v);
+  // Keeps the top levels, so the event name and ids survive a large push. Deeper values become a marker.
+  const shrink = (value, depth, max) => {
+    if (typeof value === 'string') return value.length > 500 ? value.slice(0, 500) : value;
+    if (typeof value !== 'object' || value === null || value instanceof Node) return value;
+    if (depth >= max) return '[truncated]';
+    if (Array.isArray(value)) return value.map((item) => shrink(item, depth + 1, max));
+    const out = {};
+    for (const key of Object.keys(value)) out[key] = shrink(value[key], depth + 1, max);
+    return out;
+  };
   const safe = (args) => {
     try {
-      const text = JSON.stringify(args, (k, v) => (typeof v === 'function' || v instanceof Node ? undefined : v));
-      return text.length > MAX ? JSON.stringify(['[truncated]']) : text;
+      const text = JSON.stringify(args, plain);
+      if (text.length <= MAX) return text;
+      for (const max of [6, 4, 3, 2]) {
+        const smaller = JSON.stringify(shrink(args, 0, max), plain);
+        if (smaller.length <= MAX) return smaller;
+      }
+      return JSON.stringify(['[truncated]']);
     } catch {
       return JSON.stringify(['[unserializable]']);
     }

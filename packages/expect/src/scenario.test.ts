@@ -3,10 +3,18 @@ import { expect, test } from 'vitest';
 import { README_QUICKSTART_SCENARIO, README_SCENARIO } from './readme-scenario.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';
 
+test('parses host lists in options and rejects bad entries', () => {
+  const s = parseScenario("start: /\noptions: { firstPartyHosts: ['i.guim.co.uk', '*.shopifycdn.com'], allowUnknownDestination: ['cdn.example.net'] }");
+  expect(s.options).toEqual({ firstPartyHosts: ['i.guim.co.uk', '*.shopifycdn.com'], allowUnknownDestination: ['cdn.example.net'] });
+  expect(() => parseScenario("start: /\noptions: { firstPartyHosts: ['https://a.com/x'] }")).toThrow(/firstPartyHosts/);
+  expect(() => parseScenario("start: /\noptions: { allowUnknownDestination: 'yes' }")).toThrow(/allowUnknownDestination/);
+});
+
 test('parses the README quick start scenario', () => {
   const s = parseScenario(README_QUICKSTART_SCENARIO);
   expect(s.steps[0]).toMatchObject({ kind: 'consent' });
   expect(s.expect.mustNot[0]).toMatchObject({ before: 'consent' });
+  expect(s.options.allowUnknownDestination).toBeUndefined();
 });
 
 function errorOf(text: string): string {
@@ -106,6 +114,8 @@ test('rejects count under mustNot, hashesMatch under mustNot, before with in, ba
   expect(errorOf(`start: /\nexpect:\n  mustNot:\n    - { vendor: ga4, identity.hashesMatch: true }\n`)).toContain('only valid under must');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { vendor: ga4, before: consent, in: epoch(denied) }\n`)).toContain('either before or in');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { page: { matches: "(" } }\n`)).toContain('invalid regular expression');
+  expect(errorOf(`start: /\nexpect:\n  must:\n    - { in: epoch(label=nope) }\n`)).toContain('epoch(label=<label>)');
+  expect(parseScenario(`start: /\nexpect:\n  must:\n    - { in: epoch(label=withdrawn) }\n`).expect.must[0]?.inEpoch).toBe('label=withdrawn');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { in: epoch(nope) }\n`)).toContain('epoch(undecided)');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { count: lots }\n`)).toContain('expect.must[0].count');
 });
@@ -129,6 +139,12 @@ test('reports every problem at once', () => {
 test('boolean ids filters mean present and absent', () => {
   const s = parseScenario('start: /\nexpect:\n  mustNot:\n    - { vendor: ga4, ids.user_id: true, ids.client_id: false }');
   expect(s.expect.mustNot[0]!.filter.ids).toEqual({ user_id: 'present', client_id: 'absent' });
+});
+
+test('a wait that starts with a digit must be a duration', () => {
+  for (const bad of ['4sec', '4 seconds', '10x']) expect(errorOf(`start: /\nsteps:\n  - wait: ${bad}\n`)).toContain('is not a duration');
+  expect(parseScenario('start: /\nsteps:\n  - wait: 4s\n').steps[0]).toMatchObject({ value: 4000 });
+  expect(parseScenario('start: /\nsteps:\n  - wait: "#x"\n').steps[0]).toMatchObject({ value: { selector: '#x' } });
 });
 
 test('step labels: written, default, duplicate and checked by after', () => {

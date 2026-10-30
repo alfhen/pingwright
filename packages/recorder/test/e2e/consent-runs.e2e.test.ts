@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { epochForHit, parseScenario, placeHitsInEpochs } from '@pingwright/expect';
 import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { recordScenario, StepError } from '../../src/index.ts';
+import type { BannerResult } from '@pingwright/consent';
+import type { ConsentValue } from '@pingwright/core';
+import { bannerConsentHandler, recordScenario, StepError, type ConsentHandler } from '../../src/index.ts';
 
 let site: FixtureSite;
 let outDir: string;
@@ -26,10 +28,41 @@ const run = (yaml: string) =>
 
 const googleOwn = (h: { vendor: string; consent: { raw: Record<string, string> } }) => h.vendor === 'ga4' && 'gcs' in h.consent.raw;
 
-const states = (epochs: { label: string }[]) => epochs.map((e) => e.label);
+const all = (value: ConsentValue) => ({ analytics: value, ads: value, adUserData: value, adPersonalization: value });
+const labelsAndStates = (epochs: { label: string; state: object }[]) => epochs.map((e) => ({ label: e.label, state: e.state }));
+
+/** The banner handler, plus the result the driver gave for each answer, including `none`. */
+function capturingHandler(): { handler: ConsentHandler; results: BannerResult[] } {
+  const results: BannerResult[] = [];
+  const handler: ConsentHandler = async (answer, context) => {
+    const driver = context.recorder.consent;
+    const answerWith = driver.answer.bind(driver);
+    driver.answer = async (...args) => {
+      const result = await answerWith(...args);
+      results.push(result);
+      return result;
+    };
+    try {
+      await bannerConsentHandler(answer, context);
+    } finally {
+      driver.answer = answerWith;
+    }
+  };
+  return { handler, results };
+}
 
 test('undecided: one undecided epoch, GA4 hits carry analytics denied', async () => {
-  const records = await run('start: /products/fake-tee\nsteps:\n  - consent: none\n  - wait: 3s\n');
+  const { handler, results } = capturingHandler();
+  const records = await recordScenario({
+    networkMode: 'stub',
+    outDir,
+    site: site.url,
+    parsed: parseScenario('start: /products/fake-tee\nsteps:\n  - consent: none\n  - wait: 3s\n'),
+    consent: handler,
+  }).then((r) => r.records);
+  expect(results).toHaveLength(1);
+  expect(results[0]).toMatchObject({ action: 'none', result: 'ok', shown: true, detected: true });
+  expect(results[0]!.cmp).not.toBeNull();
   expect(records.consentEpochs).toHaveLength(1);
   expect(records.consentEpochs[0]).toMatchObject({ label: 'undecided', state: { analytics: 'denied' }, source: 'start', endT: null });
   const ga4 = records.hits.filter(googleOwn);
@@ -42,7 +75,10 @@ test('accept: two epochs, GA4 hits after accept granted, Meta hits in the grante
     'start: /products/fake-tee\nsteps:\n  - consent: accept\n  - addToCart: "#add-to-cart"\n  - wait: 8s\n',
   );
   const epochs = records.consentEpochs;
-  expect(states(epochs)).toEqual(['undecided', 'granted']);
+  expect(labelsAndStates(epochs)).toEqual([
+    { label: 'undecided', state: all('denied') },
+    { label: 'granted', state: all('granted') },
+  ]);
   const granted = epochs[1]!;
   const ga4 = records.hits.filter((h) => googleOwn(h) && h.event === 'add_to_cart');
   expect(ga4.length).toBeGreaterThan(0);
@@ -56,7 +92,10 @@ test('reject: GA4 hits after reject are denied', async () => {
   const records = await run(
     'start: /products/fake-tee\nsteps:\n  - consent: reject\n  - addToCart: "#add-to-cart"\n  - wait: 8s\n',
   );
-  expect(states(records.consentEpochs)).toEqual(['undecided', 'denied']);
+  expect(labelsAndStates(records.consentEpochs)).toEqual([
+    { label: 'undecided', state: all('denied') },
+    { label: 'denied', state: all('denied') },
+  ]);
   const denied = records.consentEpochs[1]!;
   const ga4 = records.hits.filter((h) => googleOwn(h) && h.event === 'add_to_cart' && h.t >= denied.startT);
   expect(ga4.length).toBeGreaterThan(0);
@@ -76,7 +115,10 @@ test('accept then withdraw: three epochs, hits after withdraw are denied', async
       '  - wait: 8s',
     ].join('\n'),
   );
-  expect(states(records.consentEpochs)).toEqual(['undecided', 'granted', 'denied']);
+  const epochs = labelsAndStates(records.consentEpochs);
+  expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'withdrawn']);
+  expect([epochs[0]!.state, epochs[2]!.state]).toEqual([all('denied'), all('denied')]);
+  expect(epochs[1]!.state).toEqual(all('granted'));
   const withdrawn = records.consentEpochs[2]!;
   const ga4 = records.hits.filter((h) => googleOwn(h) && h.event === 'add_to_cart' && h.t >= withdrawn.startT);
   expect(ga4.length).toBeGreaterThan(0);
@@ -90,13 +132,21 @@ test('banner not shown: a HeadlessChrome user agent fails consent: none', async 
   const parsed = parseScenario('start: /\noptions: { consentTimeout: 2s }\nsteps:\n  - consent: none\n');
   const userAgentOverride =
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36';
-  const error = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed, userAgentOverride }).catch(
+  const contentScriptRanOnStartPage: boolean[] = [];
+  const consent: ConsentHandler = async (answer, context) => {
+    await expect.poll(() => context.recorder.consent.isRunningIn(context.page.mainFrame()), { timeout: 5000 }).toBe(true);
+    contentScriptRanOnStartPage.push(true);
+    return bannerConsentHandler(answer, context);
+  };
+  const error = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed, userAgentOverride, consent }).catch(
     (e: unknown) => e,
   );
   expect(error).toBeInstanceOf(StepError);
   expect((error as StepError).message).toContain('banner not shown');
   const records = (error as StepError).run!.records;
   expect(records.steps.find((s) => s.label === 'consent-1')?.error).toBe('banner not shown');
+  expect(contentScriptRanOnStartPage).toEqual([true]);
+  expect(labelsAndStates(records.consentEpochs).at(-1)).toEqual({ label: 'granted', state: all('granted') });
 });
 
 test('autoconsent options given to the recorder reach the driver', async () => {

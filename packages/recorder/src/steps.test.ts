@@ -1,7 +1,8 @@
-import { createIdentity } from '@pingwright/core';
+import { createIdentity, type Request } from '@pingwright/core';
+import { parseScenario } from '@pingwright/expect';
 import { expect, test } from 'vitest';
 import { isLoopbackHost, isSensitiveField } from './guard.ts';
-import { fillValue, resolveSitePath } from './steps.ts';
+import { defaultCartCheck, fillValue, hasHandoff, recordScenario, resolveSitePath } from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
   autocomplete: null,
@@ -47,4 +48,35 @@ test('visit paths resolve against the site with vars and cannot leave it', () =>
   expect(resolveSitePath('cart', 'http://localhost:3000/shop/', {})).toBe('http://localhost:3000/shop/cart');
   expect(() => resolveSitePath('https://elsewhere.example.com/', 'http://localhost:3000', {})).toThrow(/leaves the site/);
   expect(() => resolveSitePath('//elsewhere.example.com/', 'http://localhost:3000', {})).toThrow(/leaves the site/);
+});
+
+test('hasHandoff is true only for a scenario with a handoff step', () => {
+  expect(hasHandoff(parseScenario('start: /\nsteps:\n  - click: a\n'))).toBe(false);
+  expect(hasHandoff(parseScenario('start: /\nsteps:\n  - click: a\n  - handoff: Pay\n'))).toBe(true);
+});
+
+test('a scenario with a handoff launches headed and one without does not', async () => {
+  const launched: (boolean | undefined)[] = [];
+  const launch = (options: { headed?: boolean }) => {
+    launched.push(options.headed);
+    return Promise.reject(new Error('stop'));
+  };
+  const base = { networkMode: 'stub' as const, outDir: 'unused', site: 'http://localhost', launch: launch as never };
+  await recordScenario({ ...base, parsed: parseScenario('start: /\nsteps:\n  - handoff: Pay\n') }).catch(() => undefined);
+  await recordScenario({ ...base, parsed: parseScenario('start: /\n') }).catch(() => undefined);
+  expect(launched).toEqual([true, false]);
+});
+
+const request = (over: Partial<Request>): Request =>
+  ({ method: 'GET', url: 'http://localhost/', postData: null, ...over }) as Request;
+const dl = (event: string | null) => ({ event }) as never;
+
+test('the default cart check wants a cart POST, a cart mutation or an add_to_cart event', () => {
+  const check = (requests: Request[], events: ReturnType<typeof dl>[] = []) => defaultCartCheck({ requests, dataLayerEvents: events });
+  expect(check([])).toBe(false);
+  expect(check([request({ url: 'https://shop.example.com/cart.js' })])).toBe(false);
+  expect(check([request({ method: 'POST', url: 'https://shop.example.com/cart/add.js' })])).toBe(true);
+  expect(check([request({ method: 'POST', url: 'https://shop.example.com/api/graphql', postData: '{"query":"mutation { cartLinesAdd }"}' })])).toBe(true);
+  expect(check([], [dl('page_view')])).toBe(false);
+  expect(check([], [dl('add_to_cart')])).toBe(true);
 });

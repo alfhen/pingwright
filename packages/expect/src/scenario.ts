@@ -1,6 +1,7 @@
 import type { ConsentValue, NetworkMode, RequestOutcome } from '@pingwright/core';
 import { vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
+import { isHostPattern } from './hosts.ts';
 
 export type ConsentField = 'analytics' | 'ads' | 'adUserData' | 'adPersonalization';
 
@@ -59,7 +60,9 @@ export interface ScenarioOptions {
   seed?: number;
   consentTimeout?: number;
   graceWindow?: number;
-  allowUnknownDestination?: boolean;
+  /** `true` allows every unknown destination. A list allows only those hosts or `*.domain` wildcards. */
+  allowUnknownDestination?: boolean | string[];
+  firstPartyHosts?: string[];
 }
 
 export interface Scenario {
@@ -89,7 +92,13 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts'];
+
+const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
+
+function isHostList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every(isHostPattern);
+}
 
 type Path = (string | number)[];
 
@@ -254,6 +263,7 @@ export function parseScenario(text: string): Scenario {
       case 'wait': {
         const ms = parseDuration(value);
         if (ms !== undefined) add({ kind, value: ms });
+        else if (typeof value === 'string' && /^\s*\d/.test(value)) fail([...path, kind], `"${value}" is not a duration such as 4s, 500ms or 2m`);
         else if (typeof value === 'string' && value.trim()) add({ kind, value: { selector: value } });
         else fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m, or a selector');
         return;
@@ -359,7 +369,7 @@ export function parseScenario(text: string): Scenario {
       } else if (k === 'in') {
         const m = typeof v === 'string' ? /^epoch\(\s*([\w=]+)\s*\)$/.exec(v) : null;
         if (m && validEpochSelector(m[1]!)) rule.inEpoch = m[1]!;
-        else fail(p, 'must be epoch(undecided), epoch(granted), epoch(denied) or epoch(<field>=<value>)');
+        else fail(p, 'must be epoch(undecided), epoch(granted), epoch(denied), epoch(<field>=<value>) or epoch(label=<label>)');
       } else if (k === 'after') {
         if (typeof v !== 'string' || !v) fail(p, 'must be a step label');
         else if (!stepLabels.has(v)) fail(p, `"${v}" is not a step label, defined labels: ${[...stepLabels].join(', ') || 'none'}`);
@@ -388,8 +398,11 @@ export function parseScenario(text: string): Scenario {
           if (typeof v === 'number' && Number.isInteger(v)) options.seed = v;
           else fail(p, 'must be an integer');
         } else if (k === 'allowUnknownDestination') {
-          if (typeof v === 'boolean') options.allowUnknownDestination = v;
-          else fail(p, 'must be true or false');
+          if (typeof v === 'boolean' || isHostList(v)) options.allowUnknownDestination = v;
+          else fail(p, `must be true, false or a list of hosts${HOST_HINT}`);
+        } else if (k === 'firstPartyHosts') {
+          if (isHostList(v)) options.firstPartyHosts = v;
+          else fail(p, `must be a list of hosts${HOST_HINT}`);
         } else {
           const ms = parseDuration(v);
           if (ms === undefined) fail(p, 'must be a duration such as 4s or 500ms');
@@ -403,9 +416,12 @@ export function parseScenario(text: string): Scenario {
   return { start, vars, steps, expect: expectOut, options, warnings };
 }
 
+const EPOCH_LABELS = ['undecided', 'granted', 'denied', 'mixed', 'withdrawn'];
+
 export function validEpochSelector(selector: string): boolean {
   if (['undecided', 'granted', 'denied'].includes(selector)) return true;
   const m = /^(\w+)=(\w+)$/.exec(selector);
+  if (m?.[1] === 'label') return EPOCH_LABELS.includes(m[2]!);
   return !!m && consentFields.includes(m[1] as ConsentField) && CONSENT_VALUES.includes(m[2]!);
 }
 

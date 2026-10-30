@@ -1,0 +1,12 @@
+{
+  "autoconsent": [
+    {
+      "name": "Adroll",
+      "vendorUrl": "https://example.com/pingwright-fixture",
+      "detectCmp": [{ "exists": "#pw-consent-banner" }],
+      "detectPopup": [{ "visible": "#pw-consent-banner" }],
+      "optIn": [{ "waitForThenClick": "#pw-reject" }],
+      "optOut": [{ "waitForThenClick": "#pw-reject" }]
+    }
+  ]
+}

@@ -180,10 +180,17 @@ test('RunWriter.create rejects a run with a bad id', async () => {
 test('reader skips a cut-off last line but rejects a bad line in the middle', async () => {
   const run = makeRun();
   const req = makeRequest(run, 1);
+  const writeComplete = async () => {
+    const whole = join(dir, 'whole.jsonl');
+    await writeFile(whole, [JSON.stringify(run), JSON.stringify(req)].join('\n') + '\n');
+    return whole;
+  };
   const cut = join(dir, 'cut.jsonl');
   await writeFile(cut, [JSON.stringify(run), JSON.stringify(req), '{"type":"requ'].join('\n'));
   const loaded = await readRun(cut);
   expect(loaded.requests).toEqual([req]);
+  expect(loaded.truncatedAtLine).toBe(3);
+  expect((await readRun(await writeComplete())).truncatedAtLine).toBeUndefined();
 
   const mid = join(dir, 'mid.jsonl');
   await writeFile(mid, [JSON.stringify(run), '{"type":"requ', JSON.stringify(req)].join('\n') + '\n');

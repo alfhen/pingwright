@@ -1,6 +1,6 @@
 import { newId, type Hit, type Request } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { buildFlags, isUnknownDestination } from './flags.ts';
+import { buildFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
 
 function req(url: string, over: Partial<Request> = {}): Request {
   return {
@@ -35,6 +35,8 @@ test.each([
   ['font', req('https://cdn.example.net/a.woff?v=1', { resourceType: 'font' }), false],
   ['document', req('https://other.example.net/?q=1', { resourceType: 'document' }), false],
   ['the site host', req(`https://${HOST}/p?x=1`), false],
+  ['a stubbed Meta pixel hit', req('https://www.facebook.com/tr/?id=100000000000001&ev=PageView'), false],
+  ['a stubbed Ads remarketing hit', req('https://googleads.g.doubleclick.net/pagead/viewthroughconversion/1/?x=1'), false],
   ['a decoder match', req('https://region1.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001', { resourceType: 'fetch' }), false],
 ])('unknown destination: %s', (_name, request, expected) => {
   expect(isUnknownDestination(request, HOST)).toBe(expected);
@@ -52,6 +54,7 @@ test('flags unknown destinations, sandbox page URLs and unrouted collection requ
     page: 'https://shop.example.com/web-pixels@1/sandbox/modern/',
   } as Hit;
   const flags = buildFlags({
+    networkMode: 'stub',
     runId: unknown.runId,
     siteUrl: `https://${HOST}/`,
     requests: [unknown, unrouted, routed],
@@ -64,4 +67,84 @@ test('flags unknown destinations, sandbox page URLs and unrouted collection requ
     ['sandboxPageUrl', hit.id],
   ]);
   expect(flags[2]?.recordIds).toEqual([hit.id, routed.id]);
+});
+
+const meta = 'https://www.facebook.com/tr/?id=100000000000001&ev=PageView';
+
+function bypassFlags(request: Request, networkMode: 'stub' | 'live') {
+  return buildFlags({
+    runId: request.runId,
+    networkMode,
+    siteUrl: `https://${HOST}/`,
+    requests: [request],
+    hits: [],
+    routedRequestIds: new Set(),
+  }).filter((f) => f.kind === 'stubBypass');
+}
+
+test('an unrouted known vendor collection request is a stubBypass, and a redirect hop says so', () => {
+  const flags = bypassFlags(req(meta, { initiator: 'redirect' }), 'stub');
+  expect(flags).toHaveLength(1);
+  expect(flags[0]?.detail).toContain('redirect');
+  expect(bypassFlags(req(meta), 'stub')).toHaveLength(1);
+});
+
+test('live mode never flags stubBypass', () => {
+  expect(bypassFlags(req(meta, { initiator: 'redirect' }), 'live')).toEqual([]);
+  expect(
+    bypassFlags(req('https://region1.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001', { resourceType: 'fetch' }), 'live'),
+  ).toEqual([]);
+});
+
+test('an unrouted library load is not a stubBypass', () => {
+  expect(bypassFlags(req('https://connect.facebook.net/en_US/fbevents.js', { resourceType: 'script' }), 'stub')).toEqual([]);
+});
+
+const data = (host: string) => req(`https://${host}/p?x=1`);
+const classify = (host: string, site: string, firstPartyHosts: string[] = []) => {
+  const scope = { siteHost: site, firstPartyHosts };
+  return isUnknownDestination(data(host), scope) ? 'unknown' : isFirstPartySubdomain(data(host), scope) ? 'subdomain' : 'none';
+};
+
+test.each([
+  ['the exact site host', 'www.shop.example.com', 'www.shop.example.com', 'none'],
+  ['a sibling subdomain', 'sgtm.shop.example.com', 'www.shop.example.com', 'subdomain'],
+  ['the apex of the site', 'shop.example.com', 'www.shop.example.com', 'subdomain'],
+  ['another registrable domain', 'tracker.example.net', 'www.shop.example.com', 'unknown'],
+  ['a lookalike suffix', 'shop.example.com.evil.net', 'www.shop.example.com', 'unknown'],
+  ['a co.uk subdomain', 'cdn.shop.co.uk', 'www.shop.co.uk', 'subdomain'],
+  ['another site under co.uk', 'other.co.uk', 'www.shop.co.uk', 'unknown'],
+  ['a private-suffix neighbour', 'other.github.io', 'me.github.io', 'unknown'],
+  ['an IP host other than the site', '127.0.0.1', 'localhost', 'unknown'],
+  ['another IP', '10.0.0.2', '10.0.0.1', 'unknown'],
+  ['a localhost subdomain', 'a.localhost', 'localhost', 'unknown'],
+])('first party: %s', (_name, host, site, expected) => {
+  expect(classify(host, site)).toBe(expected);
+});
+
+test('firstPartyHosts: exact hosts and wildcards are first party and still visible', () => {
+  const hosts = ['i.guim.co.uk', '*.shopifycdn.com'];
+  expect(classify('i.guim.co.uk', 'www.shop.example.com', hosts)).toBe('subdomain');
+  expect(classify('img.shopifycdn.com', 'www.shop.example.com', hosts)).toBe('subdomain');
+  expect(classify('a.b.shopifycdn.com', 'www.shop.example.com', hosts)).toBe('subdomain');
+  expect(classify('shopifycdn.com', 'www.shop.example.com', hosts)).toBe('unknown');
+  expect(classify('x.guim.co.uk', 'www.shop.example.com', hosts)).toBe('unknown');
+});
+
+test('a first-party subdomain request becomes firstPartySubdomain, not unknownDestination', () => {
+  const request = req('https://sgtm.shop.example.com/collect', { resourceType: 'fetch', method: 'POST' });
+  const flags = buildFlags({
+    runId: request.runId,
+    networkMode: 'stub',
+    siteUrl: 'https://www.shop.example.com/',
+    requests: [request],
+    hits: [],
+    routedRequestIds: new Set([request.id]),
+  });
+  expect(flags.map((f) => [f.kind, f.recordIds[0]])).toEqual([['firstPartySubdomain', request.id]]);
+});
+
+test('first-party subdomain requests that cannot carry data are not flagged', () => {
+  const script = req('https://cdn.shop.example.com/a.js?v=1', { resourceType: 'script' });
+  expect(isFirstPartySubdomain(script, { siteHost: 'www.shop.example.com' })).toBe(false);
 });

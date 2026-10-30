@@ -1,12 +1,14 @@
 import {
   hashEmail,
   hashPhone,
+  isLibraryLoadPath,
   scan,
   sha256,
   newId,
   type ConsentEpoch,
   type ConsentState,
   type ConsentValue,
+  type Flag,
   type HashForms,
   type Hit,
   type Identity,
@@ -17,6 +19,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { isSandboxPageUrl } from '@pingwright/decoders';
+import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario } from './scenario.ts';
 
 export type EvalEpoch = ConsentEpoch;
@@ -146,12 +149,14 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
     if (want && effective[field] !== want) return false;
   }
   for (const [name, want] of Object.entries(f.ids)) {
-    const have = hit.ids[name];
-    const present = have !== undefined && have !== false;
+    const have = idValue(hit, name);
+    const compared = name.endsWith('.matchesIdentity');
+    const present = compared ? have === true : have !== undefined && have !== false;
+    const absent = compared ? have === false : !present;
     if (want === 'present') {
       if (!present) return false;
     } else if (want === 'absent') {
-      if (present) return false;
+      if (!absent) return false;
     } else if (String(have) !== want) return false;
   }
   if (f.page) {
@@ -169,6 +174,20 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
   return true;
 }
 
+/** Reads `ids.<name>`, or `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` from the nested hashes. */
+function idValue(hit: Hit, name: string): boolean | null | undefined {
+  if (name in hit.ids) {
+    const flat = hit.ids[name];
+    if (typeof flat !== 'object') return flat;
+  }
+  const [head, field, prop, ...rest] = name.split('.');
+  if (head !== 'hashes' || !field || rest.length) return undefined;
+  const hash = hit.ids.hashes?.[field];
+  if (!hash) return undefined;
+  if (prop === undefined) return hash.present;
+  return prop === 'matchesIdentity' ? hash.matchesIdentity : undefined;
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -179,21 +198,16 @@ function hostOf(url: string): string {
 
 type Placeable = Pick<ConsentEpoch, 'startT'> & Partial<Pick<ConsentEpoch, 'state' | 'label'>>;
 
-function grants(e: Placeable | undefined): boolean {
-  return !e?.state || consentFields.some((f) => e.state![f] === 'granted');
-}
-
 /**
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
- * epoch, since tags may fire on the consent update itself. That does not hold for a withdraw: a
- * hit before it was sent while consent was still granted. A hit before the first epoch belongs to
+ * epoch, since tags may fire on the consent update itself. That does not hold for a withdrawn
+ * epoch: a hit before it was sent while consent was still granted. A hit before the first epoch belongs to
  * none, unless that epoch is undecided, which is what the visitor was before it.
  */
 export function epochForHit<E extends Placeable>(epochs: readonly E[], t: number, graceMs = DEFAULT_GRACE_MS): E | undefined {
   let found: E | undefined;
   epochs.forEach((e, i) => {
-    const prev = epochs[i - 1];
-    const withdraw = prev !== undefined && grants(prev) && !grants(e);
+    const withdraw = e.label === 'withdrawn';
     const start = i === 0 ? (e.label === 'undecided' ? -Infinity : e.startT) : withdraw ? e.startT : e.startT - graceMs;
     if (t >= start) found = e;
   });
@@ -247,8 +261,10 @@ function isBeforeConsent(hit: Hit, ctx: Context): boolean {
 
 function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   if (selector === 'undecided') return inUndecidedEpoch(hit, ctx);
+  if (selector.startsWith('label=')) return epochOf(hit, ctx)?.label === selector.slice('label='.length);
   if ((selector === 'granted' || selector === 'denied') && !GOOGLE_VENDORS.has(hit.vendor)) {
-    return epochOf(hit, ctx)?.label === selector;
+    const epoch = epochOf(hit, ctx);
+    return (epoch?.outcome ?? epoch?.label) === selector;
   }
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
@@ -298,6 +314,24 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
 
+function flagHost(flag: Flag, ctx: Context): string {
+  const url = ctx.requests.get(flag.recordIds[0] ?? '')?.url ?? /\s(\S+)$/.exec(flag.detail)?.[1] ?? '';
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function countByHost(flags: readonly Flag[], ctx: Context): string {
+  const counts = new Map<string, number>();
+  for (const f of flags) {
+    const host = flagHost(f, ctx) || '(unknown host)';
+    counts.set(host, (counts.get(host) ?? 0) + 1);
+  }
+  return [...counts].map(([host, n]) => `${host} x${n}`).join(', ');
+}
+
 function builtInChecks(
   records: readonly Input[],
   scenario: Scenario,
@@ -307,18 +341,21 @@ function builtInChecks(
   const flags = records.filter((r) => r.type === 'flag');
 
   const unknown = flags.filter((f) => f.kind === 'unknownDestination');
-  if (scenario.options.allowUnknownDestination) {
-    add('builtin: unknownDestination', true, unknown.map((f) => f.id), `Unknown destinations allowed by the scenario; ${unknown.length} flagged.`);
-  } else {
-    add(
-      'builtin: unknownDestination',
-      unknown.length === 0,
-      unknown.flatMap((f) => [f.id, ...f.recordIds]),
-      unknown.length === 0
-        ? 'Expected no requests to unknown destinations, found none.'
-        : `Expected no requests to unknown destinations, found ${unknown.length}: ${unknown.map((f) => f.detail).join('; ')}.`,
-    );
-  }
+  const allow = scenario.options.allowUnknownDestination;
+  const allowedHosts = Array.isArray(allow) ? allow : [];
+  const isAllowed = (f: (typeof unknown)[number]) => allow === true || hostMatches(flagHost(f, ctx), allowedHosts);
+  const blocked = unknown.filter((f) => !isAllowed(f));
+  const allowedCount = unknown.length - blocked.length;
+  add(
+    'builtin: unknownDestination',
+    blocked.length === 0,
+    blocked.length === 0 ? unknown.map((f) => f.id) : blocked.flatMap((f) => [f.id, ...f.recordIds]),
+    blocked.length > 0
+      ? `Expected no requests to unknown destinations, found ${blocked.length}: ${countByHost(blocked, ctx)}.`
+      : unknown.length > 0
+        ? `Unknown destinations allowed by the scenario; ${allowedCount} flagged.`
+        : 'Expected no requests to unknown destinations, found none.',
+  );
 
   const sandboxed = ctx.hits.filter((h) => isSandboxPageUrl(h.page));
   add(
@@ -361,9 +398,6 @@ function identityOf(run: Run | undefined): Identity | undefined {
   return fields.every((f) => typeof values[f] === 'string') ? id : undefined;
 }
 
-// Library loads carry build hashes (fbevents.js asks for signals/config/...?hme=<sha256>). Other script requests can carry hits.
-const LIBRARY_LOAD = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
-
 function pathOf(url: string): string {
   try {
     return new URL(url).pathname;
@@ -405,7 +439,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     return entry;
   };
   for (const request of ctx.requests.values()) {
-    if (request.resourceType === 'script' && LIBRARY_LOAD.test(pathOf(request.url))) continue;
+    if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
     const url = scannedUrl(request);
     slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), request.postData ?? '');
   }

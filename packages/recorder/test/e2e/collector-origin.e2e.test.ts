@@ -26,10 +26,15 @@ const html = (body: string) => `<!doctype html><meta charset="utf-8"><title>t</t
 
 const post = (path: string) => `fetch('${COLLECTOR_ORIGIN}${path}', { method: 'POST', body: 'x' }).catch(() => {});`;
 
-// A request sent while a sandboxed srcdoc iframe is still loading bypasses context.route
-// (ERR_NAME_NOT_RESOLVED). Sending 100 ms after load is captured.
+// A request a sandboxed srcdoc iframe sends during load, and under machine load for at least 1.5 s
+// after it, bypasses context.route (ERR_NAME_NOT_RESOLVED, no request event). These tests check that the
+// collector origin is reachable and routed, so the script repeats every 300 ms until one send is captured.
 const sandboxedSrcdoc = (script: string) =>
-  `<iframe sandbox="allow-scripts" srcdoc="${`<script>addEventListener('load', () => setTimeout(() => { ${script} }, 100));</script>`.replaceAll('"', '&quot;')}"></iframe>`;
+  `<iframe sandbox="allow-scripts" srcdoc="${`<script>addEventListener('load', () => { const send = () => { ${script} }; setTimeout(send, 100); setInterval(send, 300); });</script>`.replaceAll('"', '&quot;')}"></iframe>`;
+
+const lnaProbe = () =>
+  `fetch('http://localhost:${port}/lna-probe', { mode: 'no-cors' })` +
+  `.then(() => ${post('/lna-ok').slice(0, -1)}, (e) => fetch('${COLLECTOR_ORIGIN}/lna-error?' + encodeURIComponent(String(e))));`;
 
 const blobWorker = (path: string) =>
   `new Worker(URL.createObjectURL(new Blob([${JSON.stringify(post(path))}], { type: 'text/javascript' })));`;
@@ -41,6 +46,7 @@ let context: BrowserContext | undefined;
 let collectorPaths: string[] = [];
 let seenRequests: string[] = [];
 let serverHits: string[] = [];
+let consoleMessages: string[] = [];
 
 function pages(path: string): string | undefined {
   switch (path) {
@@ -56,6 +62,8 @@ function pages(path: string): string | undefined {
       return html(`<iframe sandbox="allow-scripts" src="http://127.0.0.1:${port}/frame"></iframe>`);
     case '/frame':
       return html(`<script>${post('/cross-site')}</script>`);
+    case '/lna-control':
+      return html(sandboxedSrcdoc(lnaProbe()));
     case '/iframe-worker':
       return html(sandboxedSrcdoc(blobWorker('/iframe-worker')));
     default:
@@ -92,7 +100,9 @@ async function freshContext(): Promise<BrowserContext> {
   collectorPaths = [];
   seenRequests = [];
   serverHits = [];
+  consoleMessages = [];
   const created = await browser.newContext({ userAgent: chromeUserAgent(browser.version()) });
+  created.on('console', (message) => consoleMessages.push(message.text()));
   created.on('request', (request) => {
     if (request.url().startsWith(COLLECTOR_ORIGIN)) seenRequests.push(new URL(request.url()).pathname);
   });
@@ -141,14 +151,21 @@ test('collector origin captures a sandboxed iframe on a public-looking page', as
   await expectCaptured('/shop-iframe');
 });
 
-test('a sandboxed iframe on a public-looking page cannot fetch localhost directly', async () => {
+test('a sandboxed iframe on a public-looking page cannot fetch localhost directly, because Chromium blocks public to local', async () => {
   const ctx = await freshContext();
-  const probe =
-    `fetch('http://localhost:${port}/lna-probe', { mode: 'no-cors' })` +
-    `.then(() => ${post('/lna-ok').slice(0, -1)}, (e) => fetch('${COLLECTOR_ORIGIN}/lna-error?' + encodeURIComponent(String(e))));`;
-  await openShop(ctx, probe);
+  await openShop(ctx, lnaProbe());
   const outcome = () => collectorPaths.find((p) => p.startsWith('/lna-'));
   await expect.poll(outcome, { timeout: 10_000 }).toBeDefined();
   expect(outcome()).toBe('/lna-error');
   expect(serverHits).not.toContain('/lna-probe');
+  expect(consoleMessages.join('\n')).toMatch(/loopback|local network/i);
+});
+
+test('control: the same fetch from a sandboxed iframe on a localhost page reaches the server', async () => {
+  const ctx = await freshContext();
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${port}/lna-control`);
+  await expect.poll(() => collectorPaths.find((p) => p.startsWith('/lna-')), { timeout: 10_000 }).toBe('/lna-ok');
+  expect(serverHits).toContain('/lna-probe');
+  expect(consoleMessages.join('\n')).not.toMatch(/loopback|local network/i);
 });

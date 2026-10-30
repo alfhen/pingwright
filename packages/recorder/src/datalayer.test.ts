@@ -85,3 +85,26 @@ test('malformed payloads are dropped', () => {
   expect(dataLayerEventFromPayload({ t: 1, args: 'nope' }, runId, 0)).toBeUndefined();
   expect(dataLayerEventFromPayload({ t: 1, args: '{}' }, runId, 0)).toBeUndefined();
 });
+
+test('a push over the size limit keeps its event name and drops the deep values', () => {
+  const page = pageWith('');
+  page.run(
+    `window.dataLayer = []; dataLayer.push({ event: 'purchase', 'gtm.uniqueEventId': 9, ecommerce: { value: 5, items: Array.from({ length: 400 }, (_, i) => ({ item_id: 'SKU' + i, item_name: 'Fake tee ' + i })) } });`,
+  );
+  expect(page.sent[0]!.args.length).toBeLessThanOrEqual(10000);
+  const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0);
+  expect(event).toMatchObject({ event: 'purchase', gtmUniqueEventId: 9, isConsentCommand: false });
+  const push = event?.args[0] as { ecommerce: { value: number; items: unknown[] } };
+  expect(push.ecommerce.value).toBe(5);
+  expect(push.ecommerce.items.every((item) => item === '[truncated]')).toBe(true);
+});
+
+test('a large gtag call keeps the command, so a consent update is still a consent command', () => {
+  const page = pageWith('');
+  page.run(
+    `window.dataLayer = []; function gtag() { dataLayer.push(arguments); } gtag('consent', 'update', { analytics_storage: 'granted', note: 'x'.repeat(20000), more: { a: 'y'.repeat(9000) } });`,
+  );
+  const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0);
+  expect(event).toMatchObject({ isConsentCommand: true });
+  expect((event?.args[2] as Record<string, unknown>).analytics_storage).toBe('granted');
+});

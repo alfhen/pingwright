@@ -1,6 +1,7 @@
+import type { DataLayerEvent } from '@pingwright/core';
 import { describe, expect, test } from 'vitest';
 import { consentModeChanges, type ConsentPush } from './consent-mode.ts';
-import { buildEpochs } from './epochs.ts';
+import { buildEpochs, type BannerEvent } from './epochs.ts';
 
 const denied = {
   ad_storage: 'denied',
@@ -32,6 +33,31 @@ describe('consentModeChanges', () => {
       [20, 'update'],
     ]);
     expect(changes[1]?.state).toEqual({ analytics: 'granted', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
+  });
+
+  test('ignores a region-scoped default', () => {
+    const changes = consentModeChanges([
+      push(1, 'default', { ...denied, region: ['DK', 'SE'] } as unknown as Record<string, string>),
+      push(2, 'default', { analytics_storage: 'granted' }),
+    ]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.state.ads).toBe('unknown');
+    expect(changes[0]?.state.analytics).toBe('granted');
+  });
+
+  test('accepts full dataLayer event records', () => {
+    const record: DataLayerEvent = {
+      type: 'dataLayerEvent',
+      id: 'dle_1' as DataLayerEvent['id'],
+      runId: 'run_1' as DataLayerEvent['runId'],
+      stepId: null,
+      t: 5,
+      event: null,
+      gtmUniqueEventId: null,
+      args: ['consent', 'default', denied],
+      isConsentCommand: true,
+    };
+    expect(consentModeChanges([record])[0]?.state.analytics).toBe('denied');
   });
 
   test('treats missing signals as unknown', () => {
@@ -142,8 +168,9 @@ describe('buildEpochs', () => {
     expect(epochs.map((e) => [e.label, e.startT, e.endT])).toEqual([
       ['undecided', 0, 1090],
       ['granted', 1090, 3080],
-      ['denied', 3080, null],
+      ['withdrawn', 3080, null],
     ]);
+    expect(epochs[2]?.state).toEqual({ analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
   });
 
   test('an accept with no update followed by a quick reject is not paired with the reject update', () => {
@@ -159,7 +186,7 @@ describe('buildEpochs', () => {
     expect(epochs.map((e) => [e.label, e.startT])).toEqual([
       ['undecided', 0],
       ['granted', 1000],
-      ['denied', 2500],
+      ['withdrawn', 2500],
     ]);
     expect(epochs[1]?.state.analytics).toBe('granted');
   });
@@ -207,6 +234,16 @@ describe('buildEpochs', () => {
     ]);
     const epochs = buildEpochs([{ t: 1000, tEnd: 1040, action }], modes, { startT: 0 });
     expect(epochs.map((e) => e.label)).toEqual(['undecided', action === 'accept' ? 'granted' : 'denied']);
+  });
+
+  test('a default after a banner decision with no update does not reach later states', () => {
+    const modes = consentModeChanges(
+      [push(10, 'default', denied), push(5000, 'default', { analytics_storage: 'granted' }), push(20000, 'update', { ad_storage: 'granted' })],
+      1000,
+    );
+    expect(modes.map((c) => c.t)).toEqual([10, 20000]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1010, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.at(-1)?.state.analytics).toBe('denied');
   });
 
   test('an accept sent as several updates is one epoch with the last state', () => {
@@ -279,5 +316,92 @@ describe('labelOf', () => {
     const modes = consentModeChanges([push(1000, 'update', { analytics_storage: 'granted', ad_storage: 'granted' })]);
     const epochs = buildEpochs([], modes, { startT: 0 });
     expect(epochs.at(-1)?.label).toBe('granted');
+  });
+});
+
+describe('later Consent Mode defaults', () => {
+  const changes = (...pushes: ConsentPush[]) => consentModeChanges(pushes);
+
+  test('a default after an accept starts no epoch', () => {
+    const epochs = buildEpochs(
+      [{ t: 1000, tEnd: 1010, action: 'accept' }],
+      changes(push(10, 'default', denied), push(1005, 'update', granted), push(3000, 'default', denied)),
+      { startT: 0 },
+    );
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['granted', 1005],
+    ]);
+  });
+
+  test('a default after an accept does not change the state of a later update', () => {
+    const epochs = buildEpochs(
+      [{ t: 1000, tEnd: 1010, action: 'accept' }],
+      changes(
+        push(10, 'default', denied),
+        push(1005, 'update', granted),
+        push(10000, 'default', denied),
+        push(20000, 'update', { ad_storage: 'granted' }),
+      ),
+      { startT: 0 },
+    );
+    expect(epochs.map((e) => [e.label, e.startT])).toEqual([
+      ['undecided', 0],
+      ['granted', 1005],
+    ]);
+  });
+
+  test('several defaults before the first decision merge into the undecided state', () => {
+    const epochs = buildEpochs([], changes(push(10, 'default', { analytics_storage: 'denied' }), push(20, 'default', { ad_storage: 'denied' })), { startT: 0 });
+    expect(epochs).toHaveLength(1);
+    expect(epochs[0]?.state).toMatchObject({ analytics: 'denied', ads: 'denied' });
+  });
+
+  describe('withdrawn label', () => {
+    const analyticsOnly = { ...denied, analytics_storage: 'granted' };
+    const labelsFor = (states: Record<string, string>[], banners: BannerEvent[] = []) => {
+      const updates = states.map((s, i) => push(1000 * (i + 1), 'update', s));
+      return buildEpochs(banners, consentModeChanges([push(10, 'default', denied), ...updates]), { startT: 0 }).map((e) => e.label);
+    };
+
+    test('a banner reject that denies only some signals keeps its denied outcome', () => {
+      const banners: BannerEvent[] = [{ t: 1000, action: 'accept' }, { t: 3000, action: 'reject' }];
+      const updates = [push(1000, 'update', granted), push(3000, 'update', { analytics_storage: 'denied', ad_storage: 'denied' })];
+      const epochs = buildEpochs(banners, consentModeChanges([push(10, 'default', denied), ...updates]), { startT: 0 });
+      expect(epochs.map((e) => [e.label, e.outcome])).toEqual([['undecided', undefined], ['granted', undefined], ['withdrawn', 'denied']]);
+    });
+
+    test('granted then denied', () => {
+      expect(labelsFor([granted, denied])).toEqual(['undecided', 'granted', 'withdrawn']);
+    });
+
+    test('granted then mixed', () => {
+      expect(labelsFor([granted, analyticsOnly])).toEqual(['undecided', 'granted', 'withdrawn']);
+    });
+
+    test('mixed then denied', () => {
+      expect(labelsFor([analyticsOnly, denied])).toEqual(['undecided', 'mixed', 'withdrawn']);
+    });
+
+    test('granted, mixed, denied', () => {
+      expect(labelsFor([granted, analyticsOnly, denied])).toEqual(['undecided', 'granted', 'withdrawn', 'withdrawn']);
+    });
+
+    test('granted, denied, granted, denied', () => {
+      expect(labelsFor([granted, denied, granted, denied])).toEqual(['undecided', 'granted', 'withdrawn', 'granted', 'withdrawn']);
+    });
+
+    test('a first reject is not a withdrawal', () => {
+      expect(labelsFor([], [{ t: 1000, action: 'reject' }])).toEqual(['undecided', 'denied']);
+    });
+
+    test('a signal that was never granted is not withdrawn', () => {
+      expect(labelsFor([analyticsOnly, { ...analyticsOnly, ad_storage: 'granted' }])).toEqual(['undecided', 'mixed', 'mixed']);
+    });
+
+    test('a granted default before the decision does not make the first reject a withdrawal', () => {
+      const modes = consentModeChanges([push(10, 'default', granted), push(1000, 'update', denied)]);
+      expect(buildEpochs([{ t: 1000, action: 'reject' }], modes, { startT: 0 }).map((e) => e.label)).toEqual(['undecided', 'denied']);
+    });
   });
 });

@@ -14,7 +14,8 @@ export interface Io {
 const MISSING_BROWSER = /Executable doesn't exist|playwright install/i;
 
 function allRecords(records: RunRecords): PingwrightRecord[] {
-  const { run, ...rest } = records;
+  const { run, truncatedAtLine, ...rest } = records;
+  void truncatedAtLine;
   return [run, ...Object.values(rest).flat()];
 }
 
@@ -35,7 +36,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     return 2;
   }
   for (const warning of parsed.warnings) io.stderr(`Warning: ${warning}\n`);
-  const undeclared = Object.keys(args.vars).filter((name) => !(name in parsed.vars));
+  const undeclared = Object.keys(args.vars).filter((name) => !Object.hasOwn(parsed.vars, name));
   if (undeclared.length) {
     io.stderr(`--var ${undeclared.join(', ')} not declared in the scenario's vars. --var only overrides declared variables.\n`);
     return 2;
@@ -58,6 +59,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       site: args.site,
       scenario: basename(args.scenario),
       parsed,
+      firstPartyHosts: parsed.options.firstPartyHosts,
       seed: args.seed,
       headed: args.headed,
       autoconsent: args.autoconsentRules.length ? { ruleFiles: args.autoconsentRules } : undefined,

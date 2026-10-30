@@ -4,3 +4,5 @@ export * from './clock.ts';
 export * from './records.ts';
 export * from './store.ts';
 export * from './identity.ts';
+export * from './library.ts';
+export * from './version.ts';
