@@ -1,6 +1,7 @@
 import {
   newId,
   nodeNow,
+  readVersion,
   pageTimeToEpoch,
   RunWriter,
   type CaptureCoverage,
@@ -40,8 +41,9 @@ import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 
-export const PINGWRIGHT_VERSION = '0.1.0-rc.1';
+export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
+const REDACTED_VALUE = '[redacted]';
 
 const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
 
@@ -63,6 +65,11 @@ export interface RecorderOptions {
   userAgentOverride?: string;
 }
 
+export interface StepActivity {
+  requests: Request[];
+  dataLayerEvents: DataLayerEvent[];
+}
+
 export interface RunResult {
   path: string;
   records: RunRecords;
@@ -72,6 +79,16 @@ function redactHeaders(headers: Record<string, string>): Record<string, string> 
   return Object.fromEntries(
     Object.entries(headers).map(([k, v]) => [k, REDACTED_HEADERS.has(k.toLowerCase()) ? '[redacted]' : v]),
   );
+}
+
+function redactQuery(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const key of new Set(parsed.searchParams.keys())) parsed.searchParams.set(key, REDACTED_VALUE);
+    return parsed.href;
+  } catch {
+    return url;
+  }
 }
 
 function frameUrlOf(request: PwRequest): string | null {
@@ -108,6 +125,7 @@ export class Recorder {
   private readonly checkpoints: Checkpoint[] = [];
   private readonly bannerEvents: BannerEvent[] = [];
   private currentStepId: Id<'stp'> | null = null;
+  private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
 
   private constructor(
@@ -170,7 +188,10 @@ export class Recorder {
     context.on('request', (request) => void this.recordFor(request));
     context.on('requestfailed', (request) => {
       const record = this.recordFor(request);
-      if (record && record.outcome === 'passed') record.outcome = 'failed';
+      if (!record) return;
+      if (record.outcome === 'passed') record.outcome = 'failed';
+      const errorText = request.failure()?.errorText;
+      if (errorText) record.failure = errorText;
     });
     context.on('response', (response) => this.track(this.recordResponse(response)));
   }
@@ -213,7 +234,7 @@ export class Recorder {
     // The collector and self-test origins are Pingwright's own channel, not site traffic.
     if (!/^https?:/.test(url) || url.startsWith(COLLECTOR_ORIGIN) || url.startsWith(SELFTEST_ORIGIN)) return undefined;
     const body = request.postData();
-    const record: Request = {
+    let record: Request = {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
@@ -228,14 +249,40 @@ export class Recorder {
       postData: body === null ? null : body.slice(0, MAX_POST_DATA),
       outcome: 'passed',
     };
+    record = this.redactForHandoff(record);
     this.requests.set(request, record);
     return record;
+  }
+
+  /** A person is typing during a handoff, so only requests that decode as tracking hits keep their body and query. */
+  private redactForHandoff(record: Request, at = Date.now()): Request {
+    if (!this.duringHandoff(at)) return record;
+    if (isCollectionEndpoint(record) || isKnownVendorCollection(record) || decodeRequest(record).length > 0) return record;
+    return {
+      ...record,
+      url: redactQuery(record.url),
+      postData: record.postData === null ? null : REDACTED_VALUE,
+      redacted: 'handoff',
+    };
+  }
+
+  private duringHandoff(at: number): boolean {
+    return this.handoffWindows.some((w) => at >= w.from && (w.to === null || at <= w.to));
+  }
+
+  /** Requests sent while a handoff is active, including unload sends queued then and replayed later, are stored without their typed values. */
+  setHandoff(active: boolean): void {
+    if (active) this.handoffWindows.push({ from: Date.now(), to: null });
+    else {
+      const open = this.handoffWindows.find((w) => w.to === null);
+      if (open) open.to = Date.now();
+    }
   }
 
   private recordUnloadSend(payload: UnloadSendPayload): void {
     if (this.closed || this.unloadKeys.has(payload.key)) return;
     this.unloadKeys.add(payload.key);
-    const record: Request = {
+    let record: Request = {
       type: 'request',
       id: newId('request'),
       runId: this.runId,
@@ -250,6 +297,7 @@ export class Recorder {
       postData: payload.postData === null ? null : payload.postData.slice(0, MAX_POST_DATA),
       outcome: 'stubbed',
     };
+    record = this.redactForHandoff(record, payload.queuedAt);
     this.routed.add(record.id);
     this.unloadRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
@@ -300,6 +348,14 @@ export class Recorder {
     this.steps.push(step);
     this.currentStepId = step.id;
     return step;
+  }
+
+  /** What the recorder has seen so far while the step ran. */
+  stepActivity(step: Step): StepActivity {
+    return {
+      requests: [...this.requests.values(), ...this.unloadRequests].filter((r) => r.stepId === step.id),
+      dataLayerEvents: this.dataLayerEvents.filter((e) => e.stepId === step.id),
+    };
   }
 
   endStep(step: Step, error?: string): void {

@@ -79,8 +79,13 @@ describe('full fixture checkout', () => {
     expect(purchase!.stepId).toBe(records.requests.find((r) => r.id === purchase!.requestId)!.stepId);
 
     const accept = records.steps.find((s) => s.label === 'accept')!;
+    const cartStep = records.steps.find((s) => s.label === 'addToCart-2')!;
     const addToCart = records.hits.find((h) => h.vendor === 'ga4' && h.event === 'add_to_cart');
-    expect(addToCart?.stepId).not.toBe(accept.id);
+    expect(addToCart).toBeDefined();
+    const next = records.steps.find((s) => s.label === 'visit-3')!;
+    expect([cartStep.id, next.id]).toContain(addToCart!.stepId);
+    expect(records.dataLayerEvents.find((e) => e.event === 'add_to_cart')?.stepId).toBe(cartStep.id);
+    expect(addToCart!.stepId).not.toBe(accept.id);
     expect(records.dataLayerEvents.some((e) => e.stepId === accept.id)).toBe(true);
 
     expect(records.run.identity).toMatchObject({ seed: 12, country: 'US' });
@@ -164,6 +169,43 @@ describe('payment and log-in guard', () => {
   test.each(['#secret', '#holder'])('filling %s on a non-loopback host fails the step', async (selector) => {
     const { error } = await play(`start: /\nsteps:\n  - fill: { "${selector}": x }\n`, 'shop.example.com');
     expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/payments and log-ins must be handoff steps/i);
+  });
+
+  test('an evaluate step cannot set a card or password field on a non-loopback host', async () => {
+    const script = "document.getElementById('cc').value = '4242424242424242'";
+    const { error, card } = await play(`start: /\nsteps:\n  - evaluate: "${script}"\n`, 'shop.example.com');
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/payments and log-ins must be handoff steps/i);
+    expect(card).toBe('');
+  });
+
+  test.each([
+    "const c = document.getElementById('cc'); c.setAttributeNS(null, 'value', '4242424242424242'); fetch('/pay', { method: 'POST', body: c.value })",
+    "const c = document.getElementById('cc'); const a = document.createAttribute('value'); c.setAttributeNode(a); a.value = '4242424242424242'; fetch('/pay', { method: 'POST', body: c.value })",
+  ])('an evaluate step cannot send a card number set through attribute APIs %#', async (script) => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: PAGE }));
+    const error = await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - evaluate: ${JSON.stringify(script)}\n`)).then(() => undefined, (e: unknown) => e);
+    const { records } = await recorder.close();
+    expect(error).toBeInstanceOf(StepError);
+    expect(JSON.stringify(records.requests)).not.toContain('4242424242424242');
+  });
+
+  test('an evaluate step cannot send a card number it just set', async () => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: PAGE }));
+    const script = "const c = document.getElementById('cc'); c.value = '4242424242424242'; fetch('/pay', { method: 'POST', body: c.value })";
+    const error = await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - evaluate: "${script}"\n`)).then(() => undefined, (e: unknown) => e);
+    const { records } = await recorder.close();
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/payments and log-ins must be handoff steps/i);
+    expect(JSON.stringify(records.requests)).not.toContain('4242424242424242');
+  });
+
+  test('an evaluate step may set an ordinary field', async () => {
+    const { error } = await play(`start: /\nsteps:\n  - evaluate: "document.getElementById('name').value = 'x'"\n`, 'shop.example.com');
+    expect(error).toBeUndefined();
   });
 
   test.each(['label[for=cc]', '#pwl', 'text=Card number'])('filling through the label %s fails the step', async (selector) => {
@@ -173,7 +215,112 @@ describe('payment and log-in guard', () => {
     expect(card).toBe('');
   });
 
+  test('filling a select through its label picks the option', async () => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    const html = '<!doctype html><label for="c" id="cl">Country</label><select id="c"><option value="US">US</option><option value="SE">SE</option></select>';
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: html }));
+    try {
+      await playScenario(recorder, parseScenario('start: /\nsteps:\n  - fill: { "#cl": SE }\n'));
+      expect(await recorder.context.pages()[0]!.locator('#c').inputValue()).toBe('SE');
+    } finally {
+      await recorder.close();
+    }
+  });
+
   test('an ordinary field on a non-loopback host is filled', async () => {
     expect((await play('start: /\nsteps:\n  - fill: { "#name": firstName }\n', 'shop.example.com')).error).toBeUndefined();
   });
+});
+
+describe('addToCart', () => {
+  test('fails when the click adds nothing to the cart', async () => {
+    const parsed = parseScenario('start: /products/fake-tee\nsteps:\n  - addToCart: "#pw-accept"\n');
+    const error = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed, cartTimeoutMs: 500 }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toContain('click did not add to cart');
+  });
+
+  test('passes with a custom cart check', async () => {
+    const parsed = parseScenario('start: /products/fake-tee\nsteps:\n  - addToCart: "#pw-accept"\n');
+    const cartCheck = ({ dataLayerEvents }: { dataLayerEvents: { isConsentCommand: boolean }[] }) => dataLayerEvents.some((e) => e.isConsentCommand);
+    await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed, cartCheck });
+  });
+});
+
+describe('consent: withdraw', () => {
+  const ACCEPT = 'start: /\noptions: { consentTimeout: 1s }\nsteps:\n  - consent: accept\n  - wait: 500ms\n';
+
+  test('fails with a hint when the banner was not reopened', async () => {
+    const parsed = parseScenario(`${ACCEPT}  - consent: withdraw\n`);
+    const error = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toContain('banner not shown (withdraw needs the banner reopened first)');
+  });
+
+  test('rejects after the cookie settings link reopened the banner', async () => {
+    const parsed = parseScenario(`${ACCEPT}  - click: "#pw-cookie-settings"\n  - consent: withdraw\n  - wait: 1s\n`);
+    const { records } = await recordScenario({ networkMode: 'stub', outDir, site: site.url, parsed });
+    expect(records.consentEpochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
+  });
+});
+
+describe('handoff', () => {
+  test('requests sent during a handoff do not keep typed values, and the record says so', async () => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+    const parsed = parseScenario('start: /\nsteps:\n  - handoff: Log in\n  - checkpoint: after\n');
+    const send = (tag: string) =>
+      recorder.context.pages()[0]!.evaluate(async (t) => {
+        await fetch(`/login?user=${t}&pass=${t}`, { method: 'POST', body: `password=secret-${t}` }).catch(() => undefined);
+      }, tag);
+    await playScenario(recorder, parsed, {
+      print: () => undefined,
+      handoffResolver: async () => {
+        await send('during');
+      },
+    });
+    await send('after');
+    const { records } = await recorder.close();
+    const during = records.requests.find((r) => r.url.includes('/login') && r.redacted === 'handoff')!;
+    expect(during.postData).toBe('[redacted]');
+    expect(during.url).not.toContain('during');
+    expect(during.url).toContain('user=');
+    const after = records.requests.find((r) => r.url.includes('/login') && r.url.includes('after'))!;
+    expect(after.redacted).toBeUndefined();
+    expect(after.postData).toContain('secret-after');
+    expect(JSON.stringify(records.requests)).not.toContain('secret-during');
+  });
+});
+
+test('a send queued while the page unloads during a handoff does not keep typed values', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+  const parsed = parseScenario('start: /\nsteps:\n  - handoff: Log in\n  - checkpoint: after\n');
+  await playScenario(recorder, parsed, {
+    print: () => undefined,
+    handoffResolver: async () => {
+      const page = recorder.context.pages()[0]!;
+      await page
+        .evaluate(() => {
+          addEventListener('pagehide', () => navigator.sendBeacon('/api/form', 'password=secret-during'));
+          location.href = '/?done';
+        })
+        .catch(() => undefined);
+      await page.waitForURL(/done/);
+    },
+  });
+  const { records } = await recorder.close();
+  const beacon = records.requests.find((r) => r.url.endsWith('/api/form'))!;
+  expect(beacon.initiator).toBe('unload');
+  expect(beacon.postData).toBe('[redacted]');
+  expect(beacon.redacted).toBe('handoff');
+});
+
+test('a failed request records why it failed', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+  await recorder.context.route('**/blocked.js', (route) => route.abort('connectionrefused'));
+  const page = await recorder.visit(site.url);
+  await page.evaluate(() => fetch('/blocked.js').catch(() => undefined));
+  const { records } = await recorder.close();
+  const failed = records.requests.find((r) => r.url.endsWith('/blocked.js'))!;
+  expect(failed.outcome).toBe('failed');
+  expect(failed.failure).toBe('net::ERR_CONNECTION_REFUSED');
 });

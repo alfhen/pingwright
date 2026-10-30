@@ -1,9 +1,9 @@
 import { createInterface } from 'node:readline/promises';
 import { createIdentity, type Identity, type Step as StepRecord } from '@pingwright/core';
 import type { Scenario, Step } from '@pingwright/expect';
-import type { Page } from 'playwright';
-import { HANDOFF_REQUIRED, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
-import { launchRecorder, type Recorder, type RecorderOptions, type RunResult } from './recorder.ts';
+import type { Frame, Page } from 'playwright';
+import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
+import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
 export type ConsentAnswer = Extract<Step, { kind: 'consent' }>['value'];
 
@@ -18,10 +18,24 @@ export type ConsentHandler = (answer: ConsentAnswer, context: ConsentContext) =>
 /** `withdraw` is a rejection; the scenario reopens the banner itself first. */
 export const bannerConsentHandler: ConsentHandler = async (answer, { recorder, page, timeoutMs }) => {
   const result = await recorder.consent.answer(page, answer === 'withdraw' ? 'reject' : answer, timeoutMs ?? 10_000);
-  if (result.result === 'banner not shown') throw new Error('banner not shown');
+  if (result.result === 'banner not shown') {
+    throw new Error(answer === 'withdraw' ? 'banner not shown (withdraw needs the banner reopened first)' : 'banner not shown');
+  }
   if (result.result === 'failed') throw new Error(`consent ${answer} failed`);
   recorder.recordBanner(result);
 };
+
+/** Says whether the click of an `addToCart` step changed the cart, from what was recorded during the step. */
+export type CartCheck = (activity: StepActivity) => boolean;
+
+const CART_PATH = /\/cart\/(?:add|change|update|clear)(?:\.js)?$|\/cart\.js$/i;
+const CART_MUTATION = /cartLinesAdd/;
+const CART_EVENT = /^(?:add_to_cart|addToCart)$/i;
+
+/** A POST to a cart endpoint (Shopify `/cart/add`, a cart mutation), or an add_to_cart dataLayer event. */
+export const defaultCartCheck: CartCheck = ({ requests, dataLayerEvents }) =>
+  dataLayerEvents.some((e) => e.event !== null && CART_EVENT.test(e.event)) ||
+  requests.some((r) => r.method !== 'GET' && (CART_PATH.test(new URL(r.url).pathname) || CART_MUTATION.test(r.postData ?? '')));
 
 export interface PlayOptions {
   /** Identity seed. Default: the scenario's `options.seed`, else random. */
@@ -33,6 +47,10 @@ export interface PlayOptions {
   print?: (text: string) => void;
   /** Longest wait for a selector, a click or a fill. */
   actionTimeoutMs?: number;
+  /** Decides whether an `addToCart` step added anything. Default: `defaultCartCheck`. */
+  cartCheck?: CartCheck;
+  /** How long an `addToCart` step waits for the cart check to pass. Default 5000. */
+  cartTimeoutMs?: number;
 }
 
 export class StepError extends Error {
@@ -97,7 +115,7 @@ async function fillField(page: Page, selector: string, value: string, timeout: n
       const labelled = el instanceof HTMLLabelElement ? el : isControl || (el as HTMLElement).isContentEditable ? null : el.closest('label');
       const control = labelled?.control ?? null;
       return {
-        tag: el.tagName.toLowerCase(),
+        tag: (control ?? el).tagName.toLowerCase(),
         host: el.ownerDocument.location.hostname,
         fields: control ? [describe(el), describe(control)] : [describe(el)],
       };
@@ -110,6 +128,81 @@ async function fillField(page: Page, selector: string, value: string, timeout: n
   }
   if (inspected.tag === 'select') await field.selectOption(value, { timeout });
   else await field.fill(value, { timeout });
+}
+
+interface PageField extends FieldAttributes {
+  value: string;
+}
+
+async function sensitiveFieldsOf(page: Page): Promise<{ frame: Frame; index: number; value: string }[]> {
+  const found: { frame: Frame; index: number; value: string }[] = [];
+  for (const frame of page.frames()) {
+    if (isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname)) continue;
+    const fields = await frame
+      .evaluate((): PageField[] =>
+        [...document.querySelectorAll('input, textarea')].map((e) => ({
+          autocomplete: e.getAttribute('autocomplete'),
+          name: e.getAttribute('name'),
+          id: e.getAttribute('id'),
+          type: e.getAttribute('type'),
+          value: (e as HTMLInputElement).value,
+        })),
+      )
+      .catch(() => [] as PageField[]);
+    fields.forEach((field, index) => {
+      if (isSensitiveField(field)) found.push({ frame, index, value: field.value });
+    });
+  }
+  return found;
+}
+
+/**
+ * An evaluate step is no way around the guard. Card and password fields in hosted frames refuse
+ * plain writes (value, defaultValue, setAttribute, setAttributeNS, Attr.value) while the script runs, and the step fails.
+ * This is a guard, not a sandbox: a script that works around it (HTML parsing, another realm, async writes,
+ * execCommand, setRangeText, redefining the setters) can still send a value.
+ */
+async function evaluateGuarded(page: Page, script: string): Promise<void> {
+  const hosted = page.frames().filter((frame) => !isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));
+  const trapped: Frame[] = [];
+  for (const frame of hosted) {
+    if (await frame.evaluate(SENSITIVE_WRITE_TRAP).then(() => true, () => false)) trapped.push(frame);
+  }
+  const before = await sensitiveFieldsOf(page);
+  let scriptError: unknown;
+  try {
+    await page.evaluate(script);
+  } catch (error) {
+    scriptError = error;
+  }
+  let blocked = false;
+  for (const frame of trapped) {
+    const hit = await frame
+      .evaluate(() => {
+        const trap = (window as unknown as { __pingwrightTrap: { state: { blocked: boolean }; release: () => void } }).__pingwrightTrap;
+        trap.release();
+        return trap.state.blocked;
+      })
+      .catch(() => false);
+    blocked ||= hit;
+  }
+  const changed = (await sensitiveFieldsOf(page)).filter(
+    (field) => field.value !== '' && before.find((b) => b.frame === field.frame && b.index === field.index)?.value !== field.value,
+  );
+  for (const { frame, index } of changed) {
+    await frame.evaluate((i) => ((document.querySelectorAll('input, textarea')[i] as HTMLInputElement).value = ''), index).catch(() => undefined);
+  }
+  if (blocked || changed.length > 0) throw new Error(`the script set a card or password field. ${HANDOFF_REQUIRED}`);
+  if (scriptError) throw scriptError;
+}
+
+async function waitForCart(recorder: Recorder, record: StepRecord, options: PlayOptions): Promise<void> {
+  const check = options.cartCheck ?? defaultCartCheck;
+  const deadline = Date.now() + (options.cartTimeoutMs ?? 5000);
+  while (!check(recorder.stepActivity(record))) {
+    if (Date.now() >= deadline) throw new Error('click did not add to cart');
+    await recorder.wait(100);
+  }
 }
 
 async function runStep(
@@ -127,8 +220,11 @@ async function runStep(
       await page.goto(resolveSitePath(step.value, recorder.site, scenario.vars), { waitUntil: 'load', timeout });
       return;
     case 'click':
+      await page.locator(step.value).first().click({ timeout });
+      return;
     case 'addToCart':
       await page.locator(step.value).first().click({ timeout });
+      await waitForCart(recorder, record, options);
       return;
     case 'fill':
       for (const [selector, value] of Object.entries(step.value)) await fillField(page, selector, fillValue(value, identity), timeout);
@@ -138,7 +234,7 @@ async function runStep(
       else await page.locator(step.value.selector).first().waitFor({ state: 'attached', timeout });
       return;
     case 'evaluate':
-      await page.evaluate(step.value);
+      await evaluateGuarded(page, step.value);
       return;
     case 'checkpoint':
       await recorder.checkpoint(step.value, record);
@@ -149,7 +245,12 @@ async function runStep(
     case 'handoff': {
       const print = options.print ?? ((text: string) => process.stdout.write(`${text}\n`));
       print(`\nHandoff: ${step.value}\n${HANDOFF_REMINDER}\nRecording continues until you are done.`);
-      await (options.handoffResolver ?? stdinResolver)(step.value);
+      recorder.setHandoff(true);
+      try {
+        await (options.handoffResolver ?? stdinResolver)(step.value);
+      } finally {
+        recorder.setHandoff(false);
+      }
       return;
     }
   }
@@ -180,12 +281,14 @@ export async function playScenario(recorder: Recorder, scenario: Scenario, optio
 
 export interface RecordScenarioOptions extends RecorderOptions, PlayOptions {
   parsed: Scenario;
+  /** Test hook. Default: `launchRecorder`. */
+  launch?: typeof launchRecorder;
 }
 
 /** Launches a recorder, headed when asked or when the scenario has a handoff, plays the scenario and writes the run. */
 export async function recordScenario(options: RecordScenarioOptions): Promise<RunResult> {
-  const { parsed, ...rest } = options;
-  const recorder = await launchRecorder({ ...rest, headed: rest.headed || hasHandoff(parsed) });
+  const { parsed, launch = launchRecorder, ...rest } = options;
+  const recorder = await launch({ ...rest, headed: rest.headed || hasHandoff(parsed) });
   try {
     await playScenario(recorder, parsed, rest);
   } catch (error) {

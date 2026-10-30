@@ -141,6 +141,12 @@ test('boolean ids filters mean present and absent', () => {
   expect(s.expect.mustNot[0]!.filter.ids).toEqual({ user_id: 'present', client_id: 'absent' });
 });
 
+test('a wait that starts with a digit must be a duration', () => {
+  for (const bad of ['4sec', '4 seconds', '10x']) expect(errorOf(`start: /\nsteps:\n  - wait: ${bad}\n`)).toContain('is not a duration');
+  expect(parseScenario('start: /\nsteps:\n  - wait: 4s\n').steps[0]).toMatchObject({ value: 4000 });
+  expect(parseScenario('start: /\nsteps:\n  - wait: "#x"\n').steps[0]).toMatchObject({ value: { selector: '#x' } });
+});
+
 test('step labels: written, default, duplicate and checked by after', () => {
   const s = parseScenario('start: /\nsteps:\n  - visit: /cart\n    label: cart\n  - click: "#go"\n  - wait: "#x"\n');
   expect(s.steps.map((x) => x.label)).toEqual(['cart', 'click-2', 'wait-3']);

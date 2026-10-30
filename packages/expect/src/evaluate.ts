@@ -1,6 +1,7 @@
 import {
   hashEmail,
   hashPhone,
+  isLibraryLoadPath,
   scan,
   sha256,
   newId,
@@ -381,9 +382,6 @@ function identityOf(run: Run | undefined): Identity | undefined {
   return fields.every((f) => typeof values[f] === 'string') ? id : undefined;
 }
 
-// Library loads carry build hashes (fbevents.js asks for signals/config/...?hme=<sha256>). Other script requests can carry hits.
-const LIBRARY_LOAD = /(?:^|\/)(?:gtag\/js|fbevents\.js|signals\/config\/[^/]*)$/;
-
 function pathOf(url: string): string {
   try {
     return new URL(url).pathname;
@@ -416,7 +414,7 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     return entry;
   };
   for (const request of ctx.requests.values()) {
-    if (request.resourceType === 'script' && LIBRARY_LOAD.test(pathOf(request.url))) continue;
+    if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
     slot(request.id, request.stepId).texts.push(scannedUrl(request), request.postData ?? '');
   }
   for (const hit of ctx.hits) {
