@@ -20,6 +20,8 @@ test('does not match another path on a listed host', () => {
 
 test('does not match library loads', () => {
   expect(at('https://bat.bing.com/bat.js')).toBeUndefined();
+  expect(at('https://bat.bing.com/bat.js?ti=1')).toBeUndefined();
+  expect(at('https://bat.bing.com/p/action/1.js')).toBeUndefined();
   expect(at('https://static.ads-twitter.com/uwt.js')).toBeUndefined();
   expect(at('https://snap.licdn.com/li.lms-analytics/insight.min.js')).toBeUndefined();
 });
