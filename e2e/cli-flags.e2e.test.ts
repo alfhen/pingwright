@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { readRun } from '../packages/core/src/index.ts';
 import { rootVersion, run, runCli, runText, scenario, site, UNKNOWN } from './cli-helpers.ts';
 
 test('usage errors exit 2', async () => {
@@ -42,10 +43,11 @@ test('run --help prints the help of run', async () => {
 });
 
 test('text summary groups sandboxPageUrl flags into one line per vendor', async () => {
-  const json = await run('checkout');
-  const flagged = json.records!.flags.filter((f) => f.kind === 'sandboxPageUrl');
-  expect(flagged.length).toBeGreaterThan(1);
   const { stdout } = await runText('checkout');
+  const path = /^Record: (.+)$/m.exec(stdout)?.[1];
+  expect(path).toBeDefined();
+  const flagged = (await readRun(path!)).flags.filter((f) => f.kind === 'sandboxPageUrl');
+  expect(flagged.length).toBeGreaterThan(1);
   const lines = stdout.split('\n').filter((l) => l.startsWith('  sandboxPageUrl:'));
   expect(lines.length).toBeGreaterThan(0);
   expect(lines.length).toBeLessThan(flagged.length);

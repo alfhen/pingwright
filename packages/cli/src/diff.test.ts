@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiffResult } from '@pingwright/expect';
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
 import { formatDiff } from './diff.ts';
 import { main } from './main.ts';
@@ -11,8 +11,9 @@ const empty: DiffResult = { warnings: [], added: [], removed: [], changed: [], c
 const key = (epoch: string, vendor: string, event: string) => ({ epoch, vendor, event });
 
 test('parses diff with its options', () => {
-  expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--by-page', '--json'])).toEqual({ command: 'diff', a: 'a.jsonl', b: 'b.jsonl', byPage: true, json: true });
-  expect(parseCli(['diff', 'a', 'b'])).toMatchObject({ byPage: false, json: false });
+  expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--by-page', '--json'])).toEqual({ command: 'diff', a: 'a.jsonl', b: 'b.jsonl', byPage: true, allFlags: false, json: true });
+  expect(parseCli(['diff', 'a', 'b'])).toMatchObject({ byPage: false, allFlags: false, json: false });
+  expect(parseCli(['diff', 'a', 'b', '--all-flags'])).toMatchObject({ allFlags: true });
   expect(() => parseCli(['diff', 'a'])).toThrow(UsageError);
 });
 
@@ -94,4 +95,44 @@ test('warns when an input file is cut off', async () => {
     `${cut}: truncated at line 2; later records are missing from the diff`,
     `${cut}: truncated at line 2; later records are missing from the diff`,
   ]);
+});
+
+describe('changed lines', () => {
+  const key = { epoch: 'undecided', vendor: 'ga4', event: 'purchase', page: '/checkout' };
+  const change = { field: 'gcs', a: 'G100', b: 'G111' };
+  const hit = (hitId: string, step: string, page: string | null) => ({ hitId, t: 0, step, page });
+  const base = { warnings: [], added: [], removed: [], countMismatches: [], flags: [] };
+
+  test('shows the step when it did not move', () => {
+    const changed = [{ key, a: hit('hit_1', 'pay', 'https://shop.example.com/checkout'), b: hit('hit_2', 'pay', 'https://shop.example.com/checkout'), consent: [change], ids: [] }];
+    expect(formatDiff({ ...base, changed }, 'a', 'b')).toContain('changed (step "pay", page /checkout): gcs G100 -> G111');
+  });
+
+  test('shows both raw pages when they differ from the key', () => {
+    const a = 'https://shop.example.com/web-pixels@aaa/custom/web-pixel-1/sandbox/modern/checkout';
+    const b = 'https://shop.example.com/web-pixels@bbb/custom/web-pixel-1/sandbox/modern/checkout';
+    const changed = [{ key, a: hit('hit_1', 'pay', a), b: hit('hit_2', 'pay', b), consent: [change], ids: [] }];
+    expect(formatDiff({ ...base, changed }, 'a', 'b')).toContain(`recorded as ${a} -> ${b}:`);
+  });
+});
+
+describe('flag changes', () => {
+  const flags = [
+    { host: 'allowed.example.com', kind: 'unknownDestination', a: 17, b: 18, allowed: true },
+    { host: 'other.example.com', kind: 'stubBypass', a: 0, b: 1, allowed: false },
+  ];
+  const result = { warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags };
+
+  test('hides changes for allowed hosts by default', () => {
+    const text = formatDiff(result, 'a', 'b');
+    expect(text).not.toContain('allowed.example.com');
+    expect(text).toContain('other.example.com');
+    expect(text).toContain('1 flag count change for hosts allowed by allowUnknownDestination not shown (use --all-flags)');
+  });
+
+  test('shows them with allFlags', () => {
+    const text = formatDiff(result, 'a', 'b', { allFlags: true });
+    expect(text).toContain('unknownDestination allowed.example.com: 17 -> 18');
+    expect(text).not.toContain('not shown');
+  });
 });
