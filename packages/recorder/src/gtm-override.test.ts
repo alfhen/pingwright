@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { isGtmJsUrl, matchesGtmContainer, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
+import { bodyHasContainer, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, loaderHint, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
 
 const valid = { container: 'GTM-PWTEST1', gtmAuth: 'pwfake-auth-0001', gtmPreview: 'env-99' };
 
@@ -98,4 +98,57 @@ test('the other fields are validated and expectedTags default to an empty list',
 
 test('validation errors never repeat the auth value', () => {
   expect(() => parseGtmOverride({ ...valid, container: 'bad', gtmPreview: 'bad' })).toThrow(/^(?!.*pwfake-auth-0001)/s);
+});
+
+test('loader accepts replace, match or both, and refuses an empty or bad one', () => {
+  expect(parseGtmOverride({ ...valid, loader: { match: '/x-[a-z]+\\.js' } }).loader).toEqual({ match: '/x-[a-z]+\\.js' });
+  expect(parseGtmOverride({ ...valid, loader: { replace: 'https://load.example.com/a.js?k=1', match: 'a' } }).loader).toEqual({
+    replace: 'https://load.example.com/a.js?k=1',
+    match: 'a',
+  });
+  for (const loader of [{}, { match: '' }, { match: '(' }, { match: 5 }, { other: 1 }]) {
+    expect(() => parseGtmOverride({ ...valid, loader }), JSON.stringify(loader)).toThrow();
+  }
+});
+
+test('the loader pattern is tested against the script URL', () => {
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', 'script', { match: '/[a-z]+\\.js\\?' })).toBe(true);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.css', 'script', { match: '/[a-z]+\\.js\\?' })).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', 'script', {})).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', 'script', undefined)).toBe(false);
+  for (const type of ['fetch', 'xhr', 'image', 'ping', 'beacon', 'other']) {
+    expect(matchesLoaderPattern('https://load.example.com/data', type, { match: 'load\\.example\\.com' }), type).toBe(false);
+  }
+});
+
+test('only scripts with a query on non-Google hosts are loader candidates', () => {
+  expect(isLoaderCandidate('https://load.example.com/abcd.js?x=1', 'script')).toBe(true);
+  expect(isLoaderCandidate('https://load.example.com/abcd.js', 'script')).toBe(false);
+  expect(isLoaderCandidate('https://load.example.com/abcd.js?x=1', 'image')).toBe(false);
+  expect(isLoaderCandidate('https://www.googletagmanager.com/gtag/js?id=G-X', 'script')).toBe(false);
+  expect(isLoaderCandidate('https://load.example.com/abcd.php?x=1', 'script')).toBe(false);
+});
+
+test('the container check and the query-value hiding', () => {
+  expect(bodyHasContainer('x google_tag_manager["GTM-PWTEST1"] y', 'GTM-PWTEST1')).toBe(true);
+  expect(bodyHasContainer('nothing', 'GTM-PWTEST1')).toBe(false);
+  expect(bodyHasContainer('x google_tag_manager["GTM-PWTEST1"] y', 'GTM-PWTEST')).toBe(false);
+  expect(bodyHasContainer('google_tag_manager["GTM-PWTEST"]', 'GTM-PWTEST1')).toBe(false);
+  expect(bodyHasContainer("(function(w,d,s,l,i){})(window,document,'script','dataLayer','GTM-PWTEST1');", 'GTM-PWTEST1')).toBe(false);
+  expect(bodyHasContainer('/* GTM-PWTEST1 */ window.google_tag_manager = {};', 'GTM-PWTEST1')).toBe(true);
+  expect(withoutQueryValues('https://load.example.com/abcd.js?x9f=SECRET&x9f=2&b=3')).toBe('https://load.example.com/abcd.js?x9f=…&b=…');
+});
+
+test('loaderHint lists seen scripts without query values and points at firstPartyHosts for unchecked hosts', () => {
+  const hint = loaderHint([], ['https://load.stape.example/abcd.js?k=SECRET']);
+  expect(hint).toContain('https://load.stape.example/abcd.js?k=…');
+  expect(hint).not.toContain('SECRET');
+  expect(hint).toContain('"replace"');
+  expect(hint).toContain('options.firstPartyHosts');
+});
+
+test('loaderHint skips the firstPartyHosts advice when every script was checked', () => {
+  const url = 'https://load.example.com/abcd.js?k=1';
+  expect(loaderHint([url], [url])).not.toContain('firstPartyHosts');
+  expect(loaderHint([], [])).toContain('custom loader');
 });
