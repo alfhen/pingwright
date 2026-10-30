@@ -83,6 +83,17 @@ test('undecided: hits per vendor, denied consent, flags, one epoch', async () =>
   expect(r.records!.requests.some((q) => q.outcome === 'stubbed')).toBe(true);
 }, 90_000);
 
+test('text summary groups sandboxPageUrl flags into one line per vendor', async () => {
+  const out = await new Promise<string>((resolve) => {
+    execFile(process.execPath, [cli, 'run', scenario('undecided'), '--site', site.url, '--out', outDir], { cwd: root }, (_e, stdout) => resolve(stdout));
+  });
+  const lines = out.split('\n').filter((l) => l.startsWith('  sandboxPageUrl:'));
+  expect(lines.length).toBeGreaterThan(0);
+  expect(lines.every((l) => /^ {2}sandboxPageUrl: \S+ x\d+ \(\/\S+/.test(l))).toBe(true);
+  expect(new Set(lines.map((l) => l.split(' ')[3])).size).toBe(lines.length);
+  expect(out).not.toContain('as the page');
+}, 90_000);
+
 test('accept: granted epoch, add_to_cart granted', async () => {
   const r = await run('accept');
   expect(r.failed).toEqual([SANDBOX]);
