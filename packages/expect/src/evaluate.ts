@@ -418,27 +418,70 @@ function pathOf(url: string): string {
 const ASSET_TYPES = new Set(['image', 'script', 'stylesheet', 'font', 'media']);
 const HASH_FILE_SEGMENT = /\/[0-9a-f]{64}\.[a-z0-9]{1,5}(?=$|\/)/gi;
 
-// A digest inside a file name, with other characters around it (app-<hex>.js), is a content hash: the same for
-// every visitor. A segment that is only a digest is not matched, so a hashed id used as a path is still scanned.
-const NAMED_HASH_IN_SEGMENT = /(?<=[^/0-9a-f][^/]{0,200}?)[0-9a-f]{64}(?=\.[a-z0-9]{1,8}(?:$|\/))/gi;
-const PERSISTED_ID_KEYS = /^(?:id|sha256hash)$/i;
+// A digest inside a file name, after a name and a "-", "_" or ".", is a content hash: the same for every visitor
+// (app-<hex>.js). A segment that is only a digest, or "key=<hex>.ext", is not matched and is still scanned. Image
+// requests skip .gif too: that is the tracking-pixel name.
+const NAMED_HASH_IN_SEGMENT = /(?<=\/[^/=;]+[-_.])[0-9a-f]{64}(?=\.[a-z0-9]{1,8}(?:$|\/))/gi;
+const NAMED_HASH_NOT_GIF = /(?<=\/[^/=;]+[-_.])[0-9a-f]{64}(?=\.(?!gif(?:$|\/))[a-z0-9]{1,8}(?:$|\/))/gi;
+const NAMED_HASH_TYPES = new Set(['script', 'stylesheet', 'font', 'media', 'fetch', 'xhr']);
 const HEX64 = /^[0-9a-f]{64}$/i;
-const PERSISTED_JSON_ID = /("(?:id|sha256Hash)"\s*:\s*")[0-9a-f]{64}(")/gi;
 
-function blankPersistedIds(params: URLSearchParams): boolean {
-  let changed = false;
-  for (const [key, value] of [...params]) {
-    const next = PERSISTED_ID_KEYS.test(key) && HEX64.test(value) ? '' : value.replace(PERSISTED_JSON_ID, '$1$2');
-    if (next !== value) {
-      params.set(key, next);
-      changed = true;
-    }
+type Json = Record<string, unknown>;
+const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+// Blanks only the top-level id and sha256Hash and extensions.persistedQuery.sha256Hash. variables is never touched.
+function blankOperation(op: unknown): void {
+  if (!isObject(op)) return;
+  for (const key of Object.keys(op)) {
+    if (/^(?:id|sha256hash)$/i.test(key) && typeof op[key] === 'string' && HEX64.test(op[key] as string)) op[key] = '';
   }
-  return changed;
+  const extensions = typeof op.extensions === 'string' ? parseJson(op.extensions) : op.extensions;
+  if (isObject(extensions) && isObject(extensions.persistedQuery)) {
+    const pq = extensions.persistedQuery;
+    if (typeof pq.sha256Hash === 'string' && HEX64.test(pq.sha256Hash)) pq.sha256Hash = '';
+    if (typeof op.extensions === 'string') op.extensions = JSON.stringify(extensions);
+  }
 }
 
-// Only the id and sha256Hash fields of a GraphQL persisted-query request are dropped. Those name a stored query,
-// the same for every visitor. A hash under any other key of the same request is still scanned.
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function blankedJson(text: string): string {
+  const parsed = parseJson(text);
+  if (parsed === undefined || typeof parsed !== 'object' || parsed === null) return text;
+  for (const op of Array.isArray(parsed) ? parsed : [parsed]) blankOperation(op);
+  return JSON.stringify(parsed);
+}
+
+function blankedExtensions(text: string): string {
+  const parsed = parseJson(text);
+  if (parsed === undefined) return text;
+  const wrapper = { extensions: parsed };
+  blankOperation(wrapper);
+  return JSON.stringify(wrapper.extensions);
+}
+
+function blankedParams(params: URLSearchParams): URLSearchParams {
+  const out = new URLSearchParams();
+  const blanked = new Set<string>();
+  for (const [key, value] of params) {
+    const name = key.toLowerCase();
+    if ((name === 'id' || name === 'sha256hash') && HEX64.test(value) && !blanked.has(name)) {
+      blanked.add(name);
+      out.append(key, '');
+    } else if (key === 'extensions') out.append(key, blankedExtensions(value));
+    else out.append(key, value);
+  }
+  return out;
+}
+
+// Only the top-level id, sha256Hash and extensions.persistedQuery.sha256Hash of a GraphQL persisted-query request
+// are dropped. Those name a stored query, the same for every visitor. variables and every other key are scanned.
 function withoutPersistedQueryIds(url: string, postData: string): { url: string; postData: string } {
   let parsed: URL;
   try {
@@ -448,19 +491,20 @@ function withoutPersistedQueryIds(url: string, postData: string): { url: string;
   }
   if (!/\/graphql/i.test(parsed.pathname)) return { url, postData };
   if (!/persisted/i.test(parsed.pathname) && !/persistedQuery/.test(parsed.search + postData)) return { url, postData };
-  blankPersistedIds(parsed.searchParams);
-  let body = postData.replace(PERSISTED_JSON_ID, '$1$2');
-  if (body === postData && !/^\s*[[{]/.test(body) && body.includes('=')) {
-    const form = new URLSearchParams(body);
-    if (blankPersistedIds(form)) body = form.toString();
-  }
+  parsed.search = blankedParams(parsed.searchParams).toString();
+  let body = postData;
+  if (/^\s*[[{]/.test(postData)) body = blankedJson(postData);
+  else if (postData.includes('=')) body = blankedParams(new URLSearchParams(postData)).toString();
   return { url: parsed.href, postData: body };
 }
 
-function scannedUrl(request: Request, url = request.url): string {
+function scannedUrl(request: Request, url: string, isHit: boolean): string {
   try {
     const parsed = new URL(url);
-    parsed.pathname = parsed.pathname.replace(NAMED_HASH_IN_SEGMENT, '');
+    if (!isHit) {
+      if (NAMED_HASH_TYPES.has(request.resourceType)) parsed.pathname = parsed.pathname.replace(NAMED_HASH_IN_SEGMENT, '');
+      else if (request.resourceType === 'image') parsed.pathname = parsed.pathname.replace(NAMED_HASH_NOT_GIF, '');
+    }
     if (ASSET_TYPES.has(request.resourceType)) parsed.pathname = parsed.pathname.replace(HASH_FILE_SEGMENT, '/');
     return parsed.href;
   } catch {
@@ -484,10 +528,11 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     if (!entry) byRequest.set(key, (entry = { texts: [], hitIds: [], stepId }));
     return entry;
   };
+  const hitRequests = new Set(ctx.hits.map((h) => h.requestId));
   for (const request of ctx.requests.values()) {
     if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
     const persisted = withoutPersistedQueryIds(request.url, request.postData ?? '');
-    const url = scannedUrl(request, persisted.url);
+    const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
     slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), persisted.postData);
   }
   for (const hit of ctx.hits) {
