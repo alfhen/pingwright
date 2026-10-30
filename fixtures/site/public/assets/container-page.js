@@ -2,7 +2,7 @@
   var GA4 = 'G-PWTEST0001';
   var PIXEL = '100000000000001';
   var mode = document.currentScript.getAttribute('data-mode');
-  var sandbox = mode === 'sandbox';
+  var sandbox = mode === 'sandbox' || mode === 'sandbox-script';
 
   window.dataLayer = window.dataLayer || [];
 
@@ -62,8 +62,11 @@
   }
   window.pwContainerPage = { start: start };
 
-  if (mode === 'stape' || sandbox) {
-    var real = '/gtm.js?id=GTM-PWTEST1';
+  var real = '/gtm.js?id=GTM-PWTEST1';
+  if (mode === 'stape' || mode === 'sandbox') {
     addScript(window.__PW_FIXTURE.sgtmUrl + '/pwstape?pk=' + encodeURIComponent(btoa(real)), start);
+  } else if (mode === 'stape-script' || mode === 'sandbox-script') {
+    // A Stape custom loader script: /<random>.js?<key>=<obfuscated path>. The obfuscation here is the reversed path.
+    addScript(window.__PW_FIXTURE.sgtmUrl + '/pwload-a1b2c3.js?k=' + encodeURIComponent(real.split('').reverse().join('')), start);
   }
 })();

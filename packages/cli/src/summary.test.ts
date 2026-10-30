@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { countHits, exitCodeFor, formatSummary, type Summary } from './summary.ts';
+import { countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
 import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
@@ -58,6 +58,19 @@ test('groups unknown and first-party flags by host with counts and a few paths',
   expect(text).toContain('firstPartySubdomain: sgtm.example.com x1 (/collect)');
   expect(text).toContain('stubBypass: It was not routed: https://x.test/');
   expect(text).not.toContain('?x=1');
+});
+
+test('groups sandboxPageUrl flags by vendor with a count and an example path', () => {
+  const sandbox = 'https://shop.example.com/web-pixels@abc/sandbox/modern/checkout';
+  const flags = [
+    ...[1, 2, 3].map((n) => ({ kind: 'sandboxPageUrl', detail: `ga4 received ${sandbox}?n=${n} as the page` })),
+    { kind: 'sandboxPageUrl', detail: `meta received ${sandbox} as the page` },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('sandboxPageUrl: ga4 x3 (/web-pixels@abc/sandbox/modern/checkout)');
+  expect(text).toContain('sandboxPageUrl: meta x1 (/web-pixels@abc/sandbox/modern/checkout)');
+  expect(text).not.toContain('received');
+  expect(text).not.toContain('?n=');
 });
 
 test('shows evidence for passing expectations, capped', () => {
@@ -123,4 +136,22 @@ test('prints a scenario warning to stderr before running', async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('epoch durations are rounded: ms under a second, seconds with one decimal above', () => {
+  expect(formatDuration(850)).toBe('850 ms');
+  expect(formatDuration(849.6)).toBe('850 ms');
+  expect(formatDuration(5628.000244140625)).toBe('5.6 s');
+  expect(formatDuration(1000)).toBe('1.0 s');
+  expect(formatDuration(999.6)).toBe('1.0 s');
+  const summary: Summary = {
+    runId: 'run_1',
+    path: 'runs/run_1.jsonl',
+    pass: true,
+    hits: {},
+    epochs: [{ label: 'undecided', startT: 100, endT: 5728.000244140625 }],
+    flags: [],
+    results: [],
+  };
+  expect(formatSummary(summary)).toContain('  undecided (5.6 s)');
 });

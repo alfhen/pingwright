@@ -89,7 +89,7 @@ export const pinterest: Decoder = {
         requestId: req.id,
         t: req.t,
         vendor: 'pinterest',
-        event: p.get('event'),
+        event: p.get('event') ?? (/^\/user\/?$/.test(new URL(req.url).pathname) ? 'user' : null),
         consent: {
           ads: 'unknown',
           analytics: 'unknown',

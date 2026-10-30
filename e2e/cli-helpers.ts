@@ -13,7 +13,7 @@ export const rootVersion = (JSON.parse(readFileSync(join(root, 'package.json'), 
 export const scenario = (name: string) => join(root, 'e2e/scenarios', `${name}.yml`);
 
 export let site: FixtureSite;
-let outDir: string;
+export let outDir: string;
 
 beforeAll(async () => {
   site = await startFixtureSite();
@@ -62,3 +62,5 @@ export const ga4 = (hits: Hit[], event: string) => hits.filter((h) => h.vendor =
 export const SANDBOX = 'builtin: sandboxPageUrl';
 
 export const UNKNOWN = 'builtin: unknownDestination';
+
+export const runText = (name: string) => runCli(['run', scenario(name), '--site', site.url, '--out', outDir]);

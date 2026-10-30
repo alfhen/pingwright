@@ -1,0 +1,4 @@
+start: /container/redirect-script
+steps:
+  - wait: 3s
+options: { seed: 1, allowUnknownDestination: true }

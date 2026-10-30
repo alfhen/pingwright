@@ -97,6 +97,17 @@ async function recordPlain(name: string): Promise<string> {
   return result.path;
 }
 
+test('diff --by-page pairs sandboxed pixel hits across runs whose web-pixels hash differs', async () => {
+  const a = await recordPlain('sandbox-hash-a');
+  const b = await recordPlain('sandbox-hash-b');
+  expect(await readFile(a, 'utf8')).toContain('/web-pixels@hasha1/sandbox/modern/');
+  expect(await readFile(b, 'utf8')).toContain('/web-pixels@hashb2/sandbox/modern/');
+
+  const json = JSON.parse((await diff([a, b, '--by-page', '--json'])).stdout) as Record<string, unknown[]>;
+  expect(json).toMatchObject({ added: [], removed: [], changed: [], countMismatches: [] });
+  expect((await diff([a, b, '--by-page'])).stdout).toContain('No differences.');
+}, 120_000);
+
 test('diff pairs a hit that lands in a different step in each run, and still reports a real change', async () => {
   const one = await recordPlain('delayed-hit-one-wait');
   const two = await recordPlain('delayed-hit-two-waits');
