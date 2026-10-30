@@ -84,7 +84,8 @@ const MAX_DEPTH = 3;
 const EMAIL = /(?<![a-z0-9._+-])[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
 // Asset names such as logo@2x.png look like emails.
 const FILE_EXTENSION = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|js|mjs|json|map|woff2?|ttf|otf|eot|wasm|webm)$/i;
-const PHONE = /(?<![\w+])\+(?=\d)\d(?:[ .+-]?\d){7,14}(?!\d)|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
+// '+' separates digit groups only in a whole value (ph=+45+12+34+56+78); inside text it is a form-encoded space.
+const PHONE = /(?<![\w+])\+(?=\d)\d(?:[ .-]?\d){7,14}(?!\d|\+\d)|(?<=^|[=\s"'])\+\d+(?:\+\d+)+(?=$|[&\s"'])|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g;
 const HASH = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
 // Keys whose values are random or hashed client identifiers, not personal data.
 const NON_PERSONAL_HASH_KEYS = new Set([
@@ -115,8 +116,9 @@ const NON_PERSONAL_HASH_KEYS = new Set([
   'csrftoken',
 ]);
 // GA4 sends event parameters as ep.<name> and epn.<name>; other vendors nest the name in cd[...].
-const KEY_PREFIX = /^(?:epn?|up|upn|cd)[._]/;
+const KEY_PREFIX = /^(?:epn?|up|upn|cd|ud)[._]/;
 const KEY_BEFORE_VALUE = /([\w.[\]-]+)["']?\s*[=:]\s*["']?$/;
+const MULTIPART_KEY = /\bname=["']([\w.[\]-]+)["'][^\r\n]*\r?\n(?:[^\r\n]+\r?\n)*\r?\n$/;
 const BASE64_TOKEN = /[A-Za-z0-9+/_-]{12,}={0,2}/g;
 
 function tryUrlDecode(text: string): string | undefined {
@@ -156,7 +158,8 @@ function hasUrlEscapes(text: string): boolean {
 }
 
 function isNonPersonalKey(text: string, index: number): boolean {
-  const key = KEY_BEFORE_VALUE.exec(text.slice(Math.max(0, index - 64), index))?.[1];
+  const before = text.slice(Math.max(0, index - 128), index);
+  const key = KEY_BEFORE_VALUE.exec(before.slice(-64))?.[1] ?? MULTIPART_KEY.exec(before)?.[1];
   if (!key) return false;
   const name = key.toLowerCase().replace(/[[\]]/g, '_').replace(/^_+|_+$/g, '').replace(KEY_PREFIX, '');
   return NON_PERSONAL_HASH_KEYS.has(name);
@@ -293,7 +296,8 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
       const digits = m.replace(/\D/g, '');
       if (!digits.includes(own.phoneDigits) && !digits.includes(own.phoneDigits.slice(1))) add('phone', m);
     }
-    for (const m of variant.matchAll(HASH)) {
+    // The decoded variant carries the same hex, with its key readable.
+    for (const m of hasUrlEscapes(variant) ? [] : variant.matchAll(HASH)) {
       if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
     }
     // Escaped text is matched through its decoded variant, so a percent-encoded '=' never splits a digest.

@@ -11,6 +11,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { expect, test } from 'vitest';
+import { decodeRequest } from '@pingwright/decoders';
 import { epochForHit, evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 import { README_SCENARIO } from './readme-scenario.ts';
@@ -322,6 +323,25 @@ test('possibleRealData ignores random hashes in decoded hit params but not ident
   expect(run({ user_id: h, client_id_hash: h, external_id: h })).toBe(true);
   expect(run({ em: h })).toBe(false);
   expect(run({ 'ud[em]': h })).toBe(false);
+});
+
+test('possibleRealData ignores random hashes under exempt keys in raw Meta and GA4 requests', () => {
+  const h = createHash('sha256').update('random-client').digest('hex');
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  const passes = (req: Request) => {
+    const hits = decodeRequest(req);
+    expect(hits.length).toBeGreaterThan(0);
+    return find(evaluate([req, ...hits], parseScenario('start: /'), { identity })).pass;
+  };
+  const meta = new URLSearchParams({ id: '100000000000001', ev: 'PageView', 'ud[external_id]': h, 'cd[user_id]': h });
+  expect(passes(request({ url: `https://www.facebook.com/tr/?${meta}` }))).toBe(true);
+  const boundary = '----pw';
+  const multipart = `--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n100000000000001\r\n--${boundary}\r\nContent-Disposition: form-data; name="ev"\r\n\r\nPageView\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[external_id]"\r\n\r\n${h}\r\n--${boundary}--\r\n`;
+  expect(
+    passes(request({ method: 'POST', url: 'https://www.facebook.com/tr/', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, postData: multipart, resourceType: 'ping' })),
+  ).toBe(true);
+  const ga4 = new URLSearchParams({ v: '2', tid: 'G-PWTEST0001', cid: '1.2', en: 'purchase', uid: h });
+  expect(passes(request({ url: `https://www.google-analytics.com/g/collect?${ga4}` }))).toBe(true);
 });
 
 test('possibleRealData ignores hashes in script load URLs', () => {

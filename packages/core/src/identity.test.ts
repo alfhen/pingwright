@@ -118,6 +118,18 @@ describe('scan', () => {
     expect(scan('dt=Order+100000001&q=sku+123456789', id)).toEqual([]);
   });
 
+  it('does not flag plus-joined digit groups inside readable text', () => {
+    const id = createIdentity(42);
+    for (const text of ['cd[content_name]=Shoe+-+38+39+40+41', 'dt=Events+-+29+10+2026', 'Sizes:+36+38+40+42', 'Ref:+2026+1029+0001', 'p=+55.676098+012.568337']) {
+      expect(scan(text, id)).toEqual([]);
+    }
+  });
+
+  it('flags a plus-grouped phone that is a whole value', () => {
+    const id = createIdentity(42);
+    expect(scan('ph=%2B45+12+34+56+78&x=1', id)).toEqual([{ kind: 'phone', value: '+45+12+34+56+78' }]);
+  });
+
   it('finds an encoded foreign email next to a stray percent sign', () => {
     const id = createIdentity(42);
     const found = scan('note=10%&em=jane%40shop.example.net', id);
