@@ -78,6 +78,8 @@ export interface RecorderOptions {
   scenario?: string;
   /** Hosts or `*.domain` wildcards treated as first party besides the site's registrable domain. */
   firstPartyHosts?: string[];
+  /** Event names or `*` globs that `unloadGap` never reports. */
+  unloadGapIgnore?: string[];
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
@@ -751,7 +753,7 @@ export class Recorder {
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
-      flags.push(...buildUnloadGapFlags({ runId: this.runId, events: embedded, hits, navigations: this.navigations }));
+      flags.push(...buildUnloadGapFlags({ runId: this.runId, events: embedded, hits, navigations: this.navigations, ignore: this.options.unloadGapIgnore }));
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }

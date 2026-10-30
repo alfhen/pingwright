@@ -48,6 +48,21 @@ test('checkout sgtm pattern with a wrong email fails identity.hashesMatch on the
   expect(rule.message).toContain('do not match the run identity');
 }, 120_000);
 
+test.each(['sgtm-data-tag-top', 'sgtm-data-tag-list'])('%s: hashesMatch passes on a Data Tag purchase hit', async (name) => {
+  const r = await run(name);
+  expect(r.failed).toEqual([SANDBOX]);
+  const purchase = r.records!.hits.filter((h) => h.vendor === 'sgtm' && h.event === 'purchase');
+  expect(purchase.some((h) => h.params['user_data.email_address'] && h.params['user_data.first_name'])).toBe(true);
+}, 120_000);
+
+test('a Data Tag purchase with a wrong email hash fails identity.hashesMatch', async () => {
+  const r = await run('sgtm-data-tag-wrong-hash');
+  expect(r.code).toBe(1);
+  const rule = r.records!.results.find((x) => x.expectation.includes('hashesMatch'))!;
+  expect(rule.pass).toBe(false);
+  expect(rule.message).toContain('do not match the run identity');
+}, 120_000);
+
 test('checkout pattern with a wrong email fails identity.hashesMatch', async () => {
   const r = await run('checkout-pattern-wrong-hash');
   expect(r.code).toBe(1);
