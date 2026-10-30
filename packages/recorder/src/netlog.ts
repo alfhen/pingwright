@@ -1,4 +1,3 @@
-import { rmSync } from 'node:fs';
 import { newId, type Id, type Request, type Response, type Step } from '@pingwright/core';
 import { isCollectionEndpoint, type TrackerEntry } from '@pingwright/decoders';
 import { redactHeaders } from './redact.ts';
@@ -86,8 +85,18 @@ export function parseNetLog(text: string): NetLogRequest[] {
   return [...bySource.values()];
 }
 
-/** A frame's unload sends leave when a top-level navigation commits, shortly after it starts. */
+/** A top-level navigation from its request to its response (null while none came). */
+export interface NavigationWindow {
+  from: number;
+  to: number | null;
+}
+
+/** A frame's unload sends leave when a top-level navigation commits, which is just after its response. */
 const UNLOAD_WINDOW_MS = 5000;
+const COMMIT_SLACK_MS = 1500;
+
+const inUnloadWindow = (windows: readonly NavigationWindow[], t: number): boolean =>
+  windows.some((w) => t >= w.from && t <= (w.to === null ? w.from + UNLOAD_WINDOW_MS : Math.min(w.to + COMMIT_SLACK_MS, w.from + UNLOAD_WINDOW_MS)));
 
 /** Collection requests that the net log shows and no context hook saw. Each recorded request uses up one log entry of the same method and URL. */
 export function mergeNetLog(
@@ -96,7 +105,7 @@ export function mergeNetLog(
   steps: readonly Step[],
   trackers: readonly TrackerEntry[],
   runId: Id<'run'>,
-  navigations: readonly number[] = [],
+  navigations: readonly NavigationWindow[] = [],
 ): { requests: Request[]; responses: Response[] } {
   const seen = new Map<string, number>();
   for (const r of recorded) {
@@ -126,7 +135,7 @@ export function mergeNetLog(
       url: entry.url,
       resourceType: 'other',
       frameUrl: null,
-      initiator: navigations.some((n) => n <= entry.t && entry.t - n <= UNLOAD_WINDOW_MS) ? 'unload' : 'netlog',
+      initiator: inUnloadWindow(navigations, entry.t) ? 'unload' : 'netlog',
       headers: redactHeaders(entry.headers),
       postData: null,
       outcome: entry.failure ? 'failed' : 'passed',
@@ -139,23 +148,4 @@ export function mergeNetLog(
   return { requests, responses };
 }
 
-/**
- * Removes the directory when the process exits or gets SIGINT or SIGTERM, so a killed run leaves no net log
- * (it holds every URL of the session, unredacted). Returns the function that removes it now.
- */
-export function watchNetLogDir(dir: string): () => void {
-  const remove = (): void => {
-    process.off('exit', remove);
-    process.off('SIGINT', onSignal);
-    process.off('SIGTERM', onSignal);
-    rmSync(dir, { recursive: true, force: true });
-  };
-  const onSignal = (signal: NodeJS.Signals): void => {
-    remove();
-    if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
-  };
-  process.on('exit', remove);
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
-  return remove;
-}
+export { watchNetLogDir } from './netlog-dir.ts';

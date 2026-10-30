@@ -41,7 +41,7 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags, buildUnloadGapFlags } from './flags.ts';
-import { mergeNetLog, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, parseNetLog, watchNetLogDir, type NavigationWindow, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
@@ -179,6 +179,7 @@ export class Recorder {
   private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
   private readonly navigations: number[] = [];
+  private readonly navigationWindows = new Map<PwRequest, NavigationWindow>();
 
   private constructor(
     private readonly options: RecorderOptions,
@@ -205,11 +206,17 @@ export class Recorder {
       netLogPath = join(dir, 'netlog.json');
       removeNetLogDir = watchNetLogDir(dir);
     }
-    const browser = await chromium.launch({
-      channel: 'chromium',
-      headless: !options.headed,
-      ...(netLogPath ? { args: [`--log-net-log=${netLogPath}`] } : {}),
-    });
+    let browser: Browser;
+    try {
+      browser = await chromium.launch({
+        channel: 'chromium',
+        headless: !options.headed,
+        ...(netLogPath ? { args: [`--log-net-log=${netLogPath}`] } : {}),
+      });
+    } catch (error) {
+      removeNetLogDir?.();
+      throw error;
+    }
     try {
       const context = await browser.newContext({
         userAgent: options.userAgentOverride ?? chromeUserAgent(browser.version()),
@@ -337,7 +344,10 @@ export class Recorder {
     };
     record = this.redactForHandoff(record);
     this.requests.set(request, record);
-    if (request.isNavigationRequest() && isTopLevelFrameRequest(request)) this.navigations.push(record.t);
+    if (request.isNavigationRequest() && isTopLevelFrameRequest(request)) {
+      if (this.navigations.length > 0) this.navigationWindows.set(request, { from: record.t, to: null });
+      this.navigations.push(record.t);
+    }
     return record;
   }
 
@@ -407,6 +417,8 @@ export class Recorder {
     if (this.selfRecorded.has(response.request())) return;
     const record = this.recordFor(response.request());
     if (!record) return;
+    const navigation = this.navigationWindows.get(response.request());
+    if (navigation) navigation.to = nodeNow();
     let setCookieNames: string[] = [];
     try {
       setCookieNames = (await response.headerValues('set-cookie')).map((c) => c.split('=')[0]!.trim());
@@ -737,7 +749,7 @@ export class Recorder {
 
     const netLog = await this.readNetLog();
     if (netLog) {
-      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId, this.navigations);
+      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId, [...this.navigationWindows.values()]);
       this.extraRequests.push(...added);
       this.responses.push(...responses);
     }

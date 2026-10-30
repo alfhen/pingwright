@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,7 @@ import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { newId, type Request, type Step } from '@pingwright/core';
 import { decodeRequest, trackerList } from '@pingwright/decoders';
-import { mergeNetLog, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, parseNetLog, watchNetLogDir, type NavigationWindow, type NetLogRequest } from './netlog.ts';
 
 const constants = {
   logEventTypes: { URL_REQUEST_START_JOB: 1, HTTP_TRANSACTION_SEND_REQUEST_HEADERS: 2, HTTP_TRANSACTION_READ_RESPONSE_HEADERS: 3, REQUEST_ALIVE: 4 },
@@ -55,7 +56,7 @@ const GA4 = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&en=
 const step = (startedAt: number): Step => ({ type: 'step', id: newId('step'), runId, index: 0, label: 's', startedAt, endedAt: null });
 const entry = (over: Partial<NetLogRequest> = {}): NetLogRequest => ({ t: 1000, method: 'POST', url: GA4, headers: {}, status: 204, failure: null, ...over });
 const recordedRequest = (over: Partial<Request> = {}): Request => ({ type: 'request', id: newId('request'), runId, stepId: null, t: 900, method: 'POST', url: GA4, resourceType: 'ping', frameUrl: null, headers: {}, postData: null, outcome: 'stubbed', ...over }) as Request;
-const merge = (entries: NetLogRequest[], recorded: Request[] = [], steps: Step[] = [], navigations: number[] = []) =>
+const merge = (entries: NetLogRequest[], recorded: Request[] = [], steps: Step[] = [], navigations: NavigationWindow[] = []) =>
   mergeNetLog(entries, recorded, steps, trackerList, runId, navigations);
 
 test('skips an entry that a recorded request already accounts for', () => {
@@ -105,11 +106,17 @@ test('an OPTIONS entry is not added', () => {
   expect(merge([entry({ method: 'OPTIONS' })]).requests).toEqual([]);
 });
 
-test('initiator is unload only shortly after a top-level navigation began', () => {
-  expect(merge([entry({ t: 1000 })], [], [], [900]).requests[0]?.initiator).toBe('unload');
-  expect(merge([entry({ t: 1000 })], [], [], [1200]).requests[0]?.initiator).toBe('netlog');
-  expect(merge([entry({ t: 100000 })], [], [], [900]).requests[0]?.initiator).toBe('netlog');
+test('initiator is unload only between a top-level navigation request and shortly after its response', () => {
+  const unload = (t: number, nav: NavigationWindow) => merge([entry({ t })], [], [], [nav]).requests[0]?.initiator;
+  expect(unload(1000, { from: 900, to: 950 })).toBe('unload');
+  expect(unload(1000, { from: 900, to: null })).toBe('unload');
+  expect(unload(1000, { from: 1200, to: 1300 })).toBe('netlog');
+  expect(unload(100000, { from: 900, to: null })).toBe('netlog');
   expect(merge([entry()]).requests[0]?.initiator).toBe('netlog');
+});
+
+test('a request sent while the page loads after the navigation response is not labelled unload', () => {
+  expect(merge([entry({ t: 3000 })], [], [], [{ from: 900, to: 950 }]).requests[0]?.initiator).toBe('netlog');
 });
 
 test('watchNetLogDir removes the directory on demand and on exit handlers', async () => {
@@ -121,4 +128,17 @@ test('watchNetLogDir removes the directory on demand and on exit handlers', asyn
   remove();
   expect(existsSync(dir)).toBe(false);
   expect(process.listenerCount('exit')).toBe(before);
+});
+
+test.each(['SIGINT', 'SIGTERM'] as const)('a process killed by %s removes the net log directory and still ends by the signal', async (signal) => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-netlog-signal-'));
+  await writeFile(join(dir, 'netlog.json'), '{}');
+  const module = new URL('./netlog-dir.ts',import.meta.url).href;
+  const script = `import { watchNetLogDir } from ${JSON.stringify(module)};
+watchNetLogDir(${JSON.stringify(dir)});
+process.kill(process.pid, ${JSON.stringify(signal)});
+setTimeout(() => process.exit(0), 5000);`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 20000 });
+  expect(result.signal).toBe(signal);
+  expect(existsSync(dir)).toBe(false);
 });
