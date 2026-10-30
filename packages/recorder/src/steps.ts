@@ -136,7 +136,8 @@ async function activePage(recorder: Recorder): Promise<Page> {
   return pages[pages.length - 1] ?? recorder.context.newPage();
 }
 
-async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<void> {
+/** Returns true when the field is a card or password field (only allowed on loopback hosts). */
+async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<boolean> {
   const field = page.locator(selector).first();
   const inspected = await field.evaluate(
     (el): { tag: string; host: string; fields: FieldAttributes[] } => {
@@ -164,6 +165,7 @@ async function fillField(page: Page, selector: string, value: string, timeout: n
   }
   if (inspected.tag === 'select') await field.selectOption(value, { timeout });
   else await field.fill(value, { timeout });
+  return inspected.fields.some(isSensitiveField);
 }
 
 interface PageField extends FieldAttributes {
@@ -278,7 +280,13 @@ async function runStep(
       await waitForCart(recorder, record, scenario, options);
       return;
     case 'fill':
-      for (const [selector, value] of Object.entries(step.value)) await fillField(page, selector, fillValue(value, identity), timeout);
+      for (const [selector, value] of Object.entries(step.value)) {
+        const typed = fillValue(value, identity);
+        const sensitive = await fillField(page, selector, typed, timeout);
+        if (sensitive || SECRET_FIELD.test(selector) || typed !== value) continue;
+        identity.extra = [...new Set([...(identity.extra ?? []), typed])];
+        recorder.setIdentity(identity);
+      }
       return;
     case 'wait':
       if (typeof step.value === 'number') await recorder.wait(step.value);
@@ -307,18 +315,9 @@ async function runStep(
   }
 }
 
-/** The seeded identity with the scenario's own field values, plus every literal `fill` value as `extra`. */
+/** The seeded identity with the scenario's own field values. Literal `fill` values join `extra` once typed into a non-sensitive field. */
 export function scenarioIdentity(scenario: Scenario, seed: number): Identity {
-  const literals = scenario.steps.flatMap((step) =>
-    step.kind === 'fill'
-      ? Object.entries(step.value)
-          .filter(([selector, v]) => !SECRET_FIELD.test(selector) && !(IDENTITY_FIELDS as readonly string[]).includes(v))
-          .map(([, v]) => v)
-      : [],
-  );
-  const identity: Identity = { ...createIdentity(seed), ...scenario.identity };
-  if (literals.length) identity.extra = [...new Set(literals)];
-  return identity;
+  return { ...createIdentity(seed), ...scenario.identity };
 }
 
 /**

@@ -2,7 +2,7 @@ import { createIdentity, type Request } from '@pingwright/core';
 import { parseScenario } from '@pingwright/expect';
 import { describe, expect, test } from 'vitest';
 import { isLoopbackHost, isSensitiveField } from './guard.ts';
-import { createCartCheck, fillValue, hasHandoff, recordScenario, resolveSitePath } from './steps.ts';
+import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath } from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
   autocomplete: null,
@@ -145,4 +145,62 @@ test('a StepError from a run with a GTM override does not repeat the gtmAuth', a
   expect(scrubbed.name).toBe('StepError');
   expect(scrubbed.message).not.toContain(auth);
   expect(scrubbed.stack ?? '').not.toContain(auth);
+});
+
+test('a value typed into a password field by any selector is not kept in the run identity', async () => {
+  const saved: unknown[] = [];
+  const locator = (type: string) => ({
+    first: () => ({
+      evaluate: () => Promise.resolve({ tag: 'input', host: 'localhost', fields: [{ autocomplete: null, name: 'pass', id: 'x', type }] }),
+      fill: () => Promise.resolve(),
+    }),
+  });
+  const page = {
+    goto: () => Promise.resolve(),
+    locator: (selector: string) => locator(selector === '#pw' ? 'password' : 'text'),
+  };
+  const recorder = {
+    site: 'http://localhost',
+    setIdentity: (i: unknown) => saved.push(structuredClone(i)),
+    beginStep: () => ({}),
+    endStep: () => undefined,
+    checkpoint: () => Promise.resolve(),
+    context: { pages: () => [page] },
+  };
+  const scenario = parseScenario('start: /\nsteps:\n  - fill:\n      "#pw": secret-fake-value\n      "#note": Berlin\n');
+  const identity = await playScenario(recorder as never, scenario, { seed: 1 });
+  expect(identity.extra).toEqual(['Berlin']);
+  expect(JSON.stringify(saved.at(-1))).not.toContain('secret-fake-value');
+});
+
+test('a password value is never saved in the identity when the run fails at or before the fill', async () => {
+  const saved: unknown[] = [];
+  const page = (host: string, clickFails: boolean) => ({
+    goto: () => Promise.resolve(),
+    locator: (selector: string) => ({
+      first: () => ({
+        click: () => (clickFails ? Promise.reject(new Error('click timeout')) : Promise.resolve()),
+        evaluate: () =>
+          Promise.resolve({ tag: 'input', host, fields: [{ autocomplete: null, name: 'pass', id: 'x', type: selector === '#pw' ? 'password' : 'text' }] }),
+        fill: () => Promise.resolve(),
+      }),
+    }),
+  });
+  const play = (host: string, clickFails: boolean, yaml: string) => {
+    const recorder = {
+      site: `https://${host}`,
+      setIdentity: (i: unknown) => saved.push(structuredClone(i)),
+      beginStep: () => ({}),
+      endStep: () => undefined,
+      checkpoint: () => Promise.resolve(),
+      context: { pages: () => [page(host, clickFails)] },
+    };
+    return playScenario(recorder as never, parseScenario(yaml), { seed: 1 });
+  };
+  await expect(play('shop.example.com', false, 'start: /\nsteps:\n  - fill:\n      "#pw": secret-fake-value\n')).rejects.toThrow(/password field/);
+  await expect(
+    play('localhost', true, 'start: /\nsteps:\n  - click: "#go"\n  - fill:\n      "#pw": secret-fake-value\n'),
+  ).rejects.toThrow(/click timeout/);
+  expect(saved.length).toBeGreaterThan(0);
+  expect(JSON.stringify(saved)).not.toContain('secret-fake-value');
 });
