@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
+import { decodeRequest } from '@pingwright/decoders';
 import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts';
 
 let server: Server;
@@ -40,6 +41,13 @@ function page(path: string): string | undefined {
       return `<script>fetch('${origin}/redirect-to-collect', { mode: 'no-cors' });</script>`;
     case '/cookies':
       return `<script>fetch('/set-strict').then(() => { new Image().src = '${origin}/pixel'; });</script>`;
+    case '/cookies-sandboxed':
+      return `<script>fetch('/set-strict').then(() => {
+        const frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.srcdoc = "<script>setTimeout(() => fetch('${origin}/echo-cookie', { mode: 'no-cors', credentials: 'include' }), 2000)<\\/script>";
+        document.body.append(frame);
+      });</script>`;
     case '/redirect-frame':
       return '<iframe src="/redirect-to-collect-frame"></iframe>';
     case '/redirect-same-to-cross':
@@ -74,6 +82,26 @@ function page(path: string): string | undefined {
         };
         addEventListener('pagehide', () => send('pagehide'));
         addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') send('hidden'); });
+      </script>`;
+    case '/unload-meta':
+      return `<a href="/next">next</a><script>
+        addEventListener('pagehide', () => {
+          const form = new FormData();
+          form.append('id', '100000000000001');
+          form.append('ev', 'PageView');
+          navigator.sendBeacon('https://www.facebook.com/tr', form);
+        });
+      </script>`;
+    case '/unload-headers':
+      return `<a href="/next">next</a><script>
+        addEventListener('pagehide', () => {
+          fetch('https://www.facebook.com/tr', {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'content-type': 'text/plain' },
+            body: new URLSearchParams({ id: '100000000000001', ev: 'PageView' }),
+          });
+        });
       </script>`;
     case '/next':
       return '<p>next</p>';
@@ -113,6 +141,11 @@ beforeAll(async () => {
     }
     if (path === '/set-strict') {
       res.writeHead(204, { 'set-cookie': 'strict=1; SameSite=Strict; Path=/' }).end();
+      return;
+    }
+    if (path === '/echo-cookie') {
+      pixelCookies.push(req.headers.cookie ?? '');
+      res.writeHead(204, { 'set-cookie': 'framecookie=1; SameSite=Lax; Path=/' }).end();
       return;
     }
     if (path === '/pixel') {
@@ -240,12 +273,12 @@ test('a cross-site redirect to a collection endpoint is left to the browser and 
   expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
 });
 
-async function cookieRun(networkMode: 'stub' | 'live') {
+async function cookieRun(networkMode: 'stub' | 'live', page = '/cookies', settleMs = 1000) {
   serverSaw = [];
   pixelCookies = [];
   const recorder = await launchRecorder({ networkMode, outDir, site: `http://localhost:${port}` });
-  await recorder.visit(`http://localhost:${port}/cookies`);
-  await recorder.wait(1000);
+  await recorder.visit(`http://localhost:${port}${page}`);
+  await recorder.wait(settleMs);
   const checkpoint = await recorder.checkpoint('end', null);
   await recorder.close();
   return { sent: [...pixelCookies], jar: checkpoint.cookies.map((c) => `${c.name}@${c.domain}`).sort() };
@@ -254,6 +287,13 @@ async function cookieRun(networkMode: 'stub' | 'live') {
 test('stub mode sends and stores the same cookies as live mode for a cross-site subresource', async () => {
   const live = await cookieRun('live');
   const stub = await cookieRun('stub');
+  expect(live.sent).toEqual(['']);
+  expect(stub).toEqual(live);
+});
+
+test('stub mode sends and stores the same cookies as live mode for a sandboxed same-site iframe', async () => {
+  const live = await cookieRun('live', '/cookies-sandboxed', 3500);
+  const stub = await cookieRun('stub', '/cookies-sandboxed', 3500);
   expect(live.sent).toEqual(['']);
   expect(stub).toEqual(live);
 });
@@ -335,4 +375,41 @@ test('stub mode answers collection requests sent while the page unloads on same-
     expect(sent.some((q) => q.url.includes(`en=${tag}`))).toBe(true);
   }
   expect(records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+test('a multipart Meta beacon sent during unload keeps its body and boundary for the decoder', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `http://localhost:${port}` });
+  try {
+    const page = await recorder.visit(`http://localhost:${port}/unload-meta`);
+    await page.click('a');
+    await page.waitForURL('**/next');
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const { records } = await recorder.close();
+  const sent = records.requests.filter((q) => q.url === 'https://www.facebook.com/tr');
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.headers['content-type']).toMatch(/^multipart\/form-data; boundary=/);
+  const hits = decodeRequest(sent[0]!);
+  expect(hits).toHaveLength(1);
+  expect(hits[0]).toMatchObject({ vendor: 'meta', event: 'PageView', params: { pixelId: '100000000000001' } });
+});
+
+test('an unload fetch keeps its explicit content type', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `http://localhost:${port}` });
+  try {
+    const page = await recorder.visit(`http://localhost:${port}/unload-headers`);
+    await page.click('a');
+    await page.waitForURL('**/next');
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const { records } = await recorder.close();
+  const sent = records.requests.filter((q) => q.url === 'https://www.facebook.com/tr');
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.headers['content-type']).toBe('text/plain');
 });

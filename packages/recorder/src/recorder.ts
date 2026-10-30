@@ -300,7 +300,7 @@ export class Recorder {
       resourceType: payload.resourceType,
       frameUrl: payload.frameUrl,
       initiator: 'unload',
-      headers: {},
+      headers: redactHeaders(payload.headers ?? {}),
       postData: payload.postData === null ? null : payload.postData.slice(0, MAX_POST_DATA),
       outcome: 'stubbed',
     };
@@ -347,10 +347,11 @@ export class Recorder {
 
   /**
    * Playwright never routes the hops of a redirect chain, so a redirect to a collection endpoint would reach the
-   * network in stub mode. Only same-site, non-navigation requests are fetched here. Playwright's request client
-   * keeps its own cookie jar, which matches Chromium's rules only when request, frame and site share a registrable
-   * domain, and a fulfilled document loses its loopback address space. Everything else goes to Chromium untouched,
-   * and a redirect from it to a collection endpoint can still leave the machine (flagged `stubBypass`). Hops are
+   * network in stub mode. Only same-site, non-navigation requests of the top-level frame are fetched here.
+   * Playwright's request client keeps its own cookie jar, which matches Chromium's rules only for the top-level
+   * frame (a sandboxed child frame has an opaque origin, so its requests are cross-site for cookies), and a
+   * fulfilled document loses its loopback address space. Everything else goes to Chromium untouched, and a
+   * redirect from it to a collection endpoint can still leave the machine (flagged `stubBypass`). Hops are
    * followed here while they stay on the site, and the first collection hop gets the stub.
    */
   private async routeWithRedirectCheck(route: Route, first: Request): Promise<void> {
@@ -427,7 +428,7 @@ export class Recorder {
   }
 
   private isSameSiteRequest(request: PwRequest): boolean {
-    if (request.isNavigationRequest()) return false;
+    if (request.isNavigationRequest() || request.frame().parentFrame() !== null) return false;
     const frame = frameUrlOf(request);
     return frame !== null && this.isSameSiteUrl(request.url()) && (frame === 'about:blank' || this.isSameSiteUrl(frame));
   }

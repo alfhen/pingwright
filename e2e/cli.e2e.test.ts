@@ -59,7 +59,7 @@ const run = (name: string, extra: string[] = [], env: Record<string, string> = {
 
 const ga4 = (hits: Hit[], event: string) => hits.filter((h) => h.vendor === 'ga4' && h.event === event);
 
-// The fixture's sandboxed pixel always sends its sandbox URL as the page, so this built-in check fails on every fixture run.
+// The fixture's sandboxed pixel sends its sandbox URL as the page, so this built-in check fails on every run of a page that has the pixel.
 const SANDBOX = 'builtin: sandboxPageUrl';
 
 test('undecided: hits per vendor, denied consent, flags, one epoch', async () => {
@@ -105,10 +105,30 @@ test('reject: denied epoch, add_to_cart denied', async () => {
 test('accept then withdraw: three epochs, add_to_cart denied', async () => {
   const r = await run('accept-then-withdraw');
   expect(r.failed).toEqual([SANDBOX]);
-  expect(r.records!.consentEpochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
+  expect(r.records!.consentEpochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'withdrawn']);
+  expect(r.records!.consentEpochs.at(-1)!.state.analytics).toBe('denied');
   const atc = ga4(r.records!.hits, 'add_to_cart');
   expect(atc.length).toBeGreaterThan(0);
   expect(atc.every((h) => h.consent.analytics === 'denied')).toBe(true);
+}, 90_000);
+
+test('a Meta hit after a withdrawal fails epoch(label=withdrawn) and epoch(denied)', async () => {
+  for (const name of ['meta-after-withdrawn-label', 'meta-after-withdrawn-state']) {
+    const r = await run(name);
+    expect(r.code).toBe(1);
+    const rule = r.records!.results.find((x) => x.expectation.startsWith('mustNot:'))!;
+    expect(rule.pass).toBe(false);
+    const meta = r.records!.hits.filter((h) => h.vendor === 'meta' && h.event === 'AddToCart');
+    expect(meta.length).toBeGreaterThan(0);
+    expect(rule.evidence).toEqual(expect.arrayContaining(meta.map((h) => h.id)));
+  }
+}, 180_000);
+
+test('after a reject only, epoch(label=withdrawn) matches nothing', async () => {
+  const r = await run('meta-reject-withdrawn-label');
+  const rule = r.records!.results.find((x) => x.expectation.startsWith('mustNot:'))!;
+  expect(rule.pass).toBe(true);
+  expect(r.records!.hits.some((h) => h.vendor === 'meta')).toBe(true);
 }, 90_000);
 
 test('banner not shown: a HeadlessChrome user agent exits 2', async () => {

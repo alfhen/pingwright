@@ -130,7 +130,7 @@ test('accept, reopen the banner, then reject', async () => {
   );
   const updates = consentModeChanges(recorded).filter((c) => c.command === 'update');
   expect(updates.map((u) => u.state.analytics)).toEqual(['granted', 'denied']);
-  expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
+  expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'withdrawn']);
   expect(epochs[0]?.state.analytics).toBe('denied');
   expect(epochs.map((e) => e.source)).toEqual(['start', 'consentMode', 'consentMode']);
   expect(epochs[1]?.startT).toBe(updates[0]!.t);

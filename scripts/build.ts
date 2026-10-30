@@ -8,7 +8,7 @@ const pkg = JSON.parse(readFileSync(path('package.json'), 'utf8')) as {
 
 const { build } = await import('esbuild');
 
-// npm runs this without workspace symlinks, so @pingwright/* is resolved from the sources.
+// The root package does not depend on @pingwright/*, so they are resolved from the sources.
 const alias = Object.fromEntries(
   readdirSync(path('packages')).map((name) => [`@pingwright/${name}`, path(`packages/${name}/src/index.ts`)]),
 );

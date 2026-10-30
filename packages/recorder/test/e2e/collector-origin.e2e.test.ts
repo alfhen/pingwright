@@ -26,7 +26,7 @@ const html = (body: string) => `<!doctype html><meta charset="utf-8"><title>t</t
 
 const post = (path: string) => `fetch('${COLLECTOR_ORIGIN}${path}', { method: 'POST', body: 'x' }).catch(() => {});`;
 
-// A request a sandboxed srcdoc iframe sends during load, and under machine load up to about a second
+// A request a sandboxed srcdoc iframe sends during load, and under machine load for at least 1.5 s
 // after it, bypasses context.route (ERR_NAME_NOT_RESOLVED, no request event). These tests check that the
 // collector origin is reachable and routed, so the script repeats every 300 ms until one send is captured.
 const sandboxedSrcdoc = (script: string) =>

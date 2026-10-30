@@ -5,7 +5,7 @@ export interface Summary {
   path: string;
   pass: boolean;
   hits: Record<string, Record<string, number>>;
-  epochs: { label: string; startT: number; endT: number | null }[];
+  epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
   results: { expectation: string; pass: boolean; message: string | undefined; evidence: string[] }[];
 }
@@ -24,13 +24,19 @@ export function countHits(hits: RunRecords['hits']): Summary['hits'] {
   return out;
 }
 
+function stateName(state: RunRecords['consentEpochs'][number]['state']): string {
+  const known = Object.values(state).filter((v) => v !== 'unknown');
+  if (known.length === 0) return 'unknown';
+  return known.every((v) => v === known[0]) ? known[0]! : 'mixed';
+}
+
 export function buildSummary(records: RunRecords, results: Result[], path: string): Summary {
   return {
     runId: records.run.id,
     path,
     pass: results.every((r) => r.pass),
     hits: countHits(records.hits),
-    epochs: records.consentEpochs.map((e) => ({ label: e.label, startT: e.startT, endT: e.endT })),
+    epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
     results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, evidence: r.evidence })),
   };
@@ -81,7 +87,8 @@ export function formatSummary(summary: Summary): string {
   }
   lines.push('Consent epochs');
   for (const e of summary.epochs) {
-    lines.push(`  ${e.label} (${e.endT === null ? 'to end' : `${e.endT - e.startT} ms`})`);
+    const label = e.label === 'withdrawn' && e.state ? `withdrawn, ${e.state}` : e.label;
+    lines.push(`  ${label} (${e.endT === null ? 'to end' : `${e.endT - e.startT} ms`})`);
   }
   lines.push('Flags');
   if (summary.flags.length === 0) lines.push('  none');

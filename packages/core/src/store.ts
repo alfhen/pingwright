@@ -34,6 +34,8 @@ export interface RunRecords {
   flags: Flag[];
   collectorReports: CollectorReport[];
   invalidReports: InvalidReport[];
+  /** Line number of a cut-off last line that was dropped. Absent for a complete file. */
+  truncatedAtLine?: number;
 }
 
 export function runFilePath(runsDir: string, runId: string): string {
@@ -171,5 +173,6 @@ export async function readRun(path: string): Promise<RunRecords> {
     }
   }
   if (!out) throw new Error(badLine ? `${path}:${badLine}: invalid JSON` : `${path}: empty run file`);
+  if (badLine) out.truncatedAtLine = badLine;
   return out;
 }

@@ -149,12 +149,14 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
     if (want && effective[field] !== want) return false;
   }
   for (const [name, want] of Object.entries(f.ids)) {
-    const have = hit.ids[name];
-    const present = have !== undefined && have !== false;
+    const have = idValue(hit, name);
+    const compared = name.endsWith('.matchesIdentity');
+    const present = compared ? have === true : have !== undefined && have !== false;
+    const absent = compared ? have === false : !present;
     if (want === 'present') {
       if (!present) return false;
     } else if (want === 'absent') {
-      if (present) return false;
+      if (!absent) return false;
     } else if (String(have) !== want) return false;
   }
   if (f.page) {
@@ -172,6 +174,20 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
   return true;
 }
 
+/** Reads `ids.<name>`, or `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` from the nested hashes. */
+function idValue(hit: Hit, name: string): boolean | null | undefined {
+  if (name in hit.ids) {
+    const flat = hit.ids[name];
+    if (typeof flat !== 'object') return flat;
+  }
+  const [head, field, prop, ...rest] = name.split('.');
+  if (head !== 'hashes' || !field || rest.length) return undefined;
+  const hash = hit.ids.hashes?.[field];
+  if (!hash) return undefined;
+  if (prop === undefined) return hash.present;
+  return prop === 'matchesIdentity' ? hash.matchesIdentity : undefined;
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -182,21 +198,16 @@ function hostOf(url: string): string {
 
 type Placeable = Pick<ConsentEpoch, 'startT'> & Partial<Pick<ConsentEpoch, 'state' | 'label'>>;
 
-function grants(e: Placeable | undefined): boolean {
-  return !e?.state || consentFields.some((f) => e.state![f] === 'granted');
-}
-
 /**
  * The epoch a hit belongs to. A hit within the grace window before a boundary belongs to the new
- * epoch, since tags may fire on the consent update itself. That does not hold for a withdraw: a
- * hit before it was sent while consent was still granted. A hit before the first epoch belongs to
+ * epoch, since tags may fire on the consent update itself. That does not hold for a withdrawn
+ * epoch: a hit before it was sent while consent was still granted. A hit before the first epoch belongs to
  * none, unless that epoch is undecided, which is what the visitor was before it.
  */
 export function epochForHit<E extends Placeable>(epochs: readonly E[], t: number, graceMs = DEFAULT_GRACE_MS): E | undefined {
   let found: E | undefined;
   epochs.forEach((e, i) => {
-    const prev = epochs[i - 1];
-    const withdraw = prev !== undefined && grants(prev) && !grants(e);
+    const withdraw = e.label === 'withdrawn';
     const start = i === 0 ? (e.label === 'undecided' ? -Infinity : e.startT) : withdraw ? e.startT : e.startT - graceMs;
     if (t >= start) found = e;
   });
@@ -250,8 +261,10 @@ function isBeforeConsent(hit: Hit, ctx: Context): boolean {
 
 function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
   if (selector === 'undecided') return inUndecidedEpoch(hit, ctx);
+  if (selector.startsWith('label=')) return epochOf(hit, ctx)?.label === selector.slice('label='.length);
   if ((selector === 'granted' || selector === 'denied') && !GOOGLE_VENDORS.has(hit.vendor)) {
-    return epochOf(hit, ctx)?.label === selector;
+    const epoch = epochOf(hit, ctx);
+    return (epoch?.outcome ?? epoch?.label) === selector;
   }
   return stateMatches(effectiveConsent(hit, ctx), selector);
 }
@@ -409,6 +422,15 @@ function scannedUrl(request: Request): string {
   }
 }
 
+// Each path segment is also scanned as a value of its own, so a "+" that starts a segment can start a phone.
+function pathSegments(url: string): string[] {
+  try {
+    return new URL(url).pathname.split('/').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function scanForeignData(ctx: Context, identity: Identity): { detail: string; evidence: string[] }[] {
   const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
@@ -418,12 +440,13 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
   };
   for (const request of ctx.requests.values()) {
     if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
-    slot(request.id, request.stepId).texts.push(scannedUrl(request), request.postData ?? '');
+    const url = scannedUrl(request);
+    slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), request.postData ?? '');
   }
   for (const hit of ctx.hits) {
     const entry = slot(hit.requestId, hit.stepId);
     entry.hitIds.push(hit.id);
-    entry.texts.push(...Object.values(hit.params));
+    for (const [key, value] of Object.entries(hit.params)) entry.texts.push(`${key}=${value}`);
   }
   const out: { detail: string; evidence: string[] }[] = [];
   for (const [requestId, entry] of byRequest) {

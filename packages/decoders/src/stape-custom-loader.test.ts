@@ -151,7 +151,12 @@ test('a Stape data-client POST through the loader is stubbed and decoded (#46 fi
     postData: JSON.stringify({ page_location: PAGE }),
   });
   expect(isCollectionEndpoint(r)).toBe(true);
-  expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'sgtm', event: 'page_viewed', page: PAGE });
+  expect(decodeRequest(r)[0]).toMatchObject({
+    vendor: 'sgtm',
+    event: 'page_viewed',
+    page: PAGE,
+    transport: 'fetch via stape-loader',
+  });
 });
 
 test('reads event and page from a JSON POST body on /data', () => {
@@ -166,4 +171,45 @@ test('reads event and page from a JSON POST body on /data', () => {
     page: PAGE,
     params: { page_hostname: 'localhost' },
   });
+});
+
+test('a same-path /data JSON POST with only one of event_name and page_location is not a hit', () => {
+  for (const body of [{ event_name: 'save' }, { page_location: PAGE }, { event_name: 'save', page_location: '' }]) {
+    const r = req(`https://shop.example.com/data`, { method: 'POST', postData: JSON.stringify(body) });
+    expect(decodeRequest(r)).toEqual([]);
+    expect(isCollectionEndpoint(r)).toBe(false);
+  }
+});
+
+test('reads user_id and client_id from a JSON POST body on /data', () => {
+  const r = req(`${HOST}/data`, {
+    method: 'POST',
+    postData: JSON.stringify({
+      event_name: 'purchase',
+      page_location: PAGE,
+      user_id: 'fake-user-1',
+      client_id: '1111111111.2222222222',
+    }),
+  });
+  const [hit] = decodeRequest(r);
+  expect(hit!.ids).toEqual({ user_id: true, client_id: true });
+  expect(JSON.stringify(hit)).not.toContain('fake-user-1');
+});
+
+test('reads a numeric user_id from a JSON POST body on /data', () => {
+  const r = req(`${HOST}/data`, {
+    method: 'POST',
+    postData: JSON.stringify({ event_name: 'purchase', page_location: PAGE, user_id: 12345 }),
+  });
+  const [hit] = decodeRequest(r);
+  expect(hit!.ids).toEqual({ user_id: true });
+  expect(JSON.stringify(hit)).not.toContain('12345');
+});
+
+test('a JSON POST body without ids sets none', () => {
+  const r = req(`${HOST}/data`, {
+    method: 'POST',
+    postData: JSON.stringify({ event_name: 'purchase', page_location: PAGE }),
+  });
+  expect(decodeRequest(r)[0]!.ids).toEqual({});
 });

@@ -116,8 +116,9 @@ test('accept then withdraw: three epochs, hits after withdraw are denied', async
     ].join('\n'),
   );
   const epochs = labelsAndStates(records.consentEpochs);
-  expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'denied']);
+  expect(epochs.map((e) => e.label)).toEqual(['undecided', 'granted', 'withdrawn']);
   expect([epochs[0]!.state, epochs[2]!.state]).toEqual([all('denied'), all('denied')]);
+  expect(epochs[1]!.state).toEqual(all('granted'));
   const withdrawn = records.consentEpochs[2]!;
   const ga4 = records.hits.filter((h) => googleOwn(h) && h.event === 'add_to_cart' && h.t >= withdrawn.startT);
   expect(ga4.length).toBeGreaterThan(0);
