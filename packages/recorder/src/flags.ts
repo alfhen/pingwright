@@ -143,8 +143,8 @@ function unloadGapAdvice(networkMode: NetworkMode | undefined): string {
  * An event pushed in an embedded frame shortly before the page navigated may have a GA4 hit that the frame flushed
  * while unloading. Chromium does not report those requests to the browser context.
  * Only events that look like tracking events are checked: some vendor sent a hit of that name, or the name is a GA4
- * recommended event, or an alias in `GA4_ALIASES` (`product_added_to_cart` for `add_to_cart`). GA4 is expected when the run has any GA4 hit or the name is a GA4 event. Another vendor's hit
- * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name or its alias covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it.
+ * recommended event. GA4 is expected when the run has any GA4 hit or the name is a GA4 event. An alias in `GA4_ALIASES` (`product_added_to_cart` for `add_to_cart`) only lets a GA4 hit of the mapped name cover the event: the gates use the literal name. Another vendor's hit
+ * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it.
  */
 export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigations, ignore = [] }: UnloadGapInput): Flag[] {
   const ignored = ignore.map(globToRegExp);
@@ -157,9 +157,10 @@ export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigati
     if (navigation === undefined || navigation - event.t > UNLOAD_GAP_WINDOW_MS) continue;
     const expected = GA4_ALIASES[name] ?? name;
     const ga4Name = GA4_EVENTS.has(expected);
-    if (!ga4Name && !hits.some((h) => h.event === name)) continue;
-    if (!ga4Name && ga4Hits.length === 0) continue;
-    const covered = (h: Hit) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && (h.event === name || h.event === expected);
+    const literalGa4Name = GA4_EVENTS.has(name);
+    if (!literalGa4Name && !hits.some((h) => h.event === name)) continue;
+    if (!literalGa4Name && ga4Hits.length === 0) continue;
+    const covered = (h: Hit) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event === name;
     if (ga4Hits.length === 0 && hits.some(covered)) continue;
     if (ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event !== null && (h.event === name || h.event === expected || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
     const seconds = ((navigation - event.t) / 1000).toFixed(1);

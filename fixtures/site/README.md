@@ -99,6 +99,10 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/unload-beacons` has the banner and a sandboxed iframe (`sandbox="allow-scripts"`, `/web-pixels@0.0.0-fixture/sandbox/unload/`) that, like GA4 for a visitor who has not consented, holds an `add_to_cart` hit and flushes it in `pagehide`, as one `navigator.sendBeacon` and one `fetch` with `keepalive`, to `https://sgtm.pingwright.invalid/g/collect` (`ep.via=beacon` or `keepalive`, `gcs=G100`). The host does not resolve, so nothing leaves the machine even when stub mode does not catch the requests. `#add-to-cart` tells the frame to hold the hit. The page also loads `site.js`, so it has the usual banner, gtag and modern pixel. `/unload-beacons-bare` is the same page without `site.js`: no banner and no third-party tags, so live-mode tests send nothing off the machine.
 
+## Unload Request body page
+
+`/unload-request-body` has no banner and no tags. In `pagehide` it sends `fetch(new Request(url, { method: 'POST', body, keepalive: true }))` to `https://sgtm.pingwright.invalid/g/collect`. The body holds two GA4 events, `add_to_cart` and `view_item`, one per line.
+
 ## Unload gap page
 
 `/unload-gap` has the banner and a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/gap/`). 1.8 s after it loads, the frame pushes `{event: 'consent_update'}` (no hit) and `{event: 'item_added'}`, and sends a `/data` hit named `item_added` to `https://sgtm.pingwright.invalid` at once. In `pagehide` it sends a GA4 `add_to_cart` with `sendBeacon`, which stub mode does not capture. The scenario should wait about 3 s before it navigates.

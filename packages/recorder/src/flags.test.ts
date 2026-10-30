@@ -258,7 +258,7 @@ test('unload gap: an sgtm hit before the push does not cover it', () => {
   expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [sgtmHit('add_to_cart', 500)], navigations: [4000] })).toHaveLength(1);
 });
 
-test('unload gap: with no ga4 hit, an sgtm hit with the GA4 name covers a Shopify name', () => {
+test('unload gap: with no ga4 hit, a Shopify name is skipped because no vendor sent that literal name', () => {
   expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits: [sgtmHit('add_to_cart', 1100)], navigations: [4000] })).toEqual([]);
 });
 
@@ -266,6 +266,15 @@ test('unload gap: a Shopify event name is matched to its GA4 name', () => {
   const hits = [ga4Hit('add_to_cart', 1200)];
   expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits, navigations: [4000] })).toEqual([]);
   expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits: [ga4Hit('begin_checkout', 1200), sgtmHit('product_added_to_cart', 1100)], navigations: [4000] })).toHaveLength(1);
+});
+
+test('unload gap: a Shopify alias name that no vendor answered is skipped, with GA4 hits in the run', () => {
+  expect(gap({ events: [pushed('product_viewed', 1000)], hits: [ga4Hit('page_view', 500)], navigations: [4000] })).toEqual([]);
+  expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits: [ga4Hit('page_view', 500)], navigations: [4000] })).toEqual([]);
+});
+
+test('unload gap: a Shopify alias name that a non-GA4 vendor answered is skipped when the run has no GA4 hit', () => {
+  expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits: [sgtmHit('product_added_to_cart', 500)], navigations: [4000] })).toEqual([]);
 });
 
 test('unload gap: the advice depends on the network mode', () => {

@@ -62,7 +62,7 @@ export const unloadInitScript = `(() => {
   };
   const enqueue = (method, url, resourceType, body, contentType) => {
     const { postData, headers } = serialise(body);
-    if (contentType) headers['content-type'] = contentType;
+    if (contentType && !(typeof FormData !== 'undefined' && body instanceof FormData)) headers['content-type'] = contentType;
     const entry = {
       key: Math.random().toString(36).slice(2) + Date.now().toString(36),
       method,
@@ -82,6 +82,24 @@ export const unloadInitScript = `(() => {
     enqueue('POST', url, 'ping', data, null);
     return true;
   };
+  // A Request body is a stream that cannot be read synchronously while the page unloads, so the constructor keeps the source body.
+  const requestBodies = new WeakMap();
+  const NativeRequest = window.Request;
+  window.Request = new Proxy(NativeRequest, {
+    construct(target, args, newTarget) {
+      const request = Reflect.construct(target, args, newTarget);
+      const init = args[1];
+      const body = init && init.body != null ? init.body : args[0] instanceof NativeRequest ? requestBodies.get(args[0]) : undefined;
+      if (body !== undefined) requestBodies.set(request, body);
+      return request;
+    },
+  });
+  const nativeClone = NativeRequest.prototype.clone;
+  NativeRequest.prototype.clone = function () {
+    const copy = nativeClone.call(this);
+    if (requestBodies.has(this)) requestBodies.set(copy, requestBodies.get(this));
+    return copy;
+  };
   const nativeFetch = window.fetch;
   window.fetch = function (input, init) {
     const keepalive = (init && init.keepalive) || (input instanceof Request && input.keepalive);
@@ -90,7 +108,8 @@ export const unloadInitScript = `(() => {
     const method = (init && init.method) || (input instanceof Request ? input.method : 'GET');
     let contentType = null;
     try { contentType = new Headers((init && init.headers) || (input instanceof Request ? input.headers : undefined)).get('content-type'); } catch {}
-    enqueue(method.toUpperCase(), url, 'fetch', init && init.body, contentType);
+    const body = init && init.body != null ? init.body : input instanceof Request ? requestBodies.get(input) ?? (input.body ? input.body : null) : null;
+    enqueue(method.toUpperCase(), url, 'fetch', body, contentType);
     return Promise.resolve(new Response(null, { status: 204 }));
   };
   window.${UNLOAD_FLUSH}();
