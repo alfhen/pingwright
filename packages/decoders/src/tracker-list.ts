@@ -44,6 +44,8 @@ export const trackerList: readonly TrackerEntry[] = [
   },
 ];
 
+export const trackerVendorKeys: readonly string[] = [...new Set(trackerList.map((e) => e.vendor))];
+
 function hostMatches(pattern: string, hostname: string): boolean {
   if (pattern.startsWith('*.')) return hostname.endsWith(pattern.slice(1));
   return hostname === pattern;

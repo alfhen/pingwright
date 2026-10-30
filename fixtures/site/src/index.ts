@@ -23,6 +23,7 @@ const pages: Record<string, string> = {
   '/checkout/payment': 'payment.html',
   '/thank-you': 'thank-you.html',
   '/pinterest': 'pinterest.html',
+  '/tracker': 'tracker.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',

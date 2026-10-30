@@ -24,7 +24,7 @@ import {
   type Step,
 } from '@pingwright/core';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
-import { decodeRequest, isCollectionEndpoint, unwrapStapeLoader } from '@pingwright/decoders';
+import { decodeRequest, isCollectionEndpoint, trackerList, unwrapStapeLoader, type TrackerEntry } from '@pingwright/decoders';
 import {
   chromium,
   type APIResponse,
@@ -80,6 +80,8 @@ export interface RecorderOptions {
   userAgentOverride?: string;
   /** Serves the container's workspace build in place of the published one for this run only. */
   gtmOverride?: GtmOverrideInput;
+  /** Tracker entries added to the built-in list. */
+  trackerList?: readonly TrackerEntry[];
 }
 
 export interface StepActivity {
@@ -167,6 +169,7 @@ export class Recorder {
   private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
   private readonly fetchErrors: string[] = [];
+  private readonly trackers: readonly TrackerEntry[];
 
   private constructor(
     private readonly options: RecorderOptions,
@@ -174,7 +177,9 @@ export class Recorder {
     readonly context: BrowserContext,
     private readonly gtmOverride: GtmOverrideInput | undefined,
     private readonly testGtmOrigin: string | undefined,
-  ) {}
+  ) {
+    this.trackers = [...(options.trackerList ?? []), ...trackerList];
+  }
 
   static async launch(options: RecorderOptions): Promise<Recorder> {
     const testGtmOrigin = parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
@@ -312,7 +317,7 @@ export class Recorder {
   /** A person is typing during a handoff, so only requests that decode as tracking hits keep their body and query. */
   private redactForHandoff(record: Request, at = Date.now()): Request {
     if (!this.duringHandoff(at)) return record;
-    if (isCollectionEndpoint(record) || isKnownVendorCollection(record) || decodeRequest(record).length > 0) return record;
+    if (isCollectionEndpoint(record, this.trackers) || isKnownVendorCollection(record) || decodeRequest(record, undefined, this.trackers).length > 0) return record;
     return {
       ...record,
       url: redactQuery(record.url),
@@ -381,7 +386,7 @@ export class Recorder {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
     if (record && (await this.routeGtm(route, record))) return;
-    if (record && this.options.networkMode !== 'live' && (isCollectionEndpoint(record) || isKnownVendorCollection(record))) {
+    if (record && this.options.networkMode !== 'live' && (isCollectionEndpoint(record, this.trackers) || isKnownVendorCollection(record))) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
@@ -490,7 +495,7 @@ export class Recorder {
         postData = null;
       }
       const hop = this.hopRecord(first, next.href, method, headers, postData);
-      if (isCollectionEndpoint(hop) || isKnownVendorCollection(hop)) {
+      if (isCollectionEndpoint(hop, this.trackers) || isKnownVendorCollection(hop)) {
         hop.outcome = 'stubbed';
         this.routed.add(hop.id);
         this.extraRequests.push(hop);
@@ -669,12 +674,13 @@ export class Recorder {
     await Promise.allSettled([...this.pending]);
 
     const requests = [...this.requests.values(), ...this.extraRequests];
-    const hits: Hit[] = requests.flatMap((r) => decodeRequest(r));
+    const hits: Hit[] = requests.flatMap((r) => decodeRequest(r, undefined, this.trackers));
     const flags = buildFlags({
       runId: this.runId,
       networkMode: this.options.networkMode,
       siteUrl: this.options.site,
       firstPartyHosts: this.options.firstPartyHosts,
+      trackers: this.trackers,
       requests,
       hits,
       routedRequestIds: this.routed,

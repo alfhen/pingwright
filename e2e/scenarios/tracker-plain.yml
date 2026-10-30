@@ -1,0 +1,7 @@
+start: /tracker
+steps:
+  - wait: 3s
+expect:
+  mustNot:
+    - { vendor: ga4 }
+options: { seed: 1, allowUnknownDestination: true }

@@ -1,5 +1,5 @@
 import type { ConsentValue, NetworkMode, RequestOutcome } from '@pingwright/core';
-import { vendorKeys } from '@pingwright/decoders';
+import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
 import { isHostPattern } from './hosts.ts';
 
@@ -142,7 +142,8 @@ export function describeCount(count: Count): string {
   return count.op === '=' ? String(count.n) : `${count.op}${count.n}`;
 }
 
-export function parseScenario(text: string): Scenario {
+/** `extraVendorKeys` are vendor keys from a user tracker list, valid in `vendor:` besides the built-in ones. */
+export function parseScenario(text: string, extraVendorKeys: readonly string[] = []): Scenario {
   const lines = new LineCounter();
   const doc = parseDocument(text, { lineCounter: lines, uniqueKeys: true });
   const issues: string[] = [];
@@ -340,7 +341,7 @@ export function parseScenario(text: string): Scenario {
         else if (kind === 'mustNot') fail(p, 'is only valid under must');
         else rule.hashesMatch = true;
       } else if (k === 'vendor') {
-        const l = list(k, v, [...vendorKeys]);
+        const l = list(k, v, [...vendorKeys, ...trackerVendorKeys, ...extraVendorKeys]);
         if (l) filter.vendor = l;
       } else if (k === 'event' || k === 'transport' || k === 'host') {
         const l = list(k, v);

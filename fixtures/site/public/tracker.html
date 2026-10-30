@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tracker hosts</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Tracker hosts</h1>
+<p>Fake trackers that fire before consent on purpose. Their hosts are not in the built-in tracker list, so tests add them with a tracker-list file.</p>
+<script>
+(function () {
+  var cfg = window.__PW_FIXTURE;
+  var tiktok = cfg.thirdPartyUrl;
+  var criteo = new URL(cfg.thirdPartyUrl);
+  criteo.hostname = 'criteo.localhost';
+
+  function script(src) {
+    var el = document.createElement('script');
+    el.src = src;
+    el.onerror = function () {};
+    document.head.appendChild(el);
+  }
+
+  // TikTok-style: the pixel library loads, then the pixel posts an event to the same host.
+  script(tiktok + '/i18n/pixel/events.js');
+  fetch(tiktok + '/api/v2/pixel?event=Purchase&url=' + encodeURIComponent(location.href), { method: 'POST', mode: 'no-cors', body: '{}' });
+
+  // Criteo-style: collection is a JSONP script request to a listed path.
+  script(criteo.origin + '/m/collect?event=viewItem&callback=pwCriteo');
+})();
+</script>
+</body>
+</html>

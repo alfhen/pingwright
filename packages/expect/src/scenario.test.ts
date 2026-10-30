@@ -186,3 +186,8 @@ test('skips card and password fields when warning about real data', () => {
   const text = 'start: /\nsteps:\n  - fill: { "#card-number": "4155550123", "#password": "415-867-5309" }';
   expect(parseScenario(text).warnings).toEqual([]);
 });
+
+test("built-in tracker vendors are valid vendor keys", () => {
+  const s = parseScenario("start: /\nexpect:\n  mustNot:\n    - { vendor: [linkedin, microsoft-uet] }\n");
+  expect(s.expect.mustNot[0]!.filter).toMatchObject({ vendor: ["linkedin", "microsoft-uet"] });
+});

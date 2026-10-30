@@ -17,6 +17,7 @@ export interface RunArgs {
   headed: boolean;
   autoconsentRules: string[];
   gtmOverride: string | undefined;
+  trackerList: string | undefined;
   vars: Record<string, string>;
   json: boolean;
 }
@@ -47,6 +48,7 @@ Options for run:
   --headed                   Show the browser window
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview)
+  --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
 `;
@@ -64,6 +66,7 @@ Options:
   --headed                   Show the browser window
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview)
+  --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
   -h, --help                 Show this help
@@ -85,6 +88,7 @@ export function parseCli(argv: string[]): Command {
         headed: { type: 'boolean' },
         'autoconsent-rules': { type: 'string', multiple: true },
         'gtm-override': { type: 'string' },
+        'tracker-list': { type: 'string' },
         var: { type: 'string', multiple: true },
         json: { type: 'boolean' },
         'by-page': { type: 'boolean' },
@@ -143,6 +147,7 @@ export function parseCli(argv: string[]): Command {
     headed: values.headed ?? false,
     autoconsentRules: values['autoconsent-rules'] ?? [],
     gtmOverride: values['gtm-override'],
+    trackerList: values['tracker-list'],
     vars,
     json: values.json ?? false,
   };
