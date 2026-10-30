@@ -157,7 +157,7 @@ describe('scan', () => {
 
   it('still flags foreign phones at the start of a value', () => {
     const id = createIdentity(42);
-    for (const text of ['ph=+4420 7946 0958', '{"ph":"+44 20 7946 0958"}', 'href=tel:+442079460958', 'ph=%2B442079460958']) {
+    for (const text of ['ph=+4420 7946 0958', '{"ph":"+44 20 7946 0958"}', 'href=tel:+442079460958', 'ph=%2B442079460958', 'ph=1-415-555-2671', 'tel:1-415-555-2671', 'phone=415-555-2671']) {
       expect(scan(text, id).some((m) => m.kind === 'phone'), text).toBe(true);
     }
   });
