@@ -45,7 +45,7 @@ import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { parseNetLog, type NetLogRequest } from './netlog.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
-import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
+import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, unwrapUnloadSink, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
   isGtmJsUrl,
@@ -399,7 +399,9 @@ export class Recorder {
       const key = `${r.method} ${r.url}`;
       seen.set(key, (seen.get(key) ?? 0) + 1);
     }
-    for (const entry of entries) {
+    for (const raw of entries) {
+      const original = unwrapUnloadSink(raw.url);
+      const entry = original === null ? raw : { ...raw, url: original, status: null, failure: null };
       const key = `${entry.method} ${entry.url}`;
       const count = seen.get(key) ?? 0;
       if (count > 0) {
@@ -422,10 +424,11 @@ export class Recorder {
         initiator: 'unload',
         headers: redactHeaders(entry.headers),
         postData: null,
-        outcome: entry.failure ? 'failed' : 'passed',
+        outcome: original !== null ? 'stubbed' : entry.failure ? 'failed' : 'passed',
         captured: 'netlog',
         ...(entry.failure ? { failure: entry.failure } : {}),
       };
+      if (original !== null) this.routed.add(record.id);
       this.extraRequests.push(record);
       if (entry.status !== null) this.recordResponseFor(record, entry.status, []);
     }

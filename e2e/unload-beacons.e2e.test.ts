@@ -13,7 +13,8 @@ test('--net-log records the beacon and the keepalive POST a sandboxed frame send
   expect(hits.map((h) => h.requestId).sort()).toEqual(late.map((r) => r.id).sort());
   expect(hits.every((h) => h.consent.analytics === 'denied')).toBe(true);
   expect(mustRule(records!.results).pass).toBe(true);
-  expect(records!.flags.filter((f) => f.kind === 'stubBypass')).toHaveLength(2);
+  expect(records!.flags.some((f) => f.kind === 'stubBypass')).toBe(false);
+  expect(late.every((r) => r.outcome === 'stubbed')).toBe(true);
   expect(records!.flags.some((f) => f.kind === 'unloadGap')).toBe(false);
 }, 90_000);
 

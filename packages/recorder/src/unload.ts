@@ -1,5 +1,18 @@
 export const UNLOAD_BINDING = '__pingwrightUnloadSend';
 export const UNLOAD_FLUSH = '__pingwrightFlushUnload';
+export const UNLOAD_SINK_ORIGIN = 'https://unload.pingwright.invalid';
+
+/** The original URL of a send that a frame without sessionStorage redirected to the sink origin, or null. */
+export function unwrapUnloadSink(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin !== UNLOAD_SINK_ORIGIN) return null;
+    const encoded = parsed.searchParams.get('u');
+    return encoded === null ? null : Buffer.from(encoded, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+}
 
 export interface UnloadSendPayload {
   key: string;
@@ -19,12 +32,19 @@ export interface UnloadSendPayload {
  * sessionStorage until the binding call is acknowledged, and the next document in the tab replays the queue.
  * A send is not recorded if the tab never loads another document of the same origin and is not flushed by close().
  * A frame without sessionStorage (a sandboxed one without allow-same-origin) cannot queue, so its sends are lost:
- * swallowed, and not recorded. With `passUnqueueable` they go to the network instead, for the net log to show.
+ * swallowed, and not recorded. With `passUnqueueable` they are sent to a reserved host that does not resolve, with the original URL in `u`, for the net log to show without the hit leaving the machine.
  */
 export const unloadInitScript = (passUnqueueable: boolean): string => `(() => {
   const binding = ${JSON.stringify(UNLOAD_BINDING)};
   const STORE = '__pingwrightUnloadQueue';
   const passThrough = ${passUnqueueable} && (() => { try { sessionStorage.getItem(STORE); return false; } catch { return true; } })();
+  const SINK = ${JSON.stringify(UNLOAD_SINK_ORIGIN)};
+  const sinkUrl = (url) => {
+    const bytes = new TextEncoder().encode(new URL(String(url), location.href).href);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return SINK + '/?u=' + btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  };
   let leaving = false;
   const isLeaving = () => leaving || document.visibilityState === 'hidden';
   addEventListener('pagehide', () => { leaving = true; }, true);
@@ -79,6 +99,7 @@ export const unloadInitScript = (passUnqueueable: boolean): string => `(() => {
   };
   const beacon = navigator.sendBeacon;
   navigator.sendBeacon = function (url, data) {
+    if (passThrough && isLeaving()) { beacon.call(this, sinkUrl(url), data); return true; }
     if (passThrough || !isLeaving()) return beacon.call(this, url, data);
     enqueue('POST', url, 'ping', data, null);
     return true;
@@ -86,6 +107,11 @@ export const unloadInitScript = (passUnqueueable: boolean): string => `(() => {
   const nativeFetch = window.fetch;
   window.fetch = function (input, init) {
     const keepalive = (init && init.keepalive) || (input instanceof Request && input.keepalive);
+    if (keepalive && passThrough && isLeaving()) {
+      const target = sinkUrl(input instanceof Request ? input.url : input);
+      nativeFetch.call(this, input instanceof Request ? new Request(target, input) : target, init).catch(() => {});
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
     if (!keepalive || passThrough || !isLeaving()) return nativeFetch.apply(this, arguments);
     const url = input instanceof Request ? input.url : input;
     const method = (init && init.method) || (input instanceof Request ? input.method : 'GET');
