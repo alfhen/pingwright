@@ -1,0 +1,8 @@
+start: /shared-hashes?leak=pixel
+steps:
+  - consent: accept
+  - wait: 5s
+expect:
+  mustNot:
+    - { vendor: ga4, event: purchase }
+options: { seed: 1, allowUnknownDestination: true }

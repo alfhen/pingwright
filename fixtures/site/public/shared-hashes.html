@@ -9,23 +9,25 @@
 </head>
 <body>
 <h1>Shared hashes</h1>
-<p>Sends GraphQL persisted-query requests with a made-up query ID, and loads a script whose name holds a content hash. With <code>?leak=email</code> it also sends the hash of an email that is not the run identity on a tracking request.</p>
+<p>Sends GraphQL persisted-query requests with a made-up query ID, and loads a script whose name holds a content hash. The hash of an email that is not the run identity is sent where a skip rule could wrongly hide it: <code>?leak=email</code> in the query of a tracking request, <code>?leak=nested</code> as <code>variables.customer.id</code> of the persisted-query POST, <code>?leak=pixel</code> in the name of a <code>u-&lt;hash&gt;.gif</code> pixel.</p>
 <script>
 (function () {
   var cfg = window.__PW_FIXTURE;
   var queryId = '7d2e9a4b6c8f0a1b3d5e7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e';
   var otherEmailHash = '88f45d748ead76a339d3815f0b475088eb8b9621cad412386906e15209bfa045';
-  var leak = new URLSearchParams(location.search).get('leak') === 'email';
+  var leak = new URLSearchParams(location.search).get('leak');
   var base = cfg.thirdPartyUrl + '/graphql/persisted';
 
   setTimeout(function () {
-    fetch(base, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ id: queryId, variables: { handle: 'fake-tee' } }) });
+    fetch(base, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ id: queryId, variables: { handle: 'fake-tee', customer: leak === 'nested' ? { id: otherEmailHash } : undefined } }) });
     var extensions = JSON.stringify({ persistedQuery: { version: 1, sha256Hash: queryId } });
     fetch(base + '?id=' + queryId + '&extensions=' + encodeURIComponent(extensions), { mode: 'no-cors' });
   }, 1500);
-  if (leak) {
+  if (leak === 'email' || leak === 'pixel') {
     setTimeout(function () {
-      new Image().src = cfg.thirdPartyUrl + '/shared-hashes/collect?em=' + otherEmailHash;
+      new Image().src = leak === 'pixel'
+        ? cfg.thirdPartyUrl + '/shared-hashes/u-' + otherEmailHash + '.gif'
+        : cfg.thirdPartyUrl + '/shared-hashes/collect?em=' + otherEmailHash;
     }, 2000);
   }
 })();

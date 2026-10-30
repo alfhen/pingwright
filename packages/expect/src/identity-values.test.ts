@@ -45,7 +45,7 @@ test('hashesMatch fails on a wrong hash in sgtm user_data, even when the email i
 test('hashesMatch fails on plain user_data and finds nothing without user_data', () => {
   expect(check({ email_address: identity.email }).message).toContain('unhashed');
   expect(check({ first_name: identity.firstName }).message).toContain('unhashed');
-  expect(check({}).message).toContain('carried no hashed email or phone values');
+  expect(check({}).message).toContain('carried no hashed email, phone, name or address value');
 });
 
 test('a literal fill value can match a name or address hash, but never an email or phone', () => {

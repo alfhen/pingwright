@@ -4,7 +4,8 @@ import { run } from './cli-helpers.ts';
 async function realDataResult(name: string) {
   const r = await run(name);
   const summary = JSON.parse(r.stdout) as { results: { expectation: string; pass: boolean; message: string }[] };
-  return summary.results.find((x) => x.expectation === 'builtin: possibleRealData');
+  const check = summary.results.find((x) => x.expectation === 'builtin: possibleRealData') as { pass: boolean; message: string; evidence: string[] } | undefined;
+  return check && { ...check, requests: r.records!.requests.filter((q) => check.evidence.includes(q.id)) };
 }
 
 test('a stable hashed client ID under many keys and an hmac parameter pass possibleRealData', async () => {
@@ -23,6 +24,15 @@ test('a hashed non-identity email on a tracking request still fails possibleReal
   const real = await realDataResult('shared-hashes-leak');
   expect(real?.pass).toBe(false);
   expect(real?.message).toContain('not from the run identity');
+}, 90_000);
+
+test.each([
+  ['shared-hashes-leak-nested', (q: { postData: string | null }) => q.postData?.includes('"customer"')],
+  ['shared-hashes-leak-pixel', (q: { url: string }) => /\/shared-hashes\/u-[0-9a-f]{64}\.gif$/.test(q.url)],
+])('%s: a hashed non-identity email where a skip rule could hide it still fails possibleRealData', async (name, isLeak) => {
+  const real = await realDataResult(name);
+  expect(real?.pass).toBe(false);
+  expect(real?.requests.some((q) => isLeak(q))).toBe(true);
 }, 90_000);
 
 test('a hashed non-identity email under external_id still fails possibleRealData', async () => {
