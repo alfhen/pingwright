@@ -441,3 +441,5 @@ Where the code in 0.2 differs from the design above. Section 15.1 still applies,
 | Playwright MCP | Gives agents raw browser and network access. Pingwright adds decoding and assertions on top. |
 | Snowplow Micro | The same idea for Snowplow trackers only. |
 | ObservePoint, DataTrue, Trackingplan | Commercial auditing and monitoring. |
+
+[x](./cli.md#no-such-heading) and [y](#no-such-local)
