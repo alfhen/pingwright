@@ -1,21 +1,162 @@
 :root {
+  --pw-mark: #087f78;
+
   --vp-c-brand-1: #087f78;
-  --vp-c-brand-2: #0a6f69;
+  --vp-c-brand-2: #066a64;
   --vp-c-brand-3: #087f78;
-  --vp-c-brand-soft: rgba(8, 127, 120, 0.14);
+  --vp-c-brand-soft: rgba(8, 127, 120, 0.1);
+
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f2f6f5;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f2f6f5;
+  --vp-c-text-1: #182e38;
+  --vp-c-text-2: #4a5e66;
+  --vp-c-text-3: #6f8389;
+  --vp-c-divider: #dce5e3;
+  --vp-c-gutter: #e6edeb;
+  --vp-c-border: #cfdbd9;
+
+  --vp-code-color: #182e38;
+  --vp-code-bg: #e9f0ef;
+  --vp-code-block-bg: #f2f6f5;
+  --vp-code-link-color: #087f78;
+
+  --vp-c-tip-1: var(--vp-c-brand-1);
+  --vp-c-tip-2: var(--vp-c-brand-2);
+  --vp-c-tip-soft: var(--vp-c-brand-soft);
+
   --vp-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --vp-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --pw-font-display: 'Jost', var(--vp-font-family-base);
 }
 
 .dark {
+  --pw-mark: #69d6c2;
+
   --vp-c-brand-1: #69d6c2;
-  --vp-c-brand-2: #55c4b0;
+  --vp-c-brand-2: #8ae2d2;
   --vp-c-brand-3: #69d6c2;
-  --vp-c-brand-soft: rgba(105, 214, 194, 0.16);
-  --vp-c-bg: #182e38;
-  --vp-c-bg-alt: #13252d;
-  --vp-c-bg-elv: #1d3743;
-  --vp-c-text-1: #f4f7f7;
+  --vp-c-brand-soft: rgba(105, 214, 194, 0.12);
+
+  --vp-c-bg: #0f2129;
+  --vp-c-bg-alt: #0b1a20;
+  --vp-c-bg-elv: #16303a;
+  --vp-c-bg-soft: #132a33;
+  --vp-c-text-1: #e6eeed;
+  --vp-c-text-2: #a9bcbb;
+  --vp-c-text-3: #7f9594;
+  --vp-c-divider: #24404a;
+  --vp-c-gutter: #0b1a20;
+  --vp-c-border: #2c4b56;
+
+  --vp-code-color: #e6eeed;
+  --vp-code-bg: #1b3743;
+  --vp-code-block-bg: #132a33;
+  --vp-code-link-color: #69d6c2;
+}
+
+/* Headings and the site title use Jost, the wordmark's typeface. */
+.VPNavBarTitle .title,
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-family: var(--pw-font-display);
+  letter-spacing: -0.01em;
+}
+
+.VPNavBarTitle .title {
+  font-weight: 500;
+  font-size: 18px;
+}
+
+.vp-doc h1 {
+  font-weight: 600;
+  font-size: 40px;
+  line-height: 1.15;
+}
+
+.vp-doc h2 {
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+.vp-doc h3 {
+  font-weight: 500;
+  font-size: 20px;
+}
+
+@media (max-width: 640px) {
+  .vp-doc h1 {
+    font-size: 32px;
+  }
+}
+
+/* Code blocks hold captured requests, scenarios and output, so they get the logo's crop marks. */
+.vp-doc div[class*='language-'] {
+  --pw-arm: 14px;
+  --pw-weight: 2px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--pw-mark), var(--pw-mark)) top left / var(--pw-arm) var(--pw-weight) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) top left / var(--pw-weight) var(--pw-arm) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) top right / var(--pw-arm) var(--pw-weight) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) top right / var(--pw-weight) var(--pw-arm) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) bottom left / var(--pw-arm) var(--pw-weight) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) bottom left / var(--pw-weight) var(--pw-arm) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) bottom right / var(--pw-arm) var(--pw-weight) no-repeat,
+    linear-gradient(var(--pw-mark), var(--pw-mark)) bottom right / var(--pw-weight) var(--pw-arm) no-repeat,
+    var(--vp-code-block-bg);
+}
+
+.vp-doc :not(pre) > code {
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-size: 0.875em;
+}
+
+.vp-doc a {
+  text-underline-offset: 3px;
+}
+
+.vp-doc blockquote {
+  border-left: 2px solid var(--vp-c-brand-1);
+}
+
+/* The current page is marked with the logo's pixel. */
+.VPSidebarItem > .item {
+  position: relative;
+}
+
+.VPSidebarItem.is-active > .item .text {
+  font-weight: 600;
+}
+
+.VPSidebarItem.is-active > .item::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  background: var(--vp-c-brand-1);
+}
+
+/* On the site, the README's <picture> becomes these two images; see themedPictures in config.ts. */
+.vp-doc img.theme-dark,
+.dark .vp-doc img.theme-light {
+  display: none;
+}
+
+.dark .vp-doc img.theme-dark {
+  display: inline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
 }
 
 .docs-version {
