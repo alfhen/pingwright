@@ -154,7 +154,15 @@ test('reports flag changes per host and kind', () => {
   ]);
 });
 
-test('warns when record schema versions differ, treating a missing version as 0', () => {
+test('does not report a flag change when only the host port differs', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addFlag(a, addHit(a, {}, '127.0.0.1:41001'), 'unknownDestination');
+  addFlag(b, addHit(b, {}, '127.0.0.1:41002'), 'unknownDestination');
+  expect(diffRuns(a, b).flags).toEqual([]);
+});
+
+test('warns when record schema versions differ,treating a missing version as 0', () => {
   const d = diffRuns(makeRun(null), makeRun(1));
   expect(d.warnings).toHaveLength(1);
   expect(d.warnings[0]).toContain('0 and 1');

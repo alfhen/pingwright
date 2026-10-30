@@ -175,7 +175,7 @@ function idPresenceChanges(a: HitIds, b: HitIds): ValueChange[] {
 
 function hostOf(url: string): string {
   try {
-    return new URL(url).host;
+    return new URL(url).hostname;
   } catch {
     return '';
   }
