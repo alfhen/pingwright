@@ -748,7 +748,12 @@ export class Recorder {
   async close(): Promise<RunResult> {
     if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
     this.closed = true;
-    await this.browser.close();
+    try {
+      await this.browser.close();
+    } catch (error) {
+      this.removeNetLogDir?.();
+      throw error;
+    }
     await Promise.allSettled([...this.pending]);
 
     const netLog = await this.readNetLog();
