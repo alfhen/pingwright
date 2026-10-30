@@ -77,6 +77,9 @@ test('name segments that look like values are stored as (other)', () => {
   expect(guardFieldName('ab12'.repeat(8))).toBe('(other)');
   expect(guardFieldName('AbCdEfGhIjKlMnOpQrSt1234')).toBe('(other)');
   expect(guardFieldName('order_1234567')).toBe('(other)');
+  expect(guardFieldName('555-010-0199')).toBe('(other)');
+  expect(guardFieldName('order_123_456_789')).toBe('(other)');
+  expect(guardFieldName('ga4_v2_param')).toBe('ga4_v2_param');
   expect(guardFieldName(EMAIL)).toBe('(other)');
   expect(guardFieldName(`user.${EMAIL}.x`)).toBe('(other)');
   expect(guardFieldName('user.1234567.x')).toBe('user.(other).x');

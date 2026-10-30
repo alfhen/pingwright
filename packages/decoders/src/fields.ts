@@ -15,9 +15,14 @@ const DIGEST_TOKEN = /^[A-Za-z0-9_-]{22,}$/;
 const LONG_DIGITS = /\d{6,}/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 
+function mostlyDigits(segment: string): boolean {
+  const digits = segment.replace(/\D/g, '').length;
+  return digits >= 6 && digits * 2 >= segment.length;
+}
+
 function looksLikeValue(segment: string): boolean {
   if (segment.length > 64 || !NAME_CHARS.test(segment)) return true;
-  if (HEX_TOKEN.test(segment) || LONG_DIGITS.test(segment)) return true;
+  if (HEX_TOKEN.test(segment) || LONG_DIGITS.test(segment) || mostlyDigits(segment)) return true;
   return DIGEST_TOKEN.test(segment) && /[A-Z]/.test(segment) && /[a-z]/.test(segment) && /\d/.test(segment);
 }
 
