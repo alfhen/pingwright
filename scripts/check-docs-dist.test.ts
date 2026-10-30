@@ -20,6 +20,11 @@ describe('findExternalRefs', () => {
     expect(findExternalRefs('a.css', 'a{background:url(/local.png)}')).toEqual([]);
   });
 
+  it('flags a quoted external CSS @import', () => {
+    expect(findExternalRefs('a.css', '@import "https://cdn.example.com/theme.css";')).toEqual(['@import https://cdn.example.com/theme.css']);
+    expect(findExternalRefs('a.css', "@import './local.css';")).toEqual([]);
+  });
+
   it('flags the VitePress preload stylesheet form', () => {
     expect(findExternalRefs('a.html', '<link rel="preload stylesheet" href="https://evil.example.com/a.css" as="style">')).toHaveLength(1);
     expect(findExternalRefs('a.html', '<link rel="preload stylesheet" href="/assets/a.css" as="style">')).toEqual([]);
