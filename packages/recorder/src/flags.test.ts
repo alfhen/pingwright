@@ -258,7 +258,7 @@ test('unload gap: an sgtm hit before the push does not cover it', () => {
   expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [sgtmHit('add_to_cart', 500)], navigations: [4000] })).toHaveLength(1);
 });
 
-test('unload gap: with no ga4 hit, an sgtm hit with the GA4 name covers a Shopify name', () => {
+test('unload gap: with no ga4 hit, a Shopify name is skipped because no vendor sent that literal name', () => {
   expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits: [sgtmHit('add_to_cart', 1100)], navigations: [4000] })).toEqual([]);
 });
 

@@ -62,7 +62,7 @@ export const unloadInitScript = `(() => {
   };
   const enqueue = (method, url, resourceType, body, contentType) => {
     const { postData, headers } = serialise(body);
-    if (contentType) headers['content-type'] = contentType;
+    if (contentType && !headers['content-type']) headers['content-type'] = contentType;
     const entry = {
       key: Math.random().toString(36).slice(2) + Date.now().toString(36),
       method,

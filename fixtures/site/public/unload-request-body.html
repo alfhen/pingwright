@@ -18,6 +18,10 @@
       keepalive: true,
     });
     fetch(request).catch(function () {});
+    var form = new FormData();
+    form.append('id', '100000000000001');
+    form.append('ev', 'PageView');
+    fetch(new Request('https://www.facebook.com/tr/', { method: 'POST', body: form, keepalive: true })).catch(function () {});
   });
 </script>
 </body>

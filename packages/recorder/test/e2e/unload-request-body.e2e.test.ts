@@ -36,4 +36,10 @@ test('a keepalive fetch built from a Request with a body keeps its body when sen
   expect(sent[0]!.method).toBe('POST');
   expect(sent[0]!.postData).toBe('en=add_to_cart&ep.via=request\nen=view_item&ep.via=request');
   expect(decodeRequest(sent[0]!).map((h) => h.event)).toEqual(['add_to_cart', 'view_item']);
+  const form = records.requests.filter((q) => q.method === 'POST' && q.url === 'https://www.facebook.com/tr/');
+  expect(form).toHaveLength(1);
+  const boundary = /boundary=(.+)$/.exec(form[0]!.headers['content-type'] ?? '')?.[1];
+  expect(boundary).toBeTruthy();
+  expect(form[0]!.postData).toContain(`--${boundary}`);
+  expect(form[0]!.postData).toContain('100000000000001');
 }, 60_000);
