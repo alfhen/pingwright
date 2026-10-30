@@ -125,15 +125,17 @@ test('/sgtm-leak?mode=huge posts a body over 64 KiB that still has the fields', 
 
 test('/identifiers sends nothing until the banner is answered, then hashes of the typed email', async () => {
   const w = await open();
-  await w.context.addInitScript(() => sessionStorage.setItem('pw_checkout', JSON.stringify({ email: 'pw-fixture@example.com' })));
   const page = await w.context.newPage();
   await page.goto(`${site.url}/identifiers?state=denied`);
+  const runEmail = 'pw-run-0001@example.com';
+  await page.fill('#email', runEmail);
   await page.locator('#pw-consent-banner').waitFor({ state: 'visible' });
   await new Promise((r) => setTimeout(r, 1000));
   expect(w.offMachine).toEqual([]);
   expect(w.sgtm).toEqual([]);
   await page.click('#pw-reject');
-  const hash = sha256(fakeEmail);
+  const hash = sha256(runEmail);
+  expect(hash).not.toBe(sha256(fakeEmail));
   await expect.poll(() => sgtmBodies(w, 'purchase').length).toBe(1);
   const ga4 = offHits(w, 'google-analytics.com', /^\/g\/collect$/)[0]!;
   expect(ga4.searchParams.get('uid')).toBe('fixture-user-0001');
@@ -215,6 +217,9 @@ test('/tiles themes expose the tiles by role or by title', async () => {
   for (const [theme, role] of [['button', 'button'], ['radio', 'radio']] as const) {
     await page.goto(`${site.url}/tiles?theme=${theme}`);
     await page.getByRole(role, { name: 'White (01)' }).click();
+    expect(await page.locator('#selected').textContent()).toBe('White (01)');
+    await page.goto(`${site.url}/tiles?theme=${theme}`);
+    await page.locator('text=White (01)').click();
     expect(await page.locator('#selected').textContent()).toBe('White (01)');
     expect(await page.getByRole(role, { name: 'Black (02)' }).count()).toBe(1);
   }
