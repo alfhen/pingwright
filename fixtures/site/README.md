@@ -7,7 +7,7 @@ import { startFixtureSite } from '@pingwright/fixture-site';
 const { url, sgtmUrl, thirdPartyUrl, close } = await startFixtureSite();
 ```
 
-For manual use, run `pnpm fixture` in the repo root. It prints the three URLs.
+For manual use, run `pnpm fixture` in the repo root. It prints the URLs.
 
 Opened in a normal browser, the shop sends live GA4, Google Ads, remarketing, Consent Mode and Meta `/tr` hits to Google and Meta, with fake IDs but real page URLs and client IDs. Block them first. The sandboxed pixel's POST to `https://collector.pingwright.invalid/` fails there, because only Pingwright or a `context.route` answers that origin.
 
@@ -56,6 +56,39 @@ The choice is stored in the first-party cookie `pw_consent` (`accept` or `reject
 - Mock Stape loader, on every page, to `sgtmUrl`: `/pwstape?pk=<base64 of '/gtag/js?id=G-PWTEST0001'>` (script), `/pwstape?pk=<base64 of '/g/collect?v=2&tid=G-PWTEST0001&cid=...&en=page_view&dl=...'>`, and `/pwstape?pk=<base64 of '/data?v=2&tid=...&dtdc=<base64 JSON>'>`. The `dtdc` JSON has `page_location` and `page_hostname`.
 - Unknown destination: an image from every page to `thirdPartyUrl/unknown-pixel?x=1`.
 - Sandboxed iframe at `/web-pixels@0.0.0-fixture/sandbox/modern/` (`sandbox="allow-scripts allow-forms"`): POSTs JSON `{source:'fixture-pixel', event:'page_viewed', href}` to `https://collector.pingwright.invalid/report`, and POSTs a GA4-style hit to `https://region1.google-analytics.com/g/collect` with `dl` set to its own sandbox URL. Both use `mode: 'no-cors'` and a simple content type, because an opaque-origin frame cannot pass a CORS preflight. The collector origin does not resolve, so a test must answer it with `context.route`.
+
+## Fake GTM containers
+
+A fourth server, `containerUrl` (`http://127.0.0.1:<p4>`), answers `/gtm.js?id=GTM-PWTEST1` with a small local script. It is not real GTM. Tests route `https://www.googletagmanager.com/gtm.js` to it with `context.route`. Nothing is hosted by Pingwright.
+
+| Request | Answer |
+| --- | --- |
+| `id=GTM-PWTEST1` | The `published` build. |
+| `id=GTM-PWTEST1&gtm_auth=pwfake-auth-0001&gtm_preview=env-99&gtm_cookies_win=x` | The `workspace` build. |
+| `id=GTM-PWTEST1` plus `build=workspace` without the full fake set, or any partial or wrong set | 404. |
+| `id=GTM-PWNOVER` (a container with no version), or any other id | 404. |
+
+The fake values are exported as `fakeWorkspace` from `src/containers.ts`. The site's `receivedGtmAuth` lists every `gtm_auth` value the container host or the Stape-style host received, for a positive control.
+
+Differences between the builds, seen on the pages below:
+
+| | published | workspace |
+| --- | --- | --- |
+| Consent Mode default | all four signals `denied` | `ad_storage` `granted`, the other three `denied` |
+| Undecided GA4 `page_view` `gcs` | `G100` | `G110` |
+| GA4 events | `page_view`, `container_event` | also `workspace_only` |
+| Meta events | `PageView`, `ViewContent`, `AddToCart` | no `AddToCart` |
+| Echoes `gtm_auth` | no | yes: in an image URL and a beacon body to `thirdPartyUrl` (`/gtm-echo.gif`, `/gtm-echo`), as `Referer` of `/gtm-referer.gif`, sent by a hidden iframe at `/container/echo-frame?gtm_auth=...` that the build adds, and in a Stape-style `/g/collect` (`dl`) and `/data` (`dtdc` `page_location`) pair to `sgtmUrl`, base64 inside base64 |
+
+The container sets the Consent Mode default itself and the pages never decide consent, so every container page is undecided. The `gcs` values come from the real gtag.js, and the e2e asserts both.
+
+Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js from the internet, so stub the collection paths):
+
+- `/container/direct`: `<script src="https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1">`.
+- `/container/echo`: the same. Its URL is clean; the workspace build adds `/container/echo-frame?gtm_auth=...` (an `unsafe-url` referrer policy) as a hidden iframe.
+- `/container/noversion`: loads `GTM-PWNOVER`, which is 404. The page still runs.
+- `/container/stape`: loads the container as `sgtmUrl/pwstape?pk=<base64 of /gtm.js?id=GTM-PWTEST1>`.
+- `/container/sandbox`: a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/container/`) with the same Stape-style loader. Real gtag.js cannot run in an opaque-origin frame, so the frame sends the same GA4 and Meta events itself, as a custom pixel does. Its GA4 `dl` is the sandbox URL.
 
 ## Deliberate defects
 
