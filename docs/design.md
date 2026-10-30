@@ -1,6 +1,6 @@
 # Pingwright design
 
-Status: revision 7, for release 0.2.0-rc.3. Milestones 0.1 and 0.2 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2.
+Status: revision 7, for release 0.2.0-rc.4. Milestones 0.1 and 0.2 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2.
 
 ## 1. Problem
 
@@ -403,7 +403,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 ## 15. Milestones
 
 1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
-2. **0.2 (built, `0.2.0-rc.3`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
+2. **0.2 (built, `0.2.0-rc.4`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
 5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
