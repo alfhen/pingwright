@@ -115,7 +115,7 @@ test('prints a scenario warning to stderr before running', async () => {
     await writeFile(scenario, 'start: /\nsteps:\n  - fill: { "#email": "jane.doe@gmail.com" }\n');
     const stderr: string[] = [];
     const code = await runCommand(
-      { command: 'run', scenario, site: 'http://localhost:1', network: undefined, out: dir, seed: undefined, headed: false, autoconsentRules: [], vars: { undeclared: 'x' }, json: false },
+      { command: 'run', scenario, site: 'http://localhost:1', network: undefined, out: dir, seed: undefined, headed: false, autoconsentRules: [], gtmOverride: undefined, vars: { undeclared: 'x' }, json: false },
       { stdout: () => {}, stderr: (text) => stderr.push(text) },
     );
     expect(code).toBe(2);

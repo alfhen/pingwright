@@ -27,6 +27,28 @@ export interface CaptureCoverage {
 /** Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. A record with no version is version 0. */
 export const RECORD_SCHEMA_VERSION = 1;
 
+export interface GtmOverrideTag {
+  id: string;
+  name: string | null;
+}
+
+export interface GtmOverrideApplied {
+  way: 'direct';
+  /** The request the page made. Never the preview URL, which carries the auth value. */
+  url: string;
+  /** The preview fetch's status, or 0 when the fetch failed. */
+  status: number;
+}
+
+export interface GtmOverrideRecord {
+  container: string;
+  gtmPreview: string;
+  gtmAuth: '[redacted]';
+  /** Stored for later use, not evaluated. */
+  expectedTags: GtmOverrideTag[];
+  applied: GtmOverrideApplied[];
+}
+
 export interface Run {
   type: 'run';
   id: Id<'run'>;
@@ -38,7 +60,9 @@ export interface Run {
   pingwrightVersion: string;
   browser: { name: string; version: string };
   networkMode: NetworkMode;
-  gtmOverride: string | null;
+  gtmOverride: GtmOverrideRecord | null;
+  /** Set when `PINGWRIGHT_TEST_GTM_ORIGIN` replaced the GTM origin in gtm.js fetches. */
+  testGtmOrigin?: string;
   containerVersions: Record<string, string>;
   identity: Identity | null;
   identitySeed?: number;

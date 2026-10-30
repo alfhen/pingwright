@@ -16,6 +16,7 @@ export interface RunArgs {
   seed: number | undefined;
   headed: boolean;
   autoconsentRules: string[];
+  gtmOverride: string | undefined;
   vars: Record<string, string>;
   json: boolean;
 }
@@ -36,6 +37,7 @@ Options for run:
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
+  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
 `;
@@ -52,6 +54,7 @@ Options:
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
+  --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview)
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
   -h, --help                 Show this help
@@ -72,6 +75,7 @@ export function parseCli(argv: string[]): Command {
         seed: { type: 'string' },
         headed: { type: 'boolean' },
         'autoconsent-rules': { type: 'string', multiple: true },
+        'gtm-override': { type: 'string' },
         var: { type: 'string', multiple: true },
         json: { type: 'boolean' },
         version: { type: 'boolean' },
@@ -124,6 +128,7 @@ export function parseCli(argv: string[]): Command {
     seed,
     headed: values.headed ?? false,
     autoconsentRules: values['autoconsent-rules'] ?? [],
+    gtmOverride: values['gtm-override'],
     vars,
     json: values.json ?? false,
   };

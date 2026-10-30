@@ -5,7 +5,7 @@ test('parses run with every option', () => {
   expect(
     parseCli([
       'run', 's.yml', '--site', 'http://localhost:3000', '--network', 'live', '--out', 'o', '--seed', '7', '--headed',
-      '--autoconsent-rules', 'a.json', '--autoconsent-rules', 'b.json', '--var', 'product=tee', '--var', 'q=a=b', '--json',
+      '--autoconsent-rules', 'a.json', '--autoconsent-rules', 'b.json', '--var', 'product=tee', '--var', 'q=a=b', '--gtm-override', 'g.json', '--json',
     ]),
   ).toEqual({
     command: 'run',
@@ -16,6 +16,7 @@ test('parses run with every option', () => {
     seed: 7,
     headed: true,
     autoconsentRules: ['a.json', 'b.json'],
+    gtmOverride: 'g.json',
     vars: { product: 'tee', q: 'a=b' },
     json: true,
   });

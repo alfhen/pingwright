@@ -8,3 +8,5 @@ export * from './stub.ts';
 export * from './recorder.ts';
 export * from './guard.ts';
 export * from './steps.ts';
+export * from './gtm-override.ts';
+export * from './gtm-scrub.ts';

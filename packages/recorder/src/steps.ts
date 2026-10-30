@@ -65,6 +65,17 @@ export class StepError extends Error {
   }
 }
 
+/** The run finished and its JSONL is written, but the GTM override did not take effect. */
+export class GtmOverrideFailure extends Error {
+  constructor(
+    message: string,
+    readonly run: RunResult,
+  ) {
+    super(message);
+    this.name = 'GtmOverrideFailure';
+  }
+}
+
 const IDENTITY_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'] as const;
 type IdentityField = (typeof IDENTITY_FIELDS)[number];
 const HANDOFF_REMINDER = 'Use test accounts and test cards only. Never enter real personal or payment details.';
@@ -296,5 +307,7 @@ export async function recordScenario(options: RecordScenarioOptions): Promise<Ru
     if (error instanceof StepError && result) error.run = result;
     throw error;
   }
-  return recorder.close();
+  const result = await recorder.close();
+  if (result.gtmOverrideFailure) throw new GtmOverrideFailure(result.gtmOverrideFailure, result);
+  return result;
 }

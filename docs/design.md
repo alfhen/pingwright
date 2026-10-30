@@ -69,7 +69,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 
 | Entity | Fields (main) |
 | --- | --- |
-| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride`, `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
+| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride` (`container`, `gtmPreview`, `gtmAuth` always `[redacted]`, `expectedTags`, and `applied`: `{way, url, status}` for each match), `testGtmOrigin` (set only when the test-only GTM origin was used), `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
 | `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt` |
 | `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`), `failure` (Playwright's error text for a failed request), `redacted` (`handoff` when a handoff step replaced the body and query values) |
 | `Response` | `id` (`res_…`), `requestId`, `status`, `setCookieNames[]` |
@@ -245,6 +245,10 @@ The values are a GTM override, passed with the run:
 
 The recorder intercepts the request for the container script with `context.route` and either calls `route.continue({ url })` with the preview build URL (`https://www.googletagmanager.com/gtm.js?id=<container>&gtm_auth=…&gtm_preview=env-N&gtm_cookies_win=x`), or fetches that URL with `route.fetch({ url })` and fulfils with the response. The override belongs to that run only. It is never stored as a shared setting.
 
+In 0.2 the recorder fetches the preview build with `route.fetch({ url })` and fulfils the original request with the response, so the page's request URL is unchanged. It matches only `https://www.googletagmanager.com/gtm.js` with `id=<container>` (other parameters are ignored; `gtag/js` and `ns.html` do not match). The run records each match in `gtmOverride.applied` as `{way: "direct", url, status}`. If nothing matched, or a preview fetch was not 200, the run fails with exit 2 and the JSONL is still written.
+
+For tests, `PINGWRIGHT_TEST_GTM_ORIGIN` replaces `https://www.googletagmanager.com` in every `gtm.js` fetch, with or without an override, but not in matching. It must parse with `new URL` to `http:` and a hostname of exactly `localhost`, `127.0.0.1` or `[::1]`, with no userinfo, path, query or fragment; anything else is a hard error. It is read only from the environment, never from scenario YAML or the override file, and the run records it as `testGtmOrigin`.
+
 Limits:
 
 - Sites that load the container through a custom loader (for example Stape's) lose whatever that loader does beyond fetching the container. Hits still go to the configured server container URL.
@@ -353,6 +357,8 @@ Real data can still appear through:
 The docs and the handoff prompt tell people to use test accounts and test cards.
 
 **Secrets are always redacted:** the run token, sink credentials and any `Authorization` or cookie header values Pingwright adds.
+
+**The `gtmAuth` value is redacted in any form.** In `Recorder.close()`, as its last step, the recorder scrubs the value from every string in the records. Decoding, flags and the built-in checks run on the raw records first, so a redacted value still has its hit. The scrub decodes before it searches: it URL-decodes and base64-decodes each string recursively, and reads the query strings found inside decoded text. For a query value of `Request.url` or a form body, the whole value becomes `[redacted]`. Any other string, including `Hit.params`, `Hit.page`, headers and object fields such as `DataLayerEvent.args`, becomes `[redacted]` whole. CLI output and error messages get the same treatment. Limit: a base64 value glued to unseparated text may not be decoded.
 
 **Other rules**
 
