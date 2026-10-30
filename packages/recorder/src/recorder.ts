@@ -44,8 +44,12 @@ import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
+  bodyHasContainer,
   isGtmJsUrl,
+  isLoaderCandidate,
   matchesGtmContainer,
+  matchesLoaderPattern,
+  withoutQueryValues,
   matchesLoaderContainer,
   parseGtmOverride,
   parseTestGtmOrigin,
@@ -169,6 +173,7 @@ export class Recorder {
   private readonly handoffWindows: { from: number; to: number | null }[] = [];
   private closed = false;
   private readonly fetchErrors: string[] = [];
+  private readonly loaderCandidates = new Map<string, boolean>();
   private readonly trackers: readonly TrackerEntry[];
 
   private constructor(
@@ -404,7 +409,16 @@ export class Recorder {
     const { gtmOverride, testGtmOrigin } = this;
     // record.url may be redacted during a handoff window; match on the live URL.
     const liveUrl = route.request().url();
-    const applied = gtmOverride === undefined ? undefined : this.appliedWay(liveUrl, record, gtmOverride);
+    let applied = gtmOverride === undefined ? undefined : this.appliedWay(liveUrl, record, gtmOverride);
+    if (!applied && gtmOverride && this.isUnseenLoaderCandidate(liveUrl, record)) {
+      const sniff = await this.sniffLoader(route, liveUrl, gtmOverride.container);
+      if (!sniff) return false;
+      if (!sniff.matched) {
+        await route.fulfill({ response: sniff.response });
+        return true;
+      }
+      applied = { way: 'loader', loader: 'stape', url: record.url, loses: 'everything the loader does beyond fetching the container' };
+    }
     if (!applied && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
     const target = applied ? previewFetchUrl(gtmOverride!, testGtmOrigin) : testOriginUrl(liveUrl, testGtmOrigin!);
     let response: APIResponse;
@@ -421,9 +435,30 @@ export class Recorder {
     return true;
   }
 
+  private isUnseenLoaderCandidate(liveUrl: string, record: Request): boolean {
+    if (this.loaderCandidates.get(liveUrl) === false) return false;
+    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl)) return false;
+    return !isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record);
+  }
+
+  /** Fetches a script that may be a Stape loader and checks whether it is the container. Returns undefined when the fetch fails, so the request goes the normal way. */
+  private async sniffLoader(route: Route, liveUrl: string, container: string): Promise<{ response: APIResponse; matched: boolean } | undefined> {
+    try {
+      const response = await route.fetch();
+      const matched = response.ok() && bodyHasContainer(await response.text(), container);
+      this.loaderCandidates.set(liveUrl, matched);
+      return { response, matched };
+    } catch {
+      return undefined;
+    }
+  }
+
   private appliedWay(liveUrl: string, record: Request, override: GtmOverrideInput): Omit<GtmOverrideApplied, 'status'> | undefined {
     if (matchesGtmContainer(liveUrl, override.container)) return { way: 'direct', url: record.url };
-    if (override.loader && sameUrl(liveUrl, override.loader.replace)) {
+    if (override.loader?.replace !== undefined && sameUrl(liveUrl, override.loader.replace)) {
+      return { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' };
+    }
+    if (matchesLoaderPattern(liveUrl, override.loader)) {
       return { way: 'replace', url: record.url, loses: 'everything the loader does beyond fetching the container' };
     }
     const inner = unwrapStapeLoader({ ...record, url: liveUrl });
@@ -437,7 +472,13 @@ export class Recorder {
     const applied = this.run.gtmOverride?.applied;
     if (!applied) return undefined;
     const { container } = this.run.gtmOverride!;
-    if (applied.length === 0) return `no container request matched: the page never requested https://www.googletagmanager.com/gtm.js?id=${container}`;
+    if (applied.length === 0) {
+      const seen = [...this.loaderCandidates.keys()].map(withoutQueryValues).slice(0, 10);
+      const hint = seen.length
+        ? `. Cross-origin scripts that did not hold the container (query values hidden): ${seen.join(', ')}. If one is your loader, add "loader": {"replace": "<script URL>"} or {"match": "<regex>"} to the override file`
+        : '. If the page uses a custom loader, add "loader": {"replace": "<script URL>"} or {"match": "<regex>"} to the override file';
+      return `no container request matched: the page never requested https://www.googletagmanager.com/gtm.js?id=${container}, and no loader script held the container${hint}`;
+    }
     const bad = applied.find((a) => a.status !== 200);
     if (!bad) return undefined;
     if (bad.status === 0) return `the preview build of ${container} could not be fetched${this.fetchErrors[0] ? `: ${this.fetchErrors[0]}` : ''}`;

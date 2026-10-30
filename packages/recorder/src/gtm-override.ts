@@ -12,8 +12,8 @@ export interface GtmOverrideInput {
   gtmAuth: string;
   gtmPreview: string;
   expectedTags?: GtmOverrideTag[];
-  /** A loader script URL to replace with the preview build. */
-  loader?: { replace: string };
+  /** Loader scripts to replace with the preview build: one exact URL, and/or a regex tested against script URLs. */
+  loader?: { replace?: string; match?: string };
 }
 
 export class GtmOverrideError extends Error {
@@ -59,20 +59,36 @@ export function parseGtmOverride(input: unknown): GtmOverrideInput {
   return result;
 }
 
-function parseLoader(input: unknown): { replace: string } {
+function parseLoader(input: unknown): { replace?: string; match?: string } {
   const bad = (m: string) => new GtmOverrideError(m);
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) throw bad('loader must be an object like {"replace": "<script URL>"}');
-  const l = input as Record<string, unknown>;
-  if (Object.keys(l).some((k) => k !== 'replace')) throw bad('loader has unknown fields. Allowed: replace');
-  if (typeof l.replace !== 'string') throw bad('loader.replace must be a script URL');
-  let url: URL;
-  try {
-    url = new URL(l.replace);
-  } catch {
-    throw bad('loader.replace must be an absolute http or https URL');
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw bad('loader must be an object like {"replace": "<script URL>"} or {"match": "<regex>"}');
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw bad('loader.replace must be an absolute http or https URL');
-  return { replace: url.href };
+  const l = input as Record<string, unknown>;
+  if (Object.keys(l).some((k) => k !== 'replace' && k !== 'match')) throw bad('loader has unknown fields. Allowed: replace, match');
+  if (l.replace === undefined && l.match === undefined) throw bad('loader needs replace (a script URL) or match (a regex)');
+  const result: { replace?: string; match?: string } = {};
+  if (l.replace !== undefined) {
+    if (typeof l.replace !== 'string') throw bad('loader.replace must be a script URL');
+    let url: URL;
+    try {
+      url = new URL(l.replace);
+    } catch {
+      throw bad('loader.replace must be an absolute http or https URL');
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw bad('loader.replace must be an absolute http or https URL');
+    result.replace = url.href;
+  }
+  if (l.match !== undefined) {
+    if (typeof l.match !== 'string' || l.match === '') throw bad('loader.match must be a non-empty regular expression string');
+    try {
+      new RegExp(l.match);
+    } catch {
+      throw bad('loader.match is not a valid regular expression');
+    }
+    result.match = l.match;
+  }
+  return result;
 }
 
 /** Returns the origin of a loopback test GTM origin, or undefined when the variable is unset or empty. Anything else throws. */
@@ -124,4 +140,37 @@ export function previewFetchUrl(override: GtmOverrideInput, origin: string = GTM
 export function testOriginUrl(requestUrl: string, origin: string): string {
   const u = new URL(requestUrl);
   return `${origin}${u.pathname}${u.search}`;
+}
+
+export function matchesLoaderPattern(url: string, loader: { match?: string } | undefined): boolean {
+  return loader?.match !== undefined && new RegExp(loader.match).test(url);
+}
+
+const GOOGLE_HOST = /(^|\.)(googletagmanager|google-analytics|googleadservices|doubleclick)\.(com|net)$/;
+
+/** A script request that could be a Stape loader: a `.js` path with a query, on a host that is not Google's. */
+export function isLoaderCandidate(url: string, resourceType: string): boolean {
+  if (resourceType !== 'script') return false;
+  try {
+    const u = new URL(url);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && !GOOGLE_HOST.test(u.hostname) && u.pathname.endsWith('.js') && u.search !== '';
+  } catch {
+    return false;
+  }
+}
+
+/** The body of a GTM container script holds its container ID. */
+export function bodyHasContainer(body: string, container: string): boolean {
+  return body.includes(container);
+}
+
+/** Origin and path with the query values hidden, because they may hold per-site keys. */
+export function withoutQueryValues(url: string): string {
+  try {
+    const u = new URL(url);
+    const keys = [...new Set(u.searchParams.keys())];
+    return `${u.origin}${u.pathname}${keys.length ? `?${keys.map((k) => `${k}=…`).join('&')}` : ''}`;
+  } catch {
+    return '(unparsable URL)';
+  }
 }

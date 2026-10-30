@@ -223,3 +223,51 @@ test('loader.replace swaps the loader script for the workspace build and records
   expect(ga4(hits, 'workspace_only').length).toBeGreaterThan(0);
   await expectNoAuth(r);
 }, 90_000);
+
+const scriptLoaderUrl = () => `${site.sgtmUrl}/pwload-a1b2c3.js?k=${encodeURIComponent([...'/gtm.js?id=GTM-PWTEST1'].reverse().join(''))}`;
+
+test.each([
+  ['the page', 'gtm-loader-script'],
+  ['a sandboxed iframe', 'gtm-loader-script-sandbox'],
+])('a Stape loader script URL in %s is found by its body and serves the workspace build', async (_name, scenarioName) => {
+  site.receivedGtmAuth.length = 0;
+  const r = await runCli(scenarioName, ['--gtm-override', await overrideFile()], testOrigin());
+  expect(r.code).not.toBe(2);
+  const { run, hits } = r.records!;
+  expect(run.gtmOverride!.applied).toEqual([
+    { way: 'loader', loader: 'stape', url: scriptLoaderUrl(), status: 200, loses: 'everything the loader does beyond fetching the container' },
+  ]);
+  expect(ga4(hits, 'workspace_only').length).toBeGreaterThan(0);
+  expect(meta(hits, 'AddToCart')).toEqual([]);
+  expect(site.receivedGtmAuth).toContain(auth);
+  await expectNoAuth(r);
+}, 90_000);
+
+test('a Stape loader script runs the published build without an override', async () => {
+  const r = await runCli('gtm-loader-script', [], testOrigin());
+  expect(r.code).not.toBe(2);
+  expect(ga4(r.records!.hits, 'container_event').length).toBeGreaterThan(0);
+  expect(ga4(r.records!.hits, 'workspace_only')).toEqual([]);
+}, 90_000);
+
+test('loader.match swaps any script URL that matches the regex and records way replace', async () => {
+  const r = await runCli('gtm-loader-script', ['--gtm-override', await overrideFile({ loader: { match: '/pwload-[a-z0-9]+\\.js\\?' } })], testOrigin());
+  expect(r.code).not.toBe(2);
+  const { run, hits } = r.records!;
+  expect(run.gtmOverride!.applied).toEqual([
+    { way: 'replace', url: scriptLoaderUrl(), status: 200, loses: 'everything the loader does beyond fetching the container' },
+  ]);
+  expect(ga4(hits, 'workspace_only').length).toBeGreaterThan(0);
+  await expectNoAuth(r);
+}, 90_000);
+
+test('a loader script for another container exits 2 and the message lists the script without query values', async () => {
+  const r = await runCli('gtm-loader-script', ['--gtm-override', await overrideFile({ container: 'GTM-PWOTHER1', loader: { match: 'does-not-match-anything' } })], testOrigin());
+  expect(r.code).toBe(2);
+  expect(r.stderr).toContain('no container request matched');
+  expect(r.stderr).toContain(`${site.sgtmUrl}/pwload-a1b2c3.js?k=…`);
+  expect(r.stderr).toContain('"loader": {"replace"');
+  expect(r.stderr).not.toContain(encodeURIComponent([...'/gtm.js?id=GTM-PWTEST1'].reverse().join('')));
+  expect(r.records!.run.gtmOverride!.applied).toEqual([]);
+  await expectNoAuth(r);
+}, 90_000);

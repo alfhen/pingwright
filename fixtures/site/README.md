@@ -88,6 +88,8 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 - `/container/echo`: the same. Its URL is clean; the workspace build adds `/container/echo-frame?gtm_auth=...` (an `unsafe-url` referrer policy) as a hidden iframe.
 - `/container/noversion`: loads `GTM-PWNOVER`, which is 404. The page still runs.
 - `/container/stape`: loads the container as `sgtmUrl/pwstape?pk=<base64 of /gtm.js?id=GTM-PWTEST1>`.
+- `/container/stape-script`: loads the container as a Stape custom loader script, `sgtmUrl/pwload-a1b2c3.js?k=<reversed path>`. The path is the reversed string `/gtm.js?id=GTM-PWTEST1`, not base64.
+- `/container/sandbox-script`: the same loader script inside a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/container-script/`).
 - `/container/sandbox`: a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/container/`) with the same Stape-style loader. Real gtag.js cannot run in an opaque-origin frame, so the frame sends the same GA4 and Meta events itself, as a custom pixel does. Its GA4 `dl` is the sandbox URL.
 
 ## Pinterest page

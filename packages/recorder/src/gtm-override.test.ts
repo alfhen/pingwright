@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { isGtmJsUrl, matchesGtmContainer, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
+import { bodyHasContainer, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
 
 const valid = { container: 'GTM-PWTEST1', gtmAuth: 'pwfake-auth-0001', gtmPreview: 'env-99' };
 
@@ -98,4 +98,36 @@ test('the other fields are validated and expectedTags default to an empty list',
 
 test('validation errors never repeat the auth value', () => {
   expect(() => parseGtmOverride({ ...valid, container: 'bad', gtmPreview: 'bad' })).toThrow(/^(?!.*pwfake-auth-0001)/s);
+});
+
+test('loader accepts replace, match or both, and refuses an empty or bad one', () => {
+  expect(parseGtmOverride({ ...valid, loader: { match: '/x-[a-z]+\\.js' } }).loader).toEqual({ match: '/x-[a-z]+\\.js' });
+  expect(parseGtmOverride({ ...valid, loader: { replace: 'https://load.example.com/a.js?k=1', match: 'a' } }).loader).toEqual({
+    replace: 'https://load.example.com/a.js?k=1',
+    match: 'a',
+  });
+  for (const loader of [{}, { match: '' }, { match: '(' }, { match: 5 }, { other: 1 }]) {
+    expect(() => parseGtmOverride({ ...valid, loader }), JSON.stringify(loader)).toThrow();
+  }
+});
+
+test('the loader pattern is tested against the script URL', () => {
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', { match: '/[a-z]+\\.js\\?' })).toBe(true);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.css', { match: '/[a-z]+\\.js\\?' })).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', {})).toBe(false);
+  expect(matchesLoaderPattern('https://load.example.com/abcd.js?x=1', undefined)).toBe(false);
+});
+
+test('only scripts with a query on non-Google hosts are loader candidates', () => {
+  expect(isLoaderCandidate('https://load.example.com/abcd.js?x=1', 'script')).toBe(true);
+  expect(isLoaderCandidate('https://load.example.com/abcd.js', 'script')).toBe(false);
+  expect(isLoaderCandidate('https://load.example.com/abcd.js?x=1', 'image')).toBe(false);
+  expect(isLoaderCandidate('https://www.googletagmanager.com/gtag/js?id=G-X', 'script')).toBe(false);
+  expect(isLoaderCandidate('https://load.example.com/abcd.php?x=1', 'script')).toBe(false);
+});
+
+test('the container check and the query-value hiding', () => {
+  expect(bodyHasContainer('x google_tag_manager["GTM-PWTEST1"] y', 'GTM-PWTEST1')).toBe(true);
+  expect(bodyHasContainer('nothing', 'GTM-PWTEST1')).toBe(false);
+  expect(withoutQueryValues('https://load.example.com/abcd.js?x9f=SECRET&x9f=2&b=3')).toBe('https://load.example.com/abcd.js?x9f=…&b=…');
 });

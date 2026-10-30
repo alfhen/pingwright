@@ -30,10 +30,13 @@ const pages: Record<string, string> = {
   '/container/noversion': 'container-noversion.html',
   '/container/stape': 'container-stape.html',
   '/container/sandbox': 'container-sandbox.html',
+  '/container/stape-script': 'container-stape-script.html',
+  '/container/sandbox-script': 'container-sandbox-script.html',
 };
 
 const pixelPath = '/web-pixels@0.0.0-fixture/sandbox/modern/';
 const containerPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container/';
+const containerScriptPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container-script/';
 
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -72,6 +75,8 @@ function shopHandler(config: string) {
       await sendFile(res, 'pixel.html');
     } else if (path === containerPixelPath) {
       await sendFile(res, 'container-frame.html');
+    } else if (path === containerScriptPixelPath) {
+      await sendFile(res, 'container-frame-script.html');
     } else if (page) {
       await sendFile(res, page);
     } else if (/^\/assets\/[a-z-]+\.(js|css)$/.test(path)) {
@@ -106,11 +111,19 @@ function containerHandler(thirdPartyUrl: string, received: string[]) {
   };
 }
 
+// The Stape-style loader script URL hides the path with a fixed transform that is not base64: the reversed string.
+function deobfuscate(value: string | null): string {
+  return value === null ? '' : [...value].reverse().join('');
+}
+
 function sgtmHandler(thirdPartyUrl: string, received: string[]) {
   return (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const real = url.pathname === '/pwstape' ? decodeBase64(url.searchParams.get('pk')) : '';
-    if (real.startsWith('/gtm.js')) {
+    const scriptReal = /^\/[a-z0-9-]+\.js$/.test(url.pathname) ? deobfuscate(url.searchParams.get('k')) : '';
+    if (scriptReal.startsWith('/gtm.js')) {
+      sendContainer(res, new URL(scriptReal, 'http://127.0.0.1').searchParams, thirdPartyUrl, received);
+    } else if (real.startsWith('/gtm.js')) {
       sendContainer(res, new URL(real, 'http://127.0.0.1').searchParams, thirdPartyUrl, received);
     } else if (real.startsWith('/gtag/js')) {
       res.writeHead(200, { 'content-type': 'text/javascript' });
