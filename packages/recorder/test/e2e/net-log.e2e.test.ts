@@ -7,18 +7,25 @@ import { launchRecorder } from '../../src/index.ts';
 
 let site: FixtureSite;
 let outDir: string;
+let tmpParent: string;
+const originalTmpdir = process.env.TMPDIR;
 
 beforeAll(async () => {
   site = await startFixtureSite();
   outDir = await mkdtemp(join(tmpdir(), 'pw-netlog-e2e-'));
+  tmpParent = await mkdtemp(join(tmpdir(), 'pw-netlog-parent-'));
+  process.env.TMPDIR = tmpParent;
 });
 
 afterAll(async () => {
+  if (originalTmpdir === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = originalTmpdir;
   await site?.close();
   await rm(outDir, { recursive: true, force: true });
+  await rm(tmpParent, { recursive: true, force: true });
 });
 
-const netLogDirs = async () => (await readdir(tmpdir())).filter((n) => n.startsWith('pingwright-netlog-'));
+const netLogDirs = async () => (await readdir(tmpParent)).filter((n) => n.startsWith('pingwright-netlog-'));
 
 test('the net log captures the unload hit of a sandboxed iframe on the fixture site', async () => {
   const before = await netLogDirs();
