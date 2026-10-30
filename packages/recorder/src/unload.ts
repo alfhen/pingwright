@@ -62,7 +62,7 @@ export const unloadInitScript = `(() => {
   };
   const enqueue = (method, url, resourceType, body, contentType) => {
     const { postData, headers } = serialise(body);
-    if (contentType && !headers['content-type']) headers['content-type'] = contentType;
+    if (contentType && !(typeof FormData !== 'undefined' && body instanceof FormData)) headers['content-type'] = contentType;
     const entry = {
       key: Math.random().toString(36).slice(2) + Date.now().toString(36),
       method,
@@ -94,6 +94,12 @@ export const unloadInitScript = `(() => {
       return request;
     },
   });
+  const nativeClone = NativeRequest.prototype.clone;
+  NativeRequest.prototype.clone = function () {
+    const copy = nativeClone.call(this);
+    if (requestBodies.has(this)) requestBodies.set(copy, requestBodies.get(this));
+    return copy;
+  };
   const nativeFetch = window.fetch;
   window.fetch = function (input, init) {
     const keepalive = (init && init.keepalive) || (input instanceof Request && input.keepalive);

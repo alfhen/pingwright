@@ -17,7 +17,7 @@
       body: body,
       keepalive: true,
     });
-    fetch(request).catch(function () {});
+    fetch(request.clone()).catch(function () {});
     var form = new FormData();
     form.append('id', '100000000000001');
     form.append('ev', 'PageView');
