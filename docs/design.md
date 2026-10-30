@@ -329,6 +329,8 @@ Every result includes record IDs, the run ID and the step label. Errors say what
 
 **Leak detection instead of masking.** Pingwright does not try to mask personal data. It flags it. Any email, phone number or hashed identifier in a recording that does not come from the run's identity is reported as `possibleRealData`, with the request and step. Detection runs after decoding (base64, URL encoding), so encoded values are found too. One gap: in image, script, stylesheet, font and media requests, a path segment of the form `/<64 hex>.<ext>` is not checked, because content-addressed assets use that name. A hashed identifier sent as a pixel file name in that form is therefore not flagged.
 
+The scanner never flags the run identity's own values; that rule wins over catching more encoded leaks. A base64 value glued to unseparated text (for example `abc<base64>xyz`) is not detected. Values separated by `/`, `_`, `-` or `+` are.
+
 Real data can still appear through:
 
 - Handoff steps, if a person uses a real account or card, or autofill inserts saved details.

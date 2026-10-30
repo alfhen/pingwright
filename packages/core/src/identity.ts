@@ -163,7 +163,6 @@ function isNonPersonalKey(text: string, index: number): boolean {
 }
 
 const MAX_BOUNDARIES = 8;
-const MAX_UNSEPARATED_PREFIX = 24;
 
 // Junk glued to a value shifts the base64 alignment and adds stray bytes, so pieces cut at '_' and '-' are tried
 // as well, each from offsets 0 to 3. Only the outermost boundaries are used to keep long separator runs linear.
@@ -184,7 +183,6 @@ function* glueCuts(piece: string): Generator<string> {
   if (last > first) yield piece.slice(first + 1, last);
 }
 
-// Longer unseparated junk is only tried when nothing nearer decodes, so a clean payload is never cut short.
 function* base64Decodes(text: string): Generator<string> {
   for (const token of text.match(BASE64_TOKEN) ?? []) {
     const pieces = new Set([token]);
@@ -196,25 +194,12 @@ function* base64Decodes(text: string): Generator<string> {
       return tryBase64Decode(candidate);
     };
     for (const piece of pieces) {
-      let found = false;
       for (const cut of glueCuts(piece)) {
         for (let offset = 0; offset <= 3; offset++) {
           const decoded = attempt(cut.slice(offset));
           if (decoded !== undefined) {
-            found = true;
             yield decoded;
           }
-        }
-      }
-      if (found) continue;
-      for (let offset = 4; offset <= MAX_UNSEPARATED_PREFIX + 3; offset++) {
-        const decoded = attempt(piece.slice(offset));
-        if (decoded !== undefined) yield decoded;
-      }
-      for (let offset = 0; offset <= 3; offset++) {
-        for (let trim = EDGE; trim <= MAX_UNSEPARATED_PREFIX + 3; trim++) {
-          const decoded = attempt(piece.slice(offset, piece.length - trim));
-          if (decoded !== undefined) yield decoded;
         }
       }
     }
@@ -295,8 +280,10 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
       if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
     }
     for (const m of variant.matchAll(BASE64_TOKEN)) {
-      const bare = m[0].replace(/=+$/, '');
-      if (isDigestToken(m[0]) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) add('hash', m[0]);
+      // A leading '+' is a joiner between values, not part of the digest.
+      const token = m[0].replace(/^\++/, '');
+      const bare = token.replace(/=+$/, '');
+      if (isDigestToken(token) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) add('hash', token);
     }
   }
   return [...found.values()];
