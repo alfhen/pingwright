@@ -108,4 +108,5 @@ test('a StepError from a run with a GTM override does not repeat the gtmAuth', a
   const scrubbed = await failure({ ...options, gtmOverride: { container: 'GTM-PWTEST1', gtmAuth: auth, gtmPreview: 'env-99' } });
   expect(scrubbed.name).toBe('StepError');
   expect(scrubbed.message).not.toContain(auth);
+  expect(scrubbed.stack ?? '').not.toContain(auth);
 });

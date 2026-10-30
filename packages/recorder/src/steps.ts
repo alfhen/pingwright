@@ -307,7 +307,11 @@ export async function recordScenario(options: RecordScenarioOptions): Promise<Ru
     const result = await recorder.close().catch(() => undefined);
     if (error instanceof StepError) {
       if (result) error.run = result;
-      if (rest.gtmOverride) error.message = new Scrubber(rest.gtmOverride.gtmAuth).text(error.message);
+      if (rest.gtmOverride) {
+        const scrubber = new Scrubber(rest.gtmOverride.gtmAuth);
+        error.message = scrubber.text(error.message);
+        if (error.stack) error.stack = scrubber.text(error.stack);
+      }
     }
     throw error;
   }
