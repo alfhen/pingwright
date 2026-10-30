@@ -31,6 +31,9 @@ export function findExternalRefs(file: string, content: string): string[] {
     for (const m of content.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) {
       if (external.test(m[1]!)) found.push(`url() ${m[1]}`);
     }
+    for (const m of content.matchAll(/@import\s+["']([^"']+)["']/gi)) {
+      if (external.test(m[1]!)) found.push(`@import ${m[1]}`);
+    }
   }
   return found;
 }
