@@ -115,3 +115,7 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 - The Meta pixel ID is `100000000000001`, not `000000000000001`. fbevents.js rejects IDs that start with 0 ("Invalid PixelID"), and then sends no `/tr` request. With this ID, `/tr` requests fire.
 - GA4 sends `page_view` at once but other events (`add_to_cart`, `purchase`) several seconds later, and drops them if the page navigates away first. Wait for them before navigating.
 - Real tags load from Google and Meta, so e2e runs need internet access. Stub collection paths with `context.route` so no hit leaves the machine.
+
+## Delayed hit page
+
+`/delayed-hit` needs no internet access. It sends one GA4 `page_view` image hit to `www.google-analytics.com` after `?delay=<ms>` (default 1500), with `?gcs=<value>` (default `G100`). Stub the collection path so no hit leaves the machine. Scenarios use it to land the same hit in different steps.
