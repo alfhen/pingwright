@@ -79,6 +79,8 @@ The warning covers numbers written as `+` and digits, and the common US shapes. 
 
 `identity.hashesMatch` reads hashed email and phone values from Meta and from the server container's data client (`sgtm`). On an `sgtm` hit it reads `user_data` (`email_address`, `phone_number`, `first_name`, `last_name`, `street`, `city`, `postal_code`, `country`, at the top level or under `address`) and shows each as the hit param `user_data.<field>`.
 
+On an sgtm hit, every hashed user_data field that the hit sends must match the run identity, not only email and phone. On a Meta hit, only the hashed email and phone are checked. A field that the hit sends empty, or does not send, is skipped. A city, postal code or country sent as plain text is skipped, because Google's user data format allows that. If one field is wrong, the rule fails, and the message names the hit params that do not match and the fields that do, for example `Not matching: user_data.country. Matching: email, first name and last name.` A site can add a value that the scenario did not type, such as the country of its default market. Declare that value under `identity`, for example `identity: { country: SE }`, so that its hash matches.
+
 To withdraw consent, reopen the banner with a `click` on the site's cookie settings link, then answer it with `consent: reject` (`consent: withdraw` is the same answer). Without the click the step fails with "banner not shown (withdraw needs the banner reopened first)".
 
 ```yaml
