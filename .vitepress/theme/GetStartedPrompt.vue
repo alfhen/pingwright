@@ -19,6 +19,7 @@ Rules for you:
 - Keep the \`runs/\` folder on my machine. Do not commit it or upload it.`;
 
 const status = ref('');
+let clearTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function copy() {
   try {
@@ -27,7 +28,8 @@ async function copy() {
   } catch {
     status.value = 'Copy did not work. Select the prompt below and copy it.';
   }
-  setTimeout(() => (status.value = ''), 4000);
+  clearTimeout(clearTimer);
+  clearTimer = setTimeout(() => (status.value = ''), 4000);
 }
 </script>
 
