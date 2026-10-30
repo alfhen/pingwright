@@ -36,7 +36,6 @@ const pages: Record<string, string> = {
   '/container/redirect-script': 'container-redirect-script.html',
 };
 
-const pixelPath = '/web-pixels@0.0.0-fixture/sandbox/modern/';
 const containerPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container/';
 const containerScriptPixelPath = '/web-pixels@0.0.0-fixture/sandbox/container-script/';
 
@@ -73,7 +72,7 @@ function shopHandler(config: string) {
     if (path === '/fixture-config.js') {
       res.writeHead(200, { 'content-type': contentTypes['.js']!, 'cache-control': 'no-store' });
       res.end(config);
-    } else if (path === pixelPath) {
+    } else if (/^\/web-pixels@[\w.-]+\/sandbox\/modern\/$/.test(path)) {
       await sendFile(res, 'pixel.html');
     } else if (path === containerPixelPath) {
       await sendFile(res, 'container-frame.html');

@@ -130,7 +130,8 @@
     var frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts allow-forms');
     frame.id = 'pw-web-pixel';
-    frame.src = '/web-pixels@0.0.0-fixture/sandbox/modern/';
+    var hash = new URLSearchParams(location.search).get('pixel') || '0.0.0-fixture';
+    frame.src = '/web-pixels@' + hash + '/sandbox/modern/';
     frame.style.cssText = 'width:0;height:0;border:0;position:absolute';
     document.body.appendChild(frame);
   });
