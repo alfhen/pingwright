@@ -7,7 +7,7 @@ const empty: DiffResult = { warnings: [], added: [], removed: [], changed: [], c
 test('labels a count mismatch under its event', () => {
   const key = { epoch: 'undecided', vendor: 'ga4', event: 'page_view' };
   const text = formatDiff(
-    { ...empty, removed: [{ key, hitId: 'hit_2', t: 1, step: '' }], countMismatches: [{ key, a: 2, b: 1 }] },
+    { ...empty, removed: [{ key, hitId: 'hit_2', t: 1, step: '', page: null }], countMismatches: [{ key, a: 2, b: 1 }] },
     'a.jsonl',
     'b.jsonl',
   );
