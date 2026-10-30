@@ -493,10 +493,11 @@ export const SECRET_FIELD = /card|cvc|cvv|iban|password|cc-/i;
 const PHONE_SHAPE = /^(?:\+\d{8,15}|\+?[\d\s]*\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\+?\d{0,3}[-.\s]?\d{3}[-.\s]\d{3}[-.\s]\d{4})$/;
 
 // Digits only, country code first. Ranges set aside for fiction:
-// US 555-0100 to 555-0199 (NANPA), Sweden 070-174 06 05 to 06 99 (PTS),
+// US 555-0100 to 555-0199 (NANPA, https://www.nationalnanpa.com/),
+// Sweden 070-174 06 05 to 06 99 (PTS, https://pts.se/),
 // UK drama numbers (Ofcom, https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama).
 const FICTIONAL_PHONE = [
-  /55501\d\d$/,
+  /^1?\d{3}55501\d\d$/,
   /^4670174(?:060[5-9]|06[1-9]\d)$/,
   /^447700900\d{3}$/,
   /^442079460\d{3}$/,

@@ -71,8 +71,8 @@ identity:
 
 Use fictional numbers and `example.com` emails only. A phone number inside one of these ranges set aside for fiction gets no warning, and any other number does:
 
-- US: 555-0100 to 555-0199 (NANPA).
-- Sweden: 070-174 06 05 to 070-174 06 99 (PTS).
+- US: 555-0100 to 555-0199, from [NANPA](https://www.nationalnanpa.com/).
+- Sweden: 070-174 06 05 to 070-174 06 99, from [PTS](https://pts.se/).
 - UK, from the [Ofcom drama numbers](https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama): 07700 900000 to 900999, 020 7946 0000 to 0999, 01632 960000 to 960999, and 0xxx 496 0000 to 0999 for Leeds, Sheffield, Nottingham, Leicester, Bristol, Reading, Birmingham, Edinburgh, Glasgow, Liverpool and Manchester.
 
 The warning covers numbers written as `+` and digits, and the common US shapes. Values that a person types during a `handoff` step are unknown to Pingwright. To have them count as the run identity, declare the same value under `identity`, or the run reports their hashes as `possibleRealData`.
