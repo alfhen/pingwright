@@ -359,6 +359,8 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const wrong: string[] = [];
   const unhashed: string[] = [];
   const wrongFields = new Set<string>();
+  const wrongParams = new Set<string>();
+  const matchedFields = new Set<string>();
   const unhashedFields = new Set<string>();
   for (const hit of hits) {
     let seen = false;
@@ -378,7 +380,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       // Google's user data format sends city, postal code and country as plain text.
       if (PLAIN_ADDRESS_PARAMS.has(name) && !DIGEST_SHAPE.test(value)) continue;
       seen = true;
-      if (known.has(value)) continue;
+      if (known.has(value)) {
+        matchedFields.add(fieldLabel(name));
+        continue;
+      }
       bad = true;
       const typed = value.trim().toLowerCase();
       if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) {
@@ -386,6 +391,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
         unhashedFields.add(fieldLabel(name));
       } else {
         wrongFields.add(fieldLabel(name));
+        wrongParams.add(name);
       }
     }
     if (seen) withHash.push(hit.id);
@@ -399,7 +405,12 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     return { pass: false, evidence: unhashed, headline: UNMATCHED_HEADLINE, message: `${they} carried an unhashed ${joinLabels(unhashedFields)}${of(unhashed.length)}.` };
   }
   if (wrong.length) {
-    return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message: `the hashed ${joinLabels(wrongFields)} values ${they} carried do not match the run identity${of(wrong.length)}.` };
+    const matching = new Set([...matchedFields].filter((f) => !wrongFields.has(f)));
+    const message =
+      `the hashed ${joinLabels(wrongFields)} values ${they} carried do not match the run identity${of(wrong.length)}. ` +
+      `Not matching: ${[...wrongParams].join(', ')}.` +
+      (matching.size ? ` Matching: ${joinLabels(matching)}.` : '');
+    return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message };
   }
   if (!withHash.length) {
     return { pass: false, evidence: hits.map((h) => h.id), message: `${several ? 'none of them carried any' : 'it carried no'} hashed email, phone, name or address value.` };
