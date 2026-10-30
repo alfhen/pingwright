@@ -171,7 +171,7 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 | `ga4` | Event name (`en`), parameters (`ep.*`, `epn.*`), `uid` presence, `cid`, measurement ID (`tid`), batched bodies. Matches `/g/collect` under a path prefix too. Consent from `gcs` and `gcd`. |
 | `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts, and the `googletagmanager.com/td` collection endpoint. Reads user id (`userId` or `uid`), `oid` as `transaction_id`, and `ep.`/`epn.` params. Multi-hop chains are recorded as linked requests. |
 | `meta` | `facebook.com/tr`: `ev`, `id`, `eid`, every `ud[*]` field, and multipart beacon bodies. |
-| `pinterest` | `ct.pinterest.com/v3/` and `/user/`: `event`, `tid`, `ed` (event data, `event_id` as `eventId`), `pd.em` (hashed email) and `ad.loc` (page). In `stub` mode every path on `ct.pinterest.com` is stubbed. |
+| `pinterest` | `ct.pinterest.com/v3/` and `/user/`: `event` (a `/user/` request without one, the user-match call that carries `pd.em`, is named `user`), `tid`, `ed` (event data, `event_id` as `eventId`), `pd.em` (hashed email) and `ad.loc` (page). In `stub` mode every path on `ct.pinterest.com` is stubbed. |
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
 | `tiktok`, `criteo`, `snapchat`, `linkedin` | Later. |
 | `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` or `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. |

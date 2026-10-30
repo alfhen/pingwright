@@ -1,0 +1,7 @@
+start: /pinterest
+steps:
+  - wait: 4s
+expect:
+  must:
+    - { vendor: pinterest, event: user }
+options: { seed: 1 }

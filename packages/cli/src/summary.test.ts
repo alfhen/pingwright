@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { countHits, exitCodeFor, formatSummary, type Summary } from './summary.ts';
+import { countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
 import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
@@ -123,4 +123,21 @@ test('prints a scenario warning to stderr before running', async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('epoch durations are rounded: ms under a second, seconds with one decimal above', () => {
+  expect(formatDuration(850)).toBe('850 ms');
+  expect(formatDuration(849.6)).toBe('850 ms');
+  expect(formatDuration(5628.000244140625)).toBe('5.6 s');
+  expect(formatDuration(1000)).toBe('1.0 s');
+  const summary: Summary = {
+    runId: 'run_1',
+    path: 'runs/run_1.jsonl',
+    pass: true,
+    hits: {},
+    epochs: [{ label: 'undecided', startT: 100, endT: 5728.000244140625 }],
+    flags: [],
+    results: [],
+  };
+  expect(formatSummary(summary)).toContain('  undecided (5.6 s)');
 });

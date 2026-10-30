@@ -230,3 +230,15 @@ test('run --help prints the help of run', async () => {
   expect(r.code).toBe(0);
   expect(r.stdout).toContain('Usage: pingwright run <scenario.yml>');
 });
+
+test('text summary names a Pinterest /user/ hit without an event', async () => {
+  const r = await runCli(['run', scenario('pinterest-user'), '--site', site.url, '--out', outDir]);
+  expect(r.stdout).toMatch(/pinterest: .*\buser x1\b/);
+  expect(r.stdout).not.toContain('(no event)');
+}, 90_000);
+
+test('text summary rounds epoch durations', async () => {
+  const r = await runCli(['run', scenario('accept'), '--site', site.url, '--out', outDir]);
+  expect(r.stdout).toMatch(/\n {2}undecided \(\d+(\.\d)? (s|ms)\)\n/);
+  expect(r.stdout).not.toMatch(/\d+\.\d{2,} ?(ms|s)\)/);
+}, 90_000);

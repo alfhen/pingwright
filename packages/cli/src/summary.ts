@@ -77,6 +77,10 @@ function parseUrl(text: string | undefined): URL | undefined {
   }
 }
 
+export function formatDuration(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
   lines.push('Hits');
@@ -88,7 +92,7 @@ export function formatSummary(summary: Summary): string {
   lines.push('Consent epochs');
   for (const e of summary.epochs) {
     const label = e.label === 'withdrawn' && e.state ? `withdrawn, ${e.state}` : e.label;
-    lines.push(`  ${label} (${e.endT === null ? 'to end' : `${e.endT - e.startT} ms`})`);
+    lines.push(`  ${label} (${e.endT === null ? 'to end' : formatDuration(e.endT - e.startT)})`);
   }
   lines.push('Flags');
   if (summary.flags.length === 0) lines.push('  none');
