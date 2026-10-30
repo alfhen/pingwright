@@ -56,6 +56,13 @@ test('a literal fill value can match a name or address hash, but never an email 
   expect(check({ email_address: hashEmail('other@example.com').hex }, withBerlin).pass).toBe(false);
 });
 
+test('plain city, postal code and country beside hashed fields do not fail hashesMatch', () => {
+  const withDe = { ...identity, extra: ['DE'] };
+  expect(check({ ...good, city: 'Berlin', postal_code: '10115', country: 'DE' }).pass).toBe(true);
+  expect(check({ ...good, postal_code: '10115', country: 'DE' }, withDe).pass).toBe(true);
+  expect(check({ ...good, postal_code: sha256('99999').hex }).pass).toBe(false);
+});
+
 test('hashes of literal fill values are not possibleRealData, and other hashes still are', () => {
   const withBerlin = { ...identity, extra: ['Berlin'] };
   const berlin = sgtmHit({ city: sha256('berlin').hex });

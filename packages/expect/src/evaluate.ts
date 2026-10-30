@@ -286,6 +286,9 @@ const FIELD_PARAMS: Record<string, (identity: Identity) => string> = {
   'user_data.country': (i) => i.country,
 };
 
+const PLAIN_ADDRESS_PARAMS = new Set(['user_data.city', 'user_data.postal_code', 'user_data.country']);
+const DIGEST_SHAPE = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/i;
+
 function allForms(h: HashForms): string[] {
   return [h.hex, h.base64, h.base64url];
 }
@@ -318,6 +321,8 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
             ? fieldHashes(...accepted)
             : undefined;
       if (!known || !value) continue;
+      // Google's user data format sends city, postal code and country as plain text.
+      if (PLAIN_ADDRESS_PARAMS.has(name) && !DIGEST_SHAPE.test(value)) continue;
       seen = true;
       if (known.has(value)) continue;
       bad = true;
