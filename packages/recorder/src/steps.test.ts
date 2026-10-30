@@ -104,6 +104,8 @@ describe('the default cart check', () => {
     const add = request({ id: 'req_1' as Request['id'], method: 'POST', url: 'https://shop.example.com/cart/add.js' });
     expect(check([add], [], [{ requestId: 'req_1', status: 422 }])).toBe(false);
     expect(check([add], [], [{ requestId: 'req_1', status: 200 }])).toBe(true);
+    expect(check([add], [], [{ requestId: 'req_1', status: 302 }])).toBe(true);
+    expect(check([add], [], [{ requestId: 'req_1', status: 500 }])).toBe(false);
     expect(check([add], [], [])).toBe(false);
     expect(check([add], [], [{ requestId: 'other', status: 200 }])).toBe(false);
   });

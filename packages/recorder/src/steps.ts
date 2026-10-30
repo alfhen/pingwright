@@ -45,14 +45,14 @@ function isCartRequest(r: Request): boolean {
 /**
  * A cart request (Shopify `/cart/add`, GET `/cart/add?id=`, Hydrogen POST `/cart`, Magento `/checkout/cart/add`,
  * WooCommerce `?wc-ajax=add_to_cart`, a Storefront cart mutation) or an add_to_cart dataLayer event.
- * A cart request counts once its response is recorded with a 2xx status; a pending, failed or non-2xx one does not. `pattern` is a regular expression for URLs that also count.
+ * A cart request counts once its response is recorded with a 2xx or 3xx status (a form POST answers with a redirect); a pending, failed, 4xx or 5xx one does not. `pattern` is a regular expression for URLs that also count.
  */
 export function createCartCheck(pattern?: string): CartCheck {
   const custom = pattern === undefined ? undefined : new RegExp(pattern);
   return ({ requests, responses, dataLayerEvents }) => {
     const accepted = (r: Request): boolean => {
       const statuses = responses.filter((x) => x.requestId === r.id).map((x) => x.status);
-      return statuses.some((status) => status >= 200 && status < 300);
+      return statuses.some((status) => status >= 200 && status < 400);
     };
     return (
       dataLayerEvents.some((e) => e.event !== null && CART_EVENT.test(e.event)) ||
