@@ -40,7 +40,7 @@ const US: CountryFormat = {
 // The Swedish regulator reserves 070-174 06 05 to 070-174 06 99 for fiction.
 const SE: CountryFormat = {
   locale: [sv, en, base],
-  zip: (faker) => faker.string.numeric(3) + ' ' + faker.string.numeric(2),
+  zip: (faker) => String(faker.number.int({ min: 100, max: 984 })) + ' ' + faker.string.numeric(2),
   phone: (faker) => `+4670174${String(faker.number.int({ min: 605, max: 699 })).padStart(4, '0')}`,
   nationalDigits: (digits) => '0' + digits.slice(2),
 };

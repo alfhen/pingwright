@@ -374,7 +374,7 @@ describe('scan fixes', () => {
     for (let seed = 1; seed <= 200; seed++) {
       const i = createIdentity(seed, { country: 'SE' });
       expect(i.country).toBe('SE');
-      expect(i.zip).toMatch(/^\d{3} \d{2}$/);
+      expect(i.zip).toMatch(/^[1-9]\d{2} \d{2}$/);
       expect(i.phone).toMatch(/^\+467017406(0[5-9]|[1-9]\d)$/);
       const n = Number(i.phone.slice(-4));
       expect(n).toBeGreaterThanOrEqual(605);
