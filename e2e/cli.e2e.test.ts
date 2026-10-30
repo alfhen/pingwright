@@ -84,15 +84,21 @@ test('undecided: hits per vendor, denied consent, flags, one epoch', async () =>
 }, 90_000);
 
 test('text summary groups sandboxPageUrl flags into one line per vendor', async () => {
+  const json = await run('checkout');
+  const flagged = json.records!.flags.filter((f) => f.kind === 'sandboxPageUrl');
+  expect(flagged.length).toBeGreaterThan(1);
   const out = await new Promise<string>((resolve) => {
-    execFile(process.execPath, [cli, 'run', scenario('undecided'), '--site', site.url, '--out', outDir], { cwd: root }, (_e, stdout) => resolve(stdout));
+    execFile(process.execPath, [cli, 'run', scenario('checkout'), '--site', site.url, '--out', outDir], { cwd: root }, (_e, stdout) => resolve(stdout));
   });
   const lines = out.split('\n').filter((l) => l.startsWith('  sandboxPageUrl:'));
   expect(lines.length).toBeGreaterThan(0);
+  expect(lines.length).toBeLessThan(flagged.length);
   expect(lines.every((l) => /^ {2}sandboxPageUrl: \S+ x\d+ \(\/\S+/.test(l))).toBe(true);
   expect(new Set(lines.map((l) => l.split(' ')[3])).size).toBe(lines.length);
+  const total = lines.reduce((n, l) => n + Number(/ x(\d+) /.exec(l)![1]), 0);
+  expect(total).toBe(flagged.length);
   expect(out).not.toContain('as the page');
-}, 90_000);
+}, 180_000);
 
 test('accept: granted epoch, add_to_cart granted', async () => {
   const r = await run('accept');
