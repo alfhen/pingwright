@@ -121,6 +121,12 @@ test('reader rejects a file that does not start with a run', async () => {
   await expect(readRun(path)).rejects.toThrow('first record must be a run');
 });
 
+test('reader rejects a run record with no required fields', async () => {
+  const path = join(dir, 'empty-run.jsonl');
+  await writeFile(path, '{"type":"run"}\n');
+  await expect(readRun(path)).rejects.toThrow(`${path}:1: run record is missing id, scenario, site, startedAt`);
+});
+
 test('reader reports the line of a non-object JSON record', async () => {
   const path = join(dir, 'scalar.jsonl');
   await writeFile(path, JSON.stringify(makeRun()) + '\nnull\n');

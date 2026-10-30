@@ -105,6 +105,15 @@ function upsert<T extends { id: string }>(list: T[], record: T): void {
   else list[at] = record;
 }
 
+function missingRunFields(run: Run): string[] {
+  const missing: string[] = [];
+  if (typeof run.id !== 'string' || !isId(run.id, 'run')) missing.push('id');
+  if (typeof run.scenario !== 'string') missing.push('scenario');
+  if (typeof run.site !== 'string') missing.push('site');
+  if (typeof run.startedAt !== 'number') missing.push('startedAt');
+  return missing;
+}
+
 export interface ReadRunOptions {
   /** Receives problems that do not stop the read. Defaults to `console.warn`. */
   onWarning?: (message: string) => void;
@@ -133,6 +142,8 @@ export async function readRun(path: string, options: ReadRunOptions = {}): Promi
     }
     if (!out) {
       if (record.type !== 'run') throw new Error(`${path}:${lineNo}: first record must be a run`);
+      const missing = missingRunFields(record);
+      if (missing.length) throw new Error(`${path}:${lineNo}: run record is missing ${missing.join(', ')}`);
       out = emptyRecords(record);
       const version = record.recordSchemaVersion;
       if (version === undefined) {

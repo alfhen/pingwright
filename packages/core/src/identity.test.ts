@@ -366,8 +366,26 @@ describe('scan fixes', () => {
     expect(scan(`ud[em]=${h}`, id)).toEqual([{ kind: 'hash', value: h }]);
   });
 
-  it('keeps the country option as a label only (#32)', () => {
+  it('keeps US-shaped data for a country without a format (#32)', () => {
     expect(createIdentity(1, { country: 'DK' }).phone).toMatch(/^\+1/);
+  });
+
+  it('localises zip and phone for Sweden (#32)', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const i = createIdentity(seed, { country: 'SE' });
+      expect(i.country).toBe('SE');
+      expect(i.zip).toMatch(/^[1-9]\d{2} \d{2}$/);
+      expect(i.phone).toMatch(/^\+467017406(0[5-9]|[1-9]\d)$/);
+      const n = Number(i.phone.slice(-4));
+      expect(n).toBeGreaterThanOrEqual(605);
+      expect(n).toBeLessThanOrEqual(699);
+      expect(i.email).toMatch(/^[a-z0-9.]+@example\.com$/);
+    }
+  });
+
+  it('does not flag a Swedish identity\'s own values', () => {
+    const i = createIdentity(3, { country: 'SE' });
+    expect(scan(`em=${i.email}&ph=${i.phone}&zp=${i.zip}`, i)).toEqual([]);
   });
 });
 
@@ -394,6 +412,19 @@ describe('own identity is never flagged', () => {
       }
     }
   }, 30_000);
+
+  it('holds for a Swedish identity in national and E.164 phone forms', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const me = createIdentity(seed, { country: 'SE' });
+      const d = me.phone.slice(3);
+      const national = [`0${d}`, `0${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5)}`, `0${d.slice(0, 2)}-${d.slice(2, 5)} ${d.slice(5)}`, `0${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 7)} ${d.slice(7)}`];
+      for (const form of [me.phone, ...national]) {
+        for (const text of [`ph=${form}`, `a=${form}&b=1`, JSON.stringify({ phone: form })]) {
+          expect(scan(text, me), `${seed} ${text}`).toEqual([]);
+        }
+      }
+    }
+  });
 
   it('holds for own base64 emails with random junk glued on', () => {
     const junk = 'OoAg2yme Mu0gcWUW Ag2mGaqW ~ZW + _x- 9Zq'.split(' ');

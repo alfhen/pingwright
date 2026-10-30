@@ -72,6 +72,17 @@ describe('consentModeChanges', () => {
 });
 
 describe('buildEpochs', () => {
+  test('a default after the first decision does not leak into later states when the caller omits firstDecisionT', () => {
+    const modes = consentModeChanges([
+      push(10, 'default', denied),
+      push(5000, 'default', { analytics_storage: 'granted' }),
+      push(20000, 'update', { ad_storage: 'granted' }),
+    ]);
+    const epochs = buildEpochs([{ t: 1000, tEnd: 1010, action: 'reject' }], modes, { startT: 0 });
+    expect(epochs.at(-1)?.state.analytics).toBe('denied');
+    expect(epochs.at(-1)?.state.ads).toBe('granted');
+  });
+
   test('undecided only', () => {
     const epochs = buildEpochs([], consentModeChanges([push(10, 'default', denied)]), { startT: 0 });
     expect(epochs).toHaveLength(1);
@@ -403,5 +414,14 @@ describe('later Consent Mode defaults', () => {
       const modes = consentModeChanges([push(10, 'default', granted), push(1000, 'update', denied)]);
       expect(buildEpochs([{ t: 1000, action: 'reject' }], modes, { startT: 0 }).map((e) => e.label)).toEqual(['undecided', 'denied']);
     });
+  });
+});
+
+describe('buildEpochs same-tick default', () => {
+  test('keeps a default pushed in the same tick as the first update', () => {
+    const changes = consentModeChanges([push(10, 'update', granted), push(10, 'default', denied)]);
+    const epochs = buildEpochs([], changes, { startT: 0 });
+    expect(epochs[0]?.state).toEqual({ analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' });
+    expect(epochs[1]?.label).toBe('granted');
   });
 });
