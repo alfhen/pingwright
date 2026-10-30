@@ -528,3 +528,10 @@ test('ids.hashes.* reads hashed ids and whether they match the identity', () => 
   expect(rule(`expect:\n  must:\n    - { ids.hashes.fn: absent }`, recs).pass).toBe(true);
   expect(rule(`expect:\n  mustNot:\n    - { ids.hashes.em: present }`, recs).pass).toBe(false);
 });
+
+test('ids.hashes.*.matchesIdentity: null means not compared and satisfies neither true nor false', () => {
+  const recs = [hit({ ids: { hashes: { em: { present: true, matchesIdentity: null } } } })];
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.em.matchesIdentity: true }`, recs).pass).toBe(false);
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.em.matchesIdentity: false }`, recs).pass).toBe(false);
+  expect(rule(`expect:\n  must:\n    - { ids.hashes.em: present }`, recs).pass).toBe(true);
+});

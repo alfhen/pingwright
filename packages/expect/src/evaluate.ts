@@ -150,11 +150,13 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
   }
   for (const [name, want] of Object.entries(f.ids)) {
     const have = idValue(hit, name);
-    const present = have !== undefined && have !== false;
+    const compared = name.endsWith('.matchesIdentity');
+    const present = compared ? have === true : have !== undefined && have !== false;
+    const absent = compared ? have === false : !present;
     if (want === 'present') {
       if (!present) return false;
     } else if (want === 'absent') {
-      if (present) return false;
+      if (!absent) return false;
     } else if (String(have) !== want) return false;
   }
   if (f.page) {
