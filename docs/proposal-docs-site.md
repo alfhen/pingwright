@@ -11,7 +11,7 @@ Status: proposal (#224). Nothing is built yet. If it is accepted, the PR plan in
 - No analytics, no cookies, no forms, no third-party scripts, no fonts from a CDN.
 - No Pingwright-hosted service. The site is documentation only.
 - Nothing in `packages/` points at `pingwright.dev`. The collector origin stays `collector.pingwright.invalid`.
-- No new content in this work. Pages are the existing files.
+- No change to what the existing docs say, beyond the writing rules in §8. New pages are a landing page and short guides (D6).
 - No change to how releases are made. The site does not publish anything to npm.
 
 ## 2. Hosting
@@ -264,6 +264,15 @@ What PRs do: the VitePress config, the workflow, the dogfood check, the post-dep
 - The site's dependencies are root `devDependencies`. They never enter the CLI's `dist/` or its tarball (`files` is `dist`, `README.md` and `LICENSE`).
 - `.vitepress/cache` and `.vitepress/dist` go in `.gitignore`.
 
+**Writing.** Every page a reader sees follows these rules:
+
+- Write in Simplified Technical English (ASD-STE100 style): short sentences, one idea per sentence, active voice, common words. Define a term the first time it appears, then use only that term.
+- Explain in simple terms first. Put the technical detail after the plain explanation, not instead of it.
+- Prefer a picture to a paragraph. Show flows, consent states and what a run records as diagrams.
+- Diagrams are hand-written SVG files in `docs/images/`, in the brand colours from `brand/README.md`, with a text alternative. No diagram library that runs in the browser.
+- Run the `humanizer` skill on all new or changed prose before the PR, and fix what it finds.
+- The reviewer checks the writing as well as the facts.
+
 ## 9. PR plan
 
 Each entry is one small PR, as in `docs/plan-0.2.md`.
@@ -288,6 +297,11 @@ Acceptance: the `curl` checks in §4 pass on the live site. The weekly job runs 
 **D5. Link the site.** Needs M5.
 Touches: `README.md`, `docs/release.md`.
 Acceptance: the README links to `https://pingwright.dev`. The release steps say the site follows `main`.
+
+**D6. Landing page and guides.** Needs D1.
+Touches: `docs/index.md` or the VitePress home page, `docs/guide/*.md`, `docs/images/*.svg`, `.vitepress/config.ts` (sidebar), the Writing section of `AGENTS.md`.
+A landing page and three short guides: what Pingwright checks and why, your first run, and reading a run's results. Each guide has at least one diagram. The guides follow the writing rules in §8 and link to `cli.md` and `design.md` for detail.
+Acceptance: the pages build and pass the link check. Each diagram has a text alternative and renders in light and dark mode. The review finds no jargon left unexplained.
 
 D3 and D4 both touch the workflow, so they go one after the other.
 
