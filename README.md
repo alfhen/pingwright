@@ -4,7 +4,7 @@ Agent-first testing for tags and consent. Pingwright plays a visitor in a real b
 
 > **Status: 0.1 (`0.1.0`).** 0.1 plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
-> **In 0.1:** `pingwright run` with `stub` and `live` network modes; consent epochs; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
+> **In 0.1:** `pingwright run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
 > **Not built yet:** MCP server, `diff`, `report`, GTM reporters and overrides, `server` network mode, Shopify bridge, Pinterest and Microsoft UET decoders, Firefox and WebKit.
 
