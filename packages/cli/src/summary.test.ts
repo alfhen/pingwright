@@ -165,3 +165,39 @@ test('a failed warn result does not change the exit code', () => {
   expect(exitCodeFor([result(true), warn])).toBe(0);
   expect(exitCodeFor([warn, result(false)])).toBe(1);
 });
+
+const base: Summary = { runId: 'run_1', path: 'runs/run_1.jsonl', pass: true, ok: true, hits: {}, epochs: [], flags: [], results: [] };
+
+test('a failed warn result prints a WARN line, its message and a warning count', () => {
+  const text = formatSummary({
+    ...base,
+    pass: false,
+    results: [
+      { expectation: 'a', pass: true, message: undefined, evidence: [] },
+      { expectation: 'b', pass: false, severity: 'warn', message: 'b went wrong', evidence: [] },
+    ],
+  });
+  expect(text).toContain('  WARN b\n       b went wrong');
+  expect(text).toContain('Result: pass with 1 warning');
+  const mixed = formatSummary({
+    ...base,
+    results: [
+      { expectation: 'a', pass: false, message: 'x', evidence: [] },
+      { expectation: 'b', pass: false, severity: 'warn', message: 'y', evidence: [] },
+    ],
+  });
+  expect(mixed).toContain('Result: fail (1 of 2) with 1 warning');
+});
+
+test('possibleRealData flags collapse into one counted line', () => {
+  const flags = Array.from({ length: 4 }, (_, i) => ({ kind: 'possibleRealData', detail: `request req_${i} carries 1 email value(s)` }));
+  const text = formatSummary({ ...base, flags });
+  expect(text).toContain('  possibleRealData: x4');
+  expect(text).not.toContain('req_0');
+});
+
+test('sandboxPageUrl shows one example path', () => {
+  const flags = ['a', 'b', 'c'].map((p) => ({ kind: 'sandboxPageUrl', detail: `meta received https://shop.example.com/${p}/sandbox/x as the page` }));
+  const text = formatSummary({ ...base, flags });
+  expect(text).toContain('sandboxPageUrl: meta x3 (/a/sandbox/x and 2 more)');
+});

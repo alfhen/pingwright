@@ -15,6 +15,7 @@ export interface Summary {
 
 const EVIDENCE_CAP = 5;
 const PATH_EXAMPLES = 3;
+const SANDBOX_PATH_EXAMPLES = 1;
 const GROUPED_KINDS = new Set(['unknownDestination', 'firstPartySubdomain']);
 
 export function countHits(hits: RunRecords['hits']): Summary['hits'] {
@@ -57,7 +58,12 @@ export function exitCodeFor(results: Result[]): 0 | 1 {
 function formatFlags(flags: Summary['flags']): string[] {
   const lines: string[] = [];
   const groups = new Map<string, { kind: string; host: string; count: number; paths: Set<string> }>();
+  let realData = 0;
   for (const f of flags) {
+    if (f.kind === 'possibleRealData') {
+      realData += 1;
+      continue;
+    }
     const target = groupTarget(f);
     if (!target) {
       lines.push(`  ${f.kind}: ${f.detail}`);
@@ -71,10 +77,11 @@ function formatFlags(flags: Summary['flags']): string[] {
     groups.set(key, group);
   }
   for (const { kind, host, count, paths } of groups.values()) {
-    const shown = [...paths].slice(0, PATH_EXAMPLES);
+    const shown = [...paths].slice(0, kind === 'sandboxPageUrl' ? SANDBOX_PATH_EXAMPLES : PATH_EXAMPLES);
     const more = paths.size - shown.length;
     lines.push(`  ${kind}: ${host} x${count} (${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''})`);
   }
+  if (realData > 0) lines.push(`  possibleRealData: x${realData}`);
   return lines;
 }
 
