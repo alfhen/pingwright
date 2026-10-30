@@ -44,13 +44,12 @@ beforeAll(async () => {
   const result = build();
   expect(result.status, result.stdout + result.stderr).toBe(0);
   preview = spawn(process.execPath, [vitepress, 'preview', '--port', String(port), '--host', '127.0.0.1'], { cwd: root });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(`http://127.0.0.1:${port}/`)).ok) break;
-    } catch {
-      await new Promise((r) => setTimeout(r, 200));
-    }
+  let ready = false;
+  for (let i = 0; i < 50 && !ready; i++) {
+    ready = await fetch(`http://127.0.0.1:${port}/`).then((r) => r.ok, () => false);
+    if (!ready) await new Promise((r) => setTimeout(r, 200));
   }
+  if (!ready) throw new Error(`vitepress preview did not start on port ${port}`);
   browser = await chromium.launch({ channel: 'chromium' });
 });
 
@@ -88,4 +87,18 @@ test('search finds a word from docs/cli.md', async () => {
   await hit.waitFor();
   expect(await hit.getAttribute('href')).toContain('/docs/cli');
   await context.close();
+});
+
+test('built pages make no requests to other hosts', async () => {
+  const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
+  const outside: string[] = [];
+  context.on('request', (request) => {
+    if (new URL(request.url()).hostname !== '127.0.0.1') outside.push(request.url());
+  });
+  const page = await context.newPage();
+  for (const path of ['/', '/docs/cli', '/docs/design', '/docs/shopify-checkout', '/docs/release']) {
+    await page.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: 'networkidle' });
+  }
+  await context.close();
+  expect(outside).toEqual([]);
 });
