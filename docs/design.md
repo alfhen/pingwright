@@ -1,6 +1,6 @@
 # Pingwright design
 
-Status: revision 6, for release 0.1.0. Milestone 0.1 is built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0.
+Status: revision 7, for release 0.2.0-rc.1. Milestones 0.1 and 0.2 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2.
 
 ## 1. Problem
 
@@ -387,7 +387,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 ## 15. Milestones
 
 1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
-2. **0.2:** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
+2. **0.2 (built, `0.2.0-rc.1`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
 5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
@@ -416,6 +416,20 @@ Where the code in 0.1 differs from the design above:
 - **Hits are not linked to `TagReport`s.** No `TagReport` is written (see the rules item above).
 - **There is no run ID cookie and no run token.** Server-side correlation by run ID does not exist.
 - **Verification used Chromium 156.0.8078.4 and Playwright 1.64.1.** Other versions are untested.
+
+### 15.2 Differences in 0.2
+
+Where the code in 0.2 differs from the design above. Section 15.1 still applies, except where noted.
+
+- **`Run.recordSchemaVersion` is 1.** A record with no version reads as version 0. A newer version reads with a warning.
+- **GTM override is for web containers, loaded by `gtm.js?id=<container>`.** It is a JSON file passed with `--gtm-override`. The recorder fetches the preview build with `route.fetch` and fulfils the original request. Custom loaders are handled by the `loader` way (Stape) or the `replace` fallback (§8.2). Passing the preview values through the loader is not built. Server workspaces, the server preview header and the web tag-firing reporter are not built.
+- **`expectedTags` is stored and not evaluated.** `Run.containerVersions` is still `{}`.
+- **`gtmAuth` never appears in a record or in output.** It is replaced with `[redacted]` in any form.
+- **`pingwright diff <a.jsonl> <b.jsonl>` exists,** with `--by-page` and `--json`. It reads two records and opens no browser. It reports added, removed and changed hits per epoch, vendor and event, and changed flag counts per host. It exits 0 whether or not the runs differ. Rules on a diff are not built: run the scenario against each build and let its own rules fail.
+- **Commands are `run`, `diff`, `install-browser` and `--version`.** `report` and the MCP server are not built.
+- **A curated tracker list is stubbed and decoded.** It holds LinkedIn, Microsoft UET, X and Reddit hosts, each with a link to the vendor's docs. A listed request becomes a minimal hit with the vendor name, unknown consent and transport `tracker-list`. `--tracker-list <file>` adds entries. A listed path is stubbed for every resource type. There is still no full `microsoft-uet` decoder: its hits carry no parameters.
+- **Vendor keys in scenarios** are the built-in decoders plus every vendor in the tracker list and in a `--tracker-list` file.
+- **The Shopify checkout pattern is a doc and fixture pages,** not an adapter (`docs/shopify-checkout.md`). Payment is a `handoff`. `addToCart` is still a selector click with a cart check.
 
 ## 16. Related tools
 
