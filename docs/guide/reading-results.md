@@ -92,7 +92,7 @@ Programs can read the file, or the output of `pingwright run --json`. The [desig
 
 ## Compare two runs
 
-`pingwright diff` compares two record files of the same scenario. It does not open a browser. Use it to see what a change did, for example a new version of your tag manager.
+`pingwright diff` compares two record files of the same scenario. It does not open a browser. Use it to see what a change did, for example a new version of your Google Tag Manager container.
 
 ```mermaid
 flowchart TB

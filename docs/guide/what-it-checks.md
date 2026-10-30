@@ -23,7 +23,7 @@ A scenario is a short YAML file. It lists what the visitor does and what you exp
 
 ## Tracking requests
 
-Pingwright reads each tracking request and turns it into a hit. A hit has the vendor, the event and the consent values the request carries. An event is the action the site reports, such as `page_view`. Pingwright decodes hits for GA4, Google Ads, Meta, Pinterest and Stape. It also recognises a short list of other trackers.
+Pingwright reads each tracking request and turns it into a hit. A hit has the vendor, the event and the consent values the request carries. An event is the action the site reports, such as `page_view`. Consent values are the consent signals that a Google hit carries in its own parameters. Pingwright decodes hits for GA4 (Google Analytics 4), Google Ads, Meta, Pinterest and `sgtm`. An `sgtm` hit goes to a server-side Google Tag Manager container, for example one hosted by Stape. It also recognises a short list of other trackers.
 
 ## Consent states
 
@@ -55,9 +55,9 @@ flowchart TB
 
 In stub mode, Pingwright records a known tracking request and answers it itself, so the vendor does not get it.
 
-Scripts and pages still load. For example, the Google tag script and the Meta pixel script come from the vendor as usual. Only the tracking requests are answered locally.
+Scripts and pages still load. For example, the Google tag script and the Meta pixel script (the code that sends Meta hits) come from the vendor as usual. Only the tracking requests are answered locally.
 
-A few rare requests can still get through. One example is a request that a sandboxed iframe sends while it is still loading. The [design](../design.md#_5-3-network-modes) lists these cases.
+A few rare requests can still get through. One example is a request that a sandboxed iframe (a small page inside your page with limited rights) sends while it is still loading. The [design](../design.md#_5-3-network-modes) lists these cases.
 
 Pingwright sends a request it does not know on to its host. It flags that request as an unknown destination, and the run fails unless you allow it. Live mode (`--network live`) sends every request on. Use live mode only when you want test hits to reach a real vendor account.
 

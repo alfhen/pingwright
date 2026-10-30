@@ -37,10 +37,10 @@ If the page shows no banner, the run stops with "banner not shown" and exit code
 ## Run it
 
 ```bash
-pingwright run scenario.yml --site https://staging.example.com
+pingwright run scenario.yml --site https://test.example.com
 ```
 
-Replace the address with your own site. Use a test or staging site when you can.
+Replace the address with your own site. Use a test copy of your site when you can.
 
 ```mermaid
 flowchart TB
