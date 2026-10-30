@@ -91,7 +91,7 @@ Compares two runs of the same scenario, for example one with a GTM override and 
 
 | Option | Meaning |
 | --- | --- |
-| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. |
+| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. For a Shopify custom pixel the `/web-pixels@<hash>/.../sandbox/<mode>` prefix is stripped from the key, so runs on different Shopify deploys still pair. The record keeps the raw page. Added and removed lines show it as `recorded as <page>` when it differs from the key, and the JSON result has it as `page` on each added, removed and changed hit. A hit with no page uses the URL of the frame that sent it, or an empty page if there is none. |
 | `--json` | Prints the full diff result as JSON instead of the text summary. |
 
 The text summary is grouped by consent epoch label, then vendor, then event. Under each event it lists hits that were added (only in the second run), removed (only in the first), and changed. A changed hit is one that pairs up but differs in a consent field, in `gcs` or `gcd`, or in whether an ID is present. Hits are paired by epoch label, vendor and event (and the page path with `--by-page`), in time order: the first hit of a group in one run with the first in the other, and so on. The step is not part of the match, so a hit that lands in a different step in the two runs still pairs. Each line shows the step of the hit, and a changed line shows `step "a" -> "b"` when the step differs. A hit left over in a group after pairing is reported as added or removed. A line at the end lists flag counts that changed per host.

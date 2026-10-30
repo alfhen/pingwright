@@ -5,8 +5,17 @@ import type { Io } from './run.ts';
 
 type Tree = Map<string, Map<string, Map<string, string[]>>>;
 
-function where(key: DiffKey, step: string): string {
-  const parts = [step && `step "${step}"`, key.page && `page ${key.page}`].filter(Boolean);
+function pathOf(page: string): string {
+  try {
+    return new URL(page).pathname;
+  } catch {
+    return page;
+  }
+}
+
+function where(key: DiffKey, step: string, rawPage?: string | null): string {
+  const raw = rawPage && key.page && pathOf(rawPage) !== key.page ? `, recorded as ${rawPage}` : '';
+  const parts = [step && `step "${step}"`, key.page && `page ${key.page}${raw}`].filter(Boolean);
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
@@ -23,8 +32,8 @@ function add(tree: Tree, key: DiffKey, line: string): void {
 
 export function formatDiff(result: DiffResult, a: string, b: string): string {
   const tree: Tree = new Map();
-  for (const h of result.added) add(tree, h.key, `added${where(h.key, h.step)}: ${h.hitId}`);
-  for (const h of result.removed) add(tree, h.key, `removed${where(h.key, h.step)}: ${h.hitId}`);
+  for (const h of result.added) add(tree, h.key, `added${where(h.key, h.step, h.page)}: ${h.hitId}`);
+  for (const h of result.removed) add(tree, h.key, `removed${where(h.key, h.step, h.page)}: ${h.hitId}`);
   for (const c of result.changed) {
     const changes = [...c.consent, ...c.ids].map((v) => `${v.field} ${v.a} -> ${v.b}`).join(', ');
     const moved = c.a.step === c.b.step ? '' : `, step "${c.a.step}" -> "${c.b.step}"`;

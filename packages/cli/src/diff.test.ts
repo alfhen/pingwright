@@ -20,13 +20,13 @@ test('groups by epoch, then vendor, then event', () => {
   const text = formatDiff(
     {
       ...empty,
-      added: [{ key: key('undecided', 'ga4', 'workspace_only'), hitId: 'hit_2', t: 1, step: 'consent-1' }],
-      removed: [{ key: key('undecided', 'meta', 'AddToCart'), hitId: 'hit_9', t: 2, step: '' }],
+      added: [{ key: key('undecided', 'ga4', 'workspace_only'), hitId: 'hit_2', t: 1, step: 'consent-1', page: null }],
+      removed: [{ key: key('undecided', 'meta', 'AddToCart'), hitId: 'hit_9', t: 2, step: '', page: null }],
       changed: [
         {
           key: key('undecided', 'ga4', 'page_view'),
-          a: { hitId: 'hit_1', t: 0, step: 'start' },
-          b: { hitId: 'hit_3', t: 0, step: 'consent-1' },
+          a: { hitId: 'hit_1', t: 0, step: 'start', page: null },
+          b: { hitId: 'hit_3', t: 0, step: 'consent-1', page: null },
           consent: [{ field: 'gcs', a: 'G100', b: 'G111' }],
           ids: [],
         },
