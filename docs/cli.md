@@ -3,11 +3,19 @@
 ## Install
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v<version>
+npm i -g pingwright@next
 pingwright install-browser
 ```
 
-`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes.
+`@next` is the newest release candidate. Pingwright needs Node 22.18 or later.
+
+You can also install a release from its git tag:
+
+```bash
+npm i -g --install-links github:alfhen/pingwright#v<version>
+```
+
+`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes. Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 Or build a tarball in a checkout and install that:
 
@@ -15,8 +23,6 @@ Or build a tarball in a checkout and install that:
 pnpm install && pnpm build && pnpm pack
 npm i -g ./pingwright-<version>.tgz
 ```
-
-Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 `install-browser` runs the Playwright CLI that ships with Pingwright, so the Chromium revision matches.
 
@@ -52,6 +58,17 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `cartRequest` | Regular expression matched against request URLs. In an `addToCart` step, a matching request counts as a cart change, for a site whose cart endpoint the built-in check does not know. |
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
+
+Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. Values typed into card and password fields are not added. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
+
+```yaml
+identity:
+  phone: "+46701740620"
+```
+
+Use fictional numbers and `example.com` emails only. Values that a person types during a `handoff` step are unknown to Pingwright. To have them count as the run identity, declare the same value under `identity`, or the run reports their hashes as `possibleRealData`.
+
+`identity.hashesMatch` reads hashed email and phone values from Meta and from the server container's data client (`sgtm`). On an `sgtm` hit it reads `user_data` (`email_address`, `phone_number`, `first_name`, `last_name`, `street`, `city`, `postal_code`, `country`, at the top level or under `address`) and shows each as the hit param `user_data.<field>`.
 
 To withdraw consent, reopen the banner with a `click` on the site's cookie settings link, then answer it with `consent: reject` (`consent: withdraw` is the same answer). Without the click the step fails with "banner not shown (withdraw needs the banner reopened first)".
 

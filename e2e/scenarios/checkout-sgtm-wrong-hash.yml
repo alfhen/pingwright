@@ -1,0 +1,28 @@
+start: /products/fake-tee
+steps:
+  - consent: accept
+  - addToCart: "#add-to-cart"
+  - visit: /checkout?pattern=sgtm
+    label: checkout
+  - fill:
+      "#email": "someone.else@example.com"
+      "#first-name": firstName
+      "#last-name": lastName
+      "#phone": phone
+      "#address1": address1
+      "#city": Berlin
+      "#zip": zip
+      "#country": DE
+  - click: "#continue"
+  - fill:
+      "#card-number": "4242424242424242"
+      "#card-expiry": "12/34"
+      "#card-cvc": "123"
+  - click: "#pay"
+    label: pay
+  - wait: 7s
+    label: thank-you
+expect:
+  must:
+    - { vendor: sgtm, event: purchase, identity.hashesMatch: true }
+options: { seed: 1, allowUnknownDestination: true }
