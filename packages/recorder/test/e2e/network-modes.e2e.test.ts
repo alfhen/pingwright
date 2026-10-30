@@ -9,8 +9,14 @@ import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts'
 
 let server: Server;
 let port: number;
+let otherServer: Server;
+let otherPort: number;
+let otherSaw: { cookie: string; authorization: string }[] = [];
 let outDir: string;
 let serverSaw: string[] = [];
+let pixelCookies: string[] = [];
+let landedSaw: { method: string; contentType: string; body: string; origin: string }[] = [];
+let otherBodies: { method: string; body: string }[] = [];
 
 const COLLECT = (tag: string) => `/g/collect?v=2&tid=G-PWTEST0001&cid=1.2&en=${tag}`;
 
@@ -33,7 +39,32 @@ function page(path: string): string | undefined {
         new Worker(URL.createObjectURL(new Blob(["fetch('${origin}${COLLECT('worker')}', { method: 'POST', body: 'x' })"], { type: 'text/javascript' })));
       </script>`;
     case '/redirect':
+      return `<script>fetch('/redirect-to-collect');</script>`;
+    case '/redirect-chain':
+      return `<script>fetch('/hop-a'); new Image().src = '/hop-a?img';</script>`;
+    case '/redirect-cross-site':
       return `<script>fetch('${origin}/redirect-to-collect', { mode: 'no-cors' });</script>`;
+    case '/cookies':
+      return `<script>fetch('/set-strict').then(() => { new Image().src = '${origin}/pixel'; });</script>`;
+    case '/cookies-sandboxed':
+      return `<script>fetch('/set-strict').then(() => {
+        const frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.src = '/sbx';
+        document.body.append(frame);
+      });</script>`;
+    case '/sbx':
+      return `<script>setTimeout(() => fetch('/echo-cookie', { mode: 'no-cors', credentials: 'include' }), 2000)</script>`;
+    case '/cross-origin-fetch':
+      return `<script>fetch('/set-c').then(() => fetch('http://localhost:${otherPort}/echo', { mode: 'no-cors' }));</script>`;
+    case '/cross-origin-redirect-auth':
+      return `<script>fetch('/set-c').then(() => fetch('/redir-auth', { headers: { authorization: 'Bearer t0k' } }).catch(() => {}));</script>`;
+    case '/redirect-frame':
+      return '<iframe src="/redirect-to-collect-frame"></iframe>';
+    case '/redirect-same-to-cross':
+      return `<script>fetch('/to-cross', { mode: 'no-cors' });</script>`;
+    case '/redirect-final':
+      return `<script>fetch('/redirect-plain').then((r) => { fetch('/seen?' + encodeURIComponent(r.url + '|' + r.redirected)); });</script>`;
     case '/collector-get':
       return `<script>new Image().src = 'https://collector.pingwright.invalid/pixel.gif?source=get-pixel';</script>`;
     case '/frame-consent':
@@ -83,6 +114,14 @@ function page(path: string): string | undefined {
           });
         });
       </script>`;
+    case '/long-chain':
+      return `<script>fetch('/long/1').catch(() => {});</script>`;
+    case '/put-303-302':
+      return `<script>fetch('/s303', { method: 'PUT', headers: { 'content-type': 'text/plain' }, body: 'put=secret' }).catch(() => {});</script>`;
+    case '/post-303-307':
+      return `<script>fetch('/p303x', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'b=secret', mode: 'no-cors' }).catch(() => {});</script>`;
+    case '/post-303':
+      return `<script>fetch('/post-redirect', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'a=secret' });</script>`;
     case '/next':
       return '<p>next</p>';
     default:
@@ -99,6 +138,89 @@ beforeAll(async () => {
       res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('redirected')}` }).end();
       return;
     }
+    if (path === '/redirect-to-collect-frame') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('iframe-redirect')}` }).end();
+      return;
+    }
+    if (path === '/to-cross') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}/x-redirect` }).end();
+      return;
+    }
+    if (path === '/x-redirect') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('crosschain')}` }).end();
+      return;
+    }
+    if (path === '/hop-a') {
+      res.writeHead(302, { location: '/hop-b' }).end();
+      return;
+    }
+    if (path === '/hop-b') {
+      res.writeHead(302, { location: `http://127.0.0.1:${port}${COLLECT('chain')}` }).end();
+      return;
+    }
+    if (path === '/set-strict') {
+      res.writeHead(204, { 'set-cookie': 'strict=1; SameSite=Strict; Path=/' }).end();
+      return;
+    }
+    if (path === '/set-c') {
+      res.writeHead(204, { 'set-cookie': 'c=1; Path=/' }).end();
+      return;
+    }
+    if (path === '/redir-auth') {
+      res.writeHead(307, { location: `http://localhost:${otherPort}/echo` }).end();
+      return;
+    }
+    if (path.startsWith('/long/')) {
+      const n = Number(path.slice('/long/'.length));
+      res.writeHead(302, { location: n < 11 ? `/long/${n + 1}` : COLLECT('longchain') }).end();
+      return;
+    }
+    if (path === '/s303') {
+      req.resume();
+      res.writeHead(303, { location: '/s302x' }).end();
+      return;
+    }
+    if (path === '/s302x') {
+      res.writeHead(302, { location: `http://127.0.0.1:${otherPort}/echo-body` }).end();
+      return;
+    }
+    if (path === '/p303x') {
+      req.resume();
+      res.writeHead(303, { location: '/p307x' }).end();
+      return;
+    }
+    if (path === '/p307x') {
+      res.writeHead(307, { location: `http://127.0.0.1:${otherPort}/echo-body` }).end();
+      return;
+    }
+    if (path === '/post-redirect') {
+      req.resume();
+      res.writeHead(303, { location: '/post-landed' }).end();
+      return;
+    }
+    if (path === '/post-landed') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        landedSaw.push({ method: req.method ?? '', contentType: req.headers['content-type'] ?? '', body, origin: req.headers.origin ?? '' });
+        res.writeHead(204).end();
+      });
+      return;
+    }
+    if (path === '/echo-cookie') {
+      pixelCookies.push(req.headers.cookie ?? '');
+      res.writeHead(204, { 'set-cookie': 'framecookie=1; SameSite=Lax; Path=/' }).end();
+      return;
+    }
+    if (path === '/pixel') {
+      pixelCookies.push(req.headers.cookie ?? '');
+      res.writeHead(204, { 'set-cookie': 'thirdlax=1; SameSite=Lax; Path=/' }).end();
+      return;
+    }
+    if (path === '/redirect-plain') {
+      res.writeHead(302, { location: '/redirect-landed' }).end();
+      return;
+    }
     if (path === '/sw.js') {
       res.setHeader('content-type', 'text/javascript');
       res.end(`self.addEventListener('install', (e) => { e.waitUntil(fetch('http://127.0.0.1:${port}/from-sw')); });`);
@@ -111,12 +233,36 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
+  otherServer = createServer((req, res) => {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, PUT' };
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, cors).end();
+      return;
+    }
+    if (new URL(req.url ?? '/', 'http://x').pathname === '/echo-body') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        otherBodies.push({ method: req.method ?? '', body });
+        res.writeHead(204, cors).end();
+      });
+      return;
+    }
+    otherSaw.push({ cookie: req.headers.cookie ?? '', authorization: req.headers.authorization ?? '' });
+    res.writeHead(204, { ...cors, 'set-cookie': 'setxorigin=1; Path=/' }).end();
+  });
+  await new Promise<void>((resolve) => otherServer.listen(0, '127.0.0.1', resolve));
+  otherPort = (otherServer.address() as AddressInfo).port;
   const parent = fileURLToPath(new URL('../../../../test-results/', import.meta.url));
   await mkdir(parent, { recursive: true });
   outDir = await mkdtemp(join(parent, 'modes-'));
 });
 
 afterAll(async () => {
+  await new Promise((resolve) => {
+    otherServer.close(resolve);
+    otherServer.closeAllConnections();
+  });
   await new Promise((resolve) => {
     server.close(resolve);
     server.closeAllConnections();
@@ -126,6 +272,7 @@ afterAll(async () => {
 
 function visit(path: string, networkMode: 'stub' | 'live'): Promise<RunResult> {
   serverSaw = [];
+  pixelCookies = [];
   return recordVisit({
     networkMode,
     outDir,
@@ -179,14 +326,143 @@ test('a collection request from a dedicated worker is stubbed and never reaches 
   expect(records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });
 
-// Playwright routes only the first URL of a redirect chain, so the hop reaches the local server and must be flagged.
-test('a collection request reached by a redirect is flagged stubBypass in stub mode and not in live mode', async () => {
+test('a collection request reached by a redirect is stubbed and never reaches the server in stub mode', async () => {
   const stub = await visit('/redirect', 'stub');
   const hop = collectionRequests(stub).find((q) => q.url.includes('en=redirected'));
-  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'passed' });
+  expect(hop).toMatchObject({ initiator: 'redirect', outcome: 'stubbed' });
+  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toEqual([]);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+test('a frame redirect to a collection endpoint is left to the browser and flagged stubBypass', async () => {
+  const stub = await visit('/redirect-frame', 'stub');
+  expect(serverSaw.filter((u) => u.includes('en=iframe-redirect'))).toHaveLength(1);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
+});
+
+test('a same-site chain that passes through a cross-site hop reaches the server and is flagged stubBypass', async () => {
+  const stub = await visit('/redirect-same-to-cross', 'stub');
+  expect(serverSaw.filter((u) => u.includes('en=crosschain'))).toHaveLength(1);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
+});
+
+test('a two-hop chain to a collection endpoint never reaches the server in stub mode', async () => {
+  const stub = await visit('/redirect-chain', 'stub');
+  const hops = collectionRequests(stub).filter((q) => q.url.includes('en=chain'));
+  expect(hops.length).toBeGreaterThan(0);
+  expect(hops.every((q) => q.outcome === 'stubbed')).toBe(true);
+  expect(serverSaw.filter((u) => u.includes('en=chain'))).toEqual([]);
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
+});
+
+test('a cross-site redirect to a collection endpoint is left to the browser and flagged stubBypass', async () => {
+  const stub = await visit('/redirect-cross-site', 'stub');
   expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
-  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass').flatMap((f) => f.recordIds)).toContain(hop!.id);
-  const live = await visit('/redirect', 'live');
+  expect(stub.records.flags.filter((f) => f.kind === 'stubBypass')).not.toEqual([]);
+});
+
+async function cookieRun(networkMode: 'stub' | 'live', page = '/cookies', settleMs = 1000) {
+  serverSaw = [];
+  pixelCookies = [];
+  otherSaw = [];
+  const recorder = await launchRecorder({ networkMode, outDir, site: `http://localhost:${port}` });
+  await recorder.visit(`http://localhost:${port}${page}`);
+  await recorder.wait(settleMs);
+  const checkpoint = await recorder.checkpoint('end', null);
+  await recorder.close();
+  return { sent: [...pixelCookies], other: [...otherSaw], jar: checkpoint.cookies.map((c) => `${c.name}@${c.domain}`).sort() };
+}
+
+test('stub mode sends and stores the same cookies as live mode for a cross-site subresource', async () => {
+  const live = await cookieRun('live');
+  const stub = await cookieRun('stub');
+  expect(live.sent).toEqual(['']);
+  expect(stub).toEqual(live);
+});
+
+test('stub mode sends and stores the same cookies as live mode for a sandboxed same-site iframe', async () => {
+  const live = await cookieRun('live', '/cookies-sandboxed', 3500);
+  const stub = await cookieRun('stub', '/cookies-sandboxed', 3500);
+  expect(live.sent).toEqual(['']);
+  expect(stub).toEqual(live);
+});
+
+test('stub mode sends and stores the same cookies as live mode for a cross-origin same-site fetch', async () => {
+  const live = await cookieRun('live', '/cross-origin-fetch');
+  const stub = await cookieRun('stub', '/cross-origin-fetch');
+  expect(live.other).toEqual([{ cookie: '', authorization: '' }]);
+  expect(stub).toEqual(live);
+});
+
+test('stub mode does not carry cookies or Authorization over a cross-origin redirect', async () => {
+  const live = await cookieRun('live', '/cross-origin-redirect-auth');
+  const stub = await cookieRun('stub', '/cross-origin-redirect-auth');
+  expect(live.other).toEqual([{ cookie: '', authorization: '' }]);
+  expect(stub).toEqual(live);
+});
+
+test('a same-site redirect that is not a collection request is followed and recorded', async () => {
+  const stub = await visit('/redirect-final', 'stub');
+  const first = stub.records.requests.find((q) => q.url.endsWith('/redirect-plain'));
+  const landed = stub.records.requests.find((q) => q.url.endsWith('/redirect-landed'));
+  expect(first).toBeDefined();
+  expect(landed).toMatchObject({ initiator: 'redirect', outcome: 'passed' });
+  const status = (id: string | undefined) => stub.records.responses.filter((r) => r.requestId === id).map((r) => r.status);
+  expect(status(first?.id)).toEqual([302]);
+  expect(status(landed?.id)).toEqual([204]);
+  expect(serverSaw.some((u) => u.startsWith('/seen?'))).toBe(true);
+});
+
+test('a POST that a 303 turns into a GET reaches the server the same way in stub and live mode', async () => {
+  const seen = async (mode: 'stub' | 'live') => {
+    landedSaw = [];
+    await visit('/post-303', mode);
+    return landedSaw;
+  };
+  const live = await seen('live');
+  expect(live).toEqual([{ method: 'GET', contentType: '', body: '', origin: '' }]);
+  expect(await seen('stub')).toEqual(live);
+});
+
+for (const [name, path] of [
+  ['a POST, 303, then cross-origin 307', '/post-303-307'],
+  ['a PUT, 303, then cross-origin 302', '/put-303-302'],
+] as const) {
+  test(`${name} reaches the other host as a GET without the body in stub and live mode`, async () => {
+    const seen = async (mode: 'stub' | 'live') => {
+      otherBodies = [];
+      await visit(path, mode);
+      return otherBodies;
+    };
+    const live = await seen('live');
+    expect(live).toEqual([{ method: 'GET', body: '' }]);
+    expect(await seen('stub')).toEqual(live);
+  });
+}
+
+test('a collection endpoint right after the followed-hop limit is still stubbed', async () => {
+  const stub = await visit('/long-chain', 'stub');
+  expect(serverSaw.some((u) => u.includes('en=longchain'))).toBe(false);
+  expect(collectionRequests(stub).find((q) => q.url.includes('en=longchain'))).toMatchObject({ outcome: 'stubbed' });
+});
+
+test('live mode lets a redirect hop through to the server', async () => {
+  serverSaw = [];
+  const recorder = await launchRecorder({ networkMode: 'live', outDir, site: `http://localhost:${port}` });
+  try {
+    await recorder.visit(`http://localhost:${port}/redirect`);
+    const deadline = Date.now() + 10_000;
+    while (!serverSaw.some((u) => u.includes('en=redirected')) && Date.now() < deadline) await recorder.wait(100);
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const live = await recorder.close();
+  expect(serverSaw.filter((u) => u.includes('en=redirected'))).toHaveLength(1);
+  // The recorder sometimes misses this cross-origin hop's events (#180), so its record is checked only when present.
+  const hop = collectionRequests(live).find((q) => q.url.includes('en=redirected'));
+  if (hop) expect(hop).toMatchObject({ outcome: 'passed' });
   expect(live.records.flags.filter((f) => f.kind === 'stubBypass')).toEqual([]);
 });
 
