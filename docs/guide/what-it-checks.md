@@ -38,7 +38,7 @@ flowchart TB
 
 Every visitor starts undecided, then accepts or rejects. An accepting visitor can withdraw later.
 
-You write expectations per state. For example: "Meta must send nothing while the visitor is undecided." Pingwright checks each hit against the epoch it falls in. Google hits carry their own consent values, so Pingwright reads those values instead.
+You write expectations per state. For example: "Meta must send nothing while the visitor is undecided." Pingwright checks each hit against the epoch it falls in. For `in: epoch(granted)` and `in: epoch(denied)`, Pingwright reads the consent values a Google hit carries instead of the epoch. `before: consent` uses the time of the hit for every vendor.
 
 [Reading a run's results](./reading-results.md) shows how epochs appear in the output.
 
