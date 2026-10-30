@@ -140,6 +140,7 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
       scenario: basename(args.scenario),
       parsed,
       firstPartyHosts: parsed.options.firstPartyHosts,
+      unloadGapIgnore: parsed.options.unloadGapIgnore,
       seed: args.seed,
       headed: args.headed,
       netLog: args.netLog,

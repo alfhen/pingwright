@@ -65,6 +65,8 @@ export interface ScenarioOptions {
   firstPartyHosts?: string[];
   /** Regular expression matched against request URLs: a matching request in an `addToCart` step counts as a cart change. */
   cartRequest?: string;
+  /** dataLayer event names or `*` globs that `unloadGap` never reports. */
+  unloadGapIgnore?: string[];
 }
 
 export const IDENTITY_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'address1', 'city', 'zip', 'country'] as const;
@@ -99,7 +101,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -438,6 +440,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         } else if (k === 'cartRequest') {
           if (typeof v === 'string' && v !== '' && isRegExp(v)) options.cartRequest = v;
           else fail(p, 'must be a regular expression such as "/api/cart/add"');
+        } else if (k === 'unloadGapIgnore') {
+          if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
+          else fail(p, 'must be a list of event names or globs such as consent_*');
         } else if (k === 'firstPartyHosts') {
           if (isHostList(v)) options.firstPartyHosts = v;
           else fail(p, `must be a list of hosts${HOST_HINT}`);
