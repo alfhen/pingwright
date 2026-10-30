@@ -171,6 +171,7 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 | `ga4` | Event name (`en`), parameters (`ep.*`, `epn.*`), `uid` presence, `cid`, measurement ID (`tid`), batched bodies. Matches `/g/collect` under a path prefix too. Consent from `gcs` and `gcd`. |
 | `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts, and the `googletagmanager.com/td` collection endpoint. Reads user id (`userId` or `uid`), `oid` as `transaction_id`, and `ep.`/`epn.` params. Multi-hop chains are recorded as linked requests. |
 | `meta` | `facebook.com/tr`: `ev`, `id`, `eid`, every `ud[*]` field, and multipart beacon bodies. |
+| `pinterest` | `ct.pinterest.com/v3/` and `/user/`: `event`, `tid`, `ed` (event data, `event_id` as `eventId`), `pd.em` (hashed email) and `ad.loc` (page). In `stub` mode every path on `ct.pinterest.com` is stubbed. |
 | `pinterest` | `ct.pinterest.com`: `event`, `tid`, `pd` presence. |
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
 | `tiktok`, `criteo`, `snapchat`, `linkedin` | Later. |
@@ -399,7 +400,7 @@ Where the code in 0.1 differs from the design above:
 - **Commands are `run`, `install-browser` and `--version`.** `diff`, `report` and the MCP server are not built.
 - **Rules are `must`, `mustNot`, `count`, `before`, `in`, `after` and `identity.hashesMatch`.** `tags.mustFire` and `tags.mustNotFire` need the GTM reporters, which are not built. The `TagReport` record type exists and no 0.1 code writes it.
 - **Chromium only.** There is no Firefox or WebKit profile. Playwright's Firefox does not start on the macOS used for development.
-- **Decoders are `ga4`, `google-ads`, `meta`, `sgtm-data-client` and `stape-custom-loader`.** `pinterest` and `microsoft-uet` are not built.
+- **Decoders are `ga4`, `google-ads`, `meta`, `pinterest`, `sgtm-data-client` and `stape-custom-loader`.** `microsoft-uet` is not built.
 - **`Run.containerVersions` is always `{}`.** No GTM reporter fills it.
 - **`Checkpoint.consentState` is always `null`.** Checkpoints record cookies only.
 - **`addToCart` is a selector click.** There is no platform adapter.

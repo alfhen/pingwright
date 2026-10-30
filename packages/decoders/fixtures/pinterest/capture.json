@@ -1,0 +1,27 @@
+[
+  {
+    "method": "GET",
+    "url": "https://ct.pinterest.com/user/?tid=2612345678901&pd=%7B%22em%22%3A%2283376681922493af9dc8d856903eb6cb96fe91a4d6d3d6104f91897866239677%22%7D&cb=1793333188851&dep=2%2CPAGE_LOAD",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://ct.pinterest.com/user/?event=pagevisit&tid=2612345678901&cb=1793333188851&dep=5%2CEVENT_TAGS_ABSENT",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://ct.pinterest.com/user/?event=addtocart&ed=%7B%22value%22%3A19.5%2C%22order_quantity%22%3A1%2C%22currency%22%3A%22USD%22%2C%22event_id%22%3A%22fixture-event-0001%22%7D&tid=2612345678901&cb=1793333188852&dep=5%2CEVENT_TAGS_ABSENT",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://ct.pinterest.com/user/?event=checkout&ed=%7B%22value%22%3A19.5%2C%22order_quantity%22%3A1%2C%22currency%22%3A%22USD%22%2C%22order_id%22%3A%22fixture-order-0001%22%7D&tid=2612345678901&cb=1793333188852&dep=5%2CEVENT_TAGS_ABSENT",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://ct.pinterest.com/v3/?tid=2612345678901&pd=%7B%22em%22%3A%2283376681922493af9dc8d856903eb6cb96fe91a4d6d3d6104f91897866239677%22%7D&event=init&ad=%7B%22loc%22%3A%22http%3A%2F%2Flocalhost%3A64548%2Fpinterest%22%2C%22ref%22%3A%22%22%2C%22if%22%3Afalse%2C%22sh%22%3A720%2C%22sw%22%3A1280%2C%22mh%22%3A%22c61fa7c9%22%2C%22is_eu%22%3Atrue%2C%22architecture%22%3A%22x86%22%2C%22bitness%22%3A%2264%22%2C%22brands%22%3A%5B%7B%22brand%22%3A%22Not%3AA-Brand%22%2C%22version%22%3A%228%22%7D%2C%7B%22brand%22%3A%22Chromium%22%2C%22version%22%3A%22156%22%7D%5D%2C%22mobile%22%3Afalse%2C%22model%22%3A%22%22%2C%22platform%22%3A%22macOS%22%2C%22platformVersion%22%3A%2210_15_7%22%2C%22uaFullVersion%22%3A%22156.0.8078.4%22%7D&cb=1793333188852",
+    "resourceType": "fetch"
+  }
+]
