@@ -30,7 +30,7 @@ This is what each part does:
 - `start: /` opens the home page of the site.
 - `consent: none` checks that a cookie banner is on the page. It does not answer the banner.
 - `wait: 4s` waits 4 seconds so that late requests can arrive.
-- `mustNot` is a rule. It says that Meta and Google Ads must send nothing before the visitor answers the banner.
+- `mustNot` is an expectation: a rule about which requests the site may send. It says that Meta and Google Ads must send nothing before the visitor answers the banner.
 
 If the page shows no banner, the run stops with "banner not shown" and exit code 2.
 
@@ -63,11 +63,11 @@ The summary lists the hits, the consent epochs and each check with PASS or FAIL.
 | 1 | At least one expectation or built-in check failed. |
 | 2 | The run could not finish. For example, the scenario is not valid, or no banner was shown. |
 
-A script or a CI job can read this code. Code 1 means the site broke a rule. Code 2 means the run itself needs a fix.
+A script can read this code. So can a job that runs your tests on every change. Code 1 means the site broke an expectation. Code 2 means the run itself needs a fix.
 
 ## Safe by default
 
-- The run is in stub mode. Known tracking requests are recorded and not sent. See [What Pingwright checks](./what-it-checks.md).
+- The run is in stub mode. Pingwright records known tracking requests and answers them itself. It does not send them on. See [What Pingwright checks](./what-it-checks.md).
 - Pingwright types fake data only.
 - A request to a site it does not know is flagged as an unknown destination, and the run fails. Allow a host in the scenario with `options: { allowUnknownDestination: ['tracker.example.net'] }`.
 
@@ -75,4 +75,4 @@ A script or a CI job can read this code. Code 1 means the site broke a rule. Cod
 
 - [Reading a run's results](./reading-results.md)
 - [CLI reference](../cli.md) for every option and command
-- [Design](../design.md) for scenario steps and expectation rules
+- [Design](../design.md) for scenario steps and expectations

@@ -130,15 +130,23 @@ test('a page with a diagram draws an svg, in light and dark mode, without outsid
 
 test('pages without a diagram do not load the diagram code', async () => {
   const context = await browser!.newContext({ userAgent: chromeUserAgent(browser!.version()) });
-  const scripts: string[] = [];
-  context.on('request', (request) => {
-    if (request.resourceType() === 'script') scripts.push(request.url());
+  const scripts: { url: string; bytes: number }[] = [];
+  context.on('response', async (response) => {
+    if (response.request().resourceType() !== 'script') return;
+    scripts.push({ url: response.url(), bytes: (await response.body()).length });
   });
   const page = await context.newPage();
+  const total = () => scripts.reduce((sum, script) => sum + script.bytes, 0);
+  const diagramChunk = /mermaid|dagre|cytoscape|flowDiagram/i;
+
   await page.goto(`http://127.0.0.1:${port}/docs/cli`, { waitUntil: 'networkidle' });
-  const withoutDiagram = scripts.length;
+  expect(scripts.filter((script) => diagramChunk.test(script.url))).toEqual([]);
+  const withoutDiagram = total();
+  expect(withoutDiagram).toBeLessThan(400_000);
+
   scripts.length = 0;
   await page.goto(`http://127.0.0.1:${port}/docs/guide/first-run`, { waitUntil: 'networkidle' });
   await context.close();
-  expect(scripts.length).toBeGreaterThan(withoutDiagram);
+  expect(scripts.some((script) => diagramChunk.test(script.url))).toBe(true);
+  expect(total()).toBeGreaterThan(withoutDiagram * 3);
 });
