@@ -141,7 +141,7 @@ Acceptance: e2e scenario files in `e2e/scenarios/` for undecided, accept, reject
 README status and quick start. Design doc: every (verify) claim in 0.1 scope resolved. Version `0.1.0-rc.1`.
 Acceptance: docs build nothing; a reviewer checks every 0.1 (verify) claim has a result.
 
-Then run `scripts/release.sh 0.1.0-rc.1` on main and push the tag it creates (`docs/release.md`). The tag points at a release commit that carries `dist/` and is not on main. No npm publish and no GitHub release.
+Then run `scripts/release.sh 0.1.0-rc.1` on main and push the tag it creates (`docs/release.md`). After the field test, the issue fixes were merged and `0.1.0` was released the same way. The tag points at a release commit that carries `dist/` and is not on main. No npm publish and no GitHub release.
 
 Extra PRs, outside the plan: #76 made the srcdoc iframe test in the recorder stable. #107 (P16) made installs come from release tags that carry a built `dist/`.
 

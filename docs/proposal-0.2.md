@@ -116,7 +116,7 @@ This is the main job an agent or a reviewer has when they change a tag setup. 0.
 
 ## 4. Milestones after this change
 
-1. **0.1:** as released in `0.1.0-rc.1`. `0.1.0-rc.2` adds the field-test fixes (items 5 and 8) and the other open issue fixes.
+1. **0.1:** as released in `0.1.0-rc.1`. The field-test fixes (items 5 and 8) and the other open issue fixes shipped in `0.1.0` instead of an rc.2.
 2. **0.2:** GTM override (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts, withdrawal epochs, Shopify checkout pattern.
 3. **0.3:** MCP server (schema frozen first), web tag-firing reporter, expected tag lists, `microsoft-uet` decoder.
 4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
