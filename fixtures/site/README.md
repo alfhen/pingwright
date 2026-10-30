@@ -107,6 +107,8 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/stable-ids` loads the shop banner and, after 1.5 s and again after 2.5 s, POSTs one fake SHA-256 client ID under `clientIdHash`, `client_id_hash`, `external_id`, `uid`, `user_id`, `id` and `uuid` to `thirdPartyUrl/stable-ids/data`, and loads `thirdPartyUrl/stable-ids/session?hmac=<hex>&id=<same hash>`. With `?leak=email` it also POSTs the hash of `other.person@example.com` as `external_id` once.
 
+`/meta-purchase-no-hash` loads the shop banner and, after 0.8 s, sends one Meta `Purchase` hit for the fake pixel `100000000000001` with no `ud[em]` or `ud[ph]` values.
+
 ## Deliberate defects
 
 - Reproduces a real failure: when `navigator.userAgent` contains `HeadlessChrome`, the banner grants consent itself, stores `accept` and never shows.

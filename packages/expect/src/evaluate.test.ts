@@ -257,7 +257,12 @@ test('identity.hashesMatch', () => {
   const failed = ev([good, bad]);
   expect(failed.pass).toBe(false);
   expect(failed.evidence).toEqual([bad.hit.id]);
-  expect(ev([hit({ vendor: 'meta' })]).message).toContain('no hashed values');
+  const none = ev([hit({ vendor: 'meta' })]);
+  expect(none.message).toBe(
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: it carried no hashed email or phone values.',
+  );
+  expect(none.message).not.toContain('found 1 matching hit');
+  expect(failed.message).toContain('found 1. 2 hits matched vendor, but identity.hashesMatch failed: the hashed email or phone values in 1 hit(s) do not match');
   const noIdentity = evaluate([good.hit, good.req], parseScenario(`start: /\n${q}`))[0]!;
   expect(noIdentity.message).toContain('no run identity');
   const digitsPhone = hit({ vendor: 'meta', params: {

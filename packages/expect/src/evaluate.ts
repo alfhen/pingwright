@@ -114,15 +114,36 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
   }
 
   const count = rule.count ?? { op: '>=' as const, n: 1 };
-  let pass = countHolds(count, hits.length);
-  let message = `Expected ${describeCount(count)} matching hits${where}, ${found}.${vacuous ? ` ${vacuous}` : ''}`;
+  const pass = countHolds(count, hits.length);
+  const message = `Expected ${describeCount(count)} matching hits${where}, ${found}.${vacuous ? ` ${vacuous}` : ''}`;
   if (pass && rule.hashesMatch) {
     const check = checkHashes(hits, ctx);
-    pass = check.pass;
-    message += ` ${check.message}`;
-    return { pass, evidence: check.evidence, message };
+    if (check.pass) return { pass: true, evidence: check.evidence, message: `${message} ${check.message}` };
+    const matched = `${hits.length} hit${hits.length === 1 ? '' : 's'} matched ${describeSelector(rule.filter)}${where}`;
+    return {
+      pass: false,
+      evidence: check.evidence,
+      message: `Expected ${describeCount(count)} hits matching all conditions, found ${hits.length - check.evidence.length}. ${matched}, but identity.hashesMatch failed: ${check.message}`,
+    };
   }
   return { pass, evidence: ids, message };
+}
+
+function describeSelector(filter: Filter): string {
+  const parts = [
+    filter.vendor && 'vendor',
+    filter.event && 'event',
+    filter.host && 'host',
+    filter.transport && 'transport',
+    filter.page && 'page',
+    filter.outcome && 'outcome',
+    Object.keys(filter.ids).length > 0 && 'ids',
+    Object.keys(filter.params).length > 0 && 'params',
+    Object.keys(filter.consent).length > 0 && 'consent',
+  ].filter((p): p is string => !!p);
+  if (parts.length === 0) return 'the selector';
+  if (parts.length === 1) return parts[0]!;
+  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)!}`;
 }
 
 /**
@@ -283,7 +304,7 @@ function allForms(h: HashForms): string[] {
 
 function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: string[]; message: string } {
   const identity = ctx.identity;
-  if (!identity) return { pass: false, evidence: [], message: 'Cannot check hashes: no run identity was given.' };
+  if (!identity) return { pass: false, evidence: [], message: 'no run identity was given, so the hashes could not be checked.' };
   const emailHashes = new Set(allForms(hashEmail(identity.email)));
   const phone = hashPhone(identity.phone);
   const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
@@ -308,13 +329,13 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     if (raw) unhashed.push(hit.id);
   }
   if (unhashed.length) {
-    return { pass: false, evidence: unhashed, message: `Email or phone sent unhashed in ${unhashed.length} hit(s).` };
+    return { pass: false, evidence: unhashed, message: `${unhashed.length} hit(s) carried an email or phone that is unhashed.` };
   }
   if (wrong.length) {
-    return { pass: false, evidence: wrong, message: `Hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
+    return { pass: false, evidence: wrong, message: `the hashed email or phone values in ${wrong.length} hit(s) do not match the run identity.` };
   }
   if (!withHash.length) {
-    return { pass: false, evidence: [], message: 'Expected hashed email or phone values matching the run identity, found no hashed values.' };
+    return { pass: false, evidence: hits.map((h) => h.id), message: 'it carried no hashed email or phone values.' };
   }
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
