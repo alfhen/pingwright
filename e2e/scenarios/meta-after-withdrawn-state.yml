@@ -1,0 +1,12 @@
+start: /products/fake-tee
+steps:
+  - consent: accept
+  - wait: 1s
+  - click: "#pw-cookie-settings"
+  - consent: withdraw
+  - addToCart: "#add-to-cart"
+  - wait: 8s
+expect:
+  mustNot:
+    - { vendor: meta, in: epoch(denied) }
+options: { seed: 1, allowUnknownDestination: true }

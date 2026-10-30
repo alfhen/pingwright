@@ -114,6 +114,8 @@ test('rejects count under mustNot, hashesMatch under mustNot, before with in, ba
   expect(errorOf(`start: /\nexpect:\n  mustNot:\n    - { vendor: ga4, identity.hashesMatch: true }\n`)).toContain('only valid under must');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { vendor: ga4, before: consent, in: epoch(denied) }\n`)).toContain('either before or in');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { page: { matches: "(" } }\n`)).toContain('invalid regular expression');
+  expect(errorOf(`start: /\nexpect:\n  must:\n    - { in: epoch(label=nope) }\n`)).toContain('epoch(label=<label>)');
+  expect(parseScenario(`start: /\nexpect:\n  must:\n    - { in: epoch(label=withdrawn) }\n`).expect.must[0]?.inEpoch).toBe('label=withdrawn');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { in: epoch(nope) }\n`)).toContain('epoch(undecided)');
   expect(errorOf(`start: /\nexpect:\n  must:\n    - { count: lots }\n`)).toContain('expect.must[0].count');
 });
