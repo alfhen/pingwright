@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server container Data Tag</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Server container Data Tag</h1>
+<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields, <code>?form=list</code> sends <code>user_data</code> with lists.</p>
+<script>
+(function () {
+  var form = new URLSearchParams(location.search).get('form') || 'top';
+  var stored = JSON.parse(sessionStorage.getItem('pw_checkout') || '{}');
+  function sha256Hex(value) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(value.trim().toLowerCase())).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    });
+  }
+  var fields = {
+    email_address: stored.email || '',
+    phone_number: '+' + (stored.phone || '').replace(/\D/g, ''),
+    first_name: stored['first-name'] || '',
+    last_name: stored['last-name'] || '',
+    street: stored.address1 || '',
+    city: stored.city || ''
+  };
+  var names = Object.keys(fields);
+  Promise.all(names.map(function (k) { return sha256Hex(fields[k]); })).then(function (hashes) {
+    var h = {};
+    names.forEach(function (k, i) { h[k] = hashes[i]; });
+    var body;
+    if (form === 'list') {
+      body = {
+        event_name: 'purchase',
+        page_location: location.href,
+        user_data: {
+          email_address: [h.email_address],
+          phone_number: [h.phone_number],
+          first_name: h.first_name,
+          last_name: h.last_name,
+          address: [{ street: h.street, city: h.city, postal_code: stored.zip || '', country: 'DE' }]
+        }
+      };
+    } else {
+      body = {
+        event_name: 'purchase',
+        Platform: 'Pinterest',
+        email_address: h.email_address,
+        first_name: h.first_name,
+        last_name: h.last_name,
+        phone_number: h.phone_number,
+        street: h.street,
+        city: h.city,
+        postal_code: stored.zip || '',
+        country: 'DE'
+      };
+    }
+    fetch(window.__PW_FIXTURE.sgtmUrl + '/data?v=2&event=purchase', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }).catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>

@@ -21,20 +21,28 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' && v !== 
 
 const hasId = (v: unknown): boolean => str(v) !== undefined || (typeof v === 'number' && Number.isFinite(v));
 
-const USER_DATA_FIELDS = ['email_address', 'phone_number', 'first_name', 'last_name', 'street', 'city', 'region', 'postal_code', 'country'];
+const USER_DATA_FIELDS = ['email_address', 'phone_number', 'first_name', 'last_name', 'street', 'city', 'postal_code', 'country'];
 
 function isObject(v: unknown): v is Json {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-/** Reads `user_data`, with address fields either at its top level or under `address`, as `user_data.<field>`. */
+const firstOf = (v: unknown): unknown => (Array.isArray(v) ? v.find((x) => str(x) !== undefined || isObject(x)) : v);
+
+/**
+ * Reads `user_data` as `user_data.<field>`. Address fields sit at its top level or under `address`
+ * (an object, or a list whose first object is used). The Stape Data Tag sends the same names as
+ * top-level body fields, read only when there is no `user_data` object. A list value uses its first string.
+ */
 function userData(...sources: Json[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const source of sources) {
-    if (!isObject(source.user_data)) continue;
-    const address = isObject(source.user_data.address) ? source.user_data.address : {};
+    const hasUserData = isObject(source.user_data);
+    const fields: Json = hasUserData ? (source.user_data as Json) : source;
+    const addressValue = firstOf(fields.address);
+    const address = isObject(addressValue) ? addressValue : {};
     for (const field of USER_DATA_FIELDS) {
-      const value = str(source.user_data[field]) ?? str(address[field]);
+      const value = str(firstOf(fields[field])) ?? str(firstOf(address[field]));
       if (value && out[`user_data.${field}`] === undefined) out[`user_data.${field}`] = value;
     }
   }
