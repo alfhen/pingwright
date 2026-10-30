@@ -89,3 +89,12 @@ test('a sandbox frame URL is not reported as the page a tracker received', () =>
   expect(hit?.vendor).toBe('linkedin');
   expect(hit?.page).toBeNull();
 });
+
+test('a whole-host image with no query and no body is stubbed but gives no hit', () => {
+  const r = req('https://alb.reddit.com/rp.gif');
+  expect(isCollectionEndpoint(r)).toBe(true);
+  expect(decodeRequest(r)).toEqual([]);
+  expect(decodeRequest(req('https://alb.reddit.com/rp.gif', { method: 'POST', postData: 'a=1' }))).toHaveLength(1);
+  expect(decodeRequest(req('https://alb.reddit.com/rp.gif?id=x'))).toHaveLength(1);
+  expect(decodeRequest(req('https://alb.reddit.com/rp', { resourceType: 'fetch' }))).toHaveLength(1);
+});

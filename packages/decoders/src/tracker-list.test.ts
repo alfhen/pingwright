@@ -10,12 +10,12 @@ test('matches an exact host with any path when the entry has no paths', () => {
 test('matches a path prefix', () => {
   expect(at('https://bat.bing.com/action/0?ti=1')?.vendor).toBe('microsoft-uet');
   expect(at('https://px.ads.linkedin.com/wa/?pid=1')?.vendor).toBe('linkedin');
-  expect(at('https://analytics.twitter.com/i/adsct?p_id=1')?.vendor).toBe('x');
+  expect(at('https://px.ads.linkedin.com/collect/?pid=1&fmt=gif')?.vendor).toBe('linkedin');
 });
 
 test('does not match another path on a listed host', () => {
   expect(at('https://bat.bing.com/action/01')).toBeUndefined();
-  expect(at('https://px.ads.linkedin.com/wax')).toBeUndefined();
+  expect(at('https://bat.bing.com/p/action/1')).toBeUndefined();
 });
 
 test('does not match library loads', () => {
@@ -69,6 +69,8 @@ test.each([
   [[{ ...ok, paths: [] }], '"paths"'],
   [[{ ...ok, source: 'http://d.example.com' }], '"source"'],
   [[{ vendor: ok.vendor, host: ok.host }], '"source"'],
+  [[{ ...ok, vendor: 'meta' }], 'built-in decoder key'],
+  [[{ ...ok, vendor: 'sgtm' }], 'built-in decoder key'],
   [[{ ...ok, x: 1 }], 'unknown field "x"'],
 ])('rejects an invalid list %#', (json, message) => {
   expect(() => parseTrackerList(json)).toThrow(message);

@@ -1,4 +1,5 @@
 import type { Request } from '@pingwright/core';
+import { vendorKeys } from './decoder.ts';
 
 export interface TrackerEntry {
   vendor: string;
@@ -12,9 +13,8 @@ export interface TrackerEntry {
 
 /** Hosts whose pages count as a vendor's own docs. A built-in entry's `source` must be on one of them. */
 export const trackerDocsDomains: Readonly<Record<string, readonly string[]>> = {
-  linkedin: ['linkedin.com', 'learn.microsoft.com'],
-  'microsoft-uet': ['microsoft.com', 'help.ads.microsoft.com'],
-  x: ['business.x.com', 'business.twitter.com'],
+  linkedin: ['linkedin.com'],
+  'microsoft-uet': ['microsoft.com'],
   reddit: ['reddithelp.com'],
 };
 
@@ -22,7 +22,6 @@ export const trackerList: readonly TrackerEntry[] = [
   {
     vendor: 'linkedin',
     host: 'px.ads.linkedin.com',
-    paths: ['/wa'],
     source: 'https://www.linkedin.com/help/lms/answer/a425696',
   },
   {
@@ -30,12 +29,6 @@ export const trackerList: readonly TrackerEntry[] = [
     host: 'bat.bing.com',
     paths: ['/action/0'],
     source: 'https://learn.microsoft.com/en-us/advertising/msa-help/hlp_ba_proc_uetv2addtag',
-  },
-  {
-    vendor: 'x',
-    host: 'analytics.twitter.com',
-    paths: ['/i/adsct'],
-    source: 'https://business.twitter.com/en/solutions/twitter-ads/website-clicks/advanced-conversion-tracking.html',
   },
   {
     vendor: 'reddit',
@@ -82,6 +75,9 @@ function parseEntry(raw: unknown, at: string): TrackerEntry {
   const { vendor, host, paths, source } = o;
   if (typeof vendor !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(vendor)) {
     throw new Error(`${at}: "vendor" must be a lowercase key such as "tiktok"`);
+  }
+  if (vendorKeys.includes(vendor)) {
+    throw new Error(`${at}: "vendor" "${vendor}" is a built-in decoder key; choose another key`);
   }
   if (typeof host !== 'string' || !HOST.test(host)) {
     throw new Error(`${at}: "host" must be a lowercase host such as "t.example.com" or "*.example.com"`);

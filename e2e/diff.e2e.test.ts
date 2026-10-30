@@ -83,3 +83,32 @@ test('diff of a run with itself has no differences, and a missing file exits 2',
   expect(missing.code).toBe(2);
   expect(missing.stderr).toContain('nope.jsonl');
 }, 120_000);
+
+async function recordPlain(name: string): Promise<string> {
+  const parsed = parseScenario(await readFile(join(root, `e2e/scenarios/${name}.yml`), 'utf8'));
+  const result = await recordScenario({
+    networkMode: 'stub',
+    outDir,
+    site: site.url,
+    scenario: `${name}.yml`,
+    parsed,
+    firstPartyHosts: parsed.options.firstPartyHosts,
+  });
+  return result.path;
+}
+
+test('diff pairs a hit that lands in a different step in each run, and still reports a real change', async () => {
+  const one = await recordPlain('delayed-hit-one-wait');
+  const two = await recordPlain('delayed-hit-two-waits');
+  const gcs = await recordPlain('delayed-hit-gcs');
+
+  const same = await diff([one, two]);
+  expect(same.code).toBe(0);
+  expect(same.stdout).toContain('No differences.');
+  const json = JSON.parse((await diff([one, two, '--json'])).stdout) as { added: unknown[]; removed: unknown[]; changed: unknown[] };
+  expect(json).toMatchObject({ added: [], removed: [], changed: [] });
+
+  const changed = await diff([one, gcs]);
+  expect(changed.stdout).not.toMatch(/added|removed/);
+  expect(changed.stdout).toMatch(/changed, step "wait-1" -> "wait-2": .*gcs G100 -> G111/);
+}, 120_000);
