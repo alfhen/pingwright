@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -16,7 +16,6 @@ let site: FixtureSite;
 let outDir: string;
 
 beforeAll(async () => {
-  execFileSync(process.execPath, [join(root, 'scripts/build.ts')], { cwd: root, stdio: 'inherit' });
   site = await startFixtureSite();
   const parent = join(root, 'test-results');
   await mkdir(parent, { recursive: true });

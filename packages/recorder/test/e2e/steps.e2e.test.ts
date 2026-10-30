@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { parseScenario } from '@pingwright/expect';
 import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { launchRecorder, playScenario, recordScenario, StepError } from '../../src/index.ts';
+import type { Page } from 'playwright';
+import { launchRecorder, playScenario, recordScenario, StepError, type Recorder } from '../../src/index.ts';
 
 let site: FixtureSite;
 let outDir: string;
@@ -203,6 +204,19 @@ describe('payment and log-in guard', () => {
     expect(JSON.stringify(records.requests)).not.toContain('4242424242424242');
   });
 
+  test('an evaluate step that removes another field does not fail on a card field that already held a value', async () => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    const html = '<!doctype html><input id="n"><input id="cc" autocomplete="cc-number" value="prefilled">';
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: html }));
+    try {
+      const error = await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - evaluate: "document.getElementById('n').remove()"\n`)).then(() => undefined, (e: unknown) => e);
+      expect(error).toBeUndefined();
+      expect(await recorder.context.pages()[0]!.locator('#cc').inputValue()).toBe('prefilled');
+    } finally {
+      await recorder.close();
+    }
+  });
+
   test('an evaluate step may set an ordinary field', async () => {
     const { error } = await play(`start: /\nsteps:\n  - evaluate: "document.getElementById('name').value = 'x'"\n`, 'shop.example.com');
     expect(error).toBeUndefined();
@@ -288,6 +302,62 @@ describe('handoff', () => {
     expect(after.redacted).toBeUndefined();
     expect(after.postData).toContain('secret-after');
     expect(JSON.stringify(records.requests)).not.toContain('secret-during');
+  });
+});
+
+describe('handoff redaction', () => {
+  async function playHandoff(inHandoff: (recorder: Recorder) => Promise<void>, afterHandoff?: (recorder: Recorder) => Promise<void>) {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+    const parsed = parseScenario('start: /\nsteps:\n  - handoff: Log in\n  - checkpoint: after\n');
+    await playScenario(recorder, parsed, { print: () => undefined, handoffResolver: () => inHandoff(recorder) });
+    await afterHandoff?.(recorder);
+    return (await recorder.close()).records;
+  }
+
+  test('a GET form submitted during a handoff leaves no typed value in the url, frameUrl or referer', async () => {
+    const records = await playHandoff(async (recorder) => {
+      const page = recorder.context.pages()[0]!;
+      await page.evaluate(() => (location.href = '/?user=alice&pass=secret-get'));
+      await page.waitForURL(/secret-get/);
+      await page.evaluate(() => fetch('/api/after-nav').catch(() => undefined));
+    });
+    const redacted = records.requests.filter((r) => r.redacted === 'handoff');
+    expect(redacted.find((r) => r.url.includes('/api/after-nav'))).toBeDefined();
+    expect(redacted.find((r) => r.resourceType === 'document' && r.url.includes('user='))).toBeDefined();
+    expect(JSON.stringify(redacted)).not.toContain('secret-get');
+  });
+
+  test('a send queued during a handoff and flushed after it is redacted, one queued after it is not', async () => {
+    const queue = (page: Page, tag: string) =>
+      page.evaluate((t) => {
+        const entry = { key: `key-${t}`, method: 'POST', url: `${location.origin}/api/${t}`, resourceType: 'ping', postData: `password=secret-${t}`, headers: {}, frameUrl: location.href, queuedAt: Date.now() };
+        sessionStorage.setItem('__pingwrightUnloadQueue', JSON.stringify([...JSON.parse(sessionStorage.getItem('__pingwrightUnloadQueue') ?? '[]'), entry]));
+      }, tag);
+    const records = await playHandoff(
+      (recorder) => queue(recorder.context.pages()[0]!, 'during'),
+      async (recorder) => {
+        await recorder.wait(50);
+        await queue(recorder.context.pages()[0]!, 'later');
+      },
+    );
+    const during = records.requests.find((r) => r.url.endsWith('/api/during'))!;
+    expect(during.initiator).toBe('unload');
+    expect(during.redacted).toBe('handoff');
+    expect(during.postData).toBe('[redacted]');
+    const later = records.requests.find((r) => r.url.endsWith('/api/later'))!;
+    expect(later.redacted).toBeUndefined();
+    expect(later.postData).toBe('password=secret-later');
+  });
+
+  test('a GA4 hit sent during a handoff keeps its query and is decoded', async () => {
+    const hit = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=1.1&en=page_view&dl=https%3A%2F%2Fexample.com%2F';
+    const records = await playHandoff(async (recorder) => {
+      await recorder.context.pages()[0]!.evaluate((u) => fetch(u, { method: 'POST', mode: 'no-cors', body: 'en=page_view' }).catch(() => undefined), hit);
+    });
+    const request = records.requests.find((r) => r.url.includes('/g/collect'))!;
+    expect(request.redacted).toBeUndefined();
+    expect(request.url).toContain('tid=G-PWTEST0001');
+    expect(records.hits.some((h) => h.vendor === 'ga4' && h.requestId === request.id)).toBe(true);
   });
 });
 
