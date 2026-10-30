@@ -402,7 +402,7 @@ Deferred: HTML report, sink setup commands, a replay page.
 Where the code in 0.1 differs from the design above:
 
 - **`sgtm-data-client` is minimal.** It decodes `/data` requests that came through the Stape loader, or that carry a non-empty `dtdc` object, `v` with `event` or `en`, or a JSON POST body with `event_name` and `page_location`, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
-- **Only Meta, Google and Pinterest hosts are stubbed by host in 0.1.** In 0.2 the tracker list adds LinkedIn, Microsoft UET, X and Reddit (§15.2). Hits to other vendors, such as TikTok, pass through in `stub` mode and can only appear as `unknownDestination` flags.
+- **Only Meta and Google hosts are stubbed by host in 0.1.** In 0.2, Pinterest (every path on ct.pinterest.com) and the tracker list (§15.2) are stubbed too. The tracker list adds LinkedIn, Microsoft UET, X and Reddit (§15.2). Hits to other vendors, such as TikTok, pass through in `stub` mode and can only appear as `unknownDestination` flags.
 - **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`, or a list of hosts or `*.domain` wildcards. With a list, only requests to those hosts pass and every other unknown destination still fails. `options.firstPartyHosts` marks more hosts as first party. The rule for what is flagged, and what first party means, is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
@@ -412,7 +412,7 @@ Where the code in 0.1 differs from the design above:
 - **Commands are `run`, `install-browser` and `--version`.** `diff`, `report` and the MCP server are not built.
 - **Rules are `must`, `mustNot`, `count`, `before`, `in`, `after` and `identity.hashesMatch`.** `tags.mustFire` and `tags.mustNotFire` need the GTM reporters, which are not built. The `TagReport` record type exists and no 0.1 code writes it.
 - **Chromium only.** There is no Firefox or WebKit profile. Playwright's Firefox does not start on the macOS used for development.
-- **Decoders are `ga4`, `google-ads`, `meta`, `pinterest`, `sgtm-data-client` and `stape-custom-loader`.** `microsoft-uet` is not built.
+- **Decoders are `ga4`, `google-ads`, `meta`, `sgtm-data-client` and `stape-custom-loader`.** `pinterest` comes in 0.2 (§15.2). `microsoft-uet` is not built.
 - **`Run.containerVersions` is always `{}`.** No GTM reporter fills it.
 - **`Checkpoint.consentState` is always `null`.** Checkpoints record cookies only.
 - **`addToCart` is a selector click followed by a cart check (§5).** There is no platform adapter.

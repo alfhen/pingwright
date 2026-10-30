@@ -1,0 +1,8 @@
+start: /delayed-hit
+steps:
+  - wait: 300ms
+  - wait: 4s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true }
