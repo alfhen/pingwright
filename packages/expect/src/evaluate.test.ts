@@ -12,7 +12,7 @@ import {
 } from '@pingwright/core';
 import { expect, test } from 'vitest';
 import { decodeRequest } from '@pingwright/decoders';
-import { epochForHit, evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
+import { effectiveConsentAt, epochForHit, evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 import { README_SCENARIO } from './readme-scenario.ts';
 
@@ -736,4 +736,17 @@ test('builtins rejects unknown names and severities', () => {
   expect(() => parseScenario('start: /\noptions: { builtins: { nope: warn } }')).toThrow(/unknown builtin check/);
   expect(() => parseScenario('start: /\noptions: { builtins: { sandboxPageUrl: off } }')).toThrow(/fail or warn/);
   expect(() => parseScenario('start: /\noptions: { builtins: warn }')).toThrow(/mapping/);
+});
+
+test('effectiveConsentAt gives the evaluator state for a hit near a boundary, with a custom grace window', () => {
+  const epochs = [epoch(0, 1000, 'undecided'), epoch(1000, null, denied)];
+  const boundary = hit({ vendor: 'meta', t: 980 });
+  const q = 'expect:\n  must:\n    - { vendor: meta, consent.analytics: denied }';
+  for (const [graceMs, expected] of [[50, 'denied'], [10, 'unknown']] as const) {
+    expect(effectiveConsentAt(boundary.hit, epochs, graceMs).analytics).toBe(expected);
+    const [result] = evaluate([boundary.hit, boundary.req, ...epochs] as never, parseScenario(`start: /\n${q}`), { identity, graceWindowMs: graceMs });
+    expect(result?.pass).toBe(expected === 'denied');
+  }
+  const own = hit({ vendor: 'ga4', t: 980, consent: { ...allUnknown, analytics: 'granted' } });
+  expect(effectiveConsentAt(own.hit, epochs, 50)).toMatchObject({ analytics: 'granted', ads: 'unknown' });
 });

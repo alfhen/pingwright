@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  MAX_POST_DATA,
   newId,
   nodeNow,
   readVersion,
@@ -65,7 +66,6 @@ import {
 import { Scrubber } from './gtm-scrub.ts';
 
 export const PINGWRIGHT_VERSION = readVersion();
-export const MAX_POST_DATA = 64 * 1024;
 const REDACTED_VALUE = '[redacted]';
 
 
@@ -80,6 +80,8 @@ export interface RecorderOptions {
   firstPartyHosts?: string[];
   /** Event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
+  /** Stored on the run record as `graceWindowMs`. */
+  graceWindowMs?: number;
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
@@ -270,6 +272,7 @@ export class Recorder {
       containerVersions: {},
       identity: null,
       coverage: selfTest.coverage,
+      ...(this.options.graceWindowMs !== undefined ? { graceWindowMs: this.options.graceWindowMs } : {}),
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);
@@ -719,6 +722,7 @@ export class Recorder {
       runId: this.runId,
       stepId: step?.id ?? this.currentStepId,
       label,
+      t: nodeNow(),
       consentState: null,
       cookies,
     };

@@ -115,7 +115,8 @@ Why. Version 2 adds `Hit.fields` and `Hit.idFields`. A version 1 record has no s
 | --- | --- | --- |
 | `Hit.fields?: string[]` | `packages/core` records, filled by the decoders | #350, #352 |
 | `Hit.idFields?: string[]` | same | #352, #354 |
-| `Checkpoint.t: number` | `packages/core`, set where checkpoints are created | #351 |
+| `Hit.fieldsComplete?: boolean` | same | #350, #352 |
+| `Checkpoint.t?: number` | `packages/core`, set where checkpoints are created. A cookie rule reads a checkpoint without `t` as "cannot evaluate" | #351 |
 | `Result.note?: 'stubNoCookies' \| 'cannotEvaluateBody' \| 'fieldsNotRecorded'` | `packages/core`, set by the evaluator (R03, R06, R08) | #350, #351, #352, #354 |
 | `Run.graceWindowMs?: number` | `packages/core`, set from the scenario's `graceWindow` option (the default when unset) where the run record is made | #354 |
 | `Run.variant?: string` | `packages/core`, set by `suite` | #353, #354 |

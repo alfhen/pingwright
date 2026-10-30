@@ -1,4 +1,4 @@
-import { newId, type DataLayerEvent, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request } from '@pingwright/core';
+import { globToRegExp, newId, type DataLayerEvent, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request } from '@pingwright/core';
 import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import { findForeignData, hostMatches } from '@pingwright/expect';
 import { getDomain } from 'tldts';
@@ -116,10 +116,6 @@ const GA4_ALIASES: Readonly<Record<string, string>> = {
   checkout_completed: 'purchase',
   search_submitted: 'search',
 };
-
-function globToRegExp(glob: string): RegExp {
-  return new RegExp(`^${glob.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
-}
 
 export interface UnloadGapInput {
   runId: Id<'run'>;

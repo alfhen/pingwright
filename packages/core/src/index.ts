@@ -6,3 +6,5 @@ export * from './store.ts';
 export * from './identity.ts';
 export * from './library.ts';
 export * from './version.ts';
+export * from './glob.ts';
+export * from './limits.ts';

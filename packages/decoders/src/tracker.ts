@@ -1,6 +1,7 @@
 import { isLibraryLoadPath, type Hit, type Request } from '@pingwright/core';
 import { isSandboxPageUrl } from './sandbox.ts';
 import { defaultHitId, type NewHitId } from './decoder.ts';
+import { bodyComplete, bodyEntries, queryEntries, withFields } from './fields.ts';
 import { trackerFor, trackerList, type TrackerEntry } from './tracker-list.ts';
 
 const LOADS = new Set(['script', 'stylesheet', 'font', 'document']);
@@ -42,8 +43,9 @@ export function decodeTracker(req: Request, list: readonly TrackerEntry[] = trac
   if (!entry) return [];
   if (!entry.paths && !carriesData(req)) return [];
   const params = new URL(req.url).searchParams;
+  const body = bodyEntries(req);
   return [
-    {
+    withFields({
       type: 'hit',
       id: newHitId(),
       runId: req.runId,
@@ -57,6 +59,6 @@ export function decodeTracker(req: Request, list: readonly TrackerEntry[] = trac
       page: firstParam(params, PAGE_PARAMS) ?? (isSandboxPageUrl(req.frameUrl) ? null : req.frameUrl),
       transport: 'tracker-list',
       params: {},
-    },
+    }, [...queryEntries(params), ...body.entries], body.parsed && bodyComplete(req)),
   ];
 }

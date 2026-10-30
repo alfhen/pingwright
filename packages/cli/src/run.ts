@@ -2,7 +2,7 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { PingwrightRecord, Result, RunRecords } from '@pingwright/core';
 import { parseTrackerList, type TrackerEntry } from '@pingwright/decoders';
-import { evaluate, parseScenario, ScenarioError } from '@pingwright/expect';
+import { DEFAULT_GRACE_MS, evaluate, parseScenario, ScenarioError } from '@pingwright/expect';
 import {
   GtmOverrideError,
   GtmOverrideFailure,
@@ -141,6 +141,7 @@ export async function runCommand(args: RunArgs, rawIo: Io): Promise<number> {
       parsed,
       firstPartyHosts: parsed.options.firstPartyHosts,
       unloadGapIgnore: parsed.options.unloadGapIgnore,
+      graceWindowMs: parsed.options.graceWindow ?? DEFAULT_GRACE_MS,
       seed: args.seed,
       headed: args.headed,
       netLog: args.netLog,
