@@ -3,11 +3,11 @@
 ## Install
 
 ```bash
-npm i -g pingwright@next
+npm i -g pingwright
 pingwright install-browser
 ```
 
-`@next` is the newest release candidate. Pingwright needs Node 22.18 or later.
+`npm i -g pingwright@next` installs the newest release candidate, when there is one. Pingwright needs Node 22.18 or later.
 
 You can also install a release from its git tag:
 

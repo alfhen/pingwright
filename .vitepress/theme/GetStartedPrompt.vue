@@ -5,7 +5,7 @@ const prompt = `Set up Pingwright to test the tracking and the cookie consent on
 
 Pingwright is a command-line tool. It opens my site in a real browser, acts as a visitor, records every tracking request and checks the requests against rules that I write. The docs are at https://pingwright.dev.
 
-1. Install it with \`npm i -g pingwright@next\`, then run \`pingwright install-browser\`. Check that \`pingwright --version\` works.
+1. Install it with \`npm i -g pingwright\`, then run \`pingwright install-browser\`. Check that \`pingwright --version\` works.
 2. Read https://pingwright.dev/docs/guide/first-run and https://pingwright.dev/docs/cli before you write a scenario. Use \`pingwright run --help\` for the flags. Do not guess flags or step names.
 3. Ask me for the address of my site and the tracking tools it uses, for example GA4, Google Ads, Meta or Pinterest.
 4. Write three scenarios in a \`pingwright/\` folder: the visitor ignores the cookie banner (\`consent: none\`), accepts it (\`consent: accept\`) and rejects it (\`consent: reject\`). Each scenario opens the home page and one product or content page. Add rules: no Meta or Google Ads hit before consent, no marketing hit after a reject, and the analytics hits that I expect after an accept.

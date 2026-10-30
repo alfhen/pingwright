@@ -85,7 +85,7 @@ test('the first-run guide copies the get started prompt', async () => {
   await page.getByRole('button', { name: 'Copy get started prompt' }).click();
   await expect.poll(() => page.locator('.get-started-status').textContent()).toBe('Copied');
   const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied).toContain('npm i -g pingwright@next');
+  expect(copied).toContain('npm i -g pingwright`');
   expect(copied).toContain(await page.locator('.get-started-text').textContent());
   await context.close();
 });
