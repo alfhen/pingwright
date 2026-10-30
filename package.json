@@ -1,6 +1,6 @@
 {
   "name": "pingwright",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0-rc.2",
   "description": "Agent-first testing for website tracking and consent.",
   "license": "MIT",
   "repository": {
