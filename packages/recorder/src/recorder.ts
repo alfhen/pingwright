@@ -387,9 +387,11 @@ export class Recorder {
   /** Answers a gtm.js request with the preview build, or from the test origin. Returns false when the request is not one of those. */
   private async routeGtm(route: Route, record: Request): Promise<boolean> {
     const { gtmOverride, testGtmOrigin } = this;
-    const matched = gtmOverride !== undefined && matchesGtmContainer(record.url, gtmOverride.container);
-    if (!matched && !(testGtmOrigin && isGtmJsUrl(record.url))) return false;
-    const target = matched ? previewFetchUrl(gtmOverride, testGtmOrigin) : testOriginUrl(record.url, testGtmOrigin!);
+    // record.url may be redacted during a handoff window; match on the live URL.
+    const liveUrl = route.request().url();
+    const matched = gtmOverride !== undefined && matchesGtmContainer(liveUrl, gtmOverride.container);
+    if (!matched && !(testGtmOrigin && isGtmJsUrl(liveUrl))) return false;
+    const target = matched ? previewFetchUrl(gtmOverride, testGtmOrigin) : testOriginUrl(liveUrl, testGtmOrigin!);
     let response: APIResponse;
     try {
       response = await route.fetch({ url: target });
