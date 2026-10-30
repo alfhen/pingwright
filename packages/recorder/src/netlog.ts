@@ -1,3 +1,8 @@
+import { newId, type Id, type Request, type Response, type Step } from '@pingwright/core';
+import { isCollectionEndpoint, type TrackerEntry } from '@pingwright/decoders';
+import { redactHeaders } from './redact.ts';
+import { isKnownVendorCollection } from './stub.ts';
+
 export interface NetLogRequest {
   t: number;
   method: string;
@@ -78,4 +83,52 @@ export function parseNetLog(text: string): NetLogRequest[] {
     }
   }
   return [...bySource.values()];
+}
+
+/** Collection requests that the net log shows and no context hook saw. Each recorded request uses up one log entry of the same method and URL. */
+export function mergeNetLog(
+  entries: readonly NetLogRequest[],
+  recorded: readonly Request[],
+  steps: readonly Step[],
+  trackers: readonly TrackerEntry[],
+  runId: Id<'run'>,
+): { requests: Request[]; responses: Response[] } {
+  const seen = new Map<string, number>();
+  for (const r of recorded) {
+    const key = `${r.method} ${r.url}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  const requests: Request[] = [];
+  const responses: Response[] = [];
+  for (const entry of entries) {
+    const key = `${entry.method} ${entry.url}`;
+    const count = seen.get(key) ?? 0;
+    if (count > 0) {
+      seen.set(key, count - 1);
+      continue;
+    }
+    const candidate = { method: entry.method, url: entry.url, resourceType: 'other', postData: null } as Request;
+    if (!/^https?:/.test(entry.url) || !(isCollectionEndpoint(candidate, trackers) || isKnownVendorCollection(candidate))) continue;
+    const step = steps.findLast((s) => s.startedAt <= entry.t);
+    const record: Request = {
+      type: 'request',
+      id: newId('request'),
+      runId,
+      stepId: step?.id ?? null,
+      t: entry.t,
+      method: entry.method,
+      url: entry.url,
+      resourceType: 'other',
+      frameUrl: null,
+      initiator: 'unload',
+      headers: redactHeaders(entry.headers),
+      postData: null,
+      outcome: entry.failure ? 'failed' : 'passed',
+      captured: 'netlog',
+      ...(entry.failure ? { failure: entry.failure } : {}),
+    };
+    requests.push(record);
+    if (entry.status !== null) responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: entry.status, setCookieNames: [] });
+  }
+  return { requests, responses };
 }

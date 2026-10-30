@@ -43,7 +43,8 @@ import { routeCollector, type CollectorHandler, type ParsedReport } from './coll
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
 import { buildFlags, buildUnloadGapFlags } from './flags.ts';
-import { parseNetLog, type NetLogRequest } from './netlog.ts';
+import { mergeNetLog, parseNetLog, type NetLogRequest } from './netlog.ts';
+import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
@@ -68,7 +69,6 @@ export const PINGWRIGHT_VERSION = readVersion();
 export const MAX_POST_DATA = 64 * 1024;
 const REDACTED_VALUE = '[redacted]';
 
-const REDACTED_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
 
 export interface RecorderOptions {
   networkMode: Extract<NetworkMode, 'stub' | 'live'>;
@@ -109,12 +109,6 @@ export interface RunResult {
   records: RunRecords;
   /** Why the GTM override failed: no request matched, or a preview fetch was not 200. Absent when it worked or none was given. */
   gtmOverrideFailure?: string;
-}
-
-function redactHeaders(headers: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(headers).map(([k, v]) => [k, REDACTED_HEADERS.has(k.toLowerCase()) ? '[redacted]' : v]),
-  );
 }
 
 function redactRefererQuery(headers: Record<string, string>): Record<string, string> {
@@ -392,46 +386,6 @@ export class Recorder {
     this.routed.add(record.id);
     this.extraRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
-  }
-
-  /** Adds collection requests that the net log shows and no context hook saw. Each recorded request uses up one log entry of the same method and URL. */
-  private mergeNetLog(entries: NetLogRequest[], recorded: readonly Request[]): void {
-    const seen = new Map<string, number>();
-    for (const r of recorded) {
-      const key = `${r.method} ${r.url}`;
-      seen.set(key, (seen.get(key) ?? 0) + 1);
-    }
-    for (const raw of entries) {
-      const entry = raw;
-      const key = `${entry.method} ${entry.url}`;
-      const count = seen.get(key) ?? 0;
-      if (count > 0) {
-        seen.set(key, count - 1);
-        continue;
-      }
-      const candidate = { method: entry.method, url: entry.url, resourceType: 'other', postData: null } as Request;
-      if (!/^https?:/.test(entry.url) || !(isCollectionEndpoint(candidate, this.trackers) || isKnownVendorCollection(candidate))) continue;
-      const step = this.steps.findLast((s) => s.startedAt <= entry.t);
-      const record: Request = {
-        type: 'request',
-        id: newId('request'),
-        runId: this.runId,
-        stepId: step?.id ?? null,
-        t: entry.t,
-        method: entry.method,
-        url: entry.url,
-        resourceType: 'other',
-        frameUrl: null,
-        initiator: 'unload',
-        headers: redactHeaders(entry.headers),
-        postData: null,
-        outcome: entry.failure ? 'failed' : 'passed',
-        captured: 'netlog',
-        ...(entry.failure ? { failure: entry.failure } : {}),
-      };
-      this.extraRequests.push(record);
-      if (entry.status !== null) this.recordResponseFor(record, entry.status, []);
-    }
   }
 
   private async readNetLog(): Promise<NetLogRequest[] | undefined> {
@@ -797,7 +751,11 @@ export class Recorder {
     await Promise.allSettled([...this.pending]);
 
     const netLog = await this.readNetLog();
-    if (netLog) this.mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests]);
+    if (netLog) {
+      const { requests: added, responses } = mergeNetLog(netLog, [...this.requests.values(), ...this.extraRequests], this.steps, this.trackers, this.runId);
+      this.extraRequests.push(...added);
+      this.responses.push(...responses);
+    }
     const requests = [...this.requests.values(), ...this.extraRequests];
     const hits: Hit[] = requests.flatMap((r) => decodeRequest(r, undefined, this.trackers));
     const flags = buildFlags({
