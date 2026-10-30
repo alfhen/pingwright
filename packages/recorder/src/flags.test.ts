@@ -204,3 +204,48 @@ test.each([
 test('unload gap: a hit of another name does not clear the event', () => {
   expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('page_view', 2000)], navigations: [3000] })).toHaveLength(1);
 });
+
+const sgtmHit = (event: string, t: number): Hit => ({ ...ga4Hit(event, t), vendor: 'sgtm' }) as Hit;
+
+test('unload gap: an sgtm hit with the event name does not cover the missing GA4 hit', () => {
+  const event = pushed('product_added_to_cart', 1000);
+  const flags = gap({ events: [event], hits: [sgtmHit('product_added_to_cart', 1100), ga4Hit('page_view', 500)], navigations: [4000] });
+  expect(flags).toHaveLength(1);
+  expect(flags[0]).toMatchObject({ kind: 'unloadGap', recordIds: [event.id] });
+  expect(flags[0]!.detail).toContain('no ga4 hit');
+});
+
+test('unload gap: a later GA4 hit with a GA4 event name covers an event with another name', () => {
+  const hits = [sgtmHit('item_added', 1100), ga4Hit('add_to_cart', 1200)];
+  expect(gap({ events: [pushed('item_added', 1000)], hits, navigations: [4000] })).toEqual([]);
+});
+
+test('unload gap: an sgtm hit alone does not flag when the run has no GA4', () => {
+  expect(gap({ events: [pushed('item_added', 1000)], hits: [sgtmHit('item_added', 1100)], navigations: [4000] })).toEqual([]);
+});
+
+test('unload gap: an event that never produced a hit is skipped', () => {
+  expect(gap({ events: [pushed('consent_update', 1000)], hits: [ga4Hit('page_view', 500)], navigations: [4000] })).toEqual([]);
+});
+
+test('unload gap: ignore takes names and globs', () => {
+  const input = { events: [pushed('add_to_cart', 1000)], navigations: [4000] };
+  expect(gap({ ...input, ignore: ['add_*'] })).toEqual([]);
+  expect(gap({ ...input, ignore: ['add_to_cart'] })).toEqual([]);
+  expect(gap({ ...input, ignore: ['add_to_car'] })).toHaveLength(1);
+  expect(gap({ ...input, ignore: ['x.*'] })).toHaveLength(1);
+});
+
+test('unload gap: a GA4 hit after the next navigation does not cover the event', () => {
+  const hits = [sgtmHit('product_added_to_cart', 1100), ga4Hit('begin_checkout', 9000)];
+  expect(gap({ events: [pushed('product_added_to_cart', 1000)], hits, navigations: [4000, 8000] })).toHaveLength(1);
+});
+
+test('unload gap: a same-name GA4 hit on a later page does not cover a lost one', () => {
+  const hits = [ga4Hit('add_to_cart', 21000)];
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits, navigations: [4000, 30000] })).toHaveLength(1);
+});
+
+test('unload gap: a GA4 hit just after the navigation starts still covers the event', () => {
+  expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('add_to_cart', 4500)], navigations: [4000] })).toEqual([]);
+});
