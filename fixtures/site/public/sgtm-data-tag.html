@@ -7,10 +7,12 @@
 </head>
 <body>
 <h1>Server container Data Tag</h1>
-<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields with an empty phone and hashed postal code and country, <code>?form=list</code> sends <code>user_data</code> with lists.</p>
+<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields with an empty phone and hashed postal code and country, <code>?form=list</code> sends <code>user_data</code> with lists. <code>?wrong=postal</code> or <code>?wrong=country</code> hashes a different value for that field.</p>
 <script>
 (function () {
-  var form = new URLSearchParams(location.search).get('form') || 'top';
+  var query = new URLSearchParams(location.search);
+  var form = query.get('form') || 'top';
+  var wrong = query.get('wrong');
   var stored = JSON.parse(sessionStorage.getItem('pw_checkout') || '{}');
   function sha256Hex(value) {
     return crypto.subtle.digest('SHA-256', new TextEncoder().encode(value.trim().toLowerCase())).then(function (buf) {
@@ -24,8 +26,8 @@
     last_name: stored['last-name'] || '',
     street: stored.address1 || '',
     city: stored.city || '',
-    postal_code: stored.zip || '',
-    country: stored.country || 'DE'
+    postal_code: wrong === 'postal' ? '00000' : stored.zip || '',
+    country: wrong === 'country' ? 'FR' : stored.country || 'DE'
   };
   var names = Object.keys(fields);
   Promise.all(names.map(function (k) { return sha256Hex(fields[k]); })).then(function (hashes) {
