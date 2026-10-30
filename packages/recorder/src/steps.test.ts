@@ -72,8 +72,12 @@ const request = (over: Partial<Request>): Request =>
 const dl = (event: string | null) => ({ event }) as never;
 
 describe('the default cart check', () => {
-  const check = (requests: Request[], events: ReturnType<typeof dl>[] = [], responses: { requestId: string; status: number }[] = [], pattern?: string) =>
-    createCartCheck(pattern)({ requests, responses: responses as never, dataLayerEvents: events });
+  const check = (
+    requests: Request[],
+    events: ReturnType<typeof dl>[] = [],
+    responses: { requestId: string; status: number }[] = requests.map((r) => ({ requestId: r.id, status: 200 })),
+    pattern?: string,
+  ) => createCartCheck(pattern)({ requests, responses: responses as never, dataLayerEvents: events });
 
   test('wants a cart write, a cart mutation or an add_to_cart event', () => {
     expect(check([])).toBe(false);
@@ -96,16 +100,17 @@ describe('the default cart check', () => {
     expect(check([request({ method: 'GET', url: 'https://shop.example.com/cart/change?id=7' })])).toBe(false);
   });
 
-  test('wants a 2xx when a response was recorded', () => {
+  test('wants a recorded 2xx response', () => {
     const add = request({ id: 'req_1' as Request['id'], method: 'POST', url: 'https://shop.example.com/cart/add.js' });
     expect(check([add], [], [{ requestId: 'req_1', status: 422 }])).toBe(false);
     expect(check([add], [], [{ requestId: 'req_1', status: 200 }])).toBe(true);
-    expect(check([add], [], [{ requestId: 'other', status: 500 }])).toBe(true);
+    expect(check([add], [], [])).toBe(false);
+    expect(check([add], [], [{ requestId: 'other', status: 200 }])).toBe(false);
   });
 
   test('takes a scenario pattern on top', () => {
     const custom = request({ method: 'POST', url: 'https://shop.example.com/api/basket/items' });
     expect(check([custom])).toBe(false);
-    expect(check([custom], [], [], '/api/basket/')).toBe(true);
+    expect(check([custom], [], undefined, '/api/basket/')).toBe(true);
   });
 });

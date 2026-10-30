@@ -254,6 +254,26 @@ describe('addToCart', () => {
     expect((error as StepError).message).toContain('click did not add to cart');
   });
 
+  test('fails when the cart request is answered with a 422 after a delay', async () => {
+    const page = '<!doctype html><title>Shop</title><button id="add" onclick="fetch(\'/cart/add.js\', { method: \'POST\' })">Add</button>';
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    await recorder.context.route('https://shop.example.com/**', async (route) => {
+      if (route.request().url().endsWith('/cart/add.js')) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await route.fulfill({ status: 422, contentType: 'application/json', body: '{}' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: page });
+      }
+    });
+    const error = await playScenario(recorder, parseScenario('start: /\nsteps:\n  - addToCart: "#add"\n'), { cartTimeoutMs: 1500 }).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    await recorder.close();
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toContain('click did not add to cart');
+  });
+
   test('passes with a custom cart check', async () => {
     const parsed = parseScenario('start: /products/fake-tee\nsteps:\n  - addToCart: "#pw-accept"\n');
     const cartCheck = ({ dataLayerEvents }: { dataLayerEvents: { isConsentCommand: boolean }[] }) => dataLayerEvents.some((e) => e.isConsentCommand);
