@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Identifiers</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/banner.js"></script>
+</head>
+<body>
+<h1>Identifiers</h1>
+<p>Sends a GA4, a Meta and a server container hit that carry identifiers, once the banner is answered. <code>?state=denied</code> (default) or <code>?state=granted</code> sets the Consent Mode state the GA4 and server hits claim. The hashes are of the identity typed in the checkout form. <code>?control=1</code> sends a client-ID-only GA4 hit and a Meta hit with <code>fbp</code> instead.</p>
+<script>
+(function () {
+  var query = new URLSearchParams(location.search);
+  var granted = query.get('state') === 'granted';
+  var control = query.get('control') === '1';
+  var gcs = granted ? 'G111' : 'G100';
+  var cid = '1111111111.2222222222';
+  var sent = false;
+
+  function image(base, params) {
+    new Image().src = base + '?' + new URLSearchParams(params).toString();
+  }
+
+  function sendControl() {
+    image('https://www.google-analytics.com/g/collect', { v: '2', tid: 'G-PWTEST0001', cid: cid, en: 'page_view', gcs: gcs, dl: location.href });
+    image('https://www.facebook.com/tr/', { id: '100000000000001', ev: 'PageView', fbp: 'fb.1.1700000000000.1234567890', dl: location.href });
+  }
+
+  function sendIdentifiers() {
+    window.pwSha256(window.pwIdentity().email).then(function (hash) {
+      image('https://www.google-analytics.com/g/collect', {
+        v: '2', tid: 'G-PWTEST0001', cid: cid, en: 'purchase', gcs: gcs, uid: 'fixture-user-0001', 'ep.token': hash, dl: location.href
+      });
+      image('https://www.facebook.com/tr/', {
+        id: '100000000000001', ev: 'Purchase', 'ud[em]': hash, external_id: hash, dl: location.href
+      });
+      fetch(window.__PW_FIXTURE.sgtmUrl + '/data?v=2&event=purchase&gcs=' + gcs, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          event_name: 'purchase',
+          page_location: location.href,
+          user_data: { email_address: hash },
+          external_id: hash
+        })
+      }).catch(function () {});
+    });
+  }
+
+  // Hits go out 400 ms after the answer, so the consent step is recorded first.
+  function sendAll() {
+    if (sent) return;
+    sent = true;
+    setTimeout(control ? sendControl : sendIdentifiers, 400);
+  }
+  if (window.pwConsent.choice()) sendAll();
+  window.pwConsent.onAnswer(sendAll);
+})();
+</script>
+</body>
+</html>

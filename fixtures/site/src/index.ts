@@ -33,6 +33,13 @@ const pages: Record<string, string> = {
   '/sgtm-data-tag': 'sgtm-data-tag.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
   '/delayed-hit': 'delayed-hit.html',
+  '/sgtm-leak': 'sgtm-leak.html',
+  '/identifiers': 'identifiers.html',
+  '/cookies': 'cookies.html',
+  '/tiles': 'tiles.html',
+  '/select': 'select.html',
+  '/handoff': 'handoff.html',
+  '/handoff/second': 'handoff-second.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',
@@ -82,6 +89,8 @@ function shopHandler(config: string) {
     if (path === '/fixture-config.js') {
       res.writeHead(200, { 'content-type': contentTypes['.js']!, 'cache-control': 'no-store' });
       res.end(config);
+    } else if (path === '/session/start') {
+      res.writeHead(204, { 'set-cookie': '_pwid=pwfake-0001; Path=/; Max-Age=3600; SameSite=Lax', 'cache-control': 'no-store' }).end();
     } else if (/^\/web-pixels@[\w.-]+\/sandbox\/modern\/$/.test(path)) {
       await sendFile(res, 'pixel.html');
     } else if (path === containerPixelPath) {
@@ -136,6 +145,10 @@ function deobfuscate(value: string | null): string {
 function sgtmHandler(thirdPartyUrl: string, received: string[]) {
   return (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (url.pathname === '/pwcookie') {
+      res.writeHead(204, { 'set-cookie': '_pwdcid=pwfake-client.0001; Path=/; Max-Age=3600' }).end();
+      return;
+    }
     const real = url.pathname === '/pwstape' ? decodeBase64(url.searchParams.get('pk')) : '';
     const scriptReal = /^\/[a-z0-9-]+\.js$/.test(url.pathname) ? deobfuscate(url.searchParams.get('k')) : '';
     if (/^\/pwredir-[a-z0-9]+\.js$/.test(url.pathname)) {

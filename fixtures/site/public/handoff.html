@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Handoff</title>
+</head>
+<body>
+<h1>Handoff</h1>
+<p>A small form and a link to a second page, for testing a handoff step. <code>?listener=1</code> adds a document-level click listener that sends a GA4 image hit.</p>
+<form id="handoff-form">
+  <label>Note <input id="note" name="note"></label>
+  <button id="handoff-submit" type="submit">Save</button>
+</form>
+<div id="saved"></div>
+<a id="to-second" href="/handoff/second">Second page</a>
+<script>
+document.getElementById('handoff-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  document.getElementById('saved').textContent = 'saved';
+});
+if (new URLSearchParams(location.search).get('listener') === '1') {
+  document.addEventListener('click', function () {
+    new Image().src = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=1111111111.2222222222&en=click&dl=' + encodeURIComponent(location.href);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tiles</title>
+<style>
+.tile { display: inline-block; width: 3rem; height: 3rem; margin: .5rem; border: 2px solid #666; cursor: pointer; }
+.tile[data-on] { outline: 3px solid #06c; }
+#white { background: #fff; }
+#black { background: #000; }
+</style>
+</head>
+<body>
+<h1>Tiles</h1>
+<p>Two colour tiles, <code>White (01)</code> and <code>Black (02)</code>. <code>?theme=button</code> (default) gives them <code>role=button</code>, <code>?theme=radio</code> gives <code>role=radio</code>, <code>?theme=plain</code> uses a <code>div</code> with a <code>title</code>.</p>
+<div id="tiles"></div>
+<div id="selected">none</div>
+<script>
+(function () {
+  var theme = new URLSearchParams(location.search).get('theme') || 'button';
+  var holder = document.getElementById('tiles');
+  if (theme === 'radio') holder.setAttribute('role', 'radiogroup');
+  [['white', 'White (01)'], ['black', 'Black (02)']].forEach(function (c) {
+    var tile = document.createElement('div');
+    tile.id = c[0];
+    tile.className = 'tile';
+    tile.title = c[1];
+    if (theme === 'button') {
+      tile.setAttribute('role', 'button');
+      tile.tabIndex = 0;
+    } else if (theme === 'radio') {
+      tile.setAttribute('role', 'radio');
+      tile.setAttribute('aria-checked', 'false');
+      tile.tabIndex = 0;
+    }
+    tile.addEventListener('click', function () {
+      document.querySelectorAll('.tile').forEach(function (t) {
+        t.removeAttribute('data-on');
+        if (theme === 'radio') t.setAttribute('aria-checked', 'false');
+      });
+      tile.setAttribute('data-on', '');
+      if (theme === 'radio') tile.setAttribute('aria-checked', 'true');
+      document.getElementById('selected').textContent = c[1];
+    });
+    holder.appendChild(tile);
+  });
+})();
+</script>
+</body>
+</html>

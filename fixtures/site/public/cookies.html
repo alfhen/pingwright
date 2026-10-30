@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cookies</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/banner.js"></script>
+</head>
+<body>
+<h1>Cookies</h1>
+<p>Sets cookies the way a shop and a server container do. <code>?when=before</code> (default) requests <code>/session/start</code> at once, which answers <code>Set-Cookie: _pwid</code>. <code>?when=after</code> requests it only once the banner is answered. A script always sets <code>_ga_PWTEST</code>. A Stape-style loader request to the mock host answers <code>Set-Cookie: _pwdcid</code>.</p>
+<script>
+(function () {
+  var when = new URLSearchParams(location.search).get('when') === 'after' ? 'after' : 'before';
+  document.cookie = '_ga_PWTEST=GS1.1.1700000000.1.0.1700000000.0.0.0; path=/; max-age=3600; SameSite=Lax';
+
+  function sessionStart() {
+    fetch('/session/start').catch(function () {});
+  }
+  var pk = btoa('/data?v=2&event=page_view');
+  fetch(window.__PW_FIXTURE.sgtmUrl + '/pwcookie?pk=' + encodeURIComponent(pk), { mode: 'no-cors' }).catch(function () {});
+
+  if (when === 'before') sessionStart();
+  else window.pwConsent.onAnswer(sessionStart);
+})();
+</script>
+</body>
+</html>
