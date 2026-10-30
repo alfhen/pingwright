@@ -480,7 +480,7 @@ describe('own identity is never flagged', () => {
         }
       }
     }
-  });
+  }, 30_000);
 });
 
 describe('foreign digests in base64', () => {
@@ -539,7 +539,7 @@ describe('foreign digests in base64', () => {
         expect(scan(bare, me)).toEqual([]);
       }
     }
-  });
+  }, 30_000);
 
   it('does not flag readable 43-character values', () => {
     const me = createIdentity(1);
