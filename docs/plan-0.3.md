@@ -115,7 +115,8 @@ Why. Version 2 adds `Hit.fields` and `Hit.idFields`. A version 1 record has no s
 | --- | --- | --- |
 | `Hit.fields?: string[]` | `packages/core` records, filled by the decoders | #350, #352 |
 | `Hit.idFields?: string[]` | same | #352, #354 |
-| `Checkpoint.t: number` | `packages/core`, set where checkpoints are created | #351 |
+| `Hit.fieldsComplete?: boolean` | same | #350, #352 |
+| `Checkpoint.t?: number` | `packages/core`, set where checkpoints are created. A cookie rule reads a checkpoint without `t` as "cannot evaluate" | #351 |
 | `Result.note?: 'stubNoCookies' \| 'cannotEvaluateBody' \| 'fieldsNotRecorded'` | `packages/core`, set by the evaluator (R03, R06, R08) | #350, #351, #352, #354 |
 | `Run.graceWindowMs?: number` | `packages/core`, set from the scenario's `graceWindow` option (the default when unset) where the run record is made | #354 |
 | `Run.variant?: string` | `packages/core`, set by `suite` | #353, #354 |
@@ -134,7 +135,7 @@ The sorted, unique names of non-empty fields in the decoded payload of that one 
 
 ### `Hit.fieldsComplete`
 
-`false` when the decoder could not see the whole payload: the body was cut at the 64 KiB `postData` cap, a JSON body failed to parse, or the body is `null` because the request was captured from the net log. `true` otherwise. It is undefined on version 1 records. A rule or check that reads `fields` from a hit with `fieldsComplete: false` reports `cannot evaluate: body not fully recorded` and never passes. A body is cut when `postData.length >= MAX_POST_DATA`. The recorder slices to that cap, so a body of exactly the cap length counts as cut. R01 moves `MAX_POST_DATA` from `packages/recorder` to `packages/core`, which the decoders can import (recorder depends on decoders, not the reverse). `Request` gets no new field. A `/data` POST whose body was cut cannot pass the JSON signature test in `sgtm-data-client`, so R01 also makes that decoder match a `/data` POST on a body that starts with `{` and is cut, and gives it a hit with `fieldsComplete: false` and no fields. Without this, a cut body would make no hit, would pass through unstubbed, and a `mustNot body.has` would select nothing and pass. This matters most for the case the field test found, a data tag that forwards the whole dataLayer and every cookie, which is the body most likely to pass the cap.
+`false` when the decoder could not see the whole payload: the body was cut at the 64 KiB `postData` cap, a JSON body failed to parse, or the body is `null` for a net-log request whose method can carry a body (POST, PUT, PATCH). `true` otherwise. It is undefined on version 1 records. A rule or check that reads `fields` from a hit with `fieldsComplete: false` reports `cannot evaluate: body not fully recorded` and never passes. A body is cut when `postData.length >= MAX_POST_DATA`. The recorder slices to that cap, so a body of exactly the cap length counts as cut. R01 moves `MAX_POST_DATA` from `packages/recorder` to `packages/core`, which the decoders can import (recorder depends on decoders, not the reverse). `Request` gets no new field. A `/data` POST whose body was cut cannot pass the JSON signature test in `sgtm-data-client`, so R01 also makes that decoder match a `/data` POST on a cut body that starts with `{` and whose kept prefix holds the `event_name` and `page_location` signature keys, and gives it a hit with `fieldsComplete: false` and no fields. Without this, a cut body would make no hit, would pass through unstubbed, and a `mustNot body.has` would select nothing and pass. This matters most for the case the field test found, a data tag that forwards the whole dataLayer and every cookie, which is the body most likely to pass the cap.
 
 ### `Hit.idFields`
 
@@ -163,7 +164,7 @@ expect:
 - `body.has` is a list of names. The filter matches a hit that has any listed name in `Hit.fields`. A name may use `*` as a glob over zero or more characters, with the shared `globToRegExp` helper in `packages/core` (R01 moves it there from `packages/recorder/src/flags.ts`, where `unloadGapIgnore` uses it), so `cookie*` matches `cookie`.
 - `body.only` is an allowlist. See the semantics below.
 - Both read the decoded payload (query, body and `dtdc`), not only the body. The key keeps the name the issue asked for. See the flagged concerns.
-- Default ignore list for `body.only`: transport fields that every hit of that vendor carries. GA4: `v`, `tid`, `gtm`, `_p`, `_s`, `sid`, `sct`, `seg`, `dl`, `dr`, `dt`, `en`, `cid`, `ul`, `sr`, `_eu`, `_et`, `gcs`, `gcd`, `npa`, `dma`, `are`, `frm`, `pscdl`, `tfd`, `ec`. Meta: `id`, `ev`, `dl`, `rl`, `if`, `ts`, `sw`, `sh`, `v`, `r`, `ec`, `o`, `fbp`, `it`, `coo`, `rqm`. The server-container data client: `v`, `tid`, `event`, `en`, `dtdc`. The lists live in the decoders and are documented. `body.only` can add to them with `body.ignore: [names]`.
+- Default ignore list for `body.only`: transport fields that every hit of that vendor carries. The lists are longer than a short set of transport names and take globs; see the exports in the decoders. The server-container data client: `v`, `tid`, `event`, `en`, `dtdc`. The lists live in the decoders and are documented. `body.only` can add to them with `body.ignore: [names]`.
 - Without `body.only` or `body.has` nothing changes. A rule with neither key never reads `Hit.fields`.
 
 Semantics of `body.only`. A `must` entry normally passes when at least one hit matches. With `body.only` in the filter, that is wrong: one clean hit would hide a leaking one. So `body.only` is not part of the match. The other keys select the hits. Then:
@@ -357,7 +358,7 @@ Left out on purpose:
 - reading the dataLayer to compare. `unloadGap` already compares events, and the field names are enough here;
 - a separate "payload" record. The names live on the hit.
 
-Cost. One new optional field on `Hit`. Two keys in the scenario schema. No flag.
+Cost. Two new optional fields on `Hit` (`fields`, `fieldsComplete`). Every decoder sets both on a version 2 hit. Two keys in the scenario schema. No flag.
 
 ### #351: the cookie set before consent
 

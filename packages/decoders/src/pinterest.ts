@@ -1,5 +1,6 @@
 import type { Hit, Request } from '@pingwright/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
+import { jsonEntries, queryEntries, withFields, type FieldEntry } from './fields.ts';
 
 function onCollectionHost(req: Request): URL | undefined {
   try {
@@ -80,8 +81,20 @@ export const pinterest: Decoder = {
       ids.hashedEmail = true;
       params.hashedEmail = em;
     }
+    const entries: FieldEntry[] = [];
+    let complete = true;
+    for (const [name, value] of p) {
+      if (value === '') continue;
+      if (name !== 'ed' && name !== 'pd' && name !== 'ad') {
+        entries.push(...queryEntries([[name, value]]));
+        continue;
+      }
+      const parsed = jsonObject(value);
+      if (Object.keys(parsed).length === 0 && value.trim() !== '{}') complete = false;
+      entries.push(...jsonEntries(parsed, name));
+    }
     return [
-      {
+      withFields({
         type: 'hit',
         id: newHitId(),
         runId: req.runId,
@@ -101,7 +114,7 @@ export const pinterest: Decoder = {
         page: text(ad.loc) ?? null,
         transport: req.resourceType === 'ping' ? 'beacon' : req.resourceType,
         params,
-      },
+      }, entries, complete),
     ];
   },
 };

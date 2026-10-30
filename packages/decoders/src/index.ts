@@ -1,4 +1,7 @@
 export * from './decoder.ts';
+export * from './fields.ts';
+export * from './ignore-lists.ts';
+export * from './identifiers.ts';
 export * from './sandbox.ts';
 export * from './ga4.ts';
 export * from './meta.ts';

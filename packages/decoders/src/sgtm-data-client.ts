@@ -1,6 +1,7 @@
 import type { Hit, Request } from '@pingwright/core';
 import { decodeBase64Text } from './base64.ts';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
+import { bodyComplete, bodyEntries, jsonEntries, queryEntries, withFields } from './fields.ts';
 import { decodeGa4Consent } from './ga4.ts';
 
 type Json = Record<string, unknown>;
@@ -63,7 +64,17 @@ function dataRequest(req: Request, viaLoader: boolean): URL | undefined {
   if (Object.keys(parseDtdc(p.get('dtdc'))).length > 0) return url;
   if (p.has('v') && (p.has('event') || p.has('en'))) return url;
   const body = req.method === 'POST' ? parseObject(req.postData) : {};
-  return str(body.event_name) && str(body.page_location) ? url : undefined;
+  if (str(body.event_name) && str(body.page_location)) return url;
+  return isCutDataBody(req) ? url : undefined;
+}
+
+/**
+ * A Data Tag body over the recorder's cap does not parse. It is matched on the keys of the Data Tag signature in
+ * the kept prefix, so the path alone still matches nothing, and the hit says its fields are incomplete.
+ */
+function isCutDataBody(req: Request): boolean {
+  if (req.method !== 'POST' || req.postData === null || bodyComplete(req) || !req.postData.startsWith('{')) return false;
+  return /"event_name"\s*:/.test(req.postData) && /"page_location"\s*:/.test(req.postData);
 }
 
 export const sgtmDataClient: Decoder = {
@@ -76,6 +87,11 @@ export const sgtmDataClient: Decoder = {
     const p = url.searchParams;
     const dtdc = parseDtdc(p.get('dtdc'));
     const body = req.method === 'POST' ? parseObject(req.postData) : {};
+    const posted = req.method === 'POST' ? bodyEntries(req) : { entries: [], parsed: true };
+    const queryFields = queryEntries([...p].filter(([k]) => k !== 'dtdc'));
+    const dtdcRaw = p.get('dtdc');
+    const entries = [...queryFields, ...jsonEntries(dtdc), ...posted.entries];
+    const complete = bodyComplete(req) && posted.parsed && (!dtdcRaw || Object.keys(dtdc).length > 0);
     const ids: Hit['ids'] = {};
     if (p.get('cid') || hasId(body.client_id)) ids.client_id = true;
     if (p.get('uid') || hasId(body.user_id)) ids.user_id = true;
@@ -86,7 +102,7 @@ export const sgtmDataClient: Decoder = {
     if (hostname) params.page_hostname = hostname;
     Object.assign(params, userData(dtdc, body));
     return [
-      {
+      withFields({
         type: 'hit',
         id: newHitId(),
         runId: req.runId,
@@ -100,7 +116,7 @@ export const sgtmDataClient: Decoder = {
         page: str(dtdc.page_location) ?? str(body.page_location) ?? null,
         transport: req.resourceType === 'ping' ? 'beacon' : req.resourceType,
         params,
-      },
+      }, entries, complete),
     ];
   },
 };

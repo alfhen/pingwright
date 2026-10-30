@@ -1,5 +1,6 @@
 import type { Hit, Request } from '@pingwright/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
+import { bodyComplete, queryEntries, withFields } from './fields.ts';
 import { decodeGa4Consent } from './ga4.ts';
 
 const ADS_HOSTS = ['googleadservices.com', 'doubleclick.net', 'google.com', 'googlesyndication.com'];
@@ -79,7 +80,7 @@ export const googleAds: Decoder = {
       else if (k.startsWith('epn.')) params[k.slice(4)] = v;
     }
     return [
-      {
+      withFields({
         type: 'hit',
         id: newHitId(),
         runId: req.runId,
@@ -93,7 +94,7 @@ export const googleAds: Decoder = {
         page: p.get('url') ?? p.get('dl'),
         transport: req.resourceType === 'ping' ? 'beacon' : req.resourceType,
         params,
-      },
+      }, queryEntries(p), bodyComplete(req)),
     ];
   },
 };

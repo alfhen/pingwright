@@ -255,8 +255,12 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
  * unknown. Every other hit takes the state of the epoch it falls in.
  */
 function effectiveConsent(hit: Hit, ctx: Context): ConsentState {
-  const epoch = epochOf(hit, ctx);
-  const base = epoch?.state;
+  return effectiveConsentAt(hit, ctx.epochs, ctx.grace);
+}
+
+/** The consent state the evaluator uses for a hit. `epochs` must be sorted by `startT`. */
+export function effectiveConsentAt(hit: Hit, epochs: readonly EvalEpoch[], graceMs: number): ConsentState {
+  const base = epochForHit(epochs, hit.t, graceMs)?.state;
   const own = GOOGLE_VENDORS.has(hit.vendor) && consentFields.some((f) => hit.consent[f] !== 'unknown');
   const pick = (f: ConsentField): ConsentValue => {
     if (own) return hit.consent[f];

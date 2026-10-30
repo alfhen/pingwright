@@ -231,7 +231,7 @@ test('RunWriter stamps the current record schema version', async () => {
   expect(first.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION);
   const warnings: string[] = [];
   const read = await readRun(writer.path, { onWarning: (m) => warnings.push(m) });
-  expect(read.run.recordSchemaVersion).toBe(1);
+  expect(read.run.recordSchemaVersion).toBe(2);
   expect(warnings).toEqual([]);
 });
 
@@ -250,6 +250,23 @@ test('a run with a newer version reads with a warning', async () => {
   expect(read.run.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION + 1);
   expect(warnings).toHaveLength(1);
   expect(warnings[0]).toContain('newer');
+});
+
+test('a version 1 file reads with no field names and no error', async () => {
+  const runRecord = { ...makeRun(), recordSchemaVersion: 1 };
+  const hit = {
+    type: 'hit', id: newId('hit'), runId: runRecord.id, stepId: null, requestId: newId('request'), t: 1, vendor: 'sgtm', event: null,
+    consent: { analytics: 'unknown', ads: 'unknown', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} },
+    ids: {}, page: null, transport: 'fetch', params: {},
+  };
+  const path = join(dir, 'v1.jsonl');
+  await writeFile(path, `${JSON.stringify(runRecord)}\n${JSON.stringify(hit)}\n`);
+  const warnings: string[] = [];
+  const read = await readRun(path, { onWarning: (m) => warnings.push(m) });
+  expect(read.hits[0]?.fields).toBeUndefined();
+  expect(read.hits[0]?.fieldsComplete).toBeUndefined();
+  expect(read.hits[0]?.idFields).toBeUndefined();
+  expect(warnings).toEqual([]);
 });
 
 test('a version that is not a non-negative integer is rejected', async () => {

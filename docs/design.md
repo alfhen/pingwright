@@ -62,18 +62,20 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 
 | Entity | Fields (main) |
 | --- | --- |
-| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride` (`container`, `gtmPreview`, `gtmAuth` always `[redacted]`, `expectedTags`, and `applied`: `{way, url, status}` for each match, plus `loses` for the `loader` and `replace` ways, and `loader` (the loader kind) for the `loader` way), `testGtmOrigin` (set only when the test-only GTM origin was used), `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
+| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `graceWindowMs` (the consent grace window used), `variant` (set by `suite`), `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride` (`container`, `gtmPreview`, `gtmAuth` always `[redacted]`, `expectedTags`, and `applied`: `{way, url, status}` for each match, plus `loses` for the `loader` and `replace` ways, and `loader` (the loader kind) for the `loader` way), `testGtmOrigin` (set only when the test-only GTM origin was used), `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
 | `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt` |
 | `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`), `failure` (Playwright's error text for a failed request), `redacted` (`handoff` when a handoff step replaced the body and query values) |
 | `Response` | `id` (`res_…`), `requestId`, `status`, `setCookieNames[]` |
-| `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params` |
+| `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params`, `fields`, `fieldsComplete`, `idFields` |
 | `DataLayerEvent` | `id` (`dle_…`), `runId`, `stepId`, `t`, `event`, `gtmUniqueEventId`, `args` (the pushed arguments, JSON-safe), `isConsentCommand` |
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
 | `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`), `outcome` (optional: `granted`, `denied` or `mixed`; on a withdrawn epoch, the label it had before) |
-| `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
-| `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `severity` (optional: `fail` or `warn`; absent means `fail`), `evidence[]` (record IDs) |
+| `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `t`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
+| `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `severity` (optional: `fail` or `warn`; absent means `fail`), `evidence[]` (record IDs), `note` (optional: `stubNoCookies`, `cannotEvaluateBody` or `fieldsNotRecorded`) |
 
 `recordSchemaVersion` on a `Run` is an integer. Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. Do not bump it within 0.2. A reader treats a record with no version as version 0, and warns when the version is newer than it knows.
+
+Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`. A version 1 hit has none of them, so a reader can tell "no extra fields" from "field names were not recorded". `fields` is the sorted, unique list of non-empty field names in the hit's decoded payload (query, JSON or form body, `dtdc`). Nested names use dots and array items collapse to `[]`. A name segment that looks like a value (over 64 characters, hex of 32 or more, a digest-shaped token, six or more digits, or an `@`) is stored as `(other)`. `idFields` is the subset taken to be identifiers. Both hold names only, never values. `fieldsComplete` is `false` when the decoder could not see the whole payload: the body was cut at the 64 KiB cap, a JSON body did not parse, or a net-log request that can carry a body has none.
 
 `t` is milliseconds on one shared clock (§7.3).
 
@@ -187,7 +189,7 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
 | `tracker` | The curated tracker list (LinkedIn, Microsoft UET, Reddit) plus entries from `--tracker-list`. A listed request becomes a minimal hit with the entry's vendor, the event and page when the URL has a common parameter for them, unknown consent and transport `tracker-list`. A request that another decoder matches stays with that decoder. |
 | `tiktok`, `criteo`, `snapchat` | Later. |
-| `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` and `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. |
+| `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` and `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. A POST whose body is cut at the recorder's 64 KiB cap also matches when the kept prefix holds the keys `event_name` and `page_location`. Its hit has `fieldsComplete: false` and no fields. |
 | `stape-custom-loader` | Stape's custom loader disguises paths as `/<id>?<key>=<base64>`. This decoder base64-decodes the real path and query, then passes the request to the other decoders. |
 
 **`gcs` meaning.** The value has the form `G1xy`: `x` is `ad_storage`, `y` is `analytics_storage`, `1` is granted and `0` is denied. So `G100` is both denied and `G111` is both granted. `gcd` carries more detail, including `ad_user_data` and `ad_personalization`, and whether each value was a default or an update. The decoder keeps the raw values beside the normalised ones.

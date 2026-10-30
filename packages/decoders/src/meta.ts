@@ -1,5 +1,6 @@
 import type { Hit, Request } from '@pingwright/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
+import { bodyComplete, queryEntries, withFields } from './fields.ts';
 
 const META_HOSTS = new Set(['facebook.com', 'www.facebook.com']);
 
@@ -66,7 +67,7 @@ export const meta: Decoder = {
       params[name] = v;
     }
     return [
-      {
+      withFields({
         type: 'hit',
         id: newHitId(),
         runId: req.runId,
@@ -86,7 +87,7 @@ export const meta: Decoder = {
         page: p.get('dl'),
         transport: req.resourceType === 'ping' ? 'beacon' : req.resourceType,
         params,
-      },
+      }, queryEntries(p), bodyComplete(req)),
     ];
   },
 };

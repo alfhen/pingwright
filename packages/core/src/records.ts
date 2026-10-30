@@ -24,8 +24,11 @@ export interface CaptureCoverage {
   serviceWorker: 'chromium-only';
 }
 
-/** Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. A record with no version is version 0. */
-export const RECORD_SCHEMA_VERSION = 1;
+/**
+ * Version 1 is the 0.2.0 record shape. Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`,
+ * which a version 1 hit does not have. A record with no version is version 0.
+ */
+export const RECORD_SCHEMA_VERSION = 2;
 
 export interface GtmOverrideTag {
   id: string;
@@ -71,6 +74,10 @@ export interface Run {
   identity: Identity | null;
   identitySeed?: number;
   coverage?: CaptureCoverage;
+  /** The grace window the consent epochs were judged with: the scenario's `graceWindow`, or the default. */
+  graceWindowMs?: number;
+  /** The suite variant this run belongs to. A name, never a file path. */
+  variant?: string;
 }
 
 export interface Step {
@@ -144,6 +151,15 @@ export interface Hit {
   page: string | null;
   transport: string;
   params: Record<string, string>;
+  /**
+   * Sorted, unique names of the non-empty fields in the decoded payload of this hit (query, body, `dtdc`).
+   * Nested names use dots and arrays collapse to `[]`. Never holds a value. Absent on version 1 records.
+   */
+  fields?: string[];
+  /** False when the decoder could not see the whole payload. A rule that reads `fields` must not pass on such a hit. */
+  fieldsComplete?: boolean;
+  /** The subset of `fields` taken to be identifiers. Names only. */
+  idFields?: string[];
 }
 
 export interface DataLayerEvent {
@@ -206,6 +222,8 @@ export interface Checkpoint {
   runId: Id<'run'>;
   stepId: Id<'stp'> | null;
   label: string;
+  /** When the checkpoint was taken, on the same clock as `Request.t`. Absent on older records. */
+  t?: number;
   consentState: ConsentState | null;
   cookies: CheckpointCookie[];
 }
@@ -220,7 +238,11 @@ export interface Result {
   message?: string;
   /** Set on built-in checks. A failed `warn` result does not change the exit code. Absent means `fail`. */
   severity?: Severity;
+  /** Why the result is not a plain pass or fail. */
+  note?: ResultNote;
 }
+
+export type ResultNote = 'stubNoCookies' | 'cannotEvaluateBody' | 'fieldsNotRecorded';
 
 export type Severity = 'fail' | 'warn';
 

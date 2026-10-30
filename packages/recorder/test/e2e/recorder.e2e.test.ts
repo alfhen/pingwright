@@ -23,6 +23,7 @@ beforeAll(async () => {
     site: site.url,
     startUrl: `${site.url}/`,
     waitMs: 6000,
+    graceWindowMs: 120,
   });
   records = result.records;
 });
@@ -38,6 +39,24 @@ const isAdsCollect = (r: Request) =>
   /(^|\.)(googleadservices|doubleclick|googlesyndication)\.com$|^(www\.)?google\.com$/.test(url(r).hostname) &&
   /^\/(ccm\/collect|pagead\/)/.test(url(r).pathname);
 const isTagManagerPing = (r: Request) => /(^|\.)googletagmanager\.com$/.test(url(r).hostname) && /^\/(a|td)\/?$/.test(url(r).pathname);
+
+describe('record schema version 2', () => {
+  test('the run holds the version and the grace window', () => {
+    expect(records.run.recordSchemaVersion).toBe(2);
+    expect(records.run.graceWindowMs).toBe(120);
+  });
+
+  test('every decoded hit has field names, and a GA4 hit has its query names', () => {
+    expect(records.hits.length).toBeGreaterThan(0);
+    for (const hit of records.hits) {
+      expect(Array.isArray(hit.fields)).toBe(true);
+      expect(Array.isArray(hit.idFields)).toBe(true);
+      expect(hit.fieldsComplete).toBe(true);
+    }
+    const ga4 = records.hits.find((h) => h.vendor === 'ga4')!;
+    expect(ga4.fields).toEqual(expect.arrayContaining(['tid', 'v']));
+  });
+});
 
 describe('stub mode on the fixture site', () => {
   test('no collection request is passed through', () => {

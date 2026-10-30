@@ -102,6 +102,9 @@ describe('full fixture checkout', () => {
     const consent = end.cookies.find((c) => c.name === 'pw_consent');
     expect(consent).toMatchObject({ domain: 'localhost', firstParty: true });
     expect(end.cookies.every((c) => c.expires === null || c.expires > 1e12)).toBe(true);
+    const step = records.steps.find((s) => s.label === 'end')!;
+    expect(end.t).toBeGreaterThanOrEqual(step.startedAt);
+    expect(end.t).toBeLessThanOrEqual(step.endedAt!);
     const start = records.checkpoints.find((c) => c.label === 'start')!;
     expect(start.cookies.find((c) => c.name === 'pw_consent')).toBeUndefined();
   });

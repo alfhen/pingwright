@@ -1,5 +1,6 @@
 import type { ConsentValue, Hit, HitConsent, Request } from '@pingwright/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
+import { bodyComplete, queryEntries, withFields } from './fields.ts';
 
 function parseUrl(url: string): URL | undefined {
   try {
@@ -92,12 +93,13 @@ export const ga4: Decoder = {
   isCollectionEndpoint: isGa4Collect,
   decode(req: Request, newHitId: NewHitId = defaultHitId): Hit[] {
     if (!isGa4Collect(req)) return [];
+    const complete = bodyComplete(req);
     return eventLines(req).map((p) => {
       const ids: Hit['ids'] = {};
       if (p.get('cid')) ids.client_id = true;
       if (p.get('uid')) ids.user_id = true;
       const tid = p.get('tid');
-      return {
+      return withFields({
         type: 'hit',
         id: newHitId(),
         runId: req.runId,
@@ -111,7 +113,7 @@ export const ga4: Decoder = {
         page: p.get('dl'),
         transport: transport(req.resourceType),
         params: { ...eventParams(p), ...(tid ? { tid } : {}) },
-      };
+      }, queryEntries(p), complete);
     });
   },
 };
