@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  findStableHashes,
   createIdentity,
   hashEmail,
   hashPhone,
@@ -344,11 +345,44 @@ describe('scan fixes', () => {
 
   it('does not flag random ids and hashed client ids under identifier keys (#114)', () => {
     const random = sha256('random-controller').hex;
-    for (const key of ['uid', 'user_id', 'external_id', 'client_id_hash', 'controllerId']) {
+    for (const key of ['client_id_hash', 'clientIdHash', 'controllerId', 'hmac', 'HMAC']) {
       expect(scan(`${key}=${random}`, id), key).toEqual([]);
       expect(scan(JSON.stringify({ [key]: random }), id), key).toEqual([]);
     }
-    expect(scan(`uid=${foreign.base64url}`, id)).toEqual([]);
+    expect(scan(`client_id_hash=${foreign.base64url}`, id)).toEqual([]);
+  });
+
+  it('flags a single hash under a key that can carry a hashed email (#220)', () => {
+    const h = sha256('other.person@example.com').hex;
+    for (const key of ['uid', 'user_id', 'external_id', 'id', 'uuid']) {
+      expect(scan(`${key}=${h}`, id), key).toEqual([{ kind: 'hash', value: h }]);
+      expect(findStableHashes([{ requestId: 'r1', text: `${key}=${h}` }]).size, key).toBe(0);
+    }
+  });
+
+  it('treats a hash repeated under several ID keys or in several requests as a stable ID (#220)', () => {
+    const h = sha256('fixture-client-id').hex;
+    const body = JSON.stringify({ clientIdHash: h, external_id: h, uid: h, user_id: h, id: h, uuid: h });
+    const stable = findStableHashes([{ requestId: 'r1', text: body }]);
+    expect(scan(body, id, { stableHashes: stable })).toEqual([]);
+    const twice = findStableHashes([
+      { requestId: 'r1', text: `uid=${h}` },
+      { requestId: 'r2', text: `uid=${h}` },
+    ]);
+    expect(scan(`uid=${h}`, id, { stableHashes: twice })).toEqual([]);
+  });
+
+  it('never treats a hash as stable when any occurrence is not under an ID key (#220)', () => {
+    const h = sha256('other.person@example.com').hex;
+    const sources = (extra: string) => [
+      { requestId: 'r1', text: `uid=${h}&user_id=${h}` },
+      { requestId: 'r2', text: extra },
+    ];
+    for (const extra of [`em=${h}`, `ud[em]=${h}`, `ph=${h}`, `/p/${h}/x.gif`, h, JSON.stringify({ user_data: { em: h } })]) {
+      const stable = findStableHashes(sources(extra));
+      expect(stable.has(h), extra).toBe(false);
+      expect(scan(extra, id, { stableHashes: stable }), extra).toEqual([{ kind: 'hash', value: h }]);
+    }
   });
 
   it('still flags the same hashes under identity keys and with no key (#114)', () => {
@@ -356,12 +390,13 @@ describe('scan fixes', () => {
     expect(scan(`ud[em]=${foreign.hex}`, id)).toHaveLength(1);
     expect(scan(JSON.stringify({ user_data: { em: foreign.hex } }), id)).toHaveLength(1);
     expect(scan(`uid=1&em=${foreign.hex}`, id)).toHaveLength(1);
+    expect(scan(`hmac=1&em=${foreign.hex}`, id)).toHaveLength(1);
     expect(scan(foreign.hex, id)).toHaveLength(1);
   });
 
   it('ignores random hashes under GA4 ep. keys and still flags identity keys (#114)', () => {
     const h = sha256('random-controller').hex;
-    expect(scan(`ep.user_id=${h}&ep.client_id_hash=${h}&epn.external_id=${h}&cd[user_id]=${h}`, id)).toEqual([]);
+    expect(scan(`ep.client_id_hash=${h}&epn.controller_id=${h}&cd[hmac]=${h}`, id)).toEqual([]);
     expect(scan(`em=${h}`, id)).toEqual([{ kind: 'hash', value: h }]);
     expect(scan(`ud[em]=${h}`, id)).toEqual([{ kind: 'hash', value: h }]);
   });

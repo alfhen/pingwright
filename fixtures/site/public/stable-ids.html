@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stable IDs</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<h1>Stable IDs</h1>
+<p>Sends a hashed client ID under many keys, and an hmac parameter, to the unknown third-party host. With <code>?leak=email</code> it also sends the hash of an email that is not the run identity under <code>external_id</code>.</p>
+<script>
+(function () {
+  var cfg = window.__PW_FIXTURE;
+  var clientIdHash = '061ccbda8276cdc6beff2eeebecee045209c5223edaeaaafef5bd01073c7105a';
+  var otherEmailHash = '88f45d748ead76a339d3815f0b475088eb8b9621cad412386906e15209bfa045';
+  var hmac = '6dfccac2be941c67251bcb1ca4e3d37a0dcf810add813e23ad6d9c06baa80c28';
+  var leak = new URLSearchParams(location.search).get('leak') === 'email';
+
+  function send() {
+    var body = {
+      clientIdHash: clientIdHash,
+      client_id_hash: clientIdHash,
+      external_id: clientIdHash,
+      uid: clientIdHash,
+      user_id: clientIdHash,
+      id: clientIdHash,
+      uuid: clientIdHash
+    };
+    fetch(cfg.thirdPartyUrl + '/stable-ids/data', { method: 'POST', mode: 'no-cors', body: JSON.stringify(body) });
+    new Image().src = cfg.thirdPartyUrl + '/stable-ids/session?hmac=' + hmac + '&id=' + clientIdHash;
+  }
+  setTimeout(send, 1500);
+  setTimeout(send, 2500);
+  if (leak) {
+    setTimeout(function () {
+      fetch(cfg.thirdPartyUrl + '/stable-ids/match', { method: 'POST', mode: 'no-cors', body: JSON.stringify({ external_id: otherEmailHash }) });
+    }, 2000);
+  }
+})();
+</script>
+</body>
+</html>

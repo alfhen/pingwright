@@ -1,4 +1,5 @@
 import {
+  findStableHashes,
   hashEmail,
   hashPhone,
   isLibraryLoadPath,
@@ -448,10 +449,13 @@ function scanForeignData(ctx: Context, identity: Identity): { detail: string; ev
     entry.hitIds.push(hit.id);
     for (const [key, value] of Object.entries(hit.params)) entry.texts.push(`${key}=${value}`);
   }
+  const stableHashes = findStableHashes(
+    [...byRequest].flatMap(([requestId, entry]) => entry.texts.map((text) => ({ requestId, text }))),
+  );
   const out: { detail: string; evidence: string[] }[] = [];
   for (const [requestId, entry] of byRequest) {
     const found = new Map<string, string>();
-    for (const text of entry.texts) for (const m of scan(text, identity)) found.set(`${m.kind}:${m.value}`, m.kind);
+    for (const text of entry.texts) for (const m of scan(text, identity, { stableHashes })) found.set(`${m.kind}:${m.value}`, m.kind);
     if (found.size === 0) continue;
     const kinds = [...new Set(found.values())].join(', ');
     const step = entry.stepId ? ` in step ${entry.stepId}` : '';

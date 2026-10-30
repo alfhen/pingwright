@@ -334,6 +334,8 @@ test('possibleRealData ignores random hashes in decoded hit params but not ident
     return find(evaluate([h1, req], parseScenario('start: /'), { identity })).pass;
   };
   expect(run({ user_id: h, client_id_hash: h, external_id: h })).toBe(true);
+  expect(run({ external_id: h })).toBe(false);
+  expect(run({ hmac: h })).toBe(true);
   expect(run({ em: h })).toBe(false);
   expect(run({ 'ud[em]': h })).toBe(false);
 });
@@ -349,12 +351,28 @@ test('possibleRealData ignores random hashes under exempt keys in raw Meta and G
   const meta = new URLSearchParams({ id: '100000000000001', ev: 'PageView', 'ud[external_id]': h, 'cd[user_id]': h });
   expect(passes(request({ url: `https://www.facebook.com/tr/?${meta}` }))).toBe(true);
   const boundary = '----pw';
-  const multipart = `--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n100000000000001\r\n--${boundary}\r\nContent-Disposition: form-data; name="ev"\r\n\r\nPageView\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[external_id]"\r\n\r\n${h}\r\n--${boundary}--\r\n`;
+  const multipart = `--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n100000000000001\r\n--${boundary}\r\nContent-Disposition: form-data; name="ev"\r\n\r\nPageView\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[external_id]"\r\n\r\n${h}\r\n--${boundary}\r\nContent-Disposition: form-data; name="ud[client_id_hash]"\r\n\r\n${h}\r\n--${boundary}--\r\n`;
   expect(
     passes(request({ method: 'POST', url: 'https://www.facebook.com/tr/', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, postData: multipart, resourceType: 'ping' })),
   ).toBe(true);
-  const ga4 = new URLSearchParams({ v: '2', tid: 'G-PWTEST0001', cid: '1.2', en: 'purchase', uid: h });
+  const ga4 = new URLSearchParams({ v: '2', tid: 'G-PWTEST0001', cid: '1.2', en: 'purchase', uid: h, 'ep.client_id_hash': h });
   expect(passes(request({ url: `https://www.google-analytics.com/g/collect?${ga4}` }))).toBe(true);
+});
+
+test('possibleRealData skips a hash repeated under ID keys but not a hashed non-identity email under external_id', () => {
+  const client = createHash('sha256').update('fixture-client-id').digest('hex');
+  const email = createHash('sha256').update('someone.else@example.com').digest('hex');
+  const find = (rs: ReturnType<typeof evaluate>) => rs.find((r) => r.expectation === 'builtin: possibleRealData')!;
+  const check = (params: Record<string, string>[]) => {
+    const parts = params.map((p) => hit({ params: p }));
+    return find(evaluate(parts.flatMap((x) => [x.hit, x.req]), parseScenario('start: /'), { identity }));
+  };
+  const ids = (h: string) => ({ clientIdHash: h, external_id: h, uid: h, user_id: h, id: h, uuid: h });
+  expect(check([ids(client), ids(client)]).pass).toBe(true);
+  const leak = check([ids(client), { external_id: email }]);
+  expect(leak.pass).toBe(false);
+  expect(leak.message).toContain('not from the run identity');
+  expect(check([ids(client), { external_id: email, em: email }]).pass).toBe(false);
 });
 
 test('possibleRealData ignores hashes in script load URLs', () => {
