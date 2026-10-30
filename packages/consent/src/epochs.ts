@@ -102,10 +102,22 @@ export function buildEpochs(
   modeChanges: readonly ConsentModeChange[],
   options: EpochOptions,
 ): EpochDraft[] {
-  const sorted = [...modeChanges].sort((a, b) => a.t - b.t);
-  const updates = sorted.filter((c) => c.command === 'update');
-  const firstDecisionT = Math.min(updates[0]?.t ?? Infinity, ...banners.map((b) => b.t));
-  const initial = sorted.findLast((c) => c.command === 'default' && c.t < firstDecisionT)?.state ?? unknownConsent;
+  const sorted = [...modeChanges].sort((a, b) => a.t - b.t || Number(a.command === 'update') - Number(b.command === 'update'));
+  const firstUpdateT = sorted.find((c) => c.command === 'update')?.t ?? Infinity;
+  const firstDecisionT = Math.min(firstUpdateT, ...banners.map((b) => b.t));
+  // States are rebuilt here so a default the caller left in cannot leak into later updates.
+  let initial = unknownConsent;
+  let running = unknownConsent;
+  const updates: ConsentModeChange[] = [];
+  for (const change of sorted) {
+    if (change.command === 'default') {
+      if (change.t > firstDecisionT) continue;
+      initial = running = { ...running, ...change.signals };
+    } else {
+      running = { ...running, ...change.signals };
+      updates.push({ ...change, state: running });
+    }
+  }
   const pairWindowMs = options.pairWindowMs ?? DEFAULT_PAIR_WINDOW_MS;
   const epochs: EpochDraft[] = [
     { startT: options.startT, endT: null, source: 'start', state: initial, label: 'undecided' },

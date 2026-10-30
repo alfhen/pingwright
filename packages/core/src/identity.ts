@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Faker, base, en, en_US } from '@faker-js/faker';
+import { Faker, base, en, en_US, sv, type LocaleDefinition } from '@faker-js/faker';
 
 export interface Identity {
   seed: number;
@@ -22,26 +22,51 @@ export interface HashForms {
 // Assigned geographic codes only: N11 service codes and unassigned codes fail phone validation at some checkouts.
 const US_AREA_CODES = [201, 202, 206, 212, 213, 214, 305, 312, 404, 415, 512, 602, 617, 702, 718, 808];
 
-/** Only the label `country` follows the option; address, zip and phone stay US-shaped. */
+interface CountryFormat {
+  locale: LocaleDefinition[];
+  zip: (faker: Faker) => string;
+  phone: (faker: Faker) => string;
+  nationalDigits: (e164Digits: string) => string;
+}
+
+// 555-0100 to 555-0199 is reserved for fictional use.
+const US: CountryFormat = {
+  locale: [en_US, en, base],
+  zip: (faker) => faker.location.zipCode('#####'),
+  phone: (faker) => `+1${faker.helpers.arrayElement(US_AREA_CODES)}5550${faker.number.int({ min: 100, max: 199 })}`,
+  nationalDigits: (digits) => digits.slice(1),
+};
+
+// The Swedish regulator reserves 070-174 06 05 to 070-174 06 99 for fiction.
+const SE: CountryFormat = {
+  locale: [sv, en, base],
+  zip: (faker) => String(faker.number.int({ min: 100, max: 984 })) + ' ' + faker.string.numeric(2),
+  phone: (faker) => `+4670174${String(faker.number.int({ min: 605, max: 699 })).padStart(4, '0')}`,
+  nationalDigits: (digits) => '0' + digits.slice(2),
+};
+
+const COUNTRIES: Record<string, CountryFormat> = { US, SE };
+
+/** US and SE get local names, address, zip and phone. Any other country keeps US-shaped data under that label. */
 export function createIdentity(seed: number, options: { country?: string } = {}): Identity {
-  const faker = new Faker({ locale: [en_US, en, base] });
+  const country = options.country ?? 'US';
+  const format = COUNTRIES[country.toUpperCase()] ?? US;
+  const faker = new Faker({ locale: format.locale });
   faker.seed(seed);
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
   const tag = faker.string.alphanumeric({ length: 4, casing: 'lower' });
-  const area = faker.helpers.arrayElement(US_AREA_CODES);
-  // 555-0100 to 555-0199 is reserved for fictional use.
-  const line = faker.number.int({ min: 100, max: 199 });
+  const phone = format.phone(faker);
   return {
     seed,
     firstName,
     lastName,
     email: `${firstName}.${lastName}.${tag}@example.com`.toLowerCase().replace(/[^a-z0-9.@]/g, ''),
-    phone: `+1${area}5550${line}`,
+    phone,
     address1: faker.location.streetAddress(),
     city: faker.location.city(),
-    zip: faker.location.zipCode('#####'),
-    country: options.country ?? 'US',
+    zip: format.zip(faker),
+    country,
   };
 }
 
@@ -309,7 +334,9 @@ function ownValues(identity: Identity) {
     hashes.add(bytes.toString('base64').replace(/=+$/, ''));
     hashes.add(bytes.toString('base64url'));
   }
-  return { email, phoneDigits: phone.slice(1), hashes };
+  const phoneDigits = phone.slice(1);
+  const format = COUNTRIES[identity.country.toUpperCase()] ?? US;
+  return { email, phoneDigits, nationalDigits: format.nationalDigits(phoneDigits), hashes };
 }
 
 /** Finds emails, phone numbers and SHA-256 hex strings in text that do not belong to the identity. */
@@ -335,7 +362,7 @@ export function scan(text: string, identity: Identity, options: { stableHashes?:
       if (digits.length < 8 || digits.length > 15) continue;
       // In the form-encoded "+cc+nn+nn" shape the first group is a country code, which has 1 to 3 digits.
       if (/^\+\d+\+/.test(m) && !/^\+\d{1,3}\+/.test(m)) continue;
-      if (!digits.includes(own.phoneDigits) && !digits.includes(own.phoneDigits.slice(1))) add('phone', m);
+      if (!digits.includes(own.phoneDigits) && !digits.includes(own.nationalDigits)) add('phone', m);
     }
     // The decoded variant carries the same hex, with its key readable.
     for (const m of hasUrlEscapes(variant) ? [] : variant.matchAll(HASH)) {

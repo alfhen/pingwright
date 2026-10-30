@@ -69,14 +69,14 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 
 | Entity | Fields (main) |
 | --- | --- |
-| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride` (`container`, `gtmPreview`, `gtmAuth` always `[redacted]`, `expectedTags`, and `applied`: `{way, url, status}` for each match), `testGtmOrigin` (set only when the test-only GTM origin was used), `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
+| `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride` (`container`, `gtmPreview`, `gtmAuth` always `[redacted]`, `expectedTags`, and `applied`: `{way, url, status}` for each match, plus `loses` for the `loader` and `replace` ways, and `loader` (the loader kind) for the `loader` way), `testGtmOrigin` (set only when the test-only GTM origin was used), `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
 | `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt` |
 | `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`), `failure` (Playwright's error text for a failed request), `redacted` (`handoff` when a handoff step replaced the body and query values) |
 | `Response` | `id` (`res_…`), `requestId`, `status`, `setCookieNames[]` |
 | `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params` |
 | `DataLayerEvent` | `id` (`dle_…`), `runId`, `stepId`, `t`, `event`, `gtmUniqueEventId`, `args` (the pushed arguments, JSON-safe), `isConsentCommand` |
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
-| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`) |
+| `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`), `outcome` (optional: `granted`, `denied` or `mixed`; on a withdrawn epoch, the label it had before) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
 | `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `evidence[]` (record IDs) |
 
@@ -121,7 +121,7 @@ Every profile:
 
 | Mode | Behaviour |
 | --- | --- |
-| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect` and Meta `/tr`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
+| `stub` (default) | Scripts, libraries and pages load normally. Known **collection endpoints** (decoder-listed paths such as GA4 `/g/collect` and Meta `/tr`) are recorded, then answered locally. Requests to known vendor hosts (Meta, Google ad hosts and `googletagmanager.com`) are also stubbed by host: collection paths for every resource type, and any other request that is not a script, stylesheet, font or document load. Library loads such as `gtag/js` and `fbevents.js` continue. Site functions on those hosts (`/recaptcha`, `/maps`, `/plugins`, `/dialog`, `/login`) continue too. Tracker-list entries (§6) are stubbed too: an entry with paths on those paths for every resource type, an entry without paths for every non-load request on its host. Unknown third-party destinations pass through and are flagged in the report as `unknownDestination`. |
 | `server` | As `stub`, but requests to the configured server-container hosts pass through. Required for server-side tag reports, server-set cookies and the server preview header. |
 | `live` | Everything goes through. Test hits reach real vendor accounts. |
 
@@ -169,12 +169,13 @@ A decoder is a plugin: `match(request) → boolean`, `decode(request) → Hit[]`
 | Decoder | Notes |
 | --- | --- |
 | `ga4` | Event name (`en`), parameters (`ep.*`, `epn.*`), `uid` presence, `cid`, measurement ID (`tid`), batched bodies. Matches `/g/collect` under a path prefix too. Consent from `gcs` and `gcd`. |
-| `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts, and the `googletagmanager.com/td` collection endpoint. Reads user id (`userId` or `uid`), `oid` as `transaction_id`, and `ep.`/`epn.` params. Multi-hop chains are recorded as linked requests. |
+| `google-ads` | Conversion and remarketing pings, including `/ccm/collect` on google.com, doubleclick and googlesyndication hosts, and the `googletagmanager.com/td` collection endpoint, which is stubbed and flagged on bypass but decoded into no hit. Records that a user id (`userId` or `uid`) is present, not its value; `oid` as `transaction_id`, and `ep.`/`epn.` params. Multi-hop chains are recorded as linked requests. |
 | `meta` | `facebook.com/tr`: `ev`, `id`, `eid`, every `ud[*]` field, and multipart beacon bodies. |
 | `pinterest` | `ct.pinterest.com/v3/` and `/user/`: `event`, `tid`, `ed` (event data, `event_id` as `eventId`), `pd.em` (hashed email) and `ad.loc` (page). In `stub` mode every path on `ct.pinterest.com` is stubbed. |
 | `microsoft-uet` | `bat.bing.com`: `evt`, `ti`. A missing `ti` is reported as a defect. |
-| `tiktok`, `criteo`, `snapchat`, `linkedin` | Later. |
-| `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` or `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. |
+| `tracker` | The curated tracker list (LinkedIn, Microsoft UET, Reddit) plus entries from `--tracker-list`. A listed request becomes a minimal hit with the entry's vendor, the event and page when the URL has a common parameter for them, unknown consent and transport `tracker-list`. A request that another decoder matches stays with that decoder. |
+| `tiktok`, `criteo`, `snapchat` | Later. |
+| `sgtm-data-client` | A server container's data client path (`/data`). Any `/data` reached through the Stape loader matches. Otherwise it needs a non-empty JSON `dtdc` object, `v` with `event` or `en`, or a POST whose JSON body has `event_name` and `page_location`. Reports the event name, page location and page hostname, read from `dtdc` or the JSON body. |
 | `stape-custom-loader` | Stape's custom loader disguises paths as `/<id>?<key>=<base64>`. This decoder base64-decodes the real path and query, then passes the request to the other decoders. |
 
 **`gcs` meaning.** The value has the form `G1xy`: `x` is `ad_storage`, `y` is `analytics_storage`, `1` is granted and `0` is denied. So `G100` is both denied and `G111` is both granted. `gcd` carries more detail, including `ad_user_data` and `ad_personalization`, and whether each value was a default or an update. The decoder keeps the raw values beside the normalised ones.
@@ -245,7 +246,7 @@ The values are a GTM override, passed with the run:
 
 The recorder intercepts the request for the container script with `context.route` and either calls `route.continue({ url })` with the preview build URL (`https://www.googletagmanager.com/gtm.js?id=<container>&gtm_auth=…&gtm_preview=env-N&gtm_cookies_win=x`), or fetches that URL with `route.fetch({ url })` and fulfils with the response. The override belongs to that run only. It is never stored as a shared setting.
 
-In 0.2 the recorder fetches the preview build with `route.fetch({ url })` and fulfils the original request with the response, so the page's request URL is unchanged. It matches only `https://www.googletagmanager.com/gtm.js` with `id=<container>` (other parameters are ignored; `gtag/js` and `ns.html` do not match). The run records each match in `gtmOverride.applied` as `{way: "direct", url, status}`. If nothing matched, or a preview fetch was not 200, the run fails with exit 2 and the JSONL is still written.
+In 0.2 the recorder fetches the preview build with `route.fetch({ url })` and fulfils the original request with the response, so the page's request URL is unchanged. It matches `https://www.googletagmanager.com/gtm.js` with `id=<container>` (other parameters are ignored; `gtag/js` and `ns.html` do not match). It also matches a Stape-style custom loader request that unwraps to that container (`way: "loader"`, the loader script runs unchanged), and the exact URL in the override file's `loader.replace` (`way: "replace"`, with a `loses` note). The run records each match in `gtmOverride.applied` as `{way, url, status}`, with `loses` for the other two ways, and `loader` (the loader kind) for the `loader` way. If nothing matched, or a preview fetch was not 200, the run fails with exit 2 and the JSONL is still written.
 
 For tests, `PINGWRIGHT_TEST_GTM_ORIGIN` replaces `https://www.googletagmanager.com` in every `gtm.js` fetch, with or without an override, but not in matching. It must parse with `new URL` to `http:` and a hostname of exactly `localhost`, `127.0.0.1` or `[::1]`, with no userinfo, path, query or fragment; anything else is a hard error. It is read only from the environment, never from scenario YAML or the override file, and the run records it as `testGtmOrigin`.
 
@@ -321,6 +322,8 @@ Scenario files are YAML. An expectation is a filter over records, plus a rule.
 | `after: <step>` | Only after a named step |
 | `tags.mustFire`, `tags.mustNotFire` | Over tag reports, by tag ID or name pattern. An unknown name is "cannot evaluate", not a pass or fail. |
 | `identity.hashesMatch` | Hashed identity fields sent to a vendor match the run's fake identity (§13) |
+
+Every run also gets built-in checks. `unknownDestination` fails the run when a request goes to a host that is not first party and that no decoder or tracker-list entry matches (§5.3). `options.firstPartyHosts` lists more first-party hosts or `*.domain` wildcards. `options.allowUnknownDestination` is `true` for all, or a host list for only those hosts (§15.1).
 
 Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`), `transport`, `host`, `outcome` and `params.*`.
 
@@ -399,7 +402,7 @@ Deferred: HTML report, sink setup commands, a replay page.
 Where the code in 0.1 differs from the design above:
 
 - **`sgtm-data-client` is minimal.** It decodes `/data` requests that came through the Stape loader, or that carry a non-empty `dtdc` object, `v` with `event` or `en`, or a JSON POST body with `event_name` and `page_location`, and reports vendor `sgtm` with the event name, `page_location` as `page`, `tid` and `page_hostname` in `params`, presence of `cid` and `uid` as `ids.client_id` and `ids.user_id` (not their values), and consent. It does not know other data client paths.
-- **Only Meta, Google and Pinterest hosts are stubbed by host.** Hits to vendors without a decoder (Microsoft UET, TikTok and others) pass through in `stub` mode and can only appear as `unknownDestination` flags.
+- **Only Meta and Google hosts are stubbed by host in 0.1.** In 0.2, Pinterest (every path on ct.pinterest.com) and the tracker list (§15.2) are stubbed too. The tracker list adds LinkedIn, Microsoft UET and Reddit (§15.2). Hits to other vendors, such as TikTok, pass through in `stub` mode and can only appear as `unknownDestination` flags.
 - **`unknownDestination` is a built-in check.** A flagged request fails the run unless the scenario sets `options.allowUnknownDestination: true`, or a list of hosts or `*.domain` wildcards. With a list, only requests to those hosts pass and every other unknown destination still fails. `options.firstPartyHosts` marks more hosts as first party. The rule for what is flagged, and what first party means, is in §5.3.
 - **Fake Meta pixel ID is `100000000000001`.** fbevents.js rejects IDs that start with 0 and sends no `/tr`.
 - **Loopback payment exception.** Card and password fields can be filled on `localhost`, `127.0.0.1` and `::1` only (§5.4). On any other host the run fails and the step must be a `handoff`.
@@ -409,10 +412,10 @@ Where the code in 0.1 differs from the design above:
 - **Commands are `run`, `install-browser` and `--version`.** `diff`, `report` and the MCP server are not built.
 - **Rules are `must`, `mustNot`, `count`, `before`, `in`, `after` and `identity.hashesMatch`.** `tags.mustFire` and `tags.mustNotFire` need the GTM reporters, which are not built. The `TagReport` record type exists and no 0.1 code writes it.
 - **Chromium only.** There is no Firefox or WebKit profile. Playwright's Firefox does not start on the macOS used for development.
-- **Decoders are `ga4`, `google-ads`, `meta`, `pinterest`, `sgtm-data-client` and `stape-custom-loader`.** `microsoft-uet` is not built.
+- **Decoders are `ga4`, `google-ads`, `meta`, `sgtm-data-client` and `stape-custom-loader`.** `pinterest` comes in 0.2 (§15.2). `microsoft-uet` is not built.
 - **`Run.containerVersions` is always `{}`.** No GTM reporter fills it.
 - **`Checkpoint.consentState` is always `null`.** Checkpoints record cookies only.
-- **`addToCart` is a selector click.** There is no platform adapter.
+- **`addToCart` is a selector click followed by a cart check (§5).** There is no platform adapter.
 - **Hits are not linked to `TagReport`s.** No `TagReport` is written (see the rules item above).
 - **There is no run ID cookie and no run token.** Server-side correlation by run ID does not exist.
 - **Verification used Chromium 156.0.8078.4 and Playwright 1.64.1.** Other versions are untested.
@@ -427,7 +430,8 @@ Where the code in 0.2 differs from the design above. Section 15.1 still applies,
 - **`gtmAuth` never appears in a record or in output.** It is replaced with `[redacted]` in any form.
 - **`pingwright diff <a.jsonl> <b.jsonl>` exists,** with `--by-page` and `--json`. It reads two records and opens no browser. It reports added, removed and changed hits per epoch, vendor and event, and changed flag counts per host. It exits 0 whether or not the runs differ. Rules on a diff are not built: run the scenario against each build and let its own rules fail.
 - **Commands are `run`, `diff`, `install-browser` and `--version`.** `report` and the MCP server are not built.
-- **A curated tracker list is stubbed and decoded.** It holds LinkedIn, Microsoft UET, X and Reddit hosts, each with a link to the vendor's docs. A listed request becomes a minimal hit with the vendor name, unknown consent and transport `tracker-list`. `--tracker-list <file>` adds entries. A listed path is stubbed for every resource type. There is still no full `microsoft-uet` decoder: its hits carry no parameters.
+- **A curated tracker list is stubbed and decoded.** It holds LinkedIn, Microsoft UET and Reddit hosts, each with a link to the vendor's docs. A listed request becomes a minimal hit with the vendor name, unknown consent and transport `tracker-list`. `--tracker-list <file>` adds entries. A listed path is stubbed for every resource type. There is still no full `microsoft-uet` decoder: its hits carry no parameters.
+- **A `pinterest` decoder exists.** In `stub` mode every path on `ct.pinterest.com` is stubbed (§6).
 - **Vendor keys in scenarios** are the built-in decoders plus every vendor in the tracker list and in a `--tracker-list` file.
 - **The Shopify checkout pattern is a doc and fixture pages,** not an adapter (`docs/shopify-checkout.md`). Payment is a `handoff`. `addToCart` is still a selector click with a cart check.
 
