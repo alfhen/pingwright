@@ -3,6 +3,8 @@
   "version": "0.2.0-rc.1",
   "description": "Agent-first testing for website tracking and consent.",
   "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/alfhen/pingwright.git" },
+  "bugs": { "url": "https://github.com/alfhen/pingwright/issues" },
   "type": "module",
   "engines": { "node": ">=22.18" },
   "packageManager": "pnpm@10.34.7",

@@ -1,4 +1,9 @@
-# Pingwright
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/lockup-dark.svg">
+    <img alt="Pingwright" src="brand/lockup.svg" width="327" height="64">
+  </picture>
+</h1>
 
 Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Reports of which tags fired are planned.
 
