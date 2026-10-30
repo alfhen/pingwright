@@ -114,6 +114,8 @@ function page(path: string): string | undefined {
           });
         });
       </script>`;
+    case '/put-303-302':
+      return `<script>fetch('/s303', { method: 'PUT', headers: { 'content-type': 'text/plain' }, body: 'put=secret' }).catch(() => {});</script>`;
     case '/post-303-307':
       return `<script>fetch('/p303x', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'b=secret', mode: 'no-cors' }).catch(() => {});</script>`;
     case '/post-303':
@@ -166,6 +168,15 @@ beforeAll(async () => {
       res.writeHead(307, { location: `http://localhost:${otherPort}/echo` }).end();
       return;
     }
+    if (path === '/s303') {
+      req.resume();
+      res.writeHead(303, { location: '/s302x' }).end();
+      return;
+    }
+    if (path === '/s302x') {
+      res.writeHead(302, { location: `http://127.0.0.1:${otherPort}/echo-body` }).end();
+      return;
+    }
     if (path === '/p303x') {
       req.resume();
       res.writeHead(303, { location: '/p307x' }).end();
@@ -216,7 +227,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
   otherServer = createServer((req, res) => {
-    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization' };
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, PUT' };
     if (req.method === 'OPTIONS') {
       res.writeHead(204, cors).end();
       return;
@@ -406,16 +417,21 @@ test('a POST that a 303 turns into a GET reaches the server the same way in stub
   expect(await seen('stub')).toEqual(live);
 });
 
-test('a 303 then a cross-origin 307 reaches the other host as a GET without the body in stub and live mode', async () => {
-  const seen = async (mode: 'stub' | 'live') => {
-    otherBodies = [];
-    await visit('/post-303-307', mode);
-    return otherBodies;
-  };
-  const live = await seen('live');
-  expect(live).toEqual([{ method: 'GET', body: '' }]);
-  expect(await seen('stub')).toEqual(live);
-});
+for (const [name, path] of [
+  ['a POST, 303, then cross-origin 307', '/post-303-307'],
+  ['a PUT, 303, then cross-origin 302', '/put-303-302'],
+]) {
+  test(`${name} reaches the other host as a GET without the body in stub and live mode`, async () => {
+    const seen = async (mode: 'stub' | 'live') => {
+      otherBodies = [];
+      await visit(path, mode);
+      return otherBodies;
+    };
+    const live = await seen('live');
+    expect(live).toEqual([{ method: 'GET', body: '' }]);
+    expect(await seen('stub')).toEqual(live);
+  });
+}
 
 test('live mode lets a redirect hop through to the server', async () => {
   const live = await visit('/redirect', 'live');

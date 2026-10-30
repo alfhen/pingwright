@@ -429,10 +429,10 @@ export class Recorder {
       url = next.href;
       this.recordApiResponse(current, response);
     }
-    // Chromium applies a handed-back 307 or 308 to the original request, so after a method change it must
-    // see a 303, or it re-sends the original method and body to the next host.
-    const keepsMethod = [307, 308].includes(response.status());
-    await route.fulfill(method !== first.method && keepsMethod ? { response, status: 303 } : { response });
+    // Chromium applies a handed-back redirect to the original request, so after a method change it must see a
+    // 303, or a 307, 308 (any method) or 301/302 (non-POST) re-sends the original method and body to the next host.
+    const isRedirect = response.status() >= 300 && response.status() < 400;
+    await route.fulfill(method !== first.method && isRedirect ? { response, status: 303 } : { response });
   }
 
   private isSameOriginUrl(url: string): boolean {
