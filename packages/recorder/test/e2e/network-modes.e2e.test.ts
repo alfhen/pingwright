@@ -9,6 +9,9 @@ import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts'
 
 let server: Server;
 let port: number;
+let otherServer: Server;
+let otherPort: number;
+let otherSaw: { cookie: string; authorization: string }[] = [];
 let outDir: string;
 let serverSaw: string[] = [];
 let pixelCookies: string[] = [];
@@ -45,9 +48,15 @@ function page(path: string): string | undefined {
       return `<script>fetch('/set-strict').then(() => {
         const frame = document.createElement('iframe');
         frame.setAttribute('sandbox', 'allow-scripts');
-        frame.srcdoc = "<script>setTimeout(() => fetch('${origin}/echo-cookie', { mode: 'no-cors', credentials: 'include' }), 2000)<\\/script>";
+        frame.src = '/sbx';
         document.body.append(frame);
       });</script>`;
+    case '/sbx':
+      return `<script>setTimeout(() => fetch('/echo-cookie', { mode: 'no-cors', credentials: 'include' }), 2000)</script>`;
+    case '/cross-origin-fetch':
+      return `<script>fetch('/set-c').then(() => fetch('http://localhost:${otherPort}/echo', { mode: 'no-cors' }));</script>`;
+    case '/cross-origin-redirect-auth':
+      return `<script>fetch('/set-c').then(() => fetch('/redir-auth', { headers: { authorization: 'Bearer t0k' } }).catch(() => {}));</script>`;
     case '/redirect-frame':
       return '<iframe src="/redirect-to-collect-frame"></iframe>';
     case '/redirect-same-to-cross':
@@ -143,6 +152,14 @@ beforeAll(async () => {
       res.writeHead(204, { 'set-cookie': 'strict=1; SameSite=Strict; Path=/' }).end();
       return;
     }
+    if (path === '/set-c') {
+      res.writeHead(204, { 'set-cookie': 'c=1; Path=/' }).end();
+      return;
+    }
+    if (path === '/redir-auth') {
+      res.writeHead(307, { location: `http://localhost:${otherPort}/echo` }).end();
+      return;
+    }
     if (path === '/echo-cookie') {
       pixelCookies.push(req.headers.cookie ?? '');
       res.writeHead(204, { 'set-cookie': 'framecookie=1; SameSite=Lax; Path=/' }).end();
@@ -169,12 +186,27 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
+  otherServer = createServer((req, res) => {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization' };
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, cors).end();
+      return;
+    }
+    otherSaw.push({ cookie: req.headers.cookie ?? '', authorization: req.headers.authorization ?? '' });
+    res.writeHead(204, { ...cors, 'set-cookie': 'setxorigin=1; Path=/' }).end();
+  });
+  await new Promise<void>((resolve) => otherServer.listen(0, '127.0.0.1', resolve));
+  otherPort = (otherServer.address() as AddressInfo).port;
   const parent = fileURLToPath(new URL('../../../../test-results/', import.meta.url));
   await mkdir(parent, { recursive: true });
   outDir = await mkdtemp(join(parent, 'modes-'));
 });
 
 afterAll(async () => {
+  await new Promise((resolve) => {
+    otherServer.close(resolve);
+    otherServer.closeAllConnections();
+  });
   await new Promise((resolve) => {
     server.close(resolve);
     server.closeAllConnections();
@@ -276,12 +308,13 @@ test('a cross-site redirect to a collection endpoint is left to the browser and 
 async function cookieRun(networkMode: 'stub' | 'live', page = '/cookies', settleMs = 1000) {
   serverSaw = [];
   pixelCookies = [];
+  otherSaw = [];
   const recorder = await launchRecorder({ networkMode, outDir, site: `http://localhost:${port}` });
   await recorder.visit(`http://localhost:${port}${page}`);
   await recorder.wait(settleMs);
   const checkpoint = await recorder.checkpoint('end', null);
   await recorder.close();
-  return { sent: [...pixelCookies], jar: checkpoint.cookies.map((c) => `${c.name}@${c.domain}`).sort() };
+  return { sent: [...pixelCookies], other: [...otherSaw], jar: checkpoint.cookies.map((c) => `${c.name}@${c.domain}`).sort() };
 }
 
 test('stub mode sends and stores the same cookies as live mode for a cross-site subresource', async () => {
@@ -295,6 +328,20 @@ test('stub mode sends and stores the same cookies as live mode for a sandboxed s
   const live = await cookieRun('live', '/cookies-sandboxed', 3500);
   const stub = await cookieRun('stub', '/cookies-sandboxed', 3500);
   expect(live.sent).toEqual(['']);
+  expect(stub).toEqual(live);
+});
+
+test('stub mode sends and stores the same cookies as live mode for a cross-origin same-site fetch', async () => {
+  const live = await cookieRun('live', '/cross-origin-fetch');
+  const stub = await cookieRun('stub', '/cross-origin-fetch');
+  expect(live.other).toEqual([{ cookie: '', authorization: '' }]);
+  expect(stub).toEqual(live);
+});
+
+test('stub mode does not carry cookies or Authorization over a cross-origin redirect', async () => {
+  const live = await cookieRun('live', '/cross-origin-redirect-auth');
+  const stub = await cookieRun('stub', '/cross-origin-redirect-auth');
+  expect(live.other).toEqual([{ cookie: '', authorization: '' }]);
   expect(stub).toEqual(live);
 });
 

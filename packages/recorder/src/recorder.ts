@@ -21,7 +21,6 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
-import { getDomain } from 'tldts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint } from '@pingwright/decoders';
 import {
@@ -355,16 +354,19 @@ export class Recorder {
 
   /**
    * Playwright never routes the hops of a redirect chain, so a redirect to a collection endpoint would reach the
-   * network in stub mode. Only same-site, non-navigation requests of the top-level frame are fetched here.
+   * network in stub mode. Only same-origin, non-navigation requests of the top-level frame are fetched here, and
+   * hops are followed only while they stay on that origin: Playwright's request client would otherwise send
+   * cookies and Authorization across origins and keep Set-Cookie where Chromium would not.
    * Playwright's request client keeps its own cookie jar, which matches Chromium's rules only for the top-level
    * frame (a sandboxed child frame has an opaque origin, so its requests are cross-site for cookies), and a
    * fulfilled document loses its loopback address space. Everything else goes to Chromium untouched, and a
-   * redirect from it to a collection endpoint can still leave the machine (flagged `stubBypass`). Hops are
-   * followed here while they stay on the site, and the first collection hop gets the stub.
+   * redirect from it to a collection endpoint can still leave the machine (flagged `stubBypass`). The first
+   * collection hop gets the stub. A fetch with credentials: 'omit' cannot be seen from Playwright, so it is fetched
+   * with the jar cookies (design §5.3).
    */
   private async routeWithRedirectCheck(route: Route, first: Request): Promise<void> {
     const original = route.request();
-    if (!this.isSameSiteRequest(original)) {
+    if (!this.isFetchableRequest(original)) {
       await route.continue();
       return;
     }
@@ -407,7 +409,7 @@ export class Recorder {
         await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
         return;
       }
-      if (!this.isSameSiteUrl(next.href)) break;
+      if (!this.isSameOriginUrl(next.href)) break;
       this.extraRequests.push(hop);
       this.routed.add(hop.id);
       current = hop;
@@ -423,22 +425,19 @@ export class Recorder {
     await route.fulfill({ response });
   }
 
-  private isSameSiteUrl(url: string): boolean {
+  private isSameOriginUrl(url: string): boolean {
     try {
-      const host = new URL(url).hostname;
-      const siteHost = new URL(this.options.site).hostname;
-      if (host === siteHost) return true;
-      const domain = getDomain(siteHost, { allowPrivateDomains: true });
-      return domain !== null && getDomain(host, { allowPrivateDomains: true }) === domain;
+      return new URL(url).origin === new URL(this.options.site).origin;
     } catch {
       return false;
     }
   }
 
-  private isSameSiteRequest(request: PwRequest): boolean {
+  private isFetchableRequest(request: PwRequest): boolean {
     if (request.isNavigationRequest() || !isTopLevelFrameRequest(request)) return false;
     const frame = frameUrlOf(request);
-    return frame !== null && this.isSameSiteUrl(request.url()) && (frame === 'about:blank' || this.isSameSiteUrl(frame));
+    if (frame === null || !this.isSameOriginUrl(request.url())) return false;
+    return frame === 'about:blank' || this.isSameOriginUrl(frame);
   }
 
   private hopRecord(first: Request, url: string, method: string, headers: Record<string, string>, postData: Buffer | null): Request {
