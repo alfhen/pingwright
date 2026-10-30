@@ -72,6 +72,17 @@ function page(path: string): string | undefined {
           navigator.sendBeacon('https://www.facebook.com/tr', form);
         });
       </script>`;
+    case '/unload-headers':
+      return `<a href="/next">next</a><script>
+        addEventListener('pagehide', () => {
+          fetch('https://www.facebook.com/tr', {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'content-type': 'text/plain' },
+            body: new URLSearchParams({ id: '100000000000001', ev: 'PageView' }),
+          });
+        });
+      </script>`;
     case '/next':
       return '<p>next</p>';
     default:
@@ -256,4 +267,21 @@ test('a multipart Meta beacon sent during unload keeps its body and boundary for
   const hits = decodeRequest(sent[0]!);
   expect(hits).toHaveLength(1);
   expect(hits[0]).toMatchObject({ vendor: 'meta', event: 'PageView', params: { pixelId: '100000000000001' } });
+});
+
+test('an unload fetch keeps its explicit content type', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `http://localhost:${port}` });
+  try {
+    const page = await recorder.visit(`http://localhost:${port}/unload-headers`);
+    await page.click('a');
+    await page.waitForURL('**/next');
+    await recorder.wait(500);
+  } catch (error) {
+    await recorder.close().catch(() => undefined);
+    throw error;
+  }
+  const { records } = await recorder.close();
+  const sent = records.requests.filter((q) => q.url === 'https://www.facebook.com/tr');
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.headers['content-type']).toBe('text/plain');
 });

@@ -196,6 +196,16 @@ test('reads user_id and client_id from a JSON POST body on /data', () => {
   expect(JSON.stringify(hit)).not.toContain('fake-user-1');
 });
 
+test('reads a numeric user_id from a JSON POST body on /data', () => {
+  const r = req(`${HOST}/data`, {
+    method: 'POST',
+    postData: JSON.stringify({ event_name: 'purchase', page_location: PAGE, user_id: 12345 }),
+  });
+  const [hit] = decodeRequest(r);
+  expect(hit!.ids).toEqual({ user_id: true });
+  expect(JSON.stringify(hit)).not.toContain('12345');
+});
+
 test('a JSON POST body without ids sets none', () => {
   const r = req(`${HOST}/data`, {
     method: 'POST',
