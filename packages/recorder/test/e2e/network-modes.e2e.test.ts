@@ -488,12 +488,12 @@ test('service worker requests are recorded without a frame', async () => {
   expect(request).toMatchObject({ frameUrl: null, initiator: 'serviceWorker', outcome: 'passed' });
 });
 
-// Chromium sometimes routes this request, sometimes reports it without routing it (it then ends `failed` when the iframe is torn down), and sometimes neither routes nor reports it (design §5.3): accept one of these, exactly once.
+// Chromium sometimes routes this request, sometimes reports it without routing it (it then ends `failed`, and the server has seen it), and sometimes neither routes nor reports it (design §5.3): accept one of these, exactly once.
 test('a collection request sent while a sandboxed srcdoc iframe loads is stubbed, flagged, or the known bypass', async () => {
   const { records } = await visit('/early-srcdoc', 'stub');
   const recorded = collectionRequests({ records } as RunResult).filter((q) => q.url.includes('en=early'));
   const reachedServer = serverSaw.filter((u) => u.includes('en=early'));
-  console.info(`early srcdoc request: recorded outcomes ${JSON.stringify(recorded.map((q) => q.outcome))}, reached server ${reachedServer.length}`);
+  console.info(`early srcdoc request: recorded outcomes ${JSON.stringify(recorded.map((q) => q.outcome))}, failure ${JSON.stringify(recorded.map((q) => q.failure ?? null))}, reached server ${reachedServer.length}`);
   if (recorded.length === 0) {
     expect(reachedServer).toHaveLength(1);
     return;
@@ -506,6 +506,7 @@ test('a collection request sent while a sandboxed srcdoc iframe loads is stubbed
     expect(flagged).toEqual([]);
   } else {
     expect(request.outcome).toBe('failed');
+    expect(reachedServer).toHaveLength(1);
     expect(flagged).toHaveLength(1);
   }
 });
