@@ -1,6 +1,6 @@
-import { newId, type Flag, type Hit, type Id, type NetworkMode, type Request } from '@pingwright/core';
+import { newId, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request } from '@pingwright/core';
 import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@pingwright/decoders';
-import { hostMatches } from '@pingwright/expect';
+import { findForeignData, hostMatches } from '@pingwright/expect';
 import { getDomain } from 'tldts';
 import { isKnownVendorCollection } from './stub.ts';
 
@@ -63,11 +63,13 @@ export interface FlagInput {
   trackers?: readonly TrackerEntry[];
   requests: readonly Request[];
   hits: readonly Hit[];
+  /** When given, requests and hits are scanned for data that is not the identity's. */
+  identity?: Identity | null;
   /** Ids of requests that Playwright routed. A collection request that was seen but not routed escaped stub mode. */
   routedRequestIds: ReadonlySet<string>;
 }
 
-export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, requests, hits, routedRequestIds }: FlagInput): Flag[] {
+export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, requests, hits, identity, routedRequestIds }: FlagInput): Flag[] {
   const scope = { siteHost: parse(siteUrl)?.hostname ?? '', firstPartyHosts };
   const flags: Flag[] = [];
   for (const req of requests) {
@@ -85,6 +87,9 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, track
     if (isSandboxPageUrl(hit.page)) {
       flags.push(flag(runId, 'sandboxPageUrl', [hit.id, hit.requestId], `${hit.vendor} received ${hit.page} as the page`));
     }
+  }
+  if (identity) {
+    for (const leak of findForeignData(requests, hits, identity)) flags.push(flag(runId, 'possibleRealData', leak.evidence, leak.detail));
   }
   return flags;
 }
