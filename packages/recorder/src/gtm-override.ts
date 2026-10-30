@@ -160,9 +160,14 @@ export function isLoaderCandidate(url: string, resourceType: string): boolean {
   }
 }
 
-/** The body of a GTM container script holds its container ID. */
+/**
+ * A gtm.js body names the exact container ID and registers `google_tag_manager`. The marker keeps out
+ * bundles that only embed the GTM snippet; the ID boundaries keep out GTM-AB123 when the container is GTM-AB12.
+ */
 export function bodyHasContainer(body: string, container: string): boolean {
-  return body.includes(container);
+  if (!body.includes('google_tag_manager')) return false;
+  const escaped = container.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}(?![A-Za-z0-9_-])`).test(body);
 }
 
 /** Origin and path with the query values hidden, because they may hold per-site keys. */

@@ -271,6 +271,14 @@ test('a loader script for another container exits 2 and the message lists the sc
   await expectNoAuth(r);
 }, 90_000);
 
+test('a container ID that is a prefix of the loader script container does not match its body', async () => {
+  const r = await runCli('gtm-loader-script', ['--gtm-override', await overrideFile({ container: 'GTM-PWTEST' })], testOrigin());
+  expect(r.code).toBe(2);
+  expect(r.stderr).toContain('no container request matched');
+  expect(r.records!.run.gtmOverride!.applied).toEqual([]);
+  await expectNoAuth(r);
+}, 90_000);
+
 test('a cross-origin script that redirects to a collection endpoint is not hidden by the loader sniff', async () => {
   const r = await runCli('gtm-redirect-script', ['--gtm-override', await overrideFile()], testOrigin());
   const { requests, flags } = r.records!;

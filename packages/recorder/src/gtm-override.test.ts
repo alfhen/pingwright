@@ -132,6 +132,10 @@ test('only scripts with a query on non-Google hosts are loader candidates', () =
 test('the container check and the query-value hiding', () => {
   expect(bodyHasContainer('x google_tag_manager["GTM-PWTEST1"] y', 'GTM-PWTEST1')).toBe(true);
   expect(bodyHasContainer('nothing', 'GTM-PWTEST1')).toBe(false);
+  expect(bodyHasContainer('x google_tag_manager["GTM-PWTEST1"] y', 'GTM-PWTEST')).toBe(false);
+  expect(bodyHasContainer('google_tag_manager["GTM-PWTEST"]', 'GTM-PWTEST1')).toBe(false);
+  expect(bodyHasContainer("(function(w,d,s,l,i){})(window,document,'script','dataLayer','GTM-PWTEST1');", 'GTM-PWTEST1')).toBe(false);
+  expect(bodyHasContainer('/* GTM-PWTEST1 */ window.google_tag_manager = {};', 'GTM-PWTEST1')).toBe(true);
   expect(withoutQueryValues('https://load.example.com/abcd.js?x9f=SECRET&x9f=2&b=3')).toBe('https://load.example.com/abcd.js?x9f=…&b=…');
 });
 

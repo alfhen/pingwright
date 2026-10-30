@@ -49,6 +49,8 @@ function buildScript(build: BuildName, thirdPartyUrl: string): string {
     : '';
   return `/* fixture container ${containerId}, ${build} build */
 (function () {
+  window.google_tag_manager = window.google_tag_manager || {};
+  window.google_tag_manager[${JSON.stringify(containerId)}] = {};
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
   gtag('consent', 'default', {
