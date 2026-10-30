@@ -24,10 +24,10 @@ test('the net log captures the unload hit of a sandboxed iframe on the fixture s
   const before = await netLogDirs();
   const recorder = await launchRecorder({ networkMode: 'live', netLog: true, outDir, site: site.url });
   try {
-    const page = await recorder.visit(`${site.url}/unload-beacons`);
+    const page = await recorder.visit(`${site.url}/unload-beacons-bare`);
     await page.click('#add-to-cart');
     await recorder.wait(300);
-    await recorder.visit(`${site.url}/`);
+    await recorder.visit(`${site.url}/unload-beacons-bare?next`);
     await recorder.wait(300);
   } catch (error) {
     await recorder.close().catch(() => undefined);
@@ -37,7 +37,9 @@ test('the net log captures the unload hit of a sandboxed iframe on the fixture s
   const fromLog = records.requests.filter((r) => r.captured === 'netlog');
   expect(fromLog.length).toBeGreaterThanOrEqual(1);
   expect(fromLog.some((r) => r.initiator === 'unload')).toBe(true);
-  expect(records.hits.some((h) => h.event === 'add_to_cart')).toBe(true);
+  const hit = records.hits.find((h) => h.event === 'add_to_cart');
+  expect(hit).toBeDefined();
+  expect(fromLog.map((r) => r.id)).toContain(hit!.requestId);
   expect(records.flags.filter((f) => f.kind === 'netLogUnreadable')).toEqual([]);
   expect(await readdir(outDir)).not.toContainEqual(expect.stringMatching(/^netlog-/));
   expect(await netLogDirs()).toEqual(before);

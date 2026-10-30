@@ -25,6 +25,7 @@ const pages: Record<string, string> = {
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
   '/unload-beacons': 'unload-beacons.html',
+  '/unload-beacons-bare': 'unload-beacons-bare.html',
   '/stable-ids': 'stable-ids.html',
   '/shared-hashes': 'shared-hashes.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
