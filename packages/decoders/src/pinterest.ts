@@ -34,6 +34,12 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined;
 }
 
+function bracketKeys(name: string): { group: string; path: string } | undefined {
+  const m = /^(ed|pd)((?:\[[^\]]+\])+)$/.exec(name);
+  if (!m?.[1] || !m[2]) return undefined;
+  return { group: m[1], path: m[2].slice(1, -1).split('][').join('.') };
+}
+
 export const pinterest: Decoder = {
   name: 'pinterest',
   match: isPinterestCollect,
@@ -51,8 +57,17 @@ export const pinterest: Decoder = {
       const s = text(v);
       if (s !== undefined) params[k === 'event_id' ? 'eventId' : k] = s;
     }
+    let em = text(pd.em);
+    for (const [name, value] of p) {
+      const key = bracketKeys(name);
+      if (!key || !value) continue;
+      if (key.group === 'pd') {
+        if (key.path === 'em') em = value;
+      } else {
+        params[key.path === 'event_id' ? 'eventId' : key.path] = value;
+      }
+    }
     const ids: Hit['ids'] = {};
-    const em = text(pd.em);
     if (em) {
       ids.hashedEmail = true;
       params.hashedEmail = em;

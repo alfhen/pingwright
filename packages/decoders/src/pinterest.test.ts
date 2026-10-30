@@ -76,7 +76,7 @@ test('capture: checkout reads ed', () => {
   expect(hit).toMatchObject({ event: 'checkout', params: { value: '19.5', order_id: 'fixture-order-0001' } });
 });
 
-test('docs layout: v3 pagevisit with ad.loc and pd.em', () => {
+test('core.js format: v3 pagevisit with JSON ad and pd', () => {
   const r = req(
     v3({
       tid: TID,
@@ -96,6 +96,26 @@ test('docs layout: v3 pagevisit with ad.loc and pd.em', () => {
     requestId: r.id,
     ids: { hashedEmail: true },
     params: { tagId: TID, hashedEmail: HASH },
+  });
+});
+
+test('docs img layout: bracketed ed[...] and pd[em]', () => {
+  const url =
+    `https://ct.pinterest.com/v3/?tid=${TID}&event=checkout&ed[value]=10.00&ed[order_quantity]=2` +
+    `&ed[event_id]=eid-1&ed[line_items][0][product_id]=sku-1&pd[em]=${HASH}&noscript=1`;
+  const [hit] = decodeRequest(req(url, { resourceType: 'image' }));
+  expect(hit).toMatchObject({
+    vendor: 'pinterest',
+    event: 'checkout',
+    ids: { hashedEmail: true },
+    params: {
+      tagId: TID,
+      value: '10.00',
+      order_quantity: '2',
+      eventId: 'eid-1',
+      'line_items.0.product_id': 'sku-1',
+      hashedEmail: HASH,
+    },
   });
 });
 
