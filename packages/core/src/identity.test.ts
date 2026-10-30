@@ -187,9 +187,29 @@ describe('scan fixes', () => {
   });
 
   it('still finds short base64 values of 8 to 11 bytes', () => {
-    expect(scan(`ph=${b64('+4512345678')}`, id).length).toBeGreaterThan(0);
-    expect(scan(`ph=${b64('jo@shop.dk')}`, id).length).toBeGreaterThan(0);
-    expect(scan(`ph=${b64('a@shop.dk')}`, id).length).toBeGreaterThan(0);
+    expect(scan(`ph=${b64('+4512345678')}`, id)).toContainEqual({ kind: 'phone', value: '+4512345678' });
+    expect(scan(`ph=${b64('jo@s.test')}`, id)).toContainEqual({ kind: 'email', value: 'jo@s.test' });
+    expect(scan(`ph=${b64('ab@x.test')}`, id)).toContainEqual({ kind: 'email', value: 'ab@x.test' });
+  });
+
+  it('finds base64 behind each separator the design lists', () => {
+    const payload = Buffer.from('{"em":"jane@shop.example.net"}').toString('base64url');
+    for (const sep of ['/', '_', '-', '+']) {
+      for (const text of [`d=abcdefgh${sep}${payload}`, `d=session1234567${sep}${payload}`, `d=${payload}${sep}tail1234567890`]) {
+        expect(scan(text, id), text).toContainEqual(jane);
+      }
+    }
+  });
+
+  it('does not flag 43-character URL paths as hashes (#114)', () => {
+    const urls = [
+      'https://shop.localhost/products/BlueShirt-2024/Variant9X',
+      'https://shop.localhost/api/Orders/Recent/2024-10-29T1000',
+    ];
+    for (const url of urls) {
+      expect(scan(url, id), url).toEqual([]);
+      expect(scan(`v=2&dl=${encodeURIComponent(url)}`, id), url).toEqual([]);
+    }
   });
 
   it('does not flag base64 text that happens to be 32 bytes long (#29)', () => {
@@ -300,6 +320,14 @@ describe('scan fixes', () => {
 });
 
 describe('own identity is never flagged', () => {
+  const glue = ['', 'test', 'evt1', 'abc', 'end', 'a', 'Q', 'xyz', 'abcd', 'u1', 'Zz9'];
+  const wrap = (me: ReturnType<typeof createIdentity>) => [
+    me.email,
+    me.phone,
+    `em=${me.email}&ph=${me.phone}`,
+    JSON.stringify({ email: me.email, phone: me.phone }),
+  ];
+
   it('holds for 200 seeds across encodings and placements', () => {
     for (let seed = 1; seed <= 200; seed++) {
       const me = createIdentity(seed);
@@ -310,6 +338,23 @@ describe('own identity is never flagged', () => {
           const texts = [`/u/${form}/collect`, `a=${form}+${form}`];
           if (form !== value) texts.push(`v_${form}`, `/u/${form}xyz`, `x=abcd${form}`, `x=${form}qrstuvwxyzabcdefghijkl`);
           for (const text of texts) expect(scan(text, me), `${seed} ${text}`).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it('holds with glue text on either side of encoded values', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const me = createIdentity(seed);
+      for (const value of wrap(me)) {
+        for (const form of [Buffer.from(value).toString('base64'), Buffer.from(value).toString('base64url')]) {
+          for (const pre of glue) {
+            for (const post of glue) {
+              for (const text of [`d=${pre}${form}${post}`, `/u/${pre}${form}${post}`, `q=${encodeURIComponent(`${pre}${form}${post}`)}`]) {
+                expect(scan(text, me), `${seed} ${text}`).toEqual([]);
+              }
+            }
+          }
         }
       }
     }

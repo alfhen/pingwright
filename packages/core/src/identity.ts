@@ -163,15 +163,16 @@ function isNonPersonalKey(text: string, index: number): boolean {
 }
 
 const MAX_BOUNDARIES = 8;
+const GLUE = new Set(['_', '-', '+']);
 
-// Junk glued to a value shifts the base64 alignment and adds stray bytes, so pieces cut at '_' and '-' are tried
+// Junk glued to a value shifts the base64 alignment and adds stray bytes, so pieces cut at '_', '-' and '+' are tried
 // as well, each from offsets 0 to 3. Only the outermost boundaries are used to keep long separator runs linear.
 function* glueCuts(piece: string): Generator<string> {
   yield piece;
   const bounds: number[] = [];
-  for (let i = 0; i < piece.length && bounds.length < MAX_BOUNDARIES; i++) if (piece[i] === '_' || piece[i] === '-') bounds.push(i);
+  for (let i = 0; i < piece.length && bounds.length < MAX_BOUNDARIES; i++) if (GLUE.has(piece[i]!)) bounds.push(i);
   const tail: number[] = [];
-  for (let i = piece.length - 1; i >= 0 && tail.length < MAX_BOUNDARIES; i--) if (piece[i] === '_' || piece[i] === '-') tail.push(i);
+  for (let i = piece.length - 1; i >= 0 && tail.length < MAX_BOUNDARIES; i--) if (GLUE.has(piece[i]!)) tail.push(i);
   const all = [...new Set([...bounds, ...tail])];
   if (all.length === 0) return;
   const first = Math.min(...all);
@@ -206,12 +207,25 @@ function* base64Decodes(text: string): Generator<string> {
   }
 }
 
+const DIGEST_BEFORE = new Set(['=', ':', '"', "'", '~', ',', '+']);
+const DIGEST_AFTER = new Set(['&', '"', "'", ',']);
+
+// A digest is a whole value. Path segments and slugs that happen to be 43 characters long are not.
+function isWholeValue(text: string, start: number, token: string): boolean {
+  if (token.startsWith('/') || token.endsWith('/')) return false;
+  const before = text[start - 1];
+  const after = text[start + token.length];
+  const startsOk = before === undefined || DIGEST_BEFORE.has(before) || (before === '.' && !token.includes('/'));
+  const endsOk = after === undefined || DIGEST_AFTER.has(after) || /\s/.test(after);
+  return startsOk && endsOk;
+}
+
 function isDigestToken(token: string): boolean {
   const bare = token.replace(/=+$/, '');
   if (bare.length !== 43 || !/[a-z]/.test(bare) || !/[A-Z]/.test(bare) || !/\d/.test(bare)) return false;
   if (Buffer.from(bare.replace(/-/g, '+').replace(/_/g, '/'), 'base64').length !== 32) return false;
-  // A real digest is random bytes; 32 bytes of readable text is a payload, such as a disguised Stape path.
-  return tryBase64Decode(bare) === undefined;
+  // A real digest is random bytes; 32 bytes of readable text, even with junk glued on, is a payload, such as a disguised Stape path.
+  return base64Decodes(bare).next().done === true;
 }
 
 // Only base64 decoding spends depth; URL decoding is cheap and a disguised Stape URL layers it between base64 steps.
@@ -267,14 +281,14 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     for (const raw of hasUrlEscapes(variant) ? [] : (variant.match(EMAIL) ?? [])) {
       // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
       const m = raw.slice(raw.lastIndexOf('+') + 1);
-      if (!m.includes('@') || FILE_EXTENSION.test(m) || normalizeEmail(m) === own.email) continue;
+      if (!m.includes('@') || FILE_EXTENSION.test(m) || normalizeEmail(m).includes(own.email)) continue;
       add('email', m);
       // One '+' is either a form-encoded space or a plus-address tag, so both readings are reported.
       if (raw !== m && raw.indexOf('+') === raw.lastIndexOf('+') && !raw.startsWith('+')) add('email', raw);
     }
     for (const m of variant.match(PHONE) ?? []) {
       const digits = m.replace(/\D/g, '');
-      if (digits !== own.phoneDigits && digits !== own.phoneDigits.slice(1)) add('phone', m);
+      if (!digits.includes(own.phoneDigits) && !digits.includes(own.phoneDigits.slice(1))) add('phone', m);
     }
     for (const m of variant.matchAll(HASH)) {
       if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
@@ -283,7 +297,7 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
       // A leading '+' is a joiner between values, not part of the digest.
       const token = m[0].replace(/^\++/, '');
       const bare = token.replace(/=+$/, '');
-      if (isDigestToken(token) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) add('hash', token);
+      if (isDigestToken(token) && isWholeValue(variant, m.index + m[0].length - token.length, token) && !own.hashes.has(bare) && !isNonPersonalKey(variant, m.index)) add('hash', token);
     }
   }
   return [...found.values()];
