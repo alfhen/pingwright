@@ -103,6 +103,10 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/tracker` needs no internet access. It loads `thirdPartyUrl/i18n/pixel/events.js` (script), POSTs `thirdPartyUrl/api/v2/pixel?event=Purchase&url=...` (a TikTok-style pixel), and loads `http://criteo.localhost:<p3>/m/collect?event=viewItem&callback=pwCriteo` as a script (a Criteo-style JSONP collection). Neither host is in the built-in list. Tests list host `127.0.0.1` for tiktok and `criteo.localhost` with path `/m/collect` for criteo in a `--tracker-list` file.
 
+## Stable IDs page
+
+`/stable-ids` loads the shop banner and, after 1.5 s and again after 2.5 s, POSTs one fake SHA-256 client ID under `clientIdHash`, `client_id_hash`, `external_id`, `uid`, `user_id`, `id` and `uuid` to `thirdPartyUrl/stable-ids/data`, and loads `thirdPartyUrl/stable-ids/session?hmac=<hex>&id=<same hash>`. With `?leak=email` it also POSTs the hash of `other.person@example.com` as `external_id` once.
+
 ## Deliberate defects
 
 - Reproduces a real failure: when `navigator.userAgent` contains `HeadlessChrome`, the banner grants consent itself, stores `accept` and never shows.

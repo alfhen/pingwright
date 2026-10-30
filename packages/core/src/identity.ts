@@ -113,13 +113,9 @@ const FILE_EXTENSION = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|js|mjs|json
 // A "+" starts a phone only at the start of a value: after punctuation in form-encoded text it is a space.
 const PHONE = /(?<=^|[=\s"']|tel:)\+(?=\d)\d(?:[ .-]?\d){7,14}(?!\d|\+\d)|(?<=^|[=\s"'])\+\d+(?:\+\d+)+(?=$|[&\s"'])|\(\d{3}\)\s?\d{3}[-.\s]\d{4}|(?<![\w-])(?:1[-.\s])?\d{3}[-.\s]\d{3}[-.\s]\d{4}(?![\w-])/g;
 const HASH = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/gi;
-// Keys whose values are random or hashed client identifiers, not personal data.
+// Keys whose values are random tokens or MACs, never derived from an email or phone.
 const NON_PERSONAL_HASH_KEYS = new Set([
-  'uid',
-  'user_id',
-  'userid',
-  'external_id',
-  'externalid',
+  'hmac',
   'client_id',
   'clientid',
   'client_id_hash',
@@ -141,6 +137,9 @@ const NON_PERSONAL_HASH_KEYS = new Set([
   'csrf_token',
   'csrftoken',
 ]);
+// Keys that can carry a hashed email as well as a hashed client ID. A hash under them is only skipped when it
+// repeats (see findStableHashes), so one hashed email under external_id is still reported.
+const REUSABLE_ID_KEYS = new Set(['uid', 'user_id', 'userid', 'external_id', 'externalid', 'id', 'uuid', 'guid']);
 // GA4 sends event parameters as ep.<name> and epn.<name>; other vendors nest the name in cd[...].
 const KEY_PREFIX = /^(?:epn?|up|upn|cd|ud)[._]/;
 const KEY_BEFORE_VALUE = /([\w.[\]-]+)["']?\s*[=:]\s*["']?$/;
@@ -183,12 +182,52 @@ function hasUrlEscapes(text: string): boolean {
   return decoded !== undefined && decoded !== text;
 }
 
-function isNonPersonalKey(text: string, index: number): boolean {
+function keyNameBefore(text: string, index: number): string | undefined {
   const before = text.slice(Math.max(0, index - 128), index);
   const key = KEY_BEFORE_VALUE.exec(before.slice(-64))?.[1] ?? MULTIPART_KEY.exec(before)?.[1];
-  if (!key) return false;
-  const name = key.toLowerCase().replace(/[[\]]/g, '_').replace(/^_+|_+$/g, '').replace(KEY_PREFIX, '');
-  return NON_PERSONAL_HASH_KEYS.has(name);
+  if (!key) return undefined;
+  return key.toLowerCase().replace(/[[\]]/g, '_').replace(/^_+|_+$/g, '').replace(KEY_PREFIX, '');
+}
+
+function isNonPersonalKey(text: string, index: number): boolean {
+  const name = keyNameBefore(text, index);
+  return name !== undefined && NON_PERSONAL_HASH_KEYS.has(name);
+}
+
+export interface HashSource {
+  requestId: string;
+  text: string;
+}
+
+/**
+ * Hex digests that act as a stable client ID: every occurrence in the run is under an ID-like key, and the value
+ * repeats under two or more repeat-only key names (snake_case and camelCase spellings count once) or in two
+ * or more requests under repeat-only keys; always-exempt keys count toward neither. A digest seen once, unkeyed, or under any
+ * other key (em, ph, ud[...]) is never stable. A hashed email repeated under several ID keys cannot be told
+ * from a client ID by shape, so it is skipped too; the same hash under an identity key is still reported.
+ */
+export function findStableHashes(sources: Iterable<HashSource>): Set<string> {
+  const seen = new Map<string, { keys: Set<string>; requests: Set<string>; allIdLike: boolean }>();
+  for (const { requestId, text } of sources) {
+    for (const variant of variants(text)) {
+      if (hasUrlEscapes(variant)) continue;
+      for (const m of variant.matchAll(HASH)) {
+        const hash = m[0].toLowerCase();
+        const name = keyNameBefore(variant, m.index);
+        let entry = seen.get(hash);
+        if (!entry) seen.set(hash, (entry = { keys: new Set(), requests: new Set(), allIdLike: true }));
+        const idLike = name !== undefined && (REUSABLE_ID_KEYS.has(name) || NON_PERSONAL_HASH_KEYS.has(name));
+        if (!idLike) entry.allIdLike = false;
+        else if (REUSABLE_ID_KEYS.has(name)) {
+          entry.keys.add(name.replace(/_/g, ''));
+          entry.requests.add(requestId);
+        }
+      }
+    }
+  }
+  const stable = new Set<string>();
+  for (const [hash, e] of seen) if (e.allIdLike && (e.keys.size >= 2 || e.requests.size >= 2)) stable.add(hash);
+  return stable;
 }
 
 const MAX_BOUNDARIES = 8;
@@ -303,7 +342,7 @@ function ownValues(identity: Identity) {
 }
 
 /** Finds emails, phone numbers and SHA-256 hex strings in text that do not belong to the identity. */
-export function scan(text: string, identity: Identity): LeakMatch[] {
+export function scan(text: string, identity: Identity, options: { stableHashes?: ReadonlySet<string> } = {}): LeakMatch[] {
   const own = ownValues(identity);
   const found = new Map<string, LeakMatch>();
   const add = (kind: LeakKind, value: string) => {
@@ -329,7 +368,8 @@ export function scan(text: string, identity: Identity): LeakMatch[] {
     }
     // The decoded variant carries the same hex, with its key readable.
     for (const m of hasUrlEscapes(variant) ? [] : variant.matchAll(HASH)) {
-      if (!own.hashes.has(m[0].toLowerCase()) && !isNonPersonalKey(variant, m.index)) add('hash', m[0].toLowerCase());
+      const hash = m[0].toLowerCase();
+      if (!own.hashes.has(hash) && !options.stableHashes?.has(hash) && !isNonPersonalKey(variant, m.index)) add('hash', hash);
     }
     // Escaped text is matched through its decoded variant, so a percent-encoded '=' never splits a digest.
     for (const token of hasUrlEscapes(variant) ? [] : keyedDigests(variant)) {
