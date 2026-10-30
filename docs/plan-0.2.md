@@ -99,7 +99,7 @@ The list has entries `{vendor, host, paths?, source}`:
 - `source` is an `https` link to the vendor's own docs.
 - Each vendor has an explicit list of its docs domains, for example X: `business.x.com`, Microsoft UET: `microsoft.com`, Reddit: `reddithelp.com`.
 
-The first vendors are TikTok, Snap, LinkedIn, Microsoft UET (vendor key `microsoft-uet`, to match the 0.3 decoder), X, Reddit and Criteo. Pinterest gets a full decoder in Q06.
+The built-in vendors are LinkedIn, Microsoft UET (vendor key `microsoft-uet`, to match the 0.3 decoder), X and Reddit. TikTok, Snap and Criteo are left out: no collection host or path could be sourced from the vendor's own docs (ads.tiktok.com help, businesshelp.snapchat.com, help.criteo.com OneTag notes). Users add them with `--tracker-list`. Pinterest gets a full decoder in Q06.
 
 The module exports two functions:
 
@@ -108,7 +108,7 @@ The module exports two functions:
 
 Acceptance: unit tests for:
 
-- a host match, a path match, a path that must not match, and a library load (the TikTok pixel script) that must not match;
+- a host match, a path match, a path that must not match, and library loads (such as `bat.bing.com/bat.js`) that must not match;
 - every entry's `source` is `https` on one of its vendor's listed docs domains;
 - validation errors.
 
@@ -273,9 +273,9 @@ Stub rule:
 
 Acceptance, as e2e on the new tracker page:
 
-- A TikTok-style pixel request is `stubbed`, and `{ vendor: tiktok, before: consent }` and `{ host: <host>, before: consent }` both match it in a failing `mustNot`.
-- The TikTok pixel script load passes.
-- A Criteo-style collection sent as a script request to a listed path is `stubbed`.
+- A TikTok-style pixel request, listed in the test's user tracker-list file, is `stubbed`, and `{ vendor: tiktok, before: consent }` and `{ host: <host>, before: consent }` both match it in a failing `mustNot`.
+- The pixel script load of that vendor passes.
+- A Criteo-style collection, listed in the user file with a path and sent as a script request to it, is `stubbed`.
 - A tracker from a user list file is stubbed.
 - `diff` of two runs shows a tracker hit that one run has and the other lacks.
 
