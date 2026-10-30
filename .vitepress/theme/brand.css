@@ -164,3 +164,35 @@
   color: var(--vp-c-text-2);
   font-size: 14px;
 }
+
+.mermaid-diagram {
+  margin: 20px 0 8px;
+}
+
+.mermaid-svg {
+  display: flex;
+  justify-content: safe center;
+  overflow-x: auto;
+}
+
+.mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-svg p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.mermaid-source {
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.mermaid-error,
+.diagram-summary {
+  margin: 0 0 20px;
+  color: var(--vp-c-text-2);
+  font-size: 14px;
+}

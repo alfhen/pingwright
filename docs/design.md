@@ -37,29 +37,22 @@ Pingwright makes this checkable by a program: a coding agent, a CI job, or a per
 
 ## 3. Architecture
 
+```mermaid
+flowchart TB
+  input["Scenario and<br/>run options"] --> recorder["Recorder<br/>(Playwright)"]
+  recorder --> page["Page, iframes<br/>and workers"]
+  page -->|"collector origin,<br/>answered by<br/>context.route"| store[("Run store")]
+  recorder -->|records| store
+  page --> sgtm["Server GTM"]
+  sgtm -->|"tag reports"| sink["Sink"]
+  sink --> store
+  store --> decoders["Decoders"]
+  decoders --> expect["Expect"]
+  expect --> report["Report and diff"]
+  report --> front["CLI and MCP server"]
 ```
-            scenario.yml  +  run options (GTM preview, expected tags)
-                 │
-          ┌──────▼──────┐   requests, responses, cookies,   ┌──────────────┐
-          │  recorder   │── consent epochs, dataLayer ─────▶│              │
-          │ (Playwright)│                                   │              │
-          └──────┬──────┘                                   │              │
-                 │ loads site                               │  run store   │──▶ runs/<id>.jsonl
-    ┌────────────▼─────────────┐   posts to the            │  (in-process)│
-    │ page + iframes + workers │   collector origin,       │              │
-    │  • consent banner        │   answered by             │              │
-    │  • platform sandbox ─────┼── context.route ─────────▶│              │
-    │  • web GTM reporter ─────┼──────────────────────────▶│              │
-    └────────────┬─────────────┘                           │              │
-                 │ hits                                     │              │
-          ┌──────▼──────┐  signed server tag reports        │              │
-          │ server GTM  │──────▶ sink (user's tunnel ──────▶│              │
-          └──────┬──────┘        or user's Worker)          └──────┬───────┘
-                 ▼                                                 │
-              vendors                              decoders → expect → report / diff
-                                                                   │
-                                                            CLI  ·  MCP server
-```
+
+The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. The decoders, expectations, report and diff read the store, and the CLI and MCP server expose them.
 
 ## 4. Data model
 

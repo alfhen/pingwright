@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import type MarkdownIt from 'markdown-it';
 import { brandAssets } from './brand-assets.ts';
+import { mermaidFences } from './mermaid.ts';
 import { unlistedPages } from './page-guard.ts';
 
 const repo = 'https://github.com/alfhen/pingwright';
@@ -37,6 +38,7 @@ function themedPictures(md: MarkdownIt) {
 function markdownSetup(md: MarkdownIt) {
   repoFileLinks(md);
   themedPictures(md);
+  mermaidFences(md);
 }
 
 export default defineConfig({
@@ -62,7 +64,7 @@ export default defineConfig({
     'docs/proposal-*.md',
     'docs/release.md',
   ],
-  rewrites: { 'README.md': 'index.md' },
+  rewrites: { 'docs/index.md': 'index.md', 'README.md': 'readme.md' },
   cleanUrls: true,
   ignoreDeadLinks: false,
   useWebFonts: false,
@@ -84,12 +86,30 @@ export default defineConfig({
   },
   themeConfig: {
     logo: { light: '/mark.svg', dark: '/mark-dark.svg', alt: 'Pingwright' },
-    nav: [{ text: 'GitHub', link: repo }],
-    sidebar: [
-      { text: 'Pingwright', link: '/' },
+    nav: [
+      { text: 'Guides', link: '/docs/guide/what-it-checks', activeMatch: '/docs/guide/' },
       { text: 'CLI', link: '/docs/cli' },
-      { text: 'Shopify checkout', link: '/docs/shopify-checkout' },
-      { text: 'Design', link: '/docs/design' },
+      { text: 'GitHub', link: repo },
+    ],
+    sidebar: [
+      { text: 'Home', link: '/' },
+      {
+        text: 'Guides',
+        items: [
+          { text: 'What Pingwright checks', link: '/docs/guide/what-it-checks' },
+          { text: 'Your first run', link: '/docs/guide/first-run' },
+          { text: "Reading a run's results", link: '/docs/guide/reading-results' },
+        ],
+      },
+      {
+        text: 'Reference',
+        items: [
+          { text: 'README', link: '/readme' },
+          { text: 'CLI', link: '/docs/cli' },
+          { text: 'Shopify checkout', link: '/docs/shopify-checkout' },
+          { text: 'Design', link: '/docs/design' },
+        ],
+      },
     ],
     search: { provider: 'local' },
     socialLinks: [{ icon: 'github', link: repo }],
