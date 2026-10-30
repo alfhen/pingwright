@@ -50,7 +50,8 @@ import { chromeUserAgent } from './user-agent.ts';
 import {
   bodyHasContainer,
   isGtmJsUrl,
-  isLoaderCandidate,
+  isCrossOriginLoaderCandidate,
+  isSniffableLoader,
   loaderHint,
   gtmFailureMessage,
   matchGtmRequest,
@@ -58,7 +59,6 @@ import {
   parseTestGtmOrigin,
   previewFetchUrl,
   testOriginUrl,
-  isLoaderHost,
   TEST_GTM_ORIGIN_ENV,
   type GtmOverrideInput,
 } from './gtm-override.ts';
@@ -440,7 +440,7 @@ export class Recorder {
     // record.url may be redacted during a handoff window; match on the live URL.
     const liveUrl = route.request().url();
     let match = gtmOverride === undefined ? undefined : matchGtmRequest(liveUrl, record, gtmOverride);
-    if (!match && gtmOverride && isLoaderCandidate(liveUrl, record.resourceType) && !this.isSameOriginUrl(liveUrl)) this.crossOriginScripts.add(liveUrl);
+    if (!match && gtmOverride && isCrossOriginLoaderCandidate(liveUrl, record.resourceType, this.options.site)) this.crossOriginScripts.add(liveUrl);
     if (!match && gtmOverride && !gtmOverride.loader && this.isUnseenLoaderCandidate(liveUrl, record)) {
       const sniff = await this.sniffLoader(route, liveUrl, gtmOverride.container);
       if (!sniff) return false;
@@ -472,7 +472,7 @@ export class Recorder {
 
   private isUnseenLoaderCandidate(liveUrl: string, record: Request): boolean {
     if (this.loaderCandidates.get(liveUrl) === false) return false;
-    if (!isLoaderCandidate(liveUrl, record.resourceType) || this.isSameOriginUrl(liveUrl) || !isLoaderHost(liveUrl, this.options.site, this.options.firstPartyHosts)) return false;
+    if (!isSniffableLoader(liveUrl, record.resourceType, this.options.site, this.options.firstPartyHosts)) return false;
     return !isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record);
   }
 

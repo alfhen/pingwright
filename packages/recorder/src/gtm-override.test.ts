@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { bodyHasContainer, isLoaderHost, isGtmJsUrl, isLoaderCandidate, matchesGtmContainer, loaderHint, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
+import { bodyHasContainer, isLoaderHost, isGtmJsUrl, isLoaderCandidate, isCrossOriginLoaderCandidate, isSniffableLoader, matchesGtmContainer, loaderHint, matchesLoaderPattern, withoutQueryValues, parseGtmOverride, parseTestGtmOrigin, previewFetchUrl, testOriginUrl } from './gtm-override.ts';
 
 const valid = { container: 'GTM-PWTEST1', gtmAuth: 'pwfake-auth-0001', gtmPreview: 'env-99' };
 
@@ -175,4 +175,14 @@ test('isLoaderHost on a loopback site accepts only loopback hosts', () => {
   expect(isLoaderHost('http://[::1]:4000/a.js?k=1', site)).toBe(true);
   expect(isLoaderHost('https://load.shop.example.com/a.js?k=1', site)).toBe(false);
   expect(isLoaderHost('https://load.shop.example.com/a.js?k=1', site, ['*.shop.example.com'])).toBe(false);
+});
+
+test('a script from the site origin is neither listed nor sniffed', () => {
+  const site = 'https://shop.example.com/';
+  expect(isCrossOriginLoaderCandidate('https://shop.example.com/metrics/abcd.js?k=x', 'script', site)).toBe(false);
+  expect(isSniffableLoader('https://shop.example.com/metrics/abcd.js?k=x', 'script', site)).toBe(false);
+  expect(isCrossOriginLoaderCandidate('https://load.shop.example.com/abcd.js?k=x', 'script', site)).toBe(true);
+  expect(isSniffableLoader('https://load.shop.example.com/abcd.js?k=x', 'script', site)).toBe(true);
+  expect(isCrossOriginLoaderCandidate('https://cdn.other.example/abcd.js?k=x', 'script', site)).toBe(true);
+  expect(isSniffableLoader('https://cdn.other.example/abcd.js?k=x', 'script', site)).toBe(false);
 });
