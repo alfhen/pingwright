@@ -28,8 +28,8 @@ test('report --html marks the sgtm row as a leak and holds no value from the run
   expect((await report([summary.path, '--html', out])).code).toBe(0);
   const html = await readFile(out, 'utf8');
 
-  for (const vendor of ['sgtm', 'meta']) {
-    const row = new RegExp(`<tr><th scope="row">${vendor}</th>.*?</tr>`).exec(html);
+  for (const [vendor, label] of [['sgtm', 'server container \\(sgtm\\)'], ['meta', 'Meta \\(meta\\)']]) {
+    const row = new RegExp(`<tr><th scope="row">${label}</th>.*?</tr>`).exec(html);
     expect(row, vendor).not.toBeNull();
     expect(row![0], vendor).toContain('class="m-leak"');
   }

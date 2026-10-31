@@ -25,7 +25,7 @@ test('a Meta hit before any answer is early, severity shows only on a failed res
   expect(await renderHtml(summary.path, out)).toBe(0);
   const html = await readFile(out, 'utf8');
 
-  const row = /<tr><th scope="row">meta<\/th>.*?<\/tr>/.exec(html);
+  const row = /<tr><th scope="row">Meta \(meta\)<\/th>.*?<\/tr>/.exec(html);
   expect(row).not.toBeNull();
   expect(row![0]).toContain('class="m-early"');
   expect(row![0]).toContain('before an answer');

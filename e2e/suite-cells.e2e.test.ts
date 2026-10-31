@@ -88,7 +88,7 @@ test('the verdict comes first, then the results table, the timelines, and the di
   expect(positions.every((p) => p >= 0)).toBe(true);
   expect(positions).toEqual([...positions].sort((a, b) => a - b));
   expect(html.lastIndexOf('Timeline per vendor')).toBeLessThan(positions[3]!);
-  expect(html).toMatch(/<li><strong>published:<\/strong> identifiers go out to ga4, meta and sgtm in the denied state, 2 failed expectations, 1 accepted warning<\/li>/);
+  expect(html).toContain('<li><strong>published:</strong> identifiers go out to Google Analytics 4, Meta and server container in the denied state; 1 rule failed</li>');
 });
 
 test('the table and the page hold no identity value', () => {
@@ -106,5 +106,6 @@ test('with two variants the cell of the failing variant names its rule, and the 
   expect(diff).toBeGreaterThan(pairHtml.lastIndexOf('Timeline per vendor'));
   expect(pairHtml.indexOf('<h2>Verdict</h2>')).toBeLessThan(pairHtml.indexOf('<h2>Results</h2>'));
   expect(pairHtml.slice(diff)).toContain('workspace_only');
-  expect(pairHtml).toMatch(/<li><strong>workspace:<\/strong> [^<]*1 failed expectation[^<]*<\/li>/);
+  expect(pairHtml).toContain('<li><strong>published:</strong> no leaks</li>');
+  expect(pairHtml).toContain('<li><strong>workspace:</strong> no leaks; 1 rule failed</li>');
 });

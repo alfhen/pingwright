@@ -159,9 +159,14 @@ test('the page makes no request and runs no script', () => {
   expect(tags).not.toMatch(/\son\w+=/i);
 });
 
+test('the unchecked legend names the unknown-signal case', () => {
+  const html = renderReport(buildReportModel(records()));
+  expect(html).toMatch(/<strong>unchecked<\/strong> [^<]*identifier names whose consent signal is unknown/);
+});
+
 test('the sgtm row has a leak mark and the header keeps the host only', () => {
   const html = renderReport(buildReportModel(records()));
-  const row = /<tr><th scope="row">sgtm<\/th>.*?<\/tr>/.exec(html)![0];
+  const row = /<tr><th scope="row">server container \(sgtm\)<\/th>.*?<\/tr>/.exec(html)![0];
   expect(row).toContain('class="m-leak"');
   expect(html).toContain('shop.example.com');
   expect(html).not.toContain('/products/');
