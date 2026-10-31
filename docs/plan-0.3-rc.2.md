@@ -257,7 +257,7 @@ Acceptance: `e2e/suite-cells.e2e.test.ts` runs `suite` with two variants on the 
 
 ### Wave 5
 
-**S09 `0.3.0-rc.2` prep (final PR).** Built in this PR. Touches: `package.json`, `CHANGELOG.md`, `README.md`, `docs/cli.md`, `docs/release.md`, `docs/plan-0.3-rc.2.md`. It replaces the S09 marker.
+**S09 `0.3.0-rc.2` prep (final PR).** Merged in #509. Touches: `package.json`, `CHANGELOG.md`, `README.md`, `docs/cli.md`, `docs/release.md`, `docs/plan-0.3-rc.2.md`. It replaces the S09 marker.
 - Sets `version` in `package.json` to `0.3.0-rc.2`. `pingwright --version` reads it. The `packages/*/package.json` files stay at `0.0.0`, as now.
 - Removes unused markers under the `0.3.0-rc.2` heading, adds the `Install it with npm i -g pingwright@next` line, and writes `### Known in 0.3.0-rc.2` from the issues still open: at least #463, and each open `review-minor` issue that the rc.2 PRs filed.
 - README: the install note names `0.3.0-rc.2`. The docs and README are checked against what rc.2 does: every flag, step, rule and message that the rc.2 PRs changed is read once against `docs/cli.md`. The PR lists what it read.
