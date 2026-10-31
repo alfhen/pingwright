@@ -143,12 +143,12 @@ test('the result holds names only: no email, hash, digits or cookie value reache
     ...base, id: newId('request'), method: 'POST', url: 'https://sgtm.example.com/data?v=2&event=page_view', headers: { 'content-type': 'text/plain' },
     postData: JSON.stringify({
       event_name: 'page_view', page_location: 'http://localhost:3000/', external_id: hash, note: email, cookie_note: cookie,
-      user_data: { email_address: hash, phone_number: digits }, [hash]: 'x', [digits]: 'y', [email]: 'z',
+      user_data: { email_address: hash, phone_number: digits, [hash]: 'x', [digits]: 'y', [email]: 'z' },
     }),
   };
   const meta: Request = {
     ...base, id: newId('request'), method: 'GET', headers: {}, postData: null,
-    url: `https://www.facebook.com/tr/?id=100000000000001&ev=PageView&dl=${encodeURIComponent('http://localhost:3000/')}&ud[em]=${hash}&ud[ph]=${digits}&note=${encodeURIComponent(email)}&cookie_note=${cookie}`,
+    url: `https://www.facebook.com/tr/?id=100000000000001&ev=PageView&dl=${encodeURIComponent('http://localhost:3000/')}&ud[em]=${hash}&ud[ph]=${digits}&ud[${digits}]=1&ud[${hash}]=1&note=${encodeURIComponent(email)}&cookie_note=${cookie}`,
   };
   const hits = [sgtm, meta].flatMap((q) => decodeRequest(q)).map((h) => ({ ...h, t: 1500 }));
   expect(hits.map((h) => h.vendor).sort()).toEqual(['meta', 'sgtm']);
@@ -158,6 +158,7 @@ test('the result holds names only: no email, hash, digits or cookie value reache
   const r = evaluate([...deniedEpochs, sgtm, meta, ...hits], scenario).find((x) => x.expectation === 'builtin: deniedIdentifiers')!;
   expect(r.pass).toBe(false);
   expect(r.message).toContain('external_id');
+  expect(r.message).toContain('(other)');
   const text = JSON.stringify(r);
   for (const secret of [email, hash, digits, cookie]) expect(text).not.toContain(secret);
 });
