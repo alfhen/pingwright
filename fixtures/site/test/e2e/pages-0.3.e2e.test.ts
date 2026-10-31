@@ -267,3 +267,25 @@ test('/handoff has a form and a link to a second page, and ?listener=1 sends a h
   expect(notAnswered(w)).toEqual([]);
   await w.context.close();
 });
+
+test('/viewport sends layout_mobile and ua_mobile under 390x844 mobile emulation', async () => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent: `${chromeUserAgent(browser.version())} Mobile`,
+  });
+  try {
+    await context.route(
+      (url) => isOffMachine(url),
+      (route) => route.fulfill({ status: 204 }),
+    );
+    const page = await context.newPage();
+    await page.goto(`${site.url}/viewport`);
+    const events = await page.evaluate(() => (window as unknown as { dataLayer: Record<string, unknown>[] }).dataLayer);
+    expect(events).toContainEqual({ event: 'layout_mobile' });
+    expect(events).toContainEqual({ ua_mobile: true });
+  } finally {
+    await context.close();
+  }
+});
