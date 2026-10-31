@@ -1,6 +1,6 @@
 import { newId, RunWriter, type ConsentState, type Hit, type PingwrightRecord, type RunRecords } from '@pingwright/core';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -192,4 +192,34 @@ test('a directory with no manifest and a manifest that is not one exit 2', async
   } finally {
     await rm(empty, { recursive: true, force: true });
   }
+});
+
+test('a truncated record puts its line number on the page', () => {
+  const cut = new Map(loaded);
+  cut.set(recordKey('checkout', 'published'), { ...loaded.get(recordKey('checkout', 'published'))!, truncatedAtLine: 7 });
+  const model = buildSuiteModel(manifest, cut);
+  expect(model.warnings).toContain('checkout (published): record is truncated at line 7, so later records are missing from this report');
+  expect(renderSuiteReport(model)).toContain('Warning: checkout (published): record is truncated at line 7');
+});
+
+test('each run section shows the run header', () => {
+  const html = renderSuiteReport(buildSuiteModel(manifest, loaded));
+  expect(html).toContain('Network mode</dt><dd>stub');
+  expect(html).toContain('Record schema</dt><dd>2');
+  expect(html.match(/Network mode<\/dt>/g)).toHaveLength(2);
+});
+
+test('report refuses --html equal to suite.json or a record, by path or by link', async () => {
+  const sub = join(dir, 'guard');
+  await mkdir(sub);
+  await writeFile(join(sub, 'checkout.published.jsonl'), '{"type":"hit"}\n');
+  await writeFile(join(sub, 'suite.json'), JSON.stringify(manifest));
+  const before = await readFile(join(sub, 'suite.json'), 'utf8');
+  await link(join(sub, 'suite.json'), join(dir, 'hard.html'));
+  await symlink(join(sub, 'checkout.published.jsonl'), join(dir, 'soft.html'));
+  for (const target of [join(sub, 'suite.json'), join(sub, 'checkout.published.jsonl'), join(dir, 'hard.html'), join(dir, 'soft.html')]) {
+    expect(await main(['report', sub, '--html', target], io().io)).toBe(2);
+  }
+  expect(await readFile(join(sub, 'suite.json'), 'utf8')).toBe(before);
+  expect(await readFile(join(sub, 'checkout.published.jsonl'), 'utf8')).toBe('{"type":"hit"}\n');
 });

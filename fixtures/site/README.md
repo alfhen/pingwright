@@ -151,7 +151,7 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 ## Pages for 0.3
 
-These pages load `/assets/banner.js`, not `site.js`: a banner (`#pw-consent-banner`, `#pw-accept`, `#pw-reject`, `#pw-cookie-settings`), a Consent Mode default with all four signals denied, and no sandboxed pixel, no unknown pixel, no gtag.js and no fbevents.js. They need no internet access. Hits to `google-analytics.com` and `facebook.com` are images that a test or a stub-mode run answers locally. Hits to `sgtmUrl` go to the loopback mock host. A run with these pages can exit 0. A scenario that adds a page with `site.js` sets `builtins: { sandboxPageUrl: warn }`.
+`/sgtm-leak`, `/identifiers`, `/cookies` and `/select` load `/assets/banner.js`, not `site.js`: a banner (`#pw-consent-banner`, `#pw-accept`, `#pw-reject`, `#pw-cookie-settings`), a Consent Mode default with all four signals denied, and no sandboxed pixel, no unknown pixel, no gtag.js and no fbevents.js. `/tiles`, `/handoff` and `/handoff/second` load neither script and have no banner, so a scenario must not use a consent step on them. All of these pages need no internet access. Hits to `google-analytics.com` and `facebook.com` are images that a test or a stub-mode run answers locally. Hits to `sgtmUrl` go to the loopback mock host. A run with these pages can exit 0. A scenario that adds a page with `site.js` sets `builtins: { sandboxPageUrl: warn }`.
 
 `/sgtm-leak` uses the identity typed in `/checkout`, read from `sessionStorage` (`pw_checkout`), with fakes (`pw-fixture@example.com`) when nothing was typed. `/identifiers` has its own form (`#email`, `#phone`): the scenario fills it with identity steps before the consent step, and the typed values are also stored in `pw_checkout`.
 

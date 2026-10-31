@@ -69,7 +69,7 @@ export type Command = RunArgs | DiffArgs | ReportArgs | SuiteArgs | { command: '
 export const USAGE = `Usage:
   pingwright run <scenario.yml> --site <url> [options]
   pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
-  pingwright report <run.jsonl> --html <out.html>
+  pingwright report <run.jsonl | suite-dir> --html <out.html>
   pingwright suite <dir> --site <url> [--variant published] [--variant name=override.json] [options]
   pingwright install-browser
   pingwright --version
@@ -182,7 +182,7 @@ export function parseCli(argv: string[]): Command {
     return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
   }
   if (command === 'report') {
-    if (rest.length !== 1) throw new UsageError('report takes one JSONL file');
+    if (rest.length !== 1) throw new UsageError('report takes one JSONL file or one suite directory');
     if (!values.html) throw new UsageError('report needs --html <file>');
     return { command: 'report', input: rest[0]!, html: values.html };
   }

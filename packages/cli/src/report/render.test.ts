@@ -1,6 +1,6 @@
 import { newId, RunWriter, type PingwrightRecord, type Result, type RunRecords } from '@pingwright/core';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -230,6 +230,18 @@ test('report refuses to overwrite its own input', async () => {
   const before = await readFile(writer.path, 'utf8');
   const capture = io();
   expect(await main(['report', writer.path, '--html', join(dir, '.', basename(writer.path))], capture.io)).toBe(2);
+  expect(await readFile(writer.path, 'utf8')).toBe(before);
+});
+
+test('report refuses --html that is a hard link or symlink to the input', async () => {
+  const writer = await RunWriter.create(dir, { ...records().run, id: newId('run') });
+  await writer.close();
+  const before = await readFile(writer.path, 'utf8');
+  const hard = join(dir, 'hard-link.html');
+  const soft = join(dir, 'soft-link.html');
+  await link(writer.path, hard);
+  await symlink(writer.path, soft);
+  for (const target of [hard, soft]) expect(await main(['report', writer.path, '--html', target], io().io)).toBe(2);
   expect(await readFile(writer.path, 'utf8')).toBe(before);
 });
 
