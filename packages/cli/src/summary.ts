@@ -10,7 +10,7 @@ export interface Summary {
   hits: Record<string, Record<string, number>>;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
-  results: { expectation: string; pass: boolean; severity?: Severity; message: string | undefined; evidence: string[] }[];
+  results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; evidence: string[] }[];
 }
 
 const EVIDENCE_CAP = 5;
@@ -43,7 +43,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     hits: countHits(records.hits),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
-    results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, evidence: r.evidence, ...(r.severity && { severity: r.severity }) })),
+    results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
 }
 

@@ -83,13 +83,13 @@ test('columns follow the consent epochs, one row per vendor, with hit counts', (
   expect(model.columns.map((c) => c.label)).toEqual(['undecided', 'denied', 'withdrawn']);
   expect(model.rows.map((r) => [r.vendor, r.hits])).toEqual([['ga4', 1], ['meta', 2]]);
   expect(model.rows[1]!.segments.map((s) => s.hits)).toEqual([2, 0, 0]);
-  expect(marksOf(model, 'meta')).toEqual(['full', 'nothing', 'nothing']);
+  expect(marksOf(model, 'meta')).toEqual(['early', 'nothing', 'nothing']);
 });
 
 test('a record with no epochs has one undecided column', () => {
   const model = buildReportModel(records({ consentEpochs: [], hits: [hit('meta', 1)] }));
   expect(model.columns.map((c) => c.label)).toEqual(['undecided']);
-  expect(marksOf(model, 'meta')).toEqual(['full']);
+  expect(marksOf(model, 'meta')).toEqual(['early']);
 });
 
 test('a denied hit with no identifiers is a ping, a granted hit is full, no hit is nothing', () => {
@@ -177,11 +177,38 @@ test('a segment with granted and ping hits is mixed, and mixed beats full', () =
   expect(withMixedHit.rows[0]!.segments[0]!.label).toBe('some signals denied');
 });
 
-test('a hit with an unknown state before an answer is full with the label before an answer', () => {
+test('a hit with an unknown state before an answer is early with the label before an answer', () => {
   const model = buildReportModel(records({ hits: [hit('meta', 500)] }));
   const seg = model.rows[0]!.segments[0]!;
-  expect(seg.mark).toBe('full');
+  expect(seg.mark).toBe('early');
   expect(seg.label).toBe('before an answer');
+});
+
+test('an unknown state after an answer stays full, and early outranks full in a segment', () => {
+  const after = buildReportModel(records({ consentEpochs: [epoch('granted', 0, state())], hits: [hit('meta', 500)] }));
+  expect(marksOf(after, 'meta')).toEqual(['full']);
+  const both = buildReportModel(records({ hits: [hit('meta', 500), hit('meta', 510, {}, { analytics: 'granted' })] }));
+  expect(marksOf(both, 'meta')[0]).toBe('early');
+});
+
+test('evidence from a cannot-evaluate result gives unchecked, not leak', () => {
+  const h = hit('ga4', 100, { fieldsComplete: false }, { analytics: 'denied', ads: 'denied' });
+  const cannot = result('mustNot: {"vendor":"ga4","in":"epoch(denied)"}', false, { evidence: [h.id], note: 'cannotEvaluateBody' });
+  const model = buildReportModel(records({ consentEpochs: [epoch('denied', 0, DENIED)], hits: [h], results: [cannot] }));
+  expect(marksOf(model, 'ga4')).toEqual(['unchecked']);
+});
+
+test('a hit flagged only through its identifier names is a leak from the deniedIdentifiers evidence', () => {
+  const h = hit('ga4', 100, { idFields: ['custom_id'] }, { analytics: 'denied', ads: 'denied' });
+  const failed = result('builtin: deniedIdentifiers', false, { evidence: [h.id] });
+  const model = buildReportModel(records({ consentEpochs: [epoch('denied', 0, DENIED)], hits: [h], results: [failed] }));
+  expect(marksOf(model, 'ga4')).toEqual(['leak']);
+  expect(model.rows[0]!.segments[0]!.label).toBe('identifiers sent while denied');
+});
+
+test('a result that passed has no severity, one that failed or warned has it', () => {
+  const model = buildReportModel(records({ results: [result('builtin: a', true, { severity: 'fail' }), result('builtin: b', false), result('builtin: c', false, { severity: 'warn' })] }));
+  expect(model.expectations.map((e) => e.severity)).toEqual([undefined, 'fail', 'warn']);
 });
 
 describe('consent-scoped mustNot evidence', () => {

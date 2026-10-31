@@ -2,7 +2,12 @@
 
 ## 0.3.0-rc.2
 
-<!-- S06 -->
+### Report marks and severity
+
+- A hit with unknown consent before the first answer now has its own mark, `early`, ranked above `full`. A hit on a page with a denied Consent Mode default is still `ping` (#378).
+- The marks table says that `unchecked` covers identifier names whose consent signal is unknown, and that a hit with both granted and denied signals shows `mixed` (#448).
+- The report shows `on failure: fail` or `on failure: warn` on a failed or warned result only. A passing result shows no severity (#458).
+- Every result in `--json` has `severity`. A rule with none recorded reads `fail` (#349).
 
 <!-- S08 -->
 

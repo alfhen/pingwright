@@ -1,0 +1,12 @@
+start: /meta-early
+steps:
+  - wait: 1s
+  - visit: /sgtm-data-tag
+  - evaluate: "document.cookie = '_pwfake=pw-fixture-cookie-value; path=/'; fetch('/session/unstored?c=' + document.cookie.split('=')[1]).then(() => true)"
+  - wait: 1s
+expect:
+  must:
+    - { vendor: meta, event: PageView }
+  mustNot:
+    - { vendor: meta, event: PageView }
+options: { seed: 1, allowUnknownDestination: true }

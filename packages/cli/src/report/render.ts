@@ -15,10 +15,12 @@ const MARK_NAME: Record<Mark, string> = {
   leak: 'leak',
   unchecked: 'unchecked',
   mixed: 'mixed',
+  early: 'early',
 };
 
 const LEGEND: Record<Mark, string> = {
-  full: 'hits sent with every known signal granted, or before an answer',
+  full: 'hits sent with every known signal granted, or with no consent signal known after an answer',
+  early: 'hit sent before the person answered, with no consent default set',
   ping: 'hit sent while denied, no identifiers recorded',
   nothing: 'no hit',
   leak: 'identifier names sent while their signal was denied, or named by a failed consent-scoped mustNot',
@@ -32,6 +34,7 @@ const GLYPHS: Record<Mark, string> = {
   nothing: '<line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="2"/>',
   leak: '<polygon points="7,1 13,13 1,13" fill="currentColor"/>',
   unchecked: '<polygon points="7,1 13,7 7,13 1,7" fill="none" stroke="currentColor" stroke-width="2"/>',
+  early: '<polygon points="1,1 13,1 7,13" fill="none" stroke="currentColor" stroke-width="2"/>',
   mixed: '<path d="M7 1.5a5.5 5.5 0 0 0 0 11z" fill="currentColor"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/>',
 };
 
@@ -63,7 +66,7 @@ function expectation(e: ExpectationView): string {
     ? `<span class="evidence">evidence: ${e.evidence.map(escapeHtml).join(', ')}${e.evidenceCount > e.evidence.length ? ` and ${e.evidenceCount - e.evidence.length} more` : ''} (${e.evidenceCount})</span>`
     : '';
   const note = e.note ? `<span class="note">${escapeHtml(e.note)}</span>` : '';
-  const severity = `<span class="severity">severity: ${escapeHtml(e.severity)}</span>`;
+  const severity = e.severity ? `<span class="severity">on failure: ${escapeHtml(e.severity)}</span>` : '';
   return `<li class="s-${status}"><span class="status">${escapeHtml(e.status)}</span><code>${escapeHtml(e.text)}</code>${severity}${note}${evidence}</li>`;
 }
 
@@ -90,8 +93,8 @@ export function fields(model: ReportModel): string {
 }
 
 export const STYLE = `
-:root{color-scheme:light dark;--bg:#fff;--fg:#1b1f24;--muted:#57606a;--line:#d0d7de;--card:#f6f8fa;--full:#1a7f37;--ping:#9a6700;--nothing:#6e7781;--leak:#cf222e;--unchecked:#8250df;--mixed:#bc4c00}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8d96a0;--line:#30363d;--card:#161b22;--full:#3fb950;--ping:#d29922;--nothing:#8b949e;--leak:#ff7b72;--unchecked:#d2a8ff;--mixed:#ffa657}}
+:root{color-scheme:light dark;--bg:#fff;--fg:#1b1f24;--muted:#57606a;--line:#d0d7de;--card:#f6f8fa;--full:#1a7f37;--ping:#9a6700;--nothing:#6e7781;--leak:#cf222e;--unchecked:#8250df;--mixed:#bc4c00;--early:#0969da}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8d96a0;--line:#30363d;--card:#161b22;--full:#3fb950;--ping:#d29922;--nothing:#8b949e;--leak:#ff7b72;--unchecked:#d2a8ff;--mixed:#ffa657;--early:#58a6ff}}
 *{box-sizing:border-box}
 body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
 main{max-width:960px;margin:0 auto}
@@ -106,7 +109,7 @@ thead th{background:var(--card)}
 td .name{font-weight:600;margin-left:6px}
 td .count,td .why{display:block;color:var(--muted);font-size:.85rem}
 .glyph{vertical-align:-2px}
-.m-full{color:var(--full)}.m-ping{color:var(--ping)}.m-nothing{color:var(--nothing)}.m-leak{color:var(--leak)}.m-unchecked{color:var(--unchecked)}.m-mixed{color:var(--mixed)}
+.m-full{color:var(--full)}.m-ping{color:var(--ping)}.m-nothing{color:var(--nothing)}.m-leak{color:var(--leak)}.m-unchecked{color:var(--unchecked)}.m-mixed{color:var(--mixed)}.m-early{color:var(--early)}
 .legend{list-style:none;padding:0;margin:12px 0;display:grid;gap:4px;font-size:.9rem}
 .legend strong{margin:0 4px}
 .legend li{color:var(--fg)}

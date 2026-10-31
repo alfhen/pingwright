@@ -1,9 +1,9 @@
-import type { Hit, Result } from '@pingwright/core';
+import type { Hit, Result, RunRecords } from '@pingwright/core';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
+import { buildSummary, countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
 import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
@@ -33,8 +33,8 @@ test('formats failures with message and evidence, and the record path', () => {
     epochs: [{ label: 'undecided', startT: 0, endT: null }],
     flags: [{ kind: 'unknownDestination', detail: 'GET http://x.test/' }],
     results: [
-      { expectation: 'must: a', pass: true, message: 'ok', evidence: [] },
-      { expectation: 'mustNot: b', pass: false, message: 'found 1', evidence: ['hit_1'] },
+      { expectation: 'must: a', pass: true, severity: 'fail', message: 'ok', evidence: [] },
+      { expectation: 'mustNot: b', pass: false, severity: 'fail', message: 'found 1', evidence: ['hit_1'] },
     ],
   };
   const text = formatSummary(summary);
@@ -84,7 +84,7 @@ test('shows evidence for passing expectations, capped', () => {
     hits: {},
     epochs: [],
     flags: [],
-    results: [{ expectation: 'must: a', pass: true, message: 'ok', evidence: ids }],
+    results: [{ expectation: 'must: a', pass: true, severity: 'fail', message: 'ok', evidence: ids }],
   };
   const text = formatSummary(summary);
   expect(text).toContain('evidence: h1, h2, h3, h4, h5 and 2 more');
@@ -173,7 +173,7 @@ test('a failed warn result prints a WARN line, its message and a warning count',
     ...base,
     pass: false,
     results: [
-      { expectation: 'a', pass: true, message: undefined, evidence: [] },
+      { expectation: 'a', pass: true, severity: 'fail', message: undefined, evidence: [] },
       { expectation: 'b', pass: false, severity: 'warn', message: 'b went wrong', evidence: [] },
     ],
   });
@@ -182,7 +182,7 @@ test('a failed warn result prints a WARN line, its message and a warning count',
   const mixed = formatSummary({
     ...base,
     results: [
-      { expectation: 'a', pass: false, message: 'x', evidence: [] },
+      { expectation: 'a', pass: false, severity: 'fail', message: 'x', evidence: [] },
       { expectation: 'b', pass: false, severity: 'warn', message: 'y', evidence: [] },
     ],
   });
@@ -200,4 +200,11 @@ test('sandboxPageUrl shows one example path', () => {
   const flags = ['a', 'b', 'c'].map((p) => ({ kind: 'sandboxPageUrl', detail: `meta received https://shop.example.com/${p}/sandbox/x as the page` }));
   const text = formatSummary({ ...base, flags });
   expect(text).toContain('sandboxPageUrl: meta x3 (/a/sandbox/x and 2 more)');
+});
+
+test('every --json result carries a severity, fail when the record has none', () => {
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [] } as unknown as RunRecords;
+  const warn = { ...result(false), severity: 'warn' as const };
+  const summary = buildSummary(records, [result(true), result(false), warn, { ...result(true), severity: 'warn' as const }], 'p');
+  expect(summary.results.map((r) => r.severity)).toEqual(['fail', 'fail', 'warn', 'warn']);
 });
