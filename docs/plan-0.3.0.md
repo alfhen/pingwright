@@ -1,6 +1,6 @@
 # Plan for 0.3.0
 
-This is the checklist for `0.3.0`. The goal is a release the maintainer can use as the go/no-go gate before publishing a web and a server GTM workspace together, and whose report can be shown to people outside the team. So 0.3.0 gets only correctness bugs and report text that would mislead a reader. Everything else is in the `0.4.0` milestone (see `docs/plan-0.4.md`).
+This is the checklist for `0.3.0`. The goal is a release the maintainer can use as the go/no-go gate before publishing a web and a server GTM workspace together, and whose report can be shown to people outside the team. So 0.3.0 gets only correctness bugs and report text that would mislead a reader. Everything else is in the `0.4.0` milestone.
 
 Each item is one small PR. A PR is done when its acceptance test passes in CI, an adversarial review reports no blockers or majors, and it is squash-merged to main. The target is `0.3.0`, published on `latest` by the maintainer.
 
@@ -40,7 +40,7 @@ Not in `0.3.0`:
 | #180 recorder misses a redirect hop | Real, but rare: 4 misses in 30 live-mode probe runs, none seen in about 220 CI runs of the stub-mode redirect tests. The root cause is unknown and needs a bisect. 0.3.0 states it as a known limitation. Fix in 0.4.0. |
 | #144 release setup | rc.1 and rc.2 shipped with the current flow. 0.3.0 can too. |
 | #256, #261, #323 | Labels and a warning flag only. None changes a verdict or the exit code. |
-| Everything else | See `docs/plan-0.4.md`. |
+| Everything else | See the `0.4.0` milestone. |
 
 ## Order and waves
 
