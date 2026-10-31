@@ -4,7 +4,12 @@
 
 <!-- T05 -->
 
-<!-- T01 -->
+### Report
+
+- The verdict names built-in checks apart from scenario rules: `no leaks; 1 rule failed; built-in check sandboxPageUrl failed in 4 runs`. It no longer says "failed expectations" (#511).
+- The verdict and the timeline headers use plain vendor names, such as Google Analytics 4 and server container. Row headers read `Name (key)` (#512).
+- The report title says what was tested, for example `Pingwright suite: published vs workspace on shop.example.com, 2026-10-31`. The suite ID is in the details list (#513).
+- The verdict uses `sends` for one vendor (#505). The `unchecked` legend names the unknown-signal case (#497).
 
 ### Terminal notes
 

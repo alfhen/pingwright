@@ -183,11 +183,11 @@ function verdicts(model: SuiteReportModel): string {
       else if (cell?.model) addFindings(findings, cell.model);
       else if (cell?.status === 'fail' || cell?.status === 'warn') noRecord++;
     }
-    const sentence = findingsSentence(findings);
+    const sentence = findingsSentence(findings, true);
     const base = noRecord && sentence === 'no leaks' ? 'leaks not known' : sentence;
     const tail =
-      (unfinished ? `, ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '') +
-      (noRecord ? `, ${noRecord} run${noRecord === 1 ? ' has' : 's have'} no record` : '');
+      (unfinished ? `; ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '') +
+      (noRecord ? `; ${noRecord} run${noRecord === 1 ? ' has' : 's have'} no record` : '');
     return `<li><strong>${escapeHtml(variant)}:</strong> ${escapeHtml(base + tail)}</li>`;
   });
   return `<ul class="verdicts">${items.join('')}</ul>`;
@@ -207,8 +207,13 @@ function overview(model: SuiteReportModel): string {
   return `<div class="scroll"><table><thead><tr><th scope="col">Scenario</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+export function suiteTitle(h: SuiteReportModel['header']): string {
+  return `Pingwright suite: ${h.variants.join(' vs ')}${h.host ? ` on ${h.host}` : ''}, ${h.startedAt.slice(0, 10)}`;
+}
+
 export function renderSuiteReport(model: SuiteReportModel): string {
   const h = model.header;
+  const title = suiteTitle(h);
   const warnings = model.warnings.map((w) => `<p class="warn-box">Warning: ${escapeHtml(w)}</p>`).join('');
   const scenarios = model.scenarios
     .map((s) => {
@@ -223,8 +228,9 @@ export function renderSuiteReport(model: SuiteReportModel): string {
     })
     .join('');
   const diffs = model.diffs.length ? model.diffs.map(diffTable).join('') : '<p class="empty">No variant pair has two records to compare.</p>';
-  return page(`<h1>Suite ${escapeHtml(h.id)}</h1>
+  return page(`<h1>${escapeHtml(title)}</h1>
 ${definitionList([
+  ['Suite', h.id],
   ['Started', h.startedAt],
   ['Site host', h.host],
   ['Variants', h.variants.join(', ')],
@@ -237,5 +243,5 @@ ${verdicts(model)}
 ${overview(model)}
 ${scenarios}
 <h2>Diff per variant pair</h2>
-${diffs}`);
+${diffs}`, title);
 }

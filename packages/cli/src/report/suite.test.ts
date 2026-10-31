@@ -116,7 +116,8 @@ test('the page lists both variants, the added event, and escapes the manifest', 
   expect(html).toContain('<th scope="col">published</th><th scope="col">workspace</th>');
   expect(html).toMatch(/<tr><td>denied<\/td><td>ga4<\/td><td>workspace_only<\/td><td>1<\/td>/);
   expect(html).toContain('Exit code</dt><dd>2');
-  expect(html).toContain('suite_&lt;b&gt;01&lt;/b&gt;');
+  expect(html).toContain('<dt>Suite</dt><dd>suite_&lt;b&gt;01&lt;/b&gt;</dd>');
+  expect(html).not.toContain('<h1>Suite ');
   expect(html).not.toContain('<b>');
   expect(html).toContain('<h2>checkout</h2>');
   expect(html).toContain('Timeline per vendor');
@@ -166,8 +167,8 @@ test('the page order is verdict, results, timelines, diff tables', () => {
 
 test('the verdict names vendors, states and counts per variant, and holds no value', () => {
   const html = renderSuiteReport(buildSuiteModel(mixedManifest, leakRecords));
-  expect(html).toContain('<li><strong>published:</strong> ga4 send hits in the denied state, 1 failed expectation, 1 accepted warning</li>');
-  expect(html).toContain('<li><strong>workspace:</strong> no leaks, 1 accepted warning, 1 run did not finish</li>');
+  expect(html).toContain('<li><strong>published:</strong> Google Analytics 4 sends hits in the denied state; 1 rule failed; built-in check sandboxPageUrl warned in 1 run</li>');
+  expect(html).toContain('<li><strong>workspace:</strong> no leaks; built-in check sandboxPageUrl warned in 1 run; 1 run did not finish</li>');
   for (const secret of [EMAIL, HASH, COOKIE]) expect(html).not.toContain(secret);
 });
 
@@ -180,7 +181,7 @@ test('a suite cell in the report names the failed rules and checks', () => {
 
 test('a single-run report has the verdict line before the timeline', () => {
   const leak = renderReport(buildReportModel(leaking('checkout', 'published')));
-  expect(leak).toContain('<p class="verdict">Verdict: ga4 send hits in the denied state, 1 failed expectation, 1 accepted warning.</p>');
+  expect(leak).toContain('<p class="verdict">Verdict: Google Analytics 4 sends hits in the denied state; 1 rule failed; built-in check sandboxPageUrl warned.</p>');
   expect(leak.indexOf('class="verdict"')).toBeLessThan(leak.indexOf('Timeline per vendor'));
   const clean = renderReport(buildReportModel(records('checkout', 'published', ['page_view'])));
   expect(clean).toContain('<p class="verdict">Verdict: no leaks.</p>');
@@ -303,5 +304,15 @@ test('report refuses --html equal to suite.json or a record, by path or by link'
 test('a failed cell with no record does not read as no leaks', () => {
   const failing: SuiteManifest = { ...manifest, cells: manifest.cells.map((c) => (c.scenario === 'gone' && c.variant === 'published' ? { ...c, status: 'fail' as const, exitCode: 1 as const } : c)) };
   const html = renderSuiteReport(buildSuiteModel(failing, loaded));
-  expect(html).toContain('<li><strong>published:</strong> leaks not known, 1 run has no record</li>');
+  expect(html).toContain('<li><strong>published:</strong> leaks not known; 1 run has no record</li>');
+});
+
+test('the suite title names the variants, host and date, and the run title the scenario', () => {
+  const html = renderSuiteReport(buildSuiteModel(manifest, loaded));
+  const title = 'Pingwright suite: published vs workspace on shop.example.com, 2027-01-15';
+  expect(html).toContain(`<title>${title}</title>`);
+  expect(html).toContain(`<h1>${title}</h1>`);
+  const run = renderReport(buildReportModel(records('checkout <i>', 'published', ['page_view'])));
+  expect(run).toContain('<title>Pingwright run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</title>');
+  expect(run).toContain('<h1>Pingwright run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</h1>');
 });

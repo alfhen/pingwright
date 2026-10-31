@@ -1,4 +1,5 @@
 import type { ExpectationView, Mark, ReportModel, Segment } from './model.ts';
+import { byVendorName, vendorLabel } from './names.ts';
 import { runVerdict } from './verdict.ts';
 
 export const CSP = "default-src 'none'; style-src 'unsafe-inline'";
@@ -25,7 +26,7 @@ const LEGEND: Record<Mark, string> = {
   ping: 'hit sent while denied, no identifiers recorded',
   nothing: 'no hit',
   leak: 'identifier names sent while their signal was denied, or named by a failed consent-scoped mustNot',
-  unchecked: 'denied, but the body was not fully recorded, so the hit cannot be called clean',
+  unchecked: 'denied, but the body was not fully recorded, or identifier names whose consent signal is unknown, so the hit cannot be called clean',
   mixed: 'some signals denied, or granted and denied hits in one segment',
 };
 
@@ -52,8 +53,9 @@ function segmentCell(segment: Segment): string {
 export function timeline(model: ReportModel): string {
   if (model.rows.length === 0) return '<p class="empty">No vendor hits were recorded.</p>';
   const head = model.columns.map((c) => `<th scope="col">${escapeHtml(c.label)}</th>`).join('');
-  const body = model.rows
-    .map((row) => `<tr><th scope="row">${escapeHtml(row.vendor)}</th>${row.segments.map(segmentCell).join('')}</tr>`)
+  const body = [...model.rows]
+    .sort((a, b) => byVendorName(a.vendor, b.vendor))
+    .map((row) => `<tr><th scope="row">${escapeHtml(vendorLabel(row.vendor))}</th>${row.segments.map(segmentCell).join('')}</tr>`)
     .join('');
   const legend = (Object.keys(LEGEND) as Mark[])
     .map((m) => `<li class="m-${m}">${glyph(m)}<strong>${m}</strong> ${escapeHtml(LEGEND[m])}</li>`)
@@ -87,8 +89,9 @@ export function flags(model: ReportModel): string {
 export function fields(model: ReportModel): string {
   if (!model.fields) return `<p class="empty">not recorded (record schema version ${model.header.schemaVersion})</p>`;
   if (model.fields.length === 0) return '<p class="empty">No hit was sent while a signal was denied.</p>';
-  const items = model.fields
-    .map((v) => `<li><strong>${escapeHtml(v.vendor)}</strong> ${v.names.map((n) => `<code>${escapeHtml(n)}</code>`).join(' ')}</li>`)
+  const items = [...model.fields]
+    .sort((a, b) => byVendorName(a.vendor, b.vendor))
+    .map((v) => `<li><strong>${escapeHtml(vendorLabel(v.vendor))}</strong> ${v.names.map((n) => `<code>${escapeHtml(n)}</code>`).join(' ')}</li>`)
     .join('');
   return `<ul class="fields">${items}</ul>`;
 }
@@ -158,14 +161,14 @@ ${flags(model)}
 ${fields(model)}`;
 }
 
-export function page(body: string): string {
+export function page(body: string, title: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pingwright report</title>
+<title>${escapeHtml(title)}</title>
 <style>${STYLE}</style>
 </head>
 <body>
@@ -178,9 +181,16 @@ ${body}
 `;
 }
 
+const dayOf = (iso: string): string => iso.slice(0, 10);
+
+export function runTitle(h: ReportModel['header']): string {
+  return `Pingwright run: ${h.scenario}${h.host ? ` on ${h.host}` : ''}, ${dayOf(h.startedAt)}`;
+}
+
 export function renderReport(model: ReportModel): string {
-  return page(`<h1>${escapeHtml(model.header.scenario)}</h1>
+  const title = runTitle(model.header);
+  return page(`<h1>${escapeHtml(title)}</h1>
 ${definitionList(runHeader(model.header))}
 <p class="verdict">${escapeHtml(runVerdict(model))}</p>
-${runSections(model, 'h2')}`);
+${runSections(model, 'h2')}`, title);
 }
