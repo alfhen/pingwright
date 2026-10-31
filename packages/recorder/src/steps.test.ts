@@ -232,7 +232,7 @@ describe('select and locator steps on a fake page', () => {
     };
     return { goto: () => Promise.resolve(), locator: () => ({ first: () => field }) };
   };
-  const play = (page: unknown, yaml: string, extras: Partial<Record<string, unknown>> = {}) => {
+  const play = (page: unknown, yaml: string, extras: Partial<Record<string, unknown>> = {}, playOptions: Record<string, unknown> = {}) => {
     const saved: { extra?: string[] }[] = [];
     const recorder = {
       site: 'https://shop.example.com',
@@ -243,7 +243,7 @@ describe('select and locator steps on a fake page', () => {
       context: { pages: () => [page] },
       ...extras,
     };
-    return playScenario(recorder as never, parseScenario(yaml), { seed: 1 }).then((identity) => ({ identity, saved }));
+    return playScenario(recorder as never, parseScenario(yaml), { seed: 1, ...playOptions }).then((identity) => ({ identity, saved }));
   };
   const select = (value: string) => `start: /\nsteps:\n  - select: { "select[name=countryCode]": ${value} }\n`;
 
@@ -288,6 +288,21 @@ describe('select and locator steps on a fake page', () => {
     });
     expect(clicked).toEqual(['text=Two', 'radio:One']);
     expect(records.map((r) => r.locator)).toEqual([undefined, 1, undefined]);
+  });
+
+  test('an any locator and the click after it share one step timeout', async () => {
+    const started = Date.now();
+    let clickTimeout = 0;
+    const page = {
+      goto: () => Promise.resolve(),
+      locator: () => ({
+        count: () => Promise.resolve(Date.now() - started > 300 ? 1 : 0),
+        first: () => ({ click: (o: { timeout: number }) => ((clickTimeout = o.timeout), Promise.resolve()) }),
+      }),
+    };
+    await play(page, "start: /\nsteps:\n  - click: { any: ['#late'] }\n", {}, { actionTimeoutMs: 1000 });
+    expect(clickTimeout).toBeLessThanOrEqual(720);
+    expect(clickTimeout).toBeGreaterThan(0);
   });
 
   test('a locator timeout lists the controls, and not during a handoff', async () => {

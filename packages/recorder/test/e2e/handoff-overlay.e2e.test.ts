@@ -157,3 +157,32 @@ test('a second handoff in the same document shows the pill again', async () => {
   await played;
   await recorder.close();
 }, 60_000);
+
+test('a page script that patches DOM prototypes cannot end the wait', async () => {
+  const run = await open('/handoff', '');
+  await pillBox(run.page);
+  await run.recorder.context.addInitScript(() => {
+    const w = window as unknown as { __caught: unknown[] };
+    w.__caught = [];
+    const original = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (this: EventTarget, ...args: Parameters<typeof original>) {
+      w.__caught.push(args[1]);
+      return original.apply(this, args);
+    };
+    Element.prototype.attachShadow = function () {
+      throw new Error('patched');
+    };
+  });
+  await run.page.goto(`${site.url}/handoff/second`);
+  await pillBox(run.page);
+  await run.page.evaluate(() => {
+    for (const listener of (window as unknown as { __caught: unknown[] }).__caught) {
+      if (typeof listener === 'function') listener({ isTrusted: true, target: null, stopPropagation() {} });
+    }
+  });
+  await run.page.waitForTimeout(1200);
+  expect(run.finished()).toBe(false);
+  await clickDone(run.page);
+  await run.played;
+  await run.recorder.close();
+}, 60_000);

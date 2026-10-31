@@ -260,6 +260,30 @@ describe('payment and log-in guard', () => {
     }
   });
 
+  test.each(['#cl', 'label[for=c]'])('a select step through the label %s picks the option', async (selector) => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    const html = '<!doctype html><label for="c" id="cl">Country</label><select id="c"><option value="US">US</option><option value="SE">Sweden</option></select>';
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: html }));
+    try {
+      await playScenario(recorder, parseScenario(`start: /\nsteps:\n  - select: { "${selector}": Sweden }\n`));
+      expect(await recorder.context.pages()[0]!.locator('#c').inputValue()).toBe('SE');
+    } finally {
+      await recorder.close();
+    }
+  });
+
+  test('a select step on the label of a text input fails with "is not a select"', async () => {
+    const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: 'https://shop.example.com' });
+    const html = '<!doctype html><label for="t" id="tl">Name</label><input id="t">';
+    await recorder.context.route('https://shop.example.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: html }));
+    try {
+      const error = await playScenario(recorder, parseScenario('start: /\nsteps:\n  - select: { "#tl": x }\n')).then(() => undefined, (e: unknown) => e);
+      expect((error as Error).message).toContain('is not a select');
+    } finally {
+      await recorder.close();
+    }
+  });
+
   test('an ordinary field on a non-loopback host is filled', async () => {
     expect((await play('start: /\nsteps:\n  - fill: { "#name": firstName }\n', 'shop.example.com')).error).toBeUndefined();
   });

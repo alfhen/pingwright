@@ -4,7 +4,7 @@ import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type S
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
-import { waitForHandoff } from './handoff-overlay.ts';
+import { HANDOFF_WAKE_EVENT, waitForHandoff } from './handoff-overlay.ts';
 import { resolveLocator, timeoutMessage } from './locators.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
@@ -194,13 +194,22 @@ async function selectOption(
 ): Promise<{ sensitive: boolean; value: string; label: string }> {
   const { field, tag, sensitive } = await inspectField(page, selector, timeout);
   if (tag !== 'select') throw new Error(`${selector} is not a select`);
-  const options = await field.evaluate((el) => [...(el as HTMLSelectElement).options].map((o) => ({ value: o.value, label: o.label.trim() })), undefined, { timeout });
+  const options = await field.evaluate(
+    (el) => {
+      const select = el instanceof HTMLSelectElement ? el : (el.closest('label') as HTMLLabelElement | null)?.control;
+      if (!(select instanceof HTMLSelectElement)) return null;
+      return [...select.options].map((o) => ({ value: o.value, label: o.label.trim() }));
+    },
+    undefined,
+    { timeout },
+  );
+  if (!options) throw new Error(`${selector} is not a select`);
   const byValue = options.findIndex((o) => o.value === wanted);
   const chosen = byValue >= 0 ? byValue : options.findIndex((o) => o.label === wanted.trim());
   if (chosen < 0) throw new Error(`${selector} has no option with value or label "${wanted}"`);
   await field.selectOption({ index: chosen }, { timeout });
   const now = await field.evaluate((el) => {
-    const select = el as HTMLSelectElement;
+    const select = (el instanceof HTMLSelectElement ? el : (el.closest('label') as HTMLLabelElement).control) as HTMLSelectElement;
     return { index: select.selectedIndex, label: select.selectedOptions[0]?.label.trim() ?? '' };
   }, undefined, { timeout });
   if (now.index !== chosen) throw new Error(`value not applied (still: ${now.label})`);
@@ -218,6 +227,11 @@ async function withControlList<T>(page: Page, recorder: Recorder, action: () => 
     }
     throw error;
   }
+}
+
+/** The time left to a deadline. Playwright reads 0 as no timeout, so it is at least 1 ms. */
+function remaining(deadline: number): number {
+  return Math.max(1, deadline - Date.now());
 }
 
 async function locate(page: Page, recorder: Recorder, locator: Locator, record: StepRecord, timeout: number) {
@@ -333,8 +347,9 @@ async function runStep(
       await page.goto(resolveSitePath(step.value, recorder.site, scenario.vars), { waitUntil: 'load', timeout });
       return;
     case 'click': {
+      const deadline = Date.now() + timeout;
       const target = await locate(page, recorder, step.value, record, timeout);
-      await withControlList(page, recorder, () => target.click({ timeout }));
+      await withControlList(page, recorder, () => target.click({ timeout: remaining(deadline) }));
       return;
     }
     case 'addToCart':
@@ -361,8 +376,9 @@ async function runStep(
     case 'wait':
       if (typeof step.value === 'number') await recorder.wait(step.value);
       else {
+        const deadline = Date.now() + timeout;
         const target = await locate(page, recorder, step.value.selector, record, timeout);
-        await withControlList(page, recorder, () => target.waitFor({ state: 'attached', timeout }));
+        await withControlList(page, recorder, () => target.waitFor({ state: 'attached', timeout: remaining(deadline) }));
       }
       return;
     case 'evaluate':
@@ -379,13 +395,24 @@ async function runStep(
       print(`\nHandoff: ${step.value}\n${HANDOFF_REMINDER}\nRecording continues until you are done.`);
       recorder.setHandoff(true);
       try {
-        await waitForHandoff({ text: step.value, gate: recorder.handoff, resolver: options.handoffResolver ?? stdinResolver, print });
+        await waitForHandoff({ text: step.value, gate: recorder.handoff, resolver: options.handoffResolver ?? stdinResolver, print, wake: () => wakeOverlay(recorder) });
       } finally {
         recorder.setHandoff(false);
       }
       return;
     }
   }
+}
+
+/** Asks each open top document to read the handoff state again, because its polling stops when none is waiting. */
+async function wakeOverlay(recorder: Recorder): Promise<void> {
+  await Promise.all(
+    recorder.context.pages().map(async (p) => {
+      try {
+        await p.evaluate((name) => window.dispatchEvent(new Event(name)), HANDOFF_WAKE_EVENT);
+      } catch {}
+    }),
+  );
 }
 
 /** The seeded identity with the scenario's own field values. Literal `fill` values join `extra` once typed into a non-sensitive field. */
