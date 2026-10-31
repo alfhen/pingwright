@@ -1,0 +1,8 @@
+start: /sgtm-leak
+steps:
+  - consent: reject
+  - wait: 2s
+expect:
+  must:
+    - { vendor: sgtm, body.only: [event_name, page_location, page_title, page_referrer] }
+options: { seed: 1, allowUnknownDestination: true }

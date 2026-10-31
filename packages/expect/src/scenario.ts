@@ -39,6 +39,7 @@ export interface Rule {
   inEpoch?: string;
   after?: string;
   hashesMatch?: boolean;
+  body?: { has?: string[]; only?: string[]; ignore?: string[] };
 }
 
 export type StepBody =
@@ -100,7 +101,9 @@ export class ScenarioError extends Error {
 }
 
 const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after']);
-const GROUP_KEYS = ['consent', 'ids', 'params', 'identity'] as const;
+const GROUP_KEYS = ['consent', 'ids', 'params', 'identity', 'body'] as const;
+const BODY_KEYS = ['has', 'only', 'ignore'] as const;
+const MAX_FIELD_NAME = 64;
 const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
 const OUTCOMES = ['passed', 'stubbed', 'failed'];
 const NETWORKS = ['stub', 'server', 'live'];
@@ -382,6 +385,12 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         if (v !== true) fail(p, 'must be true');
         else if (kind === 'mustNot') fail(p, 'is only valid under must');
         else rule.hashesMatch = true;
+      } else if (k.startsWith('body.')) {
+        const key = k.slice(5);
+        if (!(BODY_KEYS as readonly string[]).includes(key)) fail(p, `unknown key, expected one of ${BODY_KEYS.map((b) => `body.${b}`).join(', ')}`);
+        else if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names');
+        else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);
+        else (rule.body ??= {})[key as (typeof BODY_KEYS)[number]] = v as string[];
       } else if (k === 'vendor') {
         const l = list(k, v, [...vendorKeys, ...trackerVendorKeys, ...extraVendorKeys]);
         if (l) filter.vendor = l;
@@ -424,6 +433,8 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       }
     }
     if (rule.before && rule.inEpoch) fail(path, 'use either before or in, not both');
+    if (rule.body?.has && rule.body.only) fail(path, 'body.has and body.only cannot be in the same entry');
+    if (rule.body?.ignore && !rule.body.only) fail(path, 'body.ignore is only valid with body.only');
     return issues.length === before ? rule : undefined;
   }
 
