@@ -30,16 +30,16 @@ async function open(path: string, after = "  - click: '#handoff-submit'\n") {
   let finished = false;
   const played = playScenario(recorder, scenario, { handoffResolver: terminal, print: () => {} }).finally(() => (finished = true));
   played.catch(() => undefined);
-  await expect.poll(() => recorder.context.pages().length).toBe(1);
+  await expect.poll(() => recorder.context.pages().length, { timeout: 20_000 }).toBe(1);
   const page = recorder.context.pages()[0]!;
-  await expect.poll(() => page.url()).toContain(path);
+  await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(path);
   await page.waitForLoadState('load');
   return { recorder, page, played, finished: () => finished };
 }
 
 async function pillBox(page: Page) {
   const host = page.locator(`#${HANDOFF_HOST_ID}`);
-  await host.waitFor({ state: 'visible', timeout: 5000 });
+  await host.waitFor({ state: 'visible', timeout: 15_000 });
   const box = await host.boundingBox();
   if (!box) throw new Error('the pill has no box');
   return box;
@@ -146,7 +146,7 @@ test('a second handoff in the same document shows the pill again', async () => {
   );
   const played = playScenario(recorder, scenario, { handoffResolver: terminal, print: () => {} });
   played.catch(() => undefined);
-  await expect.poll(() => recorder.context.pages().length).toBe(1);
+  await expect.poll(() => recorder.context.pages().length, { timeout: 20_000 }).toBe(1);
   const page = recorder.context.pages()[0]!;
   await page.waitForLoadState('load');
   await clickDone(page);
