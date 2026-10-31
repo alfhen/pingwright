@@ -2,6 +2,8 @@
 
 ## 0.3.0-rc.2
 
+Release candidate. Install it with `npm i -g pingwright@next`.
+
 ### Report marks and severity
 
 - A hit with unknown consent before the first answer now has its own mark, `early`, ranked above `full`. A hit on a page with a denied Consent Mode default is still `ping` (#378).
@@ -20,35 +22,49 @@
 - A `cookie` rule that finds a `Set-Cookie` header now says whether the browser kept the cookie: `found _dcid from Set-Cookie (7 requests); stored by the browser`, or `no later checkpoint has it` with `note: cookieNotStored`. The rule still fails on the attempt. The message shows names and counts only (#461).
 - `body.has` and `body.only` take a leaf name, `**.email`, which matches `email` at any depth. A plain name still matches a top-level field only. When it matches nothing but a nested field has that name, the result says so and has `note: nestedNameOnly` (#462).
 
-<!-- S03 -->
-
 ### Fixed
 
 - `serverHosts` uses the Public Suffix List (`tldts`) to reject wildcards on public suffixes. `*.police.uk`, `*.uk.com`, `*.fly.dev` and `*.onrender.com` are now rejected, and `*.abc.de` is no longer rejected. `*.wordpress.com` stays rejected through a short local list (#427).
-
-<!-- S04 -->
-- A `click` or `wait` on a `{ role, name }` locator that times out now lists the closest controls of that role, ranked by name, for example `Closest radio controls: "White (01)", "Black (02)".` If the page has none of that role, the error says so first. (#460)
-
-### Fixed
-
-- The Done pill calls the DOM accessors it needs at show and hide time from copies taken at document start, so a page that patches `textContent`, `style`, `getRootNode`, `String`, `Function.prototype.call` or `Event.prototype.stopPropagation` never sees the label or the host. The Done click reads `isTrusted` from a captured getter and treats a throw as untrusted (#446, Refs #398).
+- A `click` or `wait` on a `{ role, name }` locator that times out now lists the closest controls of that role, ranked by name, for example `Closest radio controls: "White (01)", "Black (02)".` If the page has none of that role, the error says so first (#460).
+- The Done pill calls the DOM accessors it needs at show and hide time from copies taken at document start, so a page that patches `textContent`, `style`, `getRootNode`, `String`, `Function.prototype.call` or `Event.prototype.stopPropagation` never sees the label or the host. The Done click reads `isTrusted` from a captured getter and treats a throw as untrusted (#446, #494, #398, #492).
 - The Done pill is at most the viewport width minus 32 px, and a long handoff text shrinks before the Done button does (#464).
 
 ### Handoff
 
 - A late "not waiting" answer no longer stops the Done pill polling after a wake, so the pill hides when the second handoff ends (#444).
+- A stale "not waiting" answer no longer hides the Done pill while a handoff is waiting (#502, #500).
 - A page that cannot answer the wake no longer blocks Enter or Done from ending a handoff (#445).
 - Tests now show the pill stops asking for the handoff state when none is waiting, and asks again on the next handoff (#443).
 
 ### Docs
 
-- The README says the 0.3 sections need `npm i -g pingwright@next`, and that the plain install gives 0.2.0 (#450).
+- The README says the 0.3 sections need `npm i -g pingwright@next`, and that the plain install gives 0.2.0 (#450, #481).
 - The Shopify guide says a handoff ends when the person clicks Done or presses Enter (#449).
-- The handoff docs say a `body` rule does not hide the Done pill, because the host is a sibling of `<body>`. Use `html { display: none }` (#454).
+- The handoff docs say a `body` rule does not hide the Done pill, because the host is a sibling of `<body>`. A rule such as `html { display: none }` can still hide it (#454, #480).
 - The docs no longer say Enter always works (#451).
 - Design section 11 lists `deniedIdentifiers` as a built-in check (#455).
+- `docs/cli.md` says only a `--net-log` POST hit has no body (#479).
 
-<!-- S09 -->
+### Known in 0.3.0-rc.2
+
+Not in rc.2:
+
+- Opt-in test payment steps for unattended checkout runs (#463).
+- Server-container visibility, baselines for CI drift checks, one scenario across several stores, WebKit support and an MCP server (#358 to #362).
+- A better release setup (#144).
+
+Known issues in rc.2:
+
+- The recorder sometimes misses a redirect response and the cross-origin hop after it. In `stub` mode such a hop can reach the network with no record and no `stubBypass` flag (#180).
+- The `country` option does not localise zip, phone or address (#32).
+- With `--net-log`, requests seen only in the net log are all labelled with initiator `unload`, and early `srcdoc` requests can be labelled `unload` (#256, #323).
+- `unloadGap` compares dataLayer event names to hit names literally (#261).
+- A cookie set by a response still in flight at the last checkpoint can read as `cookieNotStored` (#485).
+- In the report, a segment with `early`, granted and denied hits shows `early` and not `mixed` (#496).
+- The report legend for `unchecked` does not mention identifier names whose consent signal is unknown (#497).
+- The verdict says "send" for a single vendor (#505).
+- A hand-edited `suite.json` with a malformed failed cell makes `report` throw instead of saying it is not a suite manifest (#506).
+- `docs/cli.md` says a locator timeout lists only controls of the requested role, but roles outside button, radio, checkbox, link, tab and option get the general list (#490).
 
 ## 0.3.0-rc.1
 

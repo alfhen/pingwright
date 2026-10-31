@@ -41,6 +41,16 @@ test('the changelog has an rc.2 section above rc.1 with the known-in-rc.1 list',
   expect(log).toContain('Known in 0.3.0-rc.1');
 });
 
+test('the release-candidate version in the README and cli.md equals package.json', () => {
+  const version = (JSON.parse(read('package.json')) as { version: string }).version;
+  expect(version).toMatch(/-rc\.\d+$/);
+  for (const file of ['README.md', 'docs/cli.md']) {
+    const named = read(file).match(/`\d+\.\d+\.\d+-rc\.\d+`/g) ?? [];
+    expect(named.length).toBeGreaterThan(0);
+    expect(new Set(named)).toEqual(new Set([`\`${version}\``]));
+  }
+});
+
 test('design section 11 lists deniedIdentifiers as a built-in check', () => {
   expect(read('docs/design.md')).toMatch(/`options\.builtins` sets the severity[^\n]*`deniedIdentifiers`/);
 });
