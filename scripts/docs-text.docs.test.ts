@@ -54,3 +54,15 @@ test('the release-candidate version in the README and cli.md equals package.json
 test('design section 11 lists deniedIdentifiers as a built-in check', () => {
   expect(read('docs/design.md')).toMatch(/`options\.builtins` sets the severity[^\n]*`deniedIdentifiers`/);
 });
+
+const loginRuleProblem = (agents: string, design: string): string | undefined => {
+  const section13 = design.slice(design.indexOf('**Other rules**'), design.indexOf('## 14.'));
+  return /Log-ins are never automated on a hosted site/.test(agents) && /Log-ins are handoff steps/.test(section13)
+    ? undefined
+    : 'AGENTS.md or design section 13 no longer says log-ins are handoff steps on a hosted site';
+};
+
+test('AGENTS.md and design section 13 say log-ins are handoff steps on a hosted site', () => {
+  expect(loginRuleProblem(read('AGENTS.md'), read('docs/design.md'))).toBeUndefined();
+  expect(loginRuleProblem('Payments are handoff steps.', '**Other rules**\n- Payments are handoffs.\n## 14.')).toBeDefined();
+});
