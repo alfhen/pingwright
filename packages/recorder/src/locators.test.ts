@@ -1,5 +1,24 @@
 import { describe, expect, test } from 'vitest';
+import { chromium } from 'playwright';
 import { controlsFromSnapshot, resolveLocator, timeoutMessage, visibleName } from './locators.ts';
+
+test('reads real ariaSnapshot output for names that Playwright quotes', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(
+      `<button>Size: M</button><button>Item #3</button><button>Men's {XL}</button><button>White (01)</button>`,
+    );
+    expect(controlsFromSnapshot(await page.locator('body').ariaSnapshot())).toEqual([
+      'button "Size: M"',
+      'button "Item #3"',
+      `button "Men's {XL}"`,
+      'button "White (01)"',
+    ]);
+  } finally {
+    await browser.close();
+  }
+});
 
 describe('visibleName', () => {
   test('hides an email, a 6+ digit run and a hash-shaped name', () => {
@@ -43,6 +62,16 @@ describe('controlsFromSnapshot', () => {
       'tab "Details"',
       'option "Germany"',
       'button "(hidden)"',
+    ]);
+  });
+
+  test('reads single-quoted snapshot keys', () => {
+    const quoted = [`- 'button "Size: M"'`, `- 'button "Item #3"'`, `- 'button "Men''s {XL}"'`, '- button "White (01)"'].join('\n');
+    expect(controlsFromSnapshot(quoted)).toEqual([
+      'button "Size: M"',
+      'button "Item #3"',
+      `button "Men's {XL}"`,
+      'button "White (01)"',
     ]);
   });
 

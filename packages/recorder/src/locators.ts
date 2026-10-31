@@ -46,13 +46,16 @@ export function visibleName(name: string): string {
   return name.length > MAX_NAME ? `${name.slice(0, MAX_NAME)}...` : name;
 }
 
-const SNAPSHOT_LINE = new RegExp(`^\\s*- (${ROLE_FAMILIES.join('|')}) "((?:[^"\\\\]|\\\\.)*)"`);
+const SNAPSHOT_KEY = /^\s*- (?:'((?:[^']|'')*)'|(.*))/;
+const CONTROL_KEY = new RegExp(`^(${ROLE_FAMILIES.join('|')}) "((?:[^"\\\\]|\\\\.)*)"`);
 
 /** Role and accessible name of up to ten controls in the accessibility tree. Never text content or form values. */
 export function controlsFromSnapshot(snapshot: string): string[] {
   const listed: string[] = [];
   for (const line of snapshot.split('\n')) {
-    const m = SNAPSHOT_LINE.exec(line);
+    const k = SNAPSHOT_KEY.exec(line);
+    if (!k) continue;
+    const m = CONTROL_KEY.exec(k[1] === undefined ? k[2]! : k[1].replaceAll("''", "'"));
     if (!m) continue;
     let name: string;
     try {
