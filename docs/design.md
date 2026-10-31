@@ -24,7 +24,7 @@ Pingwright makes this checkable by a program: a coding agent, a CI job, or a per
 4. Express expected behaviour as data, and report pass or fail with evidence.
 5. Compare two runs per vendor and per event.
 6. Expose all of this to agents through MCP, with stable, structured results.
-7. Be safe by default: fake identities, no payments, no hosted service, and known collection endpoints stubbed. Unknown destinations still receive test hits, and every one is flagged (§5.3).
+7. Be safe by default: fake identities, no payments except the opt-in test payment (§5.4), no hosted service, and known collection endpoints stubbed. Unknown destinations still receive test hits, and every one is flagged (§5.3).
 
 **Non-goals**
 
@@ -172,7 +172,7 @@ What Pingwright does:
 
 The scenario's `start` is played first, as step 0 labelled `start`. A step may carry `label: <name>`; the default is the kind and the step's index (`click-3`), and a checkpoint is named by its value. Labels are unique, and `after:` must name one. Each Request, Hit and DataLayerEvent carries the id of the step that was running when it was recorded, and a step that ends records a checkpoint of the cookies. A `fill` or `select` on a card or password field (autocomplete `cc-*`, `type=password`, or a name or id matching card, cvc, cvv, iban or password) fails unless the page host is loopback. An `evaluate` step is no way around this: while it runs, such fields in non-loopback frames refuse plain writes through the value setters, setAttribute, setAttributeNS and Attr.value, and the step fails; a field left changed is cleared. This is a guard, not a sandbox. A script that works around it (HTML parsing such as innerHTML, a setter taken from another frame, frames created during the script, writes after the step returns, redefining the setters, execCommand, setRangeText) can still send a value. Do not rely on it to keep card data off a site. `addToCart` clicks the selector and then fails with "click did not add to cart" unless the step recorded a cart request (a Shopify POST to `/cart/add`, `/cart/change` or `/cart/update`, a GET of `/cart/add`, a POST to `/cart`, Magento `/checkout/cart/add`, WooCommerce `wc-ajax=add_to_cart`, a Storefront `cartCreate` or `cartLinesAdd` mutation, or a URL that `options.cartRequest` matches) or an `add_to_cart` dataLayer event within 5 s. A cart request counts only when its response has a 2xx or 3xx status.
 
-`handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done, with the Done button in the page or Enter in the terminal (§15.3). Pingwright never automates payment or log-in on a hosted site. The one exception is a loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, where no real payment can happen. There, a scenario may fill a fake payment form so the test suite can cover a whole checkout.
+`handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done, with the Done button in the page or Enter in the terminal (§15.3). Pingwright never automates a log-in on a hosted site, and it automates a payment there only in one case. An opt-in `payment` step may type a payment provider's documented test card on a hosted store, when all of these hold before anything is typed: the CLI flag `--allow-test-payment <host>` names the exact `--site` host; that host is in the user-level allowlist file; and the provider's test-mode marker is on the page. The `payment` step has its own code path. The `fill`, `select` and `evaluate` guards above do not change. Only values from the provider table are typed, and a typed value never reaches a record. The three gates stop mistakes. They do not stop a person who sets all three on purpose. A loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, keeps its exemption: no real payment can happen there, so a scenario may fill a fake payment form so the test suite can cover a whole checkout.
 
 While a handoff waits, a person types real-looking values into the page. Requests sent in that time that do not decode as tracking hits are stored without their body and with every query value replaced by `[redacted]`, and carry `redacted: handoff`. Tracking hits keep theirs, so a purchase made during a handoff is still checked. Later requests that are not redacted keep the page URL as it is.
 
@@ -318,7 +318,7 @@ Setup commands for the tunnel and the Worker are deferred until after the first 
 
 - **Custom pixel bridge.** A small snippet for a custom pixel that copies pushes to the collector origin when the debug cookie is set. It is inert otherwise.
 - **Sandbox handling.** Custom pixels run in a sandboxed iframe whose URL contains `/web-pixels@…/sandbox/`. Decoders report that path as a defect when it reaches vendors as the page URL.
-- **Checkout.** Checkout pages run no theme code. Add to cart goes through the cart API. Checkout payment is always a handoff step.
+- **Checkout.** Checkout pages run no theme code. Add to cart goes through the cart API. Checkout payment is a handoff step. The one exception is the opt-in test payment (§5.4).
 - **Theme preview.** `preview_theme_id` is a scenario variable, so an unpublished theme can be tested.
 
 Other platforms come later and only if someone needs them.
@@ -386,7 +386,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 - Playwright traces, HAR files and screenshots are off by default. When turned on, the report states that they are unfiltered.
 - MCP results go to the agent's model provider. With fake identities this is acceptable. Flagged `possibleRealData` values are replaced with a placeholder in MCP output.
-- Pingwright never enters passwords or payment data on a hosted site. Those steps are handoffs. Only loopback hosts are exempt (§5.4).
+- Pingwright never enters a password on a hosted site. Log-ins are handoff steps. Payments are handoff steps too, except the opt-in test payment, which types only a provider's documented test card after the three gates in §5.4 hold. Loopback hosts are exempt as before (§5.4).
 - Pingwright never takes a target address from incoming traffic.
 
 ## 14. Risks and open questions
