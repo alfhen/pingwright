@@ -97,3 +97,22 @@ test('a stale not-waiting answer does not stop the polling that a wake started',
   await expect.poll(() => pillCount(page), { timeout: 5_000 }).toBe(0);
   await recorder.close();
 }, 60_000);
+
+test('a page that cannot answer the wake does not hold up Done', async () => {
+  const { recorder } = await launch();
+  const scenario = parseScenario("start: /handoff\nsteps:\n  - handoff: Log in\n  - wait: 4000\n  - handoff: Pay the test order\n");
+  const played = playScenario(recorder, scenario, { handoffResolver: terminal, print: () => {} });
+  played.catch(() => undefined);
+  await expect.poll(() => recorder.context.pages().length, { timeout: 20_000 }).toBe(1);
+  const page = recorder.context.pages()[0]!;
+  await clickDone(page);
+  await expect.poll(() => pillCount(page), { timeout: 10_000 }).toBe(0);
+  const busy = await recorder.context.newPage();
+  await busy.goto(`${site.url.replace('localhost', '127.0.0.1')}/handoff`);
+  void busy.evaluate(() => { for (;;); }).catch(() => undefined);
+  await clickDone(page);
+  const clicked = Date.now();
+  await played;
+  expect(Date.now() - clicked).toBeLessThan(1000);
+  await Promise.race([recorder.close().catch(() => undefined), sleep(10_000)]);
+}, 60_000);

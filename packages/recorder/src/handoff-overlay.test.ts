@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { HandoffGate, handoffOverlayScript, waitForHandoff } from './handoff-overlay.ts';
+import { runInNewContext } from 'node:vm';
+import { boundedWake, HandoffGate, handoffOverlayScript, waitForHandoff } from './handoff-overlay.ts';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -119,8 +120,140 @@ test('a wake that fails does not end the wait', async () => {
   await wait;
 });
 
-test('a tick stops the polling only when no wake started since it began', () => {
-  const script = handoffOverlayScript('nonce-1');
-  expect(script).toContain('const began = generation');
-  expect(script).toContain('if (began === generation) stopPolling()');
+test('a wake that never settles is dropped after the limit and leaves no timer', async () => {
+  let settled = false;
+  void boundedWake(() => new Promise<void>(() => {}), 2000).then(() => void (settled = true));
+  await vi.advanceTimersByTimeAsync(1999);
+  expect(settled).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(settled).toBe(true);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('a wake that settles or fails clears its limit timer', async () => {
+  await boundedWake(() => Promise.resolve());
+  await boundedWake(() => Promise.reject(new Error('no page')));
+  await boundedWake(() => {
+    throw new Error('sync');
+  });
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+interface Deferred {
+  resolve: (state: { waiting: boolean; text: string }) => void;
+}
+
+function runOverlay() {
+  const listeners = new Map<string, () => void>();
+  const intervals = new Map<number, () => void>();
+  let nextInterval = 1;
+  const pending: Deferred[] = [];
+  const stateFn = () => new Promise((resolve) => pending.push({ resolve }));
+  const element = () => ({ style: {}, attachShadow: () => ({}), append() {}, remove() {} });
+  class FakeNode {}
+  class FakeElement extends FakeNode {
+    append() {}
+    remove() {}
+    getBoundingClientRect() {
+      return {};
+    }
+    setPointerCapture() {}
+  }
+  class FakeEvent {
+    constructor() {
+      Object.defineProperty(this, 'isTrusted', { get: () => true });
+    }
+    get target() {
+      return null;
+    }
+    stopPropagation() {}
+  }
+  Object.defineProperty(FakeNode.prototype, 'textContent', { set() {}, configurable: true });
+  Object.defineProperty(FakeNode.prototype, 'parentNode', { get: () => null, configurable: true });
+  class FakeHTMLElement extends FakeElement {}
+  Object.defineProperty(FakeHTMLElement.prototype, 'title', { set() {}, configurable: true });
+  Object.defineProperty(FakeHTMLElement.prototype, 'style', { get: () => ({ setProperty() {} }), configurable: true });
+  class FakeDocument {}
+  Object.defineProperty(FakeDocument.prototype, 'documentElement', { get: () => null, configurable: true });
+  class FakeFragment {
+    append() {}
+  }
+  class FakeMouse extends FakeEvent {}
+  Object.defineProperty(FakeMouse.prototype, 'clientX', { get: () => 0 });
+  Object.defineProperty(FakeMouse.prototype, 'clientY', { get: () => 0 });
+  class FakePointer extends FakeMouse {}
+  Object.defineProperty(FakePointer.prototype, 'pointerId', { get: () => 0 });
+  class FakeTarget {
+    addEventListener(type: string, fn: () => void) {
+      listeners.set(type, fn);
+    }
+  }
+  const window: Record<string, unknown> = {
+    __pwHandoffState: stateFn,
+    __pwHandoffDone: () => Promise.resolve(),
+  };
+  window.top = window;
+  const sandbox = {
+    window,
+    document: { createElement: element },
+    EventTarget: FakeTarget,
+    Node: FakeNode,
+    Element: FakeElement,
+    HTMLElement: FakeHTMLElement,
+    Document: FakeDocument,
+    DocumentFragment: FakeFragment,
+    Event: FakeEvent,
+    MouseEvent: FakeMouse,
+    PointerEvent: FakePointer,
+    CSSStyleDeclaration: class {
+      setProperty() {}
+    },
+    CSSStyleSheet: class {
+      replaceSync() {}
+    },
+    innerWidth: 800,
+    innerHeight: 600,
+    setInterval: (fn: () => void) => {
+      const id = nextInterval++;
+      intervals.set(id, fn);
+      return id;
+    },
+    clearInterval: (id: number) => void intervals.delete(id),
+  };
+  sandbox.window.addEventListener = (type: string, fn: () => void) => listeners.set(type, fn);
+  runInNewContext(handoffOverlayScript('nonce-1'), sandbox);
+  return {
+    pending,
+    intervals,
+    wake: () => listeners.get('pingwright-handoff-wake')!(),
+    tick: () => [...intervals.values()].forEach((fn) => fn()),
+  };
+}
+
+const flush = async () => {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+};
+
+test('a stale not-waiting answer does not stop the polling that a wake started', async () => {
+  const overlay = runOverlay();
+  expect(overlay.intervals.size).toBe(1);
+  expect(overlay.pending).toHaveLength(1);
+  overlay.pending[0]!.resolve({ waiting: false, text: '' });
+  await flush();
+  expect(overlay.intervals.size).toBe(0);
+
+  overlay.wake();
+  expect(overlay.intervals.size).toBe(1);
+  expect(overlay.pending).toHaveLength(2);
+  overlay.wake();
+  expect(overlay.pending).toHaveLength(3);
+  overlay.pending[1]!.resolve({ waiting: false, text: '' });
+  await flush();
+  expect(overlay.intervals.size).toBe(1);
+  overlay.tick();
+  expect(overlay.pending).toHaveLength(4);
+  overlay.pending[2]!.resolve({ waiting: false, text: '' });
+  overlay.pending[3]!.resolve({ waiting: false, text: '' });
+  await flush();
+  expect(overlay.intervals.size).toBe(0);
 });

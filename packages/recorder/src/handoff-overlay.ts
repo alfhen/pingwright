@@ -5,6 +5,7 @@ export const HANDOFF_DONE_BINDING = '__pwHandoffDone';
 export const HANDOFF_HOST_ID = 'pingwright-handoff';
 export const HANDOFF_WAKE_EVENT = 'pingwright-handoff-wake';
 export const HANDOFF_REMINDER_MS = 60_000;
+export const HANDOFF_WAKE_LIMIT_MS = 2_000;
 
 export interface HandoffState {
   waiting: boolean;
@@ -47,8 +48,22 @@ export interface HandoffWait {
   resolver: (text: string, signal: AbortSignal) => Promise<void>;
   print: (text: string) => void;
   reminderMs?: number;
-  /** Called once the gate is open, so a document whose polling stopped asks for the state again. Never awaited: a page that cannot answer must not hold up Enter or Done. */
+  /** Called once the gate is open, so a document whose polling stopped asks for the state again. Never awaited, and dropped after HANDOFF_WAKE_LIMIT_MS: a page that cannot answer must not hold up Enter or Done. */
   wake?: () => Promise<void>;
+}
+
+/** Settles when the wake does, fails quietly, or after the limit, so a page that cannot answer is dropped. */
+export async function boundedWake(wake: () => Promise<void>, limitMs: number = HANDOFF_WAKE_LIMIT_MS): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, limitMs);
+  });
+  try {
+    await Promise.race([wake(), limit]);
+  } catch {
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Waits for the first of the Done button and the terminal, and reminds the person in the terminal while it waits. */
@@ -57,7 +72,7 @@ export async function waitForHandoff(wait: HandoffWait): Promise<void> {
   const reminder = setInterval(() => wait.print(`Still waiting for the handoff: ${wait.text}`), wait.reminderMs ?? HANDOFF_REMINDER_MS);
   const fromButton = wait.gate.begin(wait.text);
   try {
-    void wait.wake?.().catch(() => undefined);
+    if (wait.wake) void boundedWake(wait.wake);
     await Promise.race([fromButton, wait.resolver(wait.text, abort.signal)]);
   } finally {
     clearInterval(reminder);
