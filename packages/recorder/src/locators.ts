@@ -38,7 +38,7 @@ export async function resolveLocator(page: Page, locator: ScenarioLocator, timeo
 const EMAIL_LIKE = /@/;
 const DIGIT_RUN = /\d(?:[\s().+-]?\d){5,}/;
 const HEX_TOKEN = /[0-9a-fA-F]{32,}/;
-const DIGEST_TOKEN = /(?=\S*[A-Z])(?=\S*[a-z])(?=\S*\d)[A-Za-z0-9_-]{22,}/;
+const DIGEST_TOKEN = /(?=\S*[A-Z])(?=\S*[a-z])(?=\S*\d)[A-Za-z0-9_+/-]{22,}={0,2}/;
 
 /** A name that is an email, a phone or id number, or a hash is never printed. */
 export function visibleName(name: string): string {

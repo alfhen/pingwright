@@ -1,4 +1,6 @@
 import { expect, test } from 'vitest';
+import { chromium } from 'playwright';
+import { controlsFromSnapshot } from '../packages/recorder/src/locators.ts';
 import { run, site } from './cli-helpers.ts';
 
 const theme = (name: string) => ['--var', `theme=${name}`];
@@ -52,3 +54,21 @@ test('a selected country joins the identity, so its hash matches and is not poss
   expect(r.records!.run.identity!.extra).toEqual(expect.arrayContaining(['DE', 'Germany']));
   expect(r.records!.flags.some((f) => f.kind === 'possibleRealData')).toBe(false);
 }, 90_000);
+
+test('reads real ariaSnapshot output for names that Playwright quotes', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(
+      `<button>Size: M</button><button>Item #3</button><button>Men's {XL}</button><button>White (01)</button>`,
+    );
+    expect(controlsFromSnapshot(await page.locator('body').ariaSnapshot())).toEqual([
+      'button "Size: M"',
+      'button "Item #3"',
+      `button "Men's {XL}"`,
+      'button "White (01)"',
+    ]);
+  } finally {
+    await browser.close();
+  }
+}, 60_000);

@@ -1,24 +1,6 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { chromium } from 'playwright';
 import { controlsFromSnapshot, resolveLocator, timeoutMessage, visibleName } from './locators.ts';
-
-test('reads real ariaSnapshot output for names that Playwright quotes', async () => {
-  const browser = await chromium.launch();
-  try {
-    const page = await browser.newPage();
-    await page.setContent(
-      `<button>Size: M</button><button>Item #3</button><button>Men's {XL}</button><button>White (01)</button>`,
-    );
-    expect(controlsFromSnapshot(await page.locator('body').ariaSnapshot())).toEqual([
-      'button "Size: M"',
-      'button "Item #3"',
-      `button "Men's {XL}"`,
-      'button "White (01)"',
-    ]);
-  } finally {
-    await browser.close();
-  }
-});
 
 describe('visibleName', () => {
   test('hides an email, a 6+ digit run and a hash-shaped name', () => {
@@ -27,6 +9,7 @@ describe('visibleName', () => {
     expect(visibleName('Order 1234567')).toBe('(hidden)');
     expect(visibleName('a'.repeat(32))).toBe('(hidden)');
     expect(visibleName('Qk3Zx9Lm0Pq7Rt5Vw2Yb8Nc4Dd')).toBe('(hidden)');
+    expect(visibleName('xXyn7gfRxfXjwrXpk+mGPAZ3/RV2X/pS6GlGxPUS36Y=')).toBe('(hidden)');
   });
 
   test('keeps ordinary names and cuts them at 60 characters', () => {
@@ -123,4 +106,29 @@ describe('resolveLocator', () => {
     expect(await resolveLocator(page, { any: ['a', 'late'] }, 2000)).toMatchObject({ index: 1 });
     await expect(resolveLocator(page, { any: ['a', 'b'] }, 200)).rejects.toMatchObject({ name: 'TimeoutError' });
   });
+});
+
+test('leak: the closest-match list never prints the fake email, its hashes or a cookie value', async () => {
+  const email = 'pw-fixture@example.com';
+  const hex = createHash('sha256').update(email).digest('hex');
+  const secrets = [
+    email,
+    hex,
+    createHash('sha256').update(email).digest('base64'),
+    createHash('sha256').update(email).digest('base64url'),
+    'pwsession=Zk3Qm8Lp0Xv7Rt5Yb2Nc4Dd9Aa',
+  ];
+  const snapshot = [
+    `- button "${email}"`,
+    `- link "${hex}"`,
+    `- option "${secrets[2]}"`,
+    `- button "${secrets[3]}"`,
+    `- link "${secrets[4]}"`,
+    `- textbox "Contact": ${email}`,
+    '- button "Buy now"',
+  ].join('\n');
+  const page = { locator: () => ({ ariaSnapshot: () => Promise.resolve(snapshot) }) } as never;
+  const out = await timeoutMessage(page, 'Timeout.');
+  for (const secret of secrets) expect(out).not.toContain(secret);
+  expect(out).toContain('button "Buy now"');
 });
