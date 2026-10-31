@@ -63,7 +63,7 @@ function expectation(e: ExpectationView): string {
     ? `<span class="evidence">evidence: ${e.evidence.map(escapeHtml).join(', ')}${e.evidenceCount > e.evidence.length ? ` and ${e.evidenceCount - e.evidence.length} more` : ''} (${e.evidenceCount})</span>`
     : '';
   const note = e.note ? `<span class="note">${escapeHtml(e.note)}</span>` : '';
-  const severity = e.kind === 'builtin' ? `<span class="severity">severity: ${e.severity}</span>` : '';
+  const severity = e.kind === 'builtin' ? `<span class="severity">severity: ${escapeHtml(e.severity)}</span>` : '';
   return `<li class="s-${status}"><span class="status">${escapeHtml(e.status)}</span><code>${escapeHtml(e.text)}</code>${severity}${note}${evidence}</li>`;
 }
 

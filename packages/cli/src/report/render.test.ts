@@ -125,6 +125,17 @@ test('strings from the records are escaped', () => {
   expect(escapeHtml(`<>&"'`)).toBe('&lt;&gt;&amp;&quot;&#39;');
 });
 
+test('a crafted severity cannot inject markup', () => {
+  const crafted = '<meta http-equiv="refresh" content="0;url=https://attacker.example/">';
+  const results = [
+    { type: 'result', id: newId('result'), runId, expectation: 'builtin: x', pass: false, evidence: [], severity: crafted },
+  ] as unknown as Result[];
+  const html = renderReport(buildReportModel(records({ results })));
+  expect(html).not.toContain('attacker.example');
+  expect(html).not.toMatch(/<meta http-equiv="refresh"/i);
+  expect(html).toContain('severity: fail');
+});
+
 test('the page makes no request and runs no script', () => {
   const html = renderReport(buildReportModel(records()));
   expect(html).toContain(`<meta http-equiv="Content-Security-Policy" content="${CSP}">`);

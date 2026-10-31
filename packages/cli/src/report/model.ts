@@ -130,7 +130,7 @@ function valueFreeForm(kind: string, entry: Record<string, unknown>): string {
 }
 
 function expectationView(result: Result): ExpectationView {
-  const severity = result.severity ?? 'fail';
+  const severity = result.severity === 'warn' ? 'warn' : 'fail';
   const parsed = parseEntry(result);
   let kind = 'rule';
   let text = 'rule';
