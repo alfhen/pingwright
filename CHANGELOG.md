@@ -47,14 +47,17 @@ Release candidate. Install it with `npm i -g pingwright@next`.
 
 ### Known in 0.3.0-rc.2
 
-Install it with `npm i -g pingwright@next`. Not in rc.2:
+Not in rc.2:
 
 - Opt-in test payment steps for unattended checkout runs (#463).
 - Server-container visibility, baselines for CI drift checks, one scenario across several stores, WebKit support and an MCP server (#358 to #362).
 - A better release setup (#144).
-- The recorder sometimes misses a redirect response and its cross-origin hop in `live` mode (#180).
+
+Known issues in rc.2:
+
+- The recorder sometimes misses a redirect response and the cross-origin hop after it. In `stub` mode such a hop can reach the network with no record and no `stubBypass` flag (#180).
 - The `country` option does not localise zip, phone or address (#32).
-- Net-log requests are all labelled with initiator `unload`, and early `srcdoc` requests can be labelled `unload` (#256, #323).
+- With `--net-log`, requests seen only in the net log are all labelled with initiator `unload`, and early `srcdoc` requests can be labelled `unload` (#256, #323).
 - `unloadGap` compares dataLayer event names to hit names literally (#261).
 - A cookie set by a response still in flight at the last checkpoint can read as `cookieNotStored` (#485).
 - In the report, a segment with `early`, granted and denied hits shows `early` and not `mixed` (#496).
