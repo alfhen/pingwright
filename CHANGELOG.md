@@ -20,7 +20,10 @@
 <!-- S04 -->
 - A `click` or `wait` on a `{ role, name }` locator that times out now lists the closest controls of that role, ranked by name, for example `Closest radio controls: "White (01)", "Black (02)".` If the page has none of that role, the error says so first. (#460)
 
-<!-- S05 -->
+### Fixed
+
+- The Done pill calls the DOM accessors it needs at show and hide time from copies taken at document start, so a page that patches `textContent`, `style`, `getRootNode`, `String`, `Function.prototype.call` or `Event.prototype.stopPropagation` never sees the label or the host. The Done click reads `isTrusted` from a captured getter and treats a throw as untrusted (#446, Refs #398).
+- The Done pill is at most the viewport width minus 32 px, and a long handoff text shrinks before the Done button does (#464).
 
 <!-- S07 -->
 
