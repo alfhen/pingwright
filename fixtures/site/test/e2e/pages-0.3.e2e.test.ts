@@ -137,6 +137,8 @@ test('/identifiers sends nothing until the banner is answered, then hashes of th
   const hash = sha256(runEmail);
   expect(hash).not.toBe(sha256(fakeEmail));
   await expect.poll(() => sgtmBodies(w, 'purchase').length).toBe(1);
+  await expect.poll(() => offHits(w, 'google-analytics.com', /^\/g\/collect$/).length).toBeGreaterThan(0);
+  await expect.poll(() => offHits(w, 'facebook.com', /^\/tr\/?$/).length).toBeGreaterThan(0);
   const ga4 = offHits(w, 'google-analytics.com', /^\/g\/collect$/)[0]!;
   expect(ga4.searchParams.get('uid')).toBe('fixture-user-0001');
   expect(ga4.searchParams.get('ep.token')).toBe(hash);
