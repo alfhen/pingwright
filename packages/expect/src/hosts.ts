@@ -21,10 +21,13 @@ const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Shared hosting suffixes that the Public Suffix List lacks. */
 const EXTRA_SHARED_SUFFIXES = new Set(['wordpress.com']);
 
-/** A suffix under which unrelated owners register names, by the Public Suffix List (private section included) or the local list. */
+/** A suffix, or the parent of a wildcard suffix rule, under which unrelated owners register names, by the Public Suffix List (private section included) or the local list. */
 function isPublicSuffix(domain: string): boolean {
   if (EXTRA_SHARED_SUFFIXES.has(domain)) return true;
-  return getPublicSuffix(domain, { allowPrivateDomains: true }) === domain;
+  const opts = { allowPrivateDomains: true };
+  if (getPublicSuffix(domain, opts) === domain) return true;
+  const child = `pw-probe.${domain}`;
+  return getPublicSuffix(child, opts) === child;
 }
 
 const VENDOR_DOMAINS = [

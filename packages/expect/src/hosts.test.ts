@@ -2,11 +2,11 @@ import { describe, expect, test } from 'vitest';
 import { isSpecificServerHost } from './hosts.ts';
 
 describe('isSpecificServerHost', () => {
-  test.each(['*.police.uk', '*.uk.com', '*.fly.dev', '*.onrender.com', '*.s3.amazonaws.com', '*.foo.kawasaki.jp'])('rejects %s, a public suffix the old rule missed', (pattern) => {
+  test.each(['*.police.uk', '*.uk.com', '*.fly.dev', '*.onrender.com', '*.s3.amazonaws.com', '*.foo.kawasaki.jp', '*.kawasaki.jp', '*.compute.amazonaws.com'])('rejects %s, a public suffix the old rule missed', (pattern) => {
     expect(isSpecificServerHost(pattern)).toBe(false);
   });
 
-  test.each(['*.abc.de', '*.xyz.io'])('accepts %s, which is not a public suffix', (pattern) => {
+  test.each(['*.abc.de', '*.xyz.io', '*.city.kawasaki.jp'])('accepts %s, which is not a public suffix', (pattern) => {
     expect(isSpecificServerHost(pattern)).toBe(true);
   });
 
