@@ -72,3 +72,10 @@ test('library loads continue', () => {
   expect(isKnownVendorCollection({ url: 'https://www.google.com/maps/vt?pb=1', resourceType: 'image' })).toBe(false);
   expect(isKnownVendorCollection({ url: 'https://example.com/tr/', resourceType: 'fetch' })).toBe(false);
 });
+
+test('a stub never sets a cookie, whatever the resource type', () => {
+  for (const resourceType of ['fetch', 'xhr', 'ping', 'image', 'script', 'document', 'stylesheet', 'other']) {
+    const stub = stubResponse({ resourceType, headers: { origin: 'https://shop.example.com' } });
+    expect(Object.keys(stub.headers).map((name) => name.toLowerCase())).not.toContain('set-cookie');
+  }
+});
