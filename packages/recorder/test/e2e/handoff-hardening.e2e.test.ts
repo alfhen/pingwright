@@ -70,8 +70,14 @@ test('a page that patches textContent, style and getRootNode never receives the 
 
 test('a page that patches Function.prototype.call and Event.prototype.stopPropagation never sees the label or the closed root', async () => {
   const run = await open('/handoff', 'Pay the test order', false, `(() => {
-    const seen = { call: [], stop: [] };
+    const seen = { call: [], stop: [], str: [] };
     window.__pwSeen = seen;
+    const NativeString = String;
+    window.String = function (v) {
+      const text = NativeString(v);
+      if (text.includes('Pay the test order')) seen.str.push(text);
+      return text;
+    };
     const call = Function.prototype.call;
     Function.prototype.call = function (self, ...args) {
       try { seen.call.push(String(self) + '|' + args.map(String).join(',')); } catch {}
@@ -90,7 +96,8 @@ test('a page that patches Function.prototype.call and Event.prototype.stopPropag
   await run.page.mouse.up();
   await clickDone(run.page);
   await run.played;
-  const seen = await run.page.evaluate(() => (window as unknown as { __pwSeen: { call: string[]; stop: string[] } }).__pwSeen);
+  const seen = await run.page.evaluate(() => (window as unknown as { __pwSeen: { call: string[]; stop: string[]; str: string[] } }).__pwSeen);
+  expect(seen.str.join('\n')).not.toContain('Pay the test order');
   expect(seen.call.join('\n')).not.toContain('Pay the test order');
   expect(seen.call.join('\n')).not.toContain('HTMLSpanElement');
   expect(seen.stop).not.toContain('[object ShadowRoot]');

@@ -72,8 +72,8 @@ export async function waitForHandoff(wait: HandoffWait): Promise<void> {
  * The pill lives in a closed shadow root and the Done click counts only when trusted. The nonce stays in
  * this closure, so a page script that calls the done binding is refused. The pill and its listeners are
  * built at document start, before page scripts run. The DOM accessors, the event getters and
- * stopPropagation are captured then too and called without Function.prototype.call, so a page that patches
- * those members, or call, never sees the pill. The pill is capped at the viewport width minus 32px.
+ * stopPropagation and String are captured then too and called without Function.prototype.call, so a page that
+ * patches those members, or call, never sees the pill. The pill is capped at the viewport width minus 32px.
  * A page script can still move the host, restyle it, cover it or remove it. A person's real click on Done
  * (or Enter in the terminal) is what ends the wait.
  */
@@ -96,6 +96,7 @@ export function handoffOverlayScript(nonce: string): string {
   let host = null;
   let label = null;
   let dropped = null;
+  const toText = String;
   const uncurry = Function.prototype.bind.bind(Function.prototype.call);
   const addListener = uncurry(EventTarget.prototype.addEventListener);
   const getter = (proto, name) => Object.getOwnPropertyDescriptor(proto, name).get;
@@ -182,7 +183,7 @@ export function handoffOverlayScript(nonce: string): string {
     let state;
     try { state = await stateFn(); } catch { return; }
     if (state && state.waiting) {
-      show(String(state.text));
+      show(toText(state.text));
       return;
     }
     hide();
