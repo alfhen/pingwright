@@ -45,6 +45,7 @@ test('stub mode does not see the cookie of the stubbed loader request and says w
   expect(result.message.endsWith('stub mode: stubbed endpoints set no cookies')).toBe(true);
   expect(records.run.networkMode).toBe('stub');
   expect(records.responses.some((x) => x.setCookieNames.includes('_pwdcid'))).toBe(false);
+  expect(records.checkpoints.some((c) => c.cookies.some((x) => x.name === '_pwdcid'))).toBe(false);
 }, 90_000);
 
 test('server mode lets the mock host answer, and only that host passes', async () => {
