@@ -299,3 +299,9 @@ test('report refuses --html equal to suite.json or a record, by path or by link'
   expect(await readFile(join(sub, 'suite.json'), 'utf8')).toBe(before);
   expect(await readFile(join(sub, 'checkout.published.jsonl'), 'utf8')).toBe('{"type":"hit"}\n');
 });
+
+test('a failed cell with no record does not read as no leaks', () => {
+  const failing: SuiteManifest = { ...manifest, cells: manifest.cells.map((c) => (c.scenario === 'gone' && c.variant === 'published' ? { ...c, status: 'fail' as const, exitCode: 1 as const } : c)) };
+  const html = renderSuiteReport(buildSuiteModel(failing, loaded));
+  expect(html).toContain('<li><strong>published:</strong> leaks not known, 1 run has no record</li>');
+});

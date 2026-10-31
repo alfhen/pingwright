@@ -176,13 +176,19 @@ function verdicts(model: SuiteReportModel): string {
   const items = model.header.variants.map((variant) => {
     const findings = emptyFindings();
     let unfinished = 0;
+    let noRecord = 0;
     for (const s of model.scenarios) {
       const cell = s.cells.find((c) => c.variant === variant);
       if (cell?.status === 'error') unfinished++;
       else if (cell?.model) addFindings(findings, cell.model);
+      else if (cell?.status === 'fail' || cell?.status === 'warn') noRecord++;
     }
-    const tail = unfinished ? `, ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '';
-    return `<li><strong>${escapeHtml(variant)}:</strong> ${escapeHtml(findingsSentence(findings) + tail)}</li>`;
+    const sentence = findingsSentence(findings);
+    const base = noRecord && sentence === 'no leaks' ? 'leaks not known' : sentence;
+    const tail =
+      (unfinished ? `, ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '') +
+      (noRecord ? `, ${noRecord} run${noRecord === 1 ? ' has' : 's have'} no record` : '');
+    return `<li><strong>${escapeHtml(variant)}:</strong> ${escapeHtml(base + tail)}</li>`;
   });
   return `<ul class="verdicts">${items.join('')}</ul>`;
 }
