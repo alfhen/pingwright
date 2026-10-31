@@ -7,12 +7,12 @@ import { parseScenario, ScenarioError } from './scenario.ts';
 
 const runId = newId('run');
 const identity = createIdentity(1);
-const unknown: ConsentState = { analytics: 'unknown', ads: 'unknown', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} };
-const denied: ConsentState = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied', raw: {} };
+const unknown = { analytics: 'unknown', ads: 'unknown', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} } as const;
+const denied = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied', raw: {} } as const;
 
 function hit(over: Partial<Hit> = {}): Hit {
   return {
-    type: 'hit', id: newId('hit'), runId, stepId: null, requestId: 'request_none', t: 0, vendor: 'sgtm', event: 'page_view',
+    type: 'hit', id: newId('hit'), runId, stepId: null, requestId: 'req_none', t: 0, vendor: 'sgtm', event: 'page_view',
     consent: unknown, ids: {}, page: 'http://localhost:3000/', transport: 'fetch', params: {}, fields: [], fieldsComplete: true, ...over,
   };
 }

@@ -109,7 +109,7 @@ function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
 
   const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
   const vacuous = rule.before ? vacuousBeforeConsent(rule, ctx) : undefined;
-  if (rule.body) return evaluateBodyRule(rule, rule.body, hits, where, total, ctx);
+  if (rule.body) return evaluateBodyRule(rule, rule.body, hits, where, total);
   const ids = hits.map((h) => h.id);
   const found = `found ${hits.length} matching hit${hits.length === 1 ? '' : 's'}${narrowed.length ? ` (${total} before narrowing)` : ''}`;
 
@@ -152,7 +152,7 @@ function cannotEvaluate(unreadable: Hit[], where: string): RuleOutcome {
   };
 }
 
-function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected: Hit[], where: string, total: number, ctx: Context): RuleOutcome {
+function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected: Hit[], where: string, total: number): RuleOutcome {
   const narrowed = `${selected.length} selected hit${selected.length === 1 ? '' : 's'}${where}`;
   if (body.has) {
     const matchers = body.has.map((name) => globToRegExp(name));
