@@ -147,6 +147,16 @@ describe('a role locator timeout', () => {
     expect(out).toBe('Timeout. Closest radio controls: "Black (02)", "White (01)".');
   });
 
+  test('ranks a longer shared prefix before a smaller edit distance', async () => {
+    const out = await timeoutMessage(page('- radio "Blxckberry"\n- radio "Black"'), 'Timeout.', { role: 'radio', name: 'Blackberry' });
+    expect(out).toBe('Timeout. Closest radio controls: "Black", "Blxckberry".');
+  });
+
+  test('a role outside the six control families gets the general list', async () => {
+    const out = await timeoutMessage(page('- textbox "Email"\n- button "Help"\n- radio "White (01)"'), 'Timeout.', { role: 'textbox', name: 'Email' });
+    expect(out).toBe('Timeout. Controls on the page: button "Help", radio "White (01)".');
+  });
+
   test('keeps page order on equal scores', async () => {
     const out = await timeoutMessage(page('- radio "Aa"\n- radio "Bb"'), 'Timeout.', { role: 'radio', name: 'Zz' });
     expect(out).toBe('Timeout. Closest radio controls: "Aa", "Bb".');
