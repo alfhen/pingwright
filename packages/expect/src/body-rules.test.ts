@@ -172,6 +172,8 @@ test('the parser rejects bad body shapes with a line number', () => {
   expect(issues('expect:\n  mustNot:\n    - { body.has: [""] }')).toContain('non-empty list');
   expect(issues(`expect:\n  mustNot:\n    - { body.has: ["${'a'.repeat(65)}"] }`)).toContain('at most 64 characters');
   expect(issues('expect:\n  must:\n    - { body.has: [a], body.only: [b] }')).toContain('cannot be in the same entry');
+  expect(issues('expect:\n  must:\n    - { vendor: meta, identity.hashesMatch: true, body.has: [a] }')).toContain('identity.hashesMatch cannot be combined');
+  expect(issues('expect:\n  must:\n    - { vendor: meta, identity.hashesMatch: true, body.only: [a] }')).toContain('identity.hashesMatch cannot be combined');
   expect(issues('expect:\n  must:\n    - { body.ignore: [a] }')).toContain('only valid with body.only');
   expect(issues('expect:\n  must:\n    - { body.nope: [a] }')).toContain('unknown key');
   expect(issues('expect:\n  must:\n    - { body.has: [a] }')).toBe('');

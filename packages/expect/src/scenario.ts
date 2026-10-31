@@ -434,6 +434,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
     }
     if (rule.before && rule.inEpoch) fail(path, 'use either before or in, not both');
     if (rule.body?.has && rule.body.only) fail(path, 'body.has and body.only cannot be in the same entry');
+    if (rule.body && rule.hashesMatch) fail(path, 'identity.hashesMatch cannot be combined with body.has or body.only');
     if (rule.body?.ignore && !rule.body.only) fail(path, 'body.ignore is only valid with body.only');
     return issues.length === before ? rule : undefined;
   }

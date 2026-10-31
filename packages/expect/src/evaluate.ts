@@ -109,7 +109,7 @@ function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
 
   const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
   const vacuous = rule.before ? vacuousBeforeConsent(rule, ctx) : undefined;
-  if (rule.body) return evaluateBodyRule(rule, rule.body, hits, where, total);
+  if (rule.body) return evaluateBodyRule(rule, rule.body, hits, where, total, vacuous);
   const ids = hits.map((h) => h.id);
   const found = `found ${hits.length} matching hit${hits.length === 1 ? '' : 's'}${narrowed.length ? ` (${total} before narrowing)` : ''}`;
 
@@ -152,7 +152,8 @@ function cannotEvaluate(unreadable: Hit[], where: string): RuleOutcome {
   };
 }
 
-function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected: Hit[], where: string, total: number): RuleOutcome {
+function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected: Hit[], where: string, total: number, vacuous?: string): RuleOutcome {
+  const tail = vacuous ? ` ${vacuous}` : '';
   const narrowed = `${selected.length} selected hit${selected.length === 1 ? '' : 's'}${where}`;
   if (body.has) {
     const matchers = body.has.map((name) => globToRegExp(name));
@@ -177,7 +178,7 @@ function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected:
       ? `found ${matching.length} hit${matching.length === 1 ? '' : 's'} with body.has fields: ${listNames(names)}`
       : 'found no hit with the body.has fields';
     const expected = rule.kind === 'must' ? `Expected ${describeCount(count)} hits with body.has fields${where}` : `Expected no hit with body.has fields${where}`;
-    return { pass: low, evidence, message: `${expected}, ${found} (${total} before narrowing).` };
+    return { pass: low, evidence, message: `${expected}, ${found} (${total} before narrowing).${tail}` };
   }
 
   const only = body.only!;
@@ -185,7 +186,7 @@ function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected:
   if (rule.kind === 'must') {
     const count = rule.count ?? { op: '>=' as const, n: 1 };
     if (!countHolds(count, selected.length))
-      return { pass: false, evidence: selected.map((h) => h.id), message: `Expected ${describeCount(count)} matching hits${where}, found ${selected.length}.` };
+      return { pass: false, evidence: selected.map((h) => h.id), message: `Expected ${describeCount(count)} matching hits${where}, found ${selected.length}.${tail}` };
   }
   const unreadable: Hit[] = [];
   const offenders: { hit: Hit; outside: string[] }[] = [];
@@ -202,10 +203,10 @@ function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected:
   if (offenders.length) {
     const lines = offenders.slice(0, MAX_LISTED).map((o) => `${o.hit.id} has fields outside body.only: ${listNames(o.outside)} (${o.outside.length} of ${o.hit.fields!.length})`);
     const more = offenders.length > MAX_LISTED ? ` and ${offenders.length - MAX_LISTED} more hits` : '';
-    return { pass: false, evidence: offenders.map((o) => o.hit.id), message: `${lines.join('; ')}${more}.` };
+    return { pass: false, evidence: offenders.map((o) => o.hit.id), message: `${lines.join('; ')}${more}.${tail}` };
   }
   if (unreadable.length) return cannotEvaluate(unreadable, where);
-  return { pass: true, evidence: selected.map((h) => h.id), message: `All ${narrowed} have only fields allowed by body.only.` };
+  return { pass: true, evidence: selected.map((h) => h.id), message: `All ${narrowed} have only fields allowed by body.only.${tail}` };
 }
 
 function describeSelector(filter: Filter): string {
