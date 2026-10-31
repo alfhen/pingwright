@@ -98,6 +98,36 @@ Payments and log-ins are handoff steps on any host other than `localhost`, `127.
 
 A `host:` rule in `expect` matches the request's host with its port (`127.0.0.1:4173`) or its bare hostname (`127.0.0.1`). It is an exact, case-sensitive match on one of these forms. An IPv6 host may be written with or without brackets (`::1`, `[::1]`, `[::1]:4173`). `ids.hashes` matches a hit with any hashed ID present, and `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` read one hashed parameter. Any other name under `ids.hashes` is a scenario error. A `possibleRealData` failure lists the first five findings and a count of the rest.
 
+### Rules on payload fields
+
+`body.has`, `body.only` and `body.ignore` check which fields a hit sent. They read the names of the non-empty fields in the whole decoded payload: the query string, a JSON or form body, and the decoded `dtdc` object. The keys are called `body.*` even so. Only names are read and shown. A value never appears in a rule, a message or the evidence.
+
+```yaml
+expect:
+  mustNot:
+    - { vendor: sgtm, body.has: [email, phone, "user_data.*", "cookie*"], in: epoch(denied) }
+  must:
+    - { vendor: sgtm, event: page_view, body.only: [event_name, page_location, page_title, page_referrer] }
+```
+
+- `body.has` is a list of field names. A hit matches when it has any of them. Nested names use dots (`user_data.email_address`) and array items collapse to `[]` (`items[].price`). A name may use `*` for zero or more characters, so `cookie*` matches `cookie` and `cookie_data`. The other keys of the entry (`vendor`, `event`, `in`, `before`, `after`, `count` and so on) select the hits first.
+- `body.only` is an allowlist. It is not part of the match. The other keys select the hits, and the entry fails if any selected hit has a field outside the list and outside the default ignore list of its vendor. This holds under `must` and under `mustNot`. Under `must`, no selected hit (or too few for `count`) also fails. The message names the hit and the fields, for example `hit_x has fields outside body.only: email, phone (2 of 14)`.
+- `body.ignore` adds names to the ignore list of one `body.only` entry. It is only valid with `body.only`.
+- Each is a non-empty list of names of at most 64 characters. `body.has` and `body.only` cannot be in the same entry. Anything else is a scenario error with a line number.
+- A rule without these keys never reads fields.
+
+A rule that cannot see the whole payload does not pass. If a selected hit has no recorded field names (a record from before schema version 2), the result is `cannot evaluate: field names not recorded`. If a selected hit has a body that was cut at 64 KiB, or a JSON body that did not parse, the result is `cannot evaluate: body not fully recorded`. This applies to `must` and `mustNot` alike, unless a field that is visible already decides the rule (a listed field in a cut body is a plain failure). The result carries `note: fieldsNotRecorded` or `note: cannotEvaluateBody`.
+
+Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not listed has no default list. A name may use `*`.
+
+| Vendor | Ignored fields |
+| --- | --- |
+| `ga4` | `v`, `tid`, `gtm`, `_p`, `_s`, `sid`, `sct`, `seg`, `dl`, `dr`, `dt`, `en`, `cid`, `ul`, `sr`, `_eu`, `_et`, `gcs`, `gcd`, `npa`, `dma`, `dma_cps`, `are`, `frm`, `pscdl`, `tfd`, `ec`, `uaa`, `uab`, `uafvl`, `uam`, `uamb`, `uap`, `uapv`, `uaw`, `_ss`, `_fv`, `_nsi`, `_c`, `_ee`, `_z`, `_gaz`, `tag_exp`, `_tu`, `ngs` |
+| `meta` | `id`, `ev`, `dl`, `rl`, `if`, `ts`, `sw`, `sh`, `v`, `r`, `ec`, `o`, `fbp`, `it`, `coo`, `rqm`, `ler`, `cdl`, `plt`, `pmd[*]`, `expv2[*]`, `cs_est`, `a` |
+| `sgtm` | `v`, `tid`, `event`, `en`, `dtdc` |
+
+The lists are exported from `@pingwright/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
+
 ### GTM override
 
 `--gtm-override <file>` takes JSON with the values of a GTM preview. Pingwright never calls the GTM API, so you supply them.
