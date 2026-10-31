@@ -51,7 +51,7 @@ The waves run left to right. PRs in one wave touch different files, so they can 
 
 Why this order:
 
-- **S01 and F01 first.** S01 creates the `0.3.0-rc.2` heading and one marker line per PR in CHANGELOG, and fixes the existing docs. Every later PR fills in its own marker, so the markers must exist first. F01 adds every new fixture page and endpoint that wave 2 needs. They touch different files, so they run in parallel. Both are small.
+- **S01 and F01 first.** S01 creates the `0.3.0-rc.2` heading and one marker line per PR with a user-visible change in CHANGELOG, and fixes the existing docs. Every later PR fills in its own marker, so the markers must exist first. F01 adds every new fixture page and endpoint that wave 2 needs. They touch different files, so they run in parallel. Both are small.
 - **S05 and S07 are two PRs on one file.** `packages/recorder/src/handoff-overlay.ts` holds the handoff issues still open (#398 is already fixed, see S05). They cannot be in one wave. S05 changes the show-time accessors and the width. S07 changes the polling and wake logic.
 - **S06 before S08.** S08 puts the verdict and the timelines in the suite report. It reads the marks and the severity rule from S06, and it reuses the timeline renderer in `render.ts`.
 - **S06 after S02.** S02 adds two note codes and the two `NOTE_TEXT` entries in `packages/cli/src/report/model.ts`, because `NOTE_TEXT` is a `Record<ResultNote, string>` and `pnpm typecheck` fails without them. No wave 2 PR touches that file. S06 runs later and builds on it.
@@ -131,8 +131,6 @@ Choice: S01 creates the `## 0.3.0-rc.2` heading and one marker line per PR, in a
 
 <!-- S07 -->
 
-<!-- F01 -->
-
 <!-- S01 -->
 
 <!-- S09 -->
@@ -152,7 +150,7 @@ The "Known in 0.3.0-rc.2" list is written by S09 from the issues still open at t
 
 ### Wave 1
 
-**F01 Fixture pages for wave 2.** Touches: `fixtures/site/src/index.ts`, `fixtures/site/README.md`, `fixtures/site/public/` (new pages), `fixtures/site/src/pages-0.3.test.ts` (or a new test file beside it), `CHANGELOG.md` (the F01 marker). It touches none of the files of S01.
+**F01 Fixture pages for wave 2.** Touches: `fixtures/site/src/index.ts`, `fixtures/site/README.md`, `fixtures/site/public/` (new pages), `fixtures/site/src/pages-0.3.test.ts` (or a new test file beside it). It adds no CHANGELOG line, because fixture pages are test infrastructure and not a user-visible change. It touches none of the files of S01.
 - `/set-cookie-unstored`: a page that requests an endpoint whose `Set-Cookie` the browser always rejects, with a `Domain` attribute that does not match the host (value `pw-fixture-cookie-value`). The rejection does not depend on the browser's third-party cookie policy.
 - `/sgtm-data-tag?form=nested`: a variant of the existing page that sends the hash as nested `customerHashed.email` (fake hash of `pw-fixture@example.com`). The current page has top-level hashes and `user_data.email_address` only, so the nested field does not exist yet.
 - `/sgtm-data-tag?form=flat-email`: sends a top-level `email` (fake hash of `pw-fixture@example.com`) for the `**.email` e2e.
@@ -178,7 +176,7 @@ Acceptance: `pnpm lint`, `pnpm docs:build` and `pnpm docs:test` pass, and the ne
 ### Wave 2
 
 **S02 Cookie evidence and `body.has` leaf names (#461, #462).** Touches: `packages/expect/src/evaluate.ts`, `packages/expect/src/scenario.ts`, `packages/core/src/records.ts` (two note codes), `packages/cli/src/report/model.ts` (the two `NOTE_TEXT` entries only), `docs/cli.md` (cookie rule and `body.has` sections), `docs/design.md` (§2, the `Result.note` list), `CHANGELOG.md` (the S02 marker), `e2e/stored-cookie-evidence.e2e.test.ts`, `e2e/leaf-names.e2e.test.ts`, `e2e/scenarios/`. The fixture pages come from F01.
-- **#461.** Stored means: a checkpoint whose time `t` is after the request time of the `Set-Cookie` response holds a cookie with that name, and the cookie's domain matches the response host. A same-named cookie on another domain does not count.
+- **#461.** Stored means: a checkpoint whose time `t` is after the request time of the `Set-Cookie` response holds a cookie with that name, and the cookie's domain matches the response host by RFC 6265 domain-match: ignore a leading dot, and the host equals the cookie domain or ends with `.` plus the domain. A cookie set with `Domain=example.com` by `sgtm.example.com` is stored on `.example.com` and counts. A same-named cookie on another domain does not count.
   - Stored: the message says `found _dcid from Set-Cookie (7 requests); stored by the browser`.
   - A later checkpoint exists and none has it: `found _dcid from Set-Cookie (7 requests); no later checkpoint has it`, and `Result.note` is `cookieNotStored`. The text says what the checkpoints show. It does not claim a fact about the browser, because a consent tool can delete a stored cookie.
   - No checkpoint after the response (a late beacon, or a failed step with no checkpoint): the evidence is unknown. The message has no storage text and there is no note.
@@ -189,7 +187,7 @@ Acceptance: `pnpm lint`, `pnpm docs:build` and `pnpm docs:test` pass, and the ne
 - Flagged: the issue asks for `stored: true|false` in the result evidence. Evidence is a list of IDs. A new note code carries the same fact and needs no new record field, so the plan uses the note.
 - Field names in the nested note go through `guardFieldName`, so a value used as a JSON key prints as `(other)`.
 
-Regression test: unit tests on the evaluator for both rules and for the old behaviour. The #461 cases are: stored; no later checkpoint has it; no checkpoint after the response (no note); a checkpoint before the response only (no claim of storage); a same-named cookie on another domain (not counted as stored). The `**.email` cases: a payload with only a top-level `email` (matches `**.email`; the old code treats `**.email` as a plain glob, so this fails on the old code), a payload with `customerHashed.email`, and a negative case with `useremail` (no match). These are unit tests on the evaluator. F01 also adds a variant, `/sgtm-data-tag?form=flat-email`, that sends a top-level `email`, so the e2e shows it end to end. Fixture: `/set-cookie-unstored`, `/sgtm-data-tag?form=nested` and `/sgtm-data-tag?form=flat-email` from F01. Fake email `pw-fixture@example.com`. The leak test asserts neither the cookie value nor the email nor its hash appears in the message, the note or the report.
+Regression test: unit tests on the evaluator for both rules and for the old behaviour. The #461 cases are: stored; no later checkpoint has it; no checkpoint after the response (no note); a checkpoint before the response only (no claim of storage); a cookie stored on `.example.com` from a `sgtm.example.com` response (counted as stored); a same-named cookie on `.other.example` (not counted as stored). The `**.email` cases: a payload with only a top-level `email` (matches `**.email`; the old code treats `**.email` as a plain glob, so this fails on the old code), a payload with `customerHashed.email`, and a negative case with `useremail` (no match). These are unit tests on the evaluator. F01 also adds a variant, `/sgtm-data-tag?form=flat-email`, that sends a top-level `email`, so the e2e shows it end to end. Fixture: `/set-cookie-unstored`, `/sgtm-data-tag?form=nested` and `/sgtm-data-tag?form=flat-email` from F01. Fake email `pw-fixture@example.com`. The leak test asserts neither the cookie value nor the email nor its hash appears in the message, the note or the report.
 Acceptance: the e2e tests run in `stub` mode only. The fixture's own endpoint passes through and sets real cookies, and the mismatched `Domain` makes the rejection deterministic. They check the two messages and notes and the exit code (1, because the rules still fail). They fail when `cookieNotStored` is not set, and when `**.email` stops matching the top-level `email` on the flat-email page (a plain glob `^.*.*\.email$` does not match it) or matches `useremail`.
 
 **S03 Public suffix list (#427).** Touches: `packages/expect/src/hosts.ts`, `packages/expect/src/hosts.test.ts`, `packages/expect/package.json`, `pnpm-lock.yaml`, `docs/release.md`, `docs/design.md` (§5.3, the `serverHosts` rule text), `CHANGELOG.md` (the S03 marker), `e2e/server-hosts-suffix.e2e.test.ts`.
@@ -242,7 +240,7 @@ Acceptance: `e2e/report-marks.e2e.test.ts` runs a scenario and reports it. The H
 - **#443.** An e2e test that counts calls of the state binding.
 
 Regression test: a unit test for the generation counter (a stale answer does not clear a newer timer) and one for `waitForHandoff` with a `wake` that never settles (the wait still ends on a Done signal). Fixture: the existing `/handoff` and `/handoff-second` pages. The e2e counts state calls: the count grows while a handoff waits, stops growing after it ends, and grows again on the second handoff.
-Acceptance: `packages/recorder/test/e2e/handoff-polling.e2e.test.ts`. It fails when `stopPolling()` is removed (the count keeps growing), when the generation counter is removed (the pill stays after the second handoff), and when the wake is awaited again.
+Acceptance: `packages/recorder/test/e2e/handoff-polling.e2e.test.ts` fails when `stopPolling()` is removed (the count keeps growing) and when the wake is awaited again. It cannot force the #444 race, because the test does not control when the state binding answers. The named guard for #444 is the unit test: it runs `handoffOverlayScript` in a `vm` with a fake window and a state function whose promises the test resolves in order (start, tick A in flight, start again, A answers `not waiting`, the timer must still run). The PR states that this unit test fails with the counter removed.
 
 ### Wave 4
 
