@@ -65,6 +65,8 @@ export const NOTE_TEXT: Record<ResultNote, string> = {
   stubNoCookies: 'stub mode: stubbed endpoints set no cookies, so this pass says nothing about server cookies',
   cannotEvaluateBody: 'cannot evaluate: body not fully recorded',
   fieldsNotRecorded: 'cannot evaluate: field names not recorded',
+  cookieNotStored: 'the server set this cookie, but no later checkpoint shows the browser holding it',
+  nestedNameOnly: 'a plain name matches a top-level field only; use **.name to match at any depth',
 };
 
 const WORST_FIRST: Mark[] = ['leak', 'unchecked', 'mixed', 'full', 'ping'];

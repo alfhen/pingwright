@@ -62,7 +62,7 @@ test('server mode lets the mock host answer, and only that host passes', async (
   expect(result.pass).toBe(false);
   expect(stdout + stderr + JSON.stringify(records.results)).not.toMatch(/pwfake/);
   expect(rawRecord).not.toMatch(/pwfake/);
-  expect(note).toBeUndefined();
+  expect(note).toBe('cookieNotStored');
   expect(records.run.networkMode).toBe('server');
   const loader = records.requests.find((q) => new URL(q.url).pathname === '/pwcookie')!;
   expect(loader.outcome).toBe('passed');

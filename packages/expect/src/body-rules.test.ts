@@ -213,3 +213,50 @@ test('messages and evidence hold field names, never values', () => {
   const text = JSON.stringify(results);
   for (const value of [email, hash, cookie, '+15550100']) expect(text).not.toContain(value);
 });
+
+const HAS = (name: string) => `expect:\n  mustNot:\n    - { vendor: sgtm, body.has: ["${name}"] }`;
+
+test('**.email matches a top-level email, a nested email and a deep email', () => {
+  for (const field of ['email', 'customerHashed.email', 'a.b.email']) {
+    const r = one(HAS('**.email'), [hit({ fields: [field] })]);
+    expect(r.pass, field).toBe(false);
+    expect(r.message).toContain(field);
+  }
+});
+
+test('**.email does not match a name that only ends with email', () => {
+  expect(one(HAS('**.email'), [hit({ fields: ['useremail', 'user.useremail'] })]).pass).toBe(true);
+});
+
+test('a plain glob *.email still needs a dot and misses a top-level email', () => {
+  expect(one(HAS('*.email'), [hit({ fields: ['email'] })]).pass).toBe(true);
+  expect(one(HAS('*.email'), [hit({ fields: ['customerHashed.email'] })]).pass).toBe(false);
+});
+
+test('a plain name that only matches a nested field passes with nestedNameOnly', () => {
+  const r = one(HAS('email'), [hit({ fields: ['customerHashed.email', 'event_name'] })]);
+  expect(r.pass).toBe(true);
+  expect(r.note).toBe('nestedNameOnly');
+  expect(r.message).toContain('no top-level match; nested fields with this name: customerHashed.email');
+});
+
+test('a plain name with a top-level match or no nested match has no note', () => {
+  expect(one(HAS('email'), [hit({ fields: ['email', 'a.email'] })]).note).toBeUndefined();
+  expect(one(HAS('email'), [hit({ fields: ['useremail', 'event_name'] })]).note).toBeUndefined();
+  expect(one(HAS('em*'), [hit({ fields: ['a.email'] })]).note).toBeUndefined();
+});
+
+test('a nested name in the note goes through the value guard', () => {
+  const hash = createHash('sha256').update('pw-fixture@example.com').digest('hex');
+  const r = one(HAS('email'), [hit({ fields: [`${hash}.email`] })]);
+  expect(JSON.stringify(r)).not.toContain(hash);
+  expect(r.message).toContain('(other)');
+});
+
+test('body.only accepts the leaf form', () => {
+  expect(one('expect:\n  must:\n    - { vendor: sgtm, body.only: ["**.email"] }', [hit({ fields: ['email', 'a.email'] })]).pass).toBe(true);
+});
+
+test('a bare **. is a scenario error', () => {
+  expect(() => parseScenario('start: /\nexpect:\n  mustNot:\n    - { body.has: ["**."] }')).toThrow(ScenarioError);
+});

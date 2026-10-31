@@ -152,18 +152,63 @@ interface CookieSighting {
   /** Absent when the record has no time to place it by. */
   t: number | undefined;
   source: string;
+  /** Host of the response, set on a Set-Cookie sighting. */
+  host?: string;
 }
 
 function cookieSightings(matchers: RegExp[], ctx: Context): CookieSighting[] {
   const out: CookieSighting[] = [];
   const wanted = (name: string) => matchers.some((m) => m.test(name));
   for (const response of ctx.responses) {
-    const t = ctx.requests.get(response.requestId)?.t;
-    for (const name of response.setCookieNames) if (wanted(name)) out.push({ name, evidence: response.requestId, t, source: 'Set-Cookie' });
+    const request = ctx.requests.get(response.requestId);
+    const t = request?.t;
+    const host = request && hostOf(request.url);
+    for (const name of response.setCookieNames) if (wanted(name)) out.push({ name, evidence: response.requestId, t, source: 'Set-Cookie', ...(host && { host }) });
   }
   for (const checkpoint of ctx.checkpoints)
     for (const cookie of checkpoint.cookies) if (wanted(cookie.name)) out.push({ name: cookie.name, evidence: checkpoint.id, t: checkpoint.t, source: `checkpoint "${checkpoint.label}"` });
   return out;
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+/** RFC 6265 domain-match: a leading dot is ignored, and the host is the domain or a subdomain of it. */
+function domainMatches(host: string, cookieDomain: string): boolean {
+  const domain = cookieDomain.replace(/^\./, '').toLowerCase();
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+type Stored = 'stored' | 'notStored' | 'unknown';
+
+/** Reads the checkpoints taken after the response: any with the cookie means stored, some without it means not stored. */
+function storedState(sighting: CookieSighting, ctx: Context): Stored {
+  if (sighting.t === undefined || !sighting.host) return 'unknown';
+  const later = ctx.checkpoints.filter((c) => c.t !== undefined && c.t > sighting.t!);
+  if (later.length === 0) return 'unknown';
+  const host = sighting.host;
+  return later.some((c) => c.cookies.some((k) => k.name === sighting.name && domainMatches(host, k.domain))) ? 'stored' : 'notStored';
+}
+
+function storageText(sightings: CookieSighting[], ctx: Context): { text: string; notStored: boolean } | undefined {
+  const byName = new Map<string, Stored>();
+  for (const sighting of sightings.filter((x) => x.source === 'Set-Cookie')) {
+    const state = storedState(sighting, ctx);
+    const previous = byName.get(sighting.name);
+    if (!previous || previous === 'unknown' || (previous === 'notStored' && state === 'stored')) byName.set(sighting.name, state);
+  }
+  const named = (want: Stored) => [...byName].filter(([, state]) => state === want).map(([name]) => guardFieldName(name)).sort();
+  const stored = named('stored');
+  const notStored = named('notStored');
+  if (!stored.length && !notStored.length) return undefined;
+  if (!notStored.length) return { text: 'stored by the browser', notStored: false };
+  if (!stored.length) return { text: 'no later checkpoint has it', notStored: true };
+  return { text: `stored by the browser: ${listNames(stored)}; no later checkpoint has: ${listNames(notStored)}`, notStored: true };
 }
 
 function beforeConsentAt(t: number, ctx: Context): boolean {
@@ -232,8 +277,12 @@ function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleO
   }
   const names = [...new Set(sightings.map((s) => guardFieldName(s.name)))].sort();
   const sources = [...new Set(sightings.map((s) => s.source))];
+  const headerOnly = sources.length === 1 && sources[0] === 'Set-Cookie';
+  const requests = new Set(sightings.map((s) => s.evidence)).size;
+  const storage = sightings.length ? storageText(sightings, ctx) : undefined;
+  const count = headerOnly ? `${requests} request${requests === 1 ? '' : 's'}` : `${total} before narrowing`;
   const found = sightings.length
-    ? `found ${listNames(names)} from ${sources.join(' and ')} (${total} before narrowing)${sources.some((s) => s !== 'Set-Cookie') ? '. A checkpoint shows the cookie was present then, not when it was set' : ''}`
+    ? `found ${listNames(names)} from ${sources.join(' and ')} (${count})${storage ? `; ${storage.text}` : ''}${sources.some((s) => s !== 'Set-Cookie') ? '. A checkpoint shows the cookie was present then, not when it was set' : ''}`
     : `found no matching cookie (${total} before narrowing)`;
   const expected = rule.kind === 'must' ? `Expected a matching cookie${where}` : `Expected no matching cookie${where}`;
   const stubbed = low && rule.kind === 'mustNot' && ctx.networkMode === 'stub';
@@ -242,6 +291,7 @@ function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleO
     evidence,
     message: `${expected}, ${found}.${stubbed ? ` ${STUB_NO_COOKIES}` : ''}`,
     ...(stubbed && { note: 'stubNoCookies' as const }),
+    ...(storage?.notStored && { note: 'cookieNotStored' as const }),
   };
 }
 
@@ -263,11 +313,25 @@ function cannotEvaluate(unreadable: Hit[], where: string): RuleOutcome {
   };
 }
 
+/** `**.name` matches `name` at any depth, on a dot boundary. Otherwise `*` matches any characters. */
+function fieldGlob(pattern: string): RegExp {
+  if (!pattern.startsWith('**.')) return globToRegExp(pattern);
+  return new RegExp(`^(?:.*\\.)?${globToRegExp(pattern.slice(3)).source.slice(1, -1)}$`);
+}
+
+function nestedNames(plain: string[], hits: Hit[]): string[] {
+  const wanted = new Set(plain);
+  const found = new Set<string>();
+  for (const hit of hits)
+    for (const field of hit.fields ?? []) if (field.includes('.') && wanted.has(field.slice(field.lastIndexOf('.') + 1))) found.add(guardFieldName(field));
+  return [...found].sort();
+}
+
 function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected: Hit[], where: string, total: number, vacuous?: string): RuleOutcome {
   const tail = vacuous ? ` ${vacuous}` : '';
   const narrowed = `${selected.length} selected hit${selected.length === 1 ? '' : 's'}${where}`;
   if (body.has) {
-    const matchers = body.has.map((name) => globToRegExp(name));
+    const matchers = body.has.map(fieldGlob);
     const unreadable: Hit[] = [];
     const matching: { hit: Hit; names: string[] }[] = [];
     for (const hit of selected) {
@@ -289,11 +353,13 @@ function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected:
       ? `found ${matching.length} hit${matching.length === 1 ? '' : 's'} with body.has fields: ${listNames(names)}`
       : 'found no hit with the body.has fields';
     const expected = rule.kind === 'must' ? `Expected ${describeCount(count)} hits with body.has fields${where}` : `Expected no hit with body.has fields${where}`;
-    return { pass: low, evidence, message: `${expected}, ${found} (${total} before narrowing).${tail}` };
+    const nested = matching.length ? [] : nestedNames(body.has.filter((n) => !n.includes('*')), selected);
+    const nestedText = nested.length ? `; no top-level match; nested fields with this name: ${listNames(nested)}` : '';
+    return { pass: low, evidence, message: `${expected}, ${found} (${total} before narrowing)${nestedText}.${tail}`, ...(nested.length && { note: 'nestedNameOnly' as const }) };
   }
 
   const only = body.only!;
-  const allowed = [...only, ...(body.ignore ?? [])].map((name) => globToRegExp(name));
+  const allowed = [...only, ...(body.ignore ?? [])].map(fieldGlob);
   if (rule.kind === 'must') {
     const count = rule.count ?? { op: '>=' as const, n: 1 };
     if (!countHolds(count, selected.length))

@@ -1,0 +1,10 @@
+start: /set-cookie-unstored
+steps:
+  - wait: 1s
+  - checkpoint: later
+  - consent: reject
+  - wait: 1s
+expect:
+  mustNot:
+    - { cookie: _pwunstored, before: consent }
+options: { seed: 1, allowUnknownDestination: true }

@@ -244,7 +244,7 @@ export interface Result {
   note?: ResultNote;
 }
 
-export type ResultNote = 'stubNoCookies' | 'cannotEvaluateBody' | 'fieldsNotRecorded';
+export type ResultNote = 'stubNoCookies' | 'cannotEvaluateBody' | 'fieldsNotRecorded' | 'cookieNotStored' | 'nestedNameOnly';
 
 export type Severity = 'fail' | 'warn';
 
