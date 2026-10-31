@@ -40,8 +40,8 @@ afterAll(async () => {
   if (overridePath) await rm(join(overridePath, '..'), { recursive: true, force: true });
 });
 
-function suite(dir: string, out: string) {
-  const args = ['suite', join(root, 'e2e/suites', dir), '--site', site.url, '--out', out, '--variant', 'published', '--variant', `workspace=${overridePath}`, '--json'];
+function suite(dir: string, out: string, json = true) {
+  const args = ['suite', join(root, 'e2e/suites', dir), '--site', site.url, '--out', out, '--variant', 'published', '--variant', `workspace=${overridePath}`, ...(json ? ['--json'] : [])];
   const env = { ...process.env, PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl };
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
     execFile(process.execPath, [cli, ...args], { cwd: root, env }, (error, stdout, stderr) => {
@@ -101,18 +101,21 @@ test('two scenarios by two variants: four cells, the workspace event as added, t
   expect(r.stderr).not.toContain(overridePath);
 }, 300_000);
 
-test('the table has four cells, and the exit code is 0 when no rule breaks', async () => {
-  const out = join(outDir, 'clean');
-  const r = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
-    const args = ['suite', join(root, 'e2e/suites/clean'), '--site', site.url, '--out', out, '--variant', 'published', '--variant', `workspace=${overridePath}`];
-    execFile(process.execPath, [cli, ...args], { cwd: root, env: { ...process.env, PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl } }, (error, stdout, stderr) => {
-      resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, stdout, stderr });
-    });
-  });
-  expect(r.code, r.stderr).toBe(0);
-  const row = r.stdout.split('\n').find((l) => l.startsWith('container-direct'))!;
-  expect(row).toMatch(/^container-direct\s+PASS\s+PASS\s+\+\d+ added/);
+test('the table prints a header and one row per scenario with a status per variant', async () => {
+  const r = await suite('mixed', join(outDir, 'table'), false);
+  expect(r.code, r.stderr).toBe(1);
+  const lines = r.stdout.split('\n');
+  expect(lines.find((l) => /^scenario\s+published\s+workspace/.test(l)), r.stdout).toBeDefined();
+  expect(lines.find((l) => l.startsWith('container-direct'))).toMatch(/^container-direct\s+PASS\s+PASS\s+\+\d+ added/);
+  expect(lines.find((l) => l.startsWith('no-workspace-event'))).toMatch(/^no-workspace-event\s+PASS\s+FAIL\s+\+\d+ added/);
   expect(r.stdout).toContain('diff (published -> workspace)');
+  for (const form of forms) expect(r.stdout + r.stderr).not.toContain(form);
+}, 300_000);
+
+test('the exit code is 0 when no rule breaks', async () => {
+  const out = join(outDir, 'clean');
+  const r = await suite('clean', out, false);
+  expect(r.code, r.stderr).toBe(0);
   const [suiteDir] = await readdir(out);
   const manifest = JSON.parse(await readFile(join(out, suiteDir!, 'suite.json'), 'utf8')) as Manifest;
   expect(manifest.cells).toHaveLength(2);
