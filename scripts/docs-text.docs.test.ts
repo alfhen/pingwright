@@ -5,7 +5,11 @@ import { expect, test } from 'vitest';
 const read = (path: string): string => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf8');
 
 const readmeInstallProblem = (readme: string): string | undefined =>
-  /\bsuite\b/.test(readme) && !readme.includes('pingwright@next') ? 'README mentions 0.3 sections without pingwright@next' : undefined;
+  !/`npm i -g pingwright` installs 0\.2/.test(readme) || !/need the release candidate/.test(readme) || !readme.includes('pingwright@next')
+    ? 'README does not say that plain install gives 0.2 and 0.3 sections need pingwright@next'
+    : undefined;
+
+const oldInstallLine = '`npm i -g pingwright@next` installs the release candidate, `0.3.0-rc.1`.';
 
 const enterAlwaysProblem = (text: string): string | undefined =>
   /Enter in the terminal always works/.test(text) ? 'says Enter always works' : undefined;
@@ -15,8 +19,7 @@ test('the README tells readers the 0.3 sections need pingwright@next', () => {
 });
 
 test('the README check fails on the old install line', () => {
-  const old = read('README.md').replaceAll('pingwright@next', 'pingwright');
-  expect(readmeInstallProblem(old)).toBeDefined();
+  expect(readmeInstallProblem(`Node 22.18 or later. ${oldInstallLine} Other ways to install are in docs/cli.md.`)).toBeDefined();
 });
 
 test('the docs do not say Enter always works', () => {
