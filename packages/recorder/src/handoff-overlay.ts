@@ -84,6 +84,7 @@ export function handoffOverlayScript(nonce: string): string {
   const STOPPED = ['pointerdown', 'pointerup', 'pointermove', 'pointercancel', 'mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'contextmenu', 'auxclick', 'touchstart', 'touchend', 'keydown', 'keyup', 'keypress'];
   let host = null;
   let label = null;
+  let dropped = null;
   const apply = (el, styles) => { for (const k in styles) el.style.setProperty(k, styles[k], 'important'); };
   const build = () => {
     host = document.createElement('div');
@@ -116,7 +117,8 @@ export function handoffOverlayScript(nonce: string): string {
       const box = host.getBoundingClientRect();
       const left = Math.min(Math.max(0, event.clientX - grab.dx), Math.max(0, innerWidth - box.width));
       const top = Math.min(Math.max(0, event.clientY - grab.dy), Math.max(0, innerHeight - box.height));
-      apply(host, { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto' });
+      dropped = { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto' };
+      apply(host, dropped);
     });
     const release = () => { grab = null; };
     pill.addEventListener('pointerup', release);
@@ -137,24 +139,21 @@ export function handoffOverlayScript(nonce: string): string {
     label.textContent = text;
     label.title = text;
     apply(host, IMPORTANT);
+    if (dropped) apply(host, dropped);
     const parent = document.documentElement;
     if (parent && host.parentNode !== parent) parent.append(host);
   };
   const hide = () => { if (host && host.parentNode) host.remove(); };
-  let seen = false;
-  let timer = 0;
   const tick = async () => {
     let state;
     try { state = await stateFn(); } catch { return; }
     if (state && state.waiting) {
-      seen = true;
       show(String(state.text));
       return;
     }
     hide();
-    if (seen) clearInterval(timer);
   };
   tick();
-  timer = setInterval(tick, 500);
+  setInterval(tick, 500);
 })();`;
 }

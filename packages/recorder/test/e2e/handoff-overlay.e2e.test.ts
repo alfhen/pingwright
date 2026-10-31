@@ -117,3 +117,43 @@ test('a document-level bubble click listener does not see the click on Done', as
   const { records } = await run.recorder.close();
   expect(records.hits.filter((h) => h.vendor === 'ga4').map((h) => h.event)).toEqual(['click_1']);
 }, 60_000);
+
+test('a dragged pill stays where it was dropped', async () => {
+  const run = await open('/handoff');
+  const before = await pillBox(run.page);
+  const grabX = before.x + 8;
+  const grabY = before.y + before.height / 2;
+  await run.page.mouse.move(grabX, grabY);
+  await run.page.mouse.down();
+  await run.page.mouse.move(grabX - 300, grabY - 200, { steps: 5 });
+  await run.page.mouse.up();
+  const dropped = await pillBox(run.page);
+  expect(Math.abs(dropped.x - (before.x - 300))).toBeLessThan(3);
+  expect(Math.abs(dropped.y - (before.y - 200))).toBeLessThan(3);
+  await run.page.waitForTimeout(1600);
+  const later = await pillBox(run.page);
+  expect(later.x).toBe(dropped.x);
+  expect(later.y).toBe(dropped.y);
+  await clickDone(run.page);
+  await run.played;
+  await run.recorder.close();
+}, 60_000);
+
+test('a second handoff in the same document shows the pill again', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url, headed: false, handoffOverlay: true });
+  const scenario = parseScenario(
+    "start: /handoff\nsteps:\n  - handoff: Log in\n  - click: '#handoff-submit'\n  - wait: 1500\n  - handoff: Pay the test order\n",
+  );
+  const played = playScenario(recorder, scenario, { handoffResolver: terminal, print: () => {} });
+  played.catch(() => undefined);
+  await expect.poll(() => recorder.context.pages().length).toBe(1);
+  const page = recorder.context.pages()[0]!;
+  await page.waitForLoadState('load');
+  await clickDone(page);
+  await expect.poll(() => page.locator('#saved').textContent(), { timeout: 10_000 }).toBe('saved');
+  await expect.poll(() => page.locator(`#${HANDOFF_HOST_ID}`).count(), { timeout: 10_000 }).toBe(0);
+  await expect.poll(() => page.locator(`#${HANDOFF_HOST_ID}`).count(), { timeout: 10_000 }).toBe(1);
+  await clickDone(page);
+  await played;
+  await recorder.close();
+}, 60_000);
