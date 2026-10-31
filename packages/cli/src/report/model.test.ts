@@ -334,6 +334,14 @@ describe('deniedIdentifiers evidence', () => {
   const denied = () => hit('sgtm', 1500);
   const failedCheck = (h: Hit, severity: 'fail' | 'warn') => result('builtin: deniedIdentifiers', false, { evidence: [h.id], severity });
 
+  test('every evidence hit marks its own segment as a leak', () => {
+    const early = hit('sgtm', 500);
+    const late = denied();
+    const check = result('builtin: deniedIdentifiers', false, { evidence: [early.id, late.id], severity: 'warn' });
+    const model = buildReportModel(records({ hits: [early, late], results: [check] }));
+    expect(marksOf(model, 'sgtm')).toEqual(['leak', 'leak', 'nothing']);
+  });
+
   test.each(['fail', 'warn'] as const)('a denied hit with no idFields named in a failed check at %s is a leak, not a ping', (severity) => {
     const h = denied();
     expect(marksOf(buildReportModel(records({ hits: [h] })), 'sgtm')).toEqual(['nothing', 'ping', 'nothing']);
