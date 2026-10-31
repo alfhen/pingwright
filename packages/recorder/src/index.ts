@@ -10,3 +10,4 @@ export * from './guard.ts';
 export * from './steps.ts';
 export * from './gtm-override.ts';
 export * from './gtm-scrub.ts';
+export * from './handoff-overlay.ts';

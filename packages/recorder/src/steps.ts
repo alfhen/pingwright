@@ -4,6 +4,7 @@ import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Scenario, type 
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
+import { waitForHandoff } from './handoff-overlay.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
 export type ConsentAnswer = Extract<Step, { kind: 'consent' }>['value'];
@@ -68,8 +69,8 @@ export interface PlayOptions {
   /** Identity seed. Default: the scenario's `options.seed`, else random. */
   seed?: number;
   consent?: ConsentHandler;
-  /** Resolves when the person is done with a handoff. Default: waits for Enter on stdin. */
-  handoffResolver?: (message: string) => Promise<void>;
+  /** Resolves when the person is done with a handoff. Default: waits for Enter on stdin. The Done control can end the wait first, and then the signal aborts. */
+  handoffResolver?: (message: string, signal: AbortSignal) => Promise<void>;
   /** Where handoff instructions go. Default: stdout. */
   print?: (text: string) => void;
   /** Longest wait for a selector, a click or a fill. */
@@ -122,10 +123,12 @@ export function resolveSitePath(path: string, site: string, vars: Record<string,
   return url.href;
 }
 
-async function stdinResolver(): Promise<void> {
+async function stdinResolver(_message: string, signal: AbortSignal): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    await rl.question('Press Enter when done. ');
+    await rl.question('Press Enter when done. ', { signal });
+  } catch (error) {
+    if (!signal.aborted) throw error;
   } finally {
     rl.close();
   }
@@ -306,7 +309,7 @@ async function runStep(
       print(`\nHandoff: ${step.value}\n${HANDOFF_REMINDER}\nRecording continues until you are done.`);
       recorder.setHandoff(true);
       try {
-        await (options.handoffResolver ?? stdinResolver)(step.value);
+        await waitForHandoff({ text: step.value, gate: recorder.handoff, resolver: options.handoffResolver ?? stdinResolver, print });
       } finally {
         recorder.setHandoff(false);
       }
@@ -352,7 +355,7 @@ export interface RecordScenarioOptions extends RecorderOptions, PlayOptions {
 /** Launches a recorder, headed when asked or when the scenario has a handoff, plays the scenario and writes the run. */
 export async function recordScenario(options: RecordScenarioOptions): Promise<RunResult> {
   const { parsed, launch = launchRecorder, ...rest } = options;
-  const recorder = await launch({ ...rest, headed: rest.headed || hasHandoff(parsed) });
+  const recorder = await launch({ ...rest, headed: rest.headed || hasHandoff(parsed), handoffOverlay: hasHandoff(parsed) });
   try {
     await playScenario(recorder, parsed, rest);
   } catch (error) {

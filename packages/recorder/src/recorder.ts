@@ -26,6 +26,7 @@ import {
   type RunRecords,
   type Step,
 } from '@pingwright/core';
+import { HANDOFF_DONE_BINDING, HANDOFF_STATE_BINDING, HandoffGate, handoffOverlayScript, type HandoffState } from './handoff-overlay.ts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
 import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@pingwright/decoders';
 import {
@@ -82,6 +83,8 @@ export interface RecorderOptions {
   unloadGapIgnore?: string[];
   /** Stored on the run record as `graceWindowMs`. */
   graceWindowMs?: number;
+  /** Installs the in-page Done control for handoff steps. `recordScenario` sets it when the scenario has a handoff. */
+  handoffOverlay?: boolean;
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
   headed?: boolean;
@@ -175,6 +178,7 @@ export class Recorder {
   private readonly bannerEvents: BannerEvent[] = [];
   private currentStepId: Id<'stp'> | null = null;
   private readonly handoffWindows: { from: number; to: number | null }[] = [];
+  readonly handoff = new HandoffGate();
   private closed = false;
   private readonly fetchErrors: string[] = [];
   private readonly loaderCandidates = new Map<string, boolean>();
@@ -285,6 +289,14 @@ export class Recorder {
     if (this.options.networkMode !== 'live') {
       await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
       await context.addInitScript(unloadInitScript);
+    }
+    if (this.options.handoffOverlay) {
+      await context.exposeBinding(HANDOFF_STATE_BINDING, (source): HandoffState =>
+        source.frame === source.page.mainFrame() ? this.handoff.state() : { waiting: false, text: '' });
+      await context.exposeBinding(HANDOFF_DONE_BINDING, (source, nonce: unknown) => {
+        if (source.frame === source.page.mainFrame()) this.handoff.done(nonce);
+      });
+      await context.addInitScript(handoffOverlayScript(this.handoff.nonce));
     }
     context.on('request', (request) => void this.recordFor(request));
     context.on('requestfailed', (request) => {
