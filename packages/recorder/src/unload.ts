@@ -13,7 +13,7 @@ export interface UnloadSendPayload {
 }
 
 /**
- * Stub mode only. Chromium neither routes nor reports requests a page sends from pagehide or
+ * Stub and server mode (not live). Unload-time sends to serverHosts are answered here too, so they set no cookies. Chromium neither routes nor reports requests a page sends from pagehide or
  * visibilitychange, and binding calls made from those handlers are lost. While the page is hidden or
  * unloading, sendBeacon and keepalive fetch are answered in the page. Each one is queued in
  * sessionStorage until the binding call is acknowledged, and the next document in the tab replays the queue.

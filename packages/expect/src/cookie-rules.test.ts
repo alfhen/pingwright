@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createIdentity, newId, type Checkpoint, type ConsentState, type Request, type Response, type Step } from '@pingwright/core';
 import { expect, test } from 'vitest';
 import { evaluate, type EvalEpoch } from './evaluate.ts';
@@ -179,6 +180,10 @@ test.each([
   ['[127.0.0.1, localhost, "::1"]', true],
   ['["*.com"]', false],
   ['["*.co.uk"]', false],
+  ['["*.co.kr"]', false],
+  ['["*.myshopify.com"]', false],
+  ['["*.github.io"]', false],
+  ['["*.sgtm.example.co.kr"]', true],
   ['[www.google-analytics.com]', false],
   ['["*.google-analytics.com"]', false],
   ['[www.facebook.com]', false],
@@ -190,4 +195,16 @@ test.each([
   const yaml = `start: /\noptions:\n  serverHosts: ${value}\n`;
   if (valid) expect(parseScenario(yaml).options.serverHosts).toBeDefined();
   else expect(() => parseScenario(yaml)).toThrow(ScenarioError);
+});
+
+test('a fake email, its SHA-256 and a cookie value show in no result', () => {
+  const email = 'pw-fixture@example.com';
+  const hash = createHash('sha256').update(email).digest('hex');
+  const value = 'pwfake-cookie-value-9f3a';
+  const req = request(10);
+  const res = { ...response(req, ['_pwid']), setCookie: [`_pwid=${value}`, `${email}=${hash}`] };
+  const ckp = { ...checkpoint('c', 20, ['_pwid']), cookies: [{ name: '_pwid', domain: 'localhost', expires: null, firstParty: true, value: `${email}:${hash}:${value}` }] };
+  const results = run('expect:\n  mustNot:\n    - { cookie: "_pw*", before: consent }\n  must:\n    - { cookie: _pwid }', [req, res, ckp]);
+  expect(results.length).toBeGreaterThanOrEqual(2);
+  for (const secret of [email, hash, value]) expect(JSON.stringify(results)).not.toContain(secret);
 });

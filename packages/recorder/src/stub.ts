@@ -88,5 +88,13 @@ export function setCookieNamesOf(headers: Record<string, string>): string[] {
   return Object.entries(headers)
     .filter(([name]) => name.toLowerCase() === 'set-cookie')
     .flatMap(([, value]) => value.split('\n'))
-    .map((c) => c.split('=')[0]!.trim());
+    .flatMap((c) => setCookieNameOf(c));
+}
+
+/** A Set-Cookie line with no `=` or an empty name has no cookie name; its text is a value and is never recorded. */
+export function setCookieNameOf(line: string): string[] {
+  const pair = line.split(';')[0]!;
+  const eq = pair.indexOf('=');
+  const name = eq > 0 ? pair.slice(0, eq).trim() : '';
+  return name ? [name] : [];
 }
