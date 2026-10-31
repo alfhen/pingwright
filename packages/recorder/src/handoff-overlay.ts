@@ -71,7 +71,9 @@ export async function waitForHandoff(wait: HandoffWait): Promise<void> {
  * says a handoff is waiting. It polls while one is waiting and stops when none is, until the wake event.
  * The pill lives in a closed shadow root and the Done click counts only when trusted. The nonce stays in
  * this closure, so a page script that calls the done binding is refused. The pill and its listeners are
- * built at document start, before page scripts run, so a patched DOM prototype cannot see or call them.
+ * built at document start, before page scripts run, and every DOM accessor it calls later (show, hide, drag)
+ * is captured then too, so a patched DOM prototype cannot see or call them. The pill is capped at the
+ * viewport width minus 32px.
  * A page script can still restyle or remove the host, which hides the pill but cannot end the wait.
  */
 export function handoffOverlayScript(nonce: string): string {
@@ -86,7 +88,7 @@ export function handoffOverlayScript(nonce: string): string {
   const IMPORTANT = {
     all: 'initial', position: 'fixed', right: '16px', bottom: '16px', left: 'auto', top: 'auto',
     display: 'block', visibility: 'visible', opacity: '1', 'pointer-events': 'auto',
-    width: 'max-content', 'max-width': '420px', height: 'auto', margin: '0', transform: 'none',
+    width: 'max-content', 'max-width': 'min(420px, calc(100vw - 32px))', height: 'auto', margin: '0', transform: 'none',
     'z-index': '2147483647',
   };
   const STOPPED = ['pointerdown', 'pointerup', 'pointermove', 'pointercancel', 'mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'contextmenu', 'auxclick', 'touchstart', 'touchend', 'keydown', 'keyup', 'keypress'];
@@ -94,7 +96,22 @@ export function handoffOverlayScript(nonce: string): string {
   let label = null;
   let dropped = null;
   const addListener = EventTarget.prototype.addEventListener;
-  const apply = (el, styles) => { for (const k in styles) el.style.setProperty(k, styles[k], 'important'); };
+  const getter = (proto, name) => Object.getOwnPropertyDescriptor(proto, name).get;
+  const setter = (proto, name) => Object.getOwnPropertyDescriptor(proto, name).set;
+  const setText = setter(Node.prototype, 'textContent');
+  const setTitle = setter(HTMLElement.prototype, 'title');
+  const getStyle = getter(HTMLElement.prototype, 'style');
+  const setProp = CSSStyleDeclaration.prototype.setProperty;
+  const appendChild = Element.prototype.append;
+  const appendToRoot = DocumentFragment.prototype.append;
+  const removeNode = Element.prototype.remove;
+  const getRoot = getter(Document.prototype, 'documentElement');
+  const getParent = getter(Node.prototype, 'parentNode');
+  const getBox = Element.prototype.getBoundingClientRect;
+  const capture = Element.prototype.setPointerCapture;
+  const trustedOf = Object.getOwnPropertyDescriptor(new Event('x'), 'isTrusted').get;
+  const trusted = (event) => { try { return trustedOf.call(event) === true; } catch { return false; } };
+  const apply = (el, styles) => { const style = getStyle.call(el); for (const k in styles) setProp.call(style, k, styles[k], 'important'); };
   const build = () => {
     host = document.createElement('div');
     host.id = HOST_ID;
@@ -104,26 +121,26 @@ export function handoffOverlayScript(nonce: string): string {
     label = document.createElement('span');
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = 'Done';
-    pill.append(label, button);
-    root.append(pill);
-    apply(pill, { display: 'flex', 'align-items': 'center', gap: '10px', padding: '6px 6px 6px 12px', background: '#1d2530', color: '#fff', font: '13px/1.3 system-ui, sans-serif', 'border-radius': '999px', 'box-shadow': '0 2px 10px rgba(0,0,0,.35)', cursor: 'grab', 'user-select': 'none', 'touch-action': 'none' });
-    apply(label, { overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap', 'max-width': '300px' });
-    apply(button, { all: 'unset', 'box-sizing': 'border-box', background: '#2f7d4f', color: '#fff', padding: '4px 14px', 'border-radius': '999px', 'font-weight': '600', cursor: 'pointer' });
+    setText.call(button, 'Done');
+    appendChild.call(pill, label, button);
+    appendToRoot.call(root, pill);
+    apply(pill, { display: 'flex', 'align-items': 'center', gap: '10px', padding: '6px 6px 6px 12px', background: '#1d2530', color: '#fff', font: '13px/1.3 system-ui, sans-serif', 'border-radius': '999px', 'box-sizing': 'border-box', 'max-width': '100%', 'box-shadow': '0 2px 10px rgba(0,0,0,.35)', cursor: 'grab', 'user-select': 'none', 'touch-action': 'none' });
+    apply(label, { overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap', 'max-width': '300px', 'min-width': '0' });
+    apply(button, { all: 'unset', 'box-sizing': 'border-box', background: '#2f7d4f', color: '#fff', padding: '4px 14px', 'border-radius': '999px', 'font-weight': '600', cursor: 'pointer', 'flex-shrink': '0' });
     addListener.call(button, 'click', (event) => {
-      if (!event.isTrusted) return;
+      if (!trusted(event)) return;
       Promise.resolve(doneFn(NONCE)).catch(() => {});
     });
     let grab = null;
     addListener.call(pill, 'pointerdown', (event) => {
       if (event.target === button) return;
-      const box = host.getBoundingClientRect();
+      const box = getBox.call(host);
       grab = { dx: event.clientX - box.left, dy: event.clientY - box.top };
-      pill.setPointerCapture(event.pointerId);
+      capture.call(pill, event.pointerId);
     });
     addListener.call(pill, 'pointermove', (event) => {
       if (!grab) return;
-      const box = host.getBoundingClientRect();
+      const box = getBox.call(host);
       const left = Math.min(Math.max(0, event.clientX - grab.dx), Math.max(0, innerWidth - box.width));
       const top = Math.min(Math.max(0, event.clientY - grab.dy), Math.max(0, innerHeight - box.height));
       dropped = { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto' };
@@ -144,14 +161,14 @@ export function handoffOverlayScript(nonce: string): string {
     }
   };
   const show = (text) => {
-    label.textContent = text;
-    label.title = text;
+    setText.call(label, text);
+    setTitle.call(label, text);
     apply(host, IMPORTANT);
     if (dropped) apply(host, dropped);
-    const parent = document.documentElement;
-    if (parent && host.parentNode !== parent) parent.append(host);
+    const parent = getRoot.call(document);
+    if (parent && getParent.call(host) !== parent) appendChild.call(parent, host);
   };
-  const hide = () => { if (host && host.parentNode) host.remove(); };
+  const hide = () => { if (host && getParent.call(host)) removeNode.call(host); };
   let timer = null;
   const stopPolling = () => { if (timer !== null) { clearInterval(timer); timer = null; } };
   const tick = async () => {

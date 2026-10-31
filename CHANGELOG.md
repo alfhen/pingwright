@@ -12,7 +12,10 @@
 
 <!-- S04 -->
 
-<!-- S05 -->
+### Fixed
+
+- The Done pill calls the DOM accessors it needs at show and hide time from copies taken at document start, so a page that patches `textContent`, `style` or `getRootNode` never sees the label or the host. The Done click reads `isTrusted` from a captured getter and treats a throw as untrusted (#446, Refs #398).
+- The Done pill is at most the viewport width minus 32 px, and a long handoff text shrinks before the Done button does (#464).
 
 <!-- S07 -->
 

@@ -70,3 +70,25 @@ test('the overlay script runs only in the top frame and makes no request', () =>
   expect(script).toContain('isTrusted');
   expect(script).not.toMatch(/fetch\(|XMLHttpRequest|sendBeacon|new Image|http:|https:/);
 });
+
+test('the overlay captures its show-time accessors before page code and reads isTrusted from an instance', () => {
+  const script = handoffOverlayScript('nonce-1');
+  const captureAt = script.indexOf('setter(Node.prototype');
+  expect(captureAt).toBeGreaterThan(-1);
+  expect(captureAt).toBeLessThan(script.indexOf('const build'));
+  expect(script).toContain("Object.getOwnPropertyDescriptor(new Event('x'), 'isTrusted').get");
+  expect(script).not.toContain('Event.prototype');
+  expect(script).not.toMatch(/\.textContent =|\.title =|\.style\.|\.documentElement|\.parentNode|\.remove\(\)/);
+  expect(script).toContain('calc(100vw - 32px)');
+});
+
+test('a throw from the isTrusted getter reads as untrusted', () => {
+  const script = handoffOverlayScript('nonce-1');
+  const trusted = script.match(/const trusted = [^\n]+/)![0];
+  const run = new Function('trustedOf', `${trusted}; return trusted;`)(function (this: { real?: boolean }) {
+    if (!this?.real) throw new TypeError('Illegal invocation');
+    return true;
+  }) as (event: unknown) => boolean;
+  expect(run({ isTrusted: true })).toBe(false);
+  expect(run({ real: true })).toBe(true);
+});
