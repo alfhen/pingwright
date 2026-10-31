@@ -42,12 +42,11 @@ import {
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
-import { hostMatches } from '@pingwright/expect';
 import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
-import { isKnownVendorCollection, stubResponse } from './stub.ts';
+import { isKnownVendorCollection, isStubbedCollection, setCookieNamesOf, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
@@ -187,6 +186,7 @@ export class Recorder {
   private readonly loaderCandidates = new Map<string, boolean>();
   private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
+  private readonly stubRecorded = new Set<string>();
   private readonly navigations: number[] = [];
   private readonly navigationWindows = new NavigationWindows<PwRequest>();
 
@@ -444,6 +444,7 @@ export class Recorder {
     const record = this.recordFor(response.request());
     if (!record) return;
     this.navigationWindows.respond(response.request(), nodeNow());
+    if (this.stubRecorded.has(record.id)) return;
     let setCookieNames: string[] = [];
     try {
       setCookieNames = (await response.headerValues('set-cookie')).map((c) => c.split('=')[0]!.trim());
@@ -466,6 +467,8 @@ export class Recorder {
     if (record && this.options.networkMode !== 'live' && this.isStubbedCollection(record)) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
+      this.stubRecorded.add(record.id);
+      this.recordResponseFor(record, stub.status, setCookieNamesOf(stub.headers));
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
       return;
     }
@@ -476,21 +479,12 @@ export class Recorder {
     await route.continue();
   }
 
-  /** A collection request that stub and `server` mode answer locally. `server` mode lets the hosts in `serverHosts` through. */
   private isStubbedCollection(record: Request): boolean {
-    if (!isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record)) return false;
-    return !(this.options.networkMode === 'server' && this.isServerHost(record.url));
-  }
-
-  private isServerHost(url: string): boolean {
-    let host: string;
-    try {
-      host = new URL(url).hostname;
-    } catch {
-      return false;
-    }
-    const bare = (h: string) => h.replace(/^\[|\]$/g, '');
-    return hostMatches(bare(host), (this.options.serverHosts ?? []).map(bare));
+    return isStubbedCollection(record, {
+      networkMode: this.options.networkMode,
+      serverHosts: this.options.serverHosts,
+      trackers: this.trackers,
+    });
   }
 
   /** Answers a gtm.js request, directly or through a loader, with the preview build, or from the test origin. Returns false when the request is not one of those. */
@@ -613,7 +607,7 @@ export class Recorder {
         this.routed.add(hop.id);
         this.extraRequests.push(hop);
         const stub = stubResponse(first);
-        this.recordResponseFor(hop, stub.status, []);
+        this.recordResponseFor(hop, stub.status, setCookieNamesOf(stub.headers));
         await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
         return;
       }

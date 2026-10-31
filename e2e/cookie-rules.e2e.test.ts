@@ -21,6 +21,10 @@ test('mustNot cookie before consent fails and names the request that set it', as
   const setter = records.requests.find((q) => new URL(q.url).pathname === '/session/start')!;
   expect(result.evidence).toEqual([setter.id]);
   expect(result.message).toContain('_pwid');
+  expect(records.responses.find((x) => x.requestId === setter.id)!.setCookieNames).toEqual(['_pwid']);
+  const stubbed = records.requests.filter((q) => q.outcome === 'stubbed');
+  expect(stubbed.length).toBeGreaterThan(0);
+  for (const q of stubbed) expect(records.responses.filter((x) => x.requestId === q.id).flatMap((x) => x.setCookieNames)).toEqual([]);
 }, 90_000);
 
 test('the same cookie set after the answer passes', async () => {
@@ -44,8 +48,9 @@ test('stub mode does not see the cookie of the stubbed loader request and says w
   expect(note).toBe('stubNoCookies');
   expect(result.message.endsWith('stub mode: stubbed endpoints set no cookies')).toBe(true);
   expect(records.run.networkMode).toBe('stub');
-  expect(records.responses.some((x) => x.setCookieNames.includes('_pwdcid'))).toBe(false);
-  expect(records.checkpoints.some((c) => c.cookies.some((x) => x.name === '_pwdcid'))).toBe(false);
+  const loader = records.requests.find((q) => new URL(q.url).pathname === '/pwcookie')!;
+  expect(loader.outcome).toBe('stubbed');
+  expect(records.responses.filter((x) => x.requestId === loader.id).flatMap((x) => x.setCookieNames)).toEqual([]);
 }, 90_000);
 
 test('server mode lets the mock host answer, and only that host passes', async () => {

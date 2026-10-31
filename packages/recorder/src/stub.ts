@@ -1,4 +1,6 @@
 import { isLibraryLoadPath, type Request } from '@pingwright/core';
+import { isCollectionEndpoint, type TrackerEntry } from '@pingwright/decoders';
+import { hostMatches } from '@pingwright/expect';
 
 const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 
@@ -59,4 +61,32 @@ export function isKnownVendorCollection(req: Pick<Request, 'url' | 'resourceType
   if (COLLECTION_PATH.test(url.pathname)) return true;
   if (SITE_FUNCTION_PATH.test(url.pathname)) return false;
   return !LOADS.has(req.resourceType);
+}
+
+export interface StubDecisionOptions {
+  networkMode: 'stub' | 'server' | 'live';
+  serverHosts?: readonly string[];
+  trackers: readonly TrackerEntry[];
+}
+
+/** A collection request that stub and `server` mode answer locally. `server` mode lets the hosts in `serverHosts` through. */
+export function isStubbedCollection(req: Request, options: StubDecisionOptions): boolean {
+  if (!isCollectionEndpoint(req, options.trackers) && !isKnownVendorCollection(req)) return false;
+  if (options.networkMode !== 'server') return true;
+  let host: string;
+  try {
+    host = new URL(req.url).hostname;
+  } catch {
+    return true;
+  }
+  const bare = (h: string) => h.replace(/^\[|\]$/g, '');
+  return !hostMatches(bare(host), (options.serverHosts ?? []).map(bare));
+}
+
+/** The names, never the values, of the cookies a header set carries. */
+export function setCookieNamesOf(headers: Record<string, string>): string[] {
+  return Object.entries(headers)
+    .filter(([name]) => name.toLowerCase() === 'set-cookie')
+    .flatMap(([, value]) => value.split('\n'))
+    .map((c) => c.split('=')[0]!.trim());
 }
