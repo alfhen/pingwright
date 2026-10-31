@@ -60,7 +60,8 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. Use it for custom events that are not meant to produce a hit. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
-| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl` and `possibleRealData`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
+| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData` and `deniedIdentifiers`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
+| `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` treats as analytics identifiers, matched against the field names of each hit. |
 
 Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. A value joins the run identity only after it is typed into a field that is not a card or password field, whatever the selector: Pingwright checks the field when it fills it. If the run stops before that, the value is not in the run record. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
 
@@ -197,3 +198,25 @@ A CI job can gate on the exit code, or on `ok` in the `--json` summary:
 pingwright run checkout.yml --site https://staging.example.com
 pingwright run checkout.yml --site https://staging.example.com --json | jq -e .ok
 ```
+
+### deniedIdentifiers
+
+The `deniedIdentifiers` check fails when a hit carries an identifier field while the consent signal for that field's class is denied. It reads the field names that the decoders record in `Hit.idFields`. It never reads or prints a value. Google hits (`ga4`, `google-ads`) are judged by their own `gcs` and `gcd`. Every other hit, a server hit included, is judged by the consent epoch it falls in. An unknown signal is not flagged.
+
+| Class | Field names | Signal that must not be denied |
+| --- | --- | --- |
+| Analytics id | `user_id`, `uid`, `up.user_id`, any other field with a 64-character hex value, and the names in `identifierFields` | `analytics` |
+| Ads identity | `external_id`, `ud`, `ud[*]`, `user_data`, `user_data.*`, `em`, `ph`, `hashed_email`, `customer_hashed`, `cookieData` | `adUserData`, or `ads` when `adUserData` is unknown (Meta hits, and Google hits with `gcs` but no `gcd`) |
+| Client-ID hash | `clientIdHash`, `client_id_hash`, `cid_hash` | `analytics` |
+
+These are not flagged on purpose: `cid`, `client_id`, `_ga`, `fbp`, `fbc` and `gclid`. GA4 cookieless pings carry a random `cid`.
+
+The result lists vendor, field names and the denied signal, and its evidence is the hit IDs. If a hit sent while consent is denied has no recorded field names (a version 1 record) or a body that was cut, the check reports `cannot evaluate` and fails, with `note` set to `fieldsNotRecorded` or `cannotEvaluateBody`.
+
+Upgrading to 0.3 can change exit codes. The check is `fail` by default, like the other built-in checks, so a run that sent a hashed custom parameter on a denied hit now exits 1. To keep the old exit code while you fix it, set the check to `warn`:
+
+```yaml
+options:
+  builtins: { deniedIdentifiers: warn }
+```
+

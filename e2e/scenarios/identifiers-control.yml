@@ -1,0 +1,7 @@
+start: /identifiers?state=denied&control=1
+steps:
+  - fill:
+      "#email": email
+  - consent: reject
+  - wait: 3s
+options: { seed: 1, allowUnknownDestination: true }

@@ -5,4 +5,4 @@ steps:
 expect:
   mustNot:
     - { vendor: sgtm, body.has: [email, phone], in: epoch(denied) }
-options: { seed: 1, allowUnknownDestination: true }
+options: { seed: 1, allowUnknownDestination: true, builtins: { deniedIdentifiers: warn } }

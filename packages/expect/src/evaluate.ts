@@ -23,7 +23,7 @@ import {
   type Step,
   globToRegExp,
 } from '@pingwright/core';
-import { GA4_BODY_ONLY_IGNORE, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList } from '@pingwright/decoders';
+import { GA4_BODY_ONLY_IGNORE, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@pingwright/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -528,10 +528,10 @@ function builtInChecks(
   records: readonly Input[],
   scenario: Scenario,
   ctx: Context,
-  addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity) => void,
+  addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) => void,
 ) {
-  const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string) =>
-    addResult(`builtin: ${name}`, pass, evidence, message, scenario.options.builtins?.[name] ?? 'fail');
+  const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote) =>
+    addResult(`builtin: ${name}`, pass, evidence, message, scenario.options.builtins?.[name] ?? 'fail', note);
   const flags = records.filter((r) => r.type === 'flag');
 
   const unknown = flags.filter((f) => f.kind === 'unknownDestination');
@@ -561,6 +561,8 @@ function builtInChecks(
       : `Expected no hit to carry a sandbox URL as its page, found ${sandboxed.length}: ${sandboxed[0]!.page}.`,
   );
 
+  deniedIdentifiersCheck(scenario, ctx, add);
+
   const real = flags.filter((f) => f.kind === 'possibleRealData');
   // Flags from the recorder come from the raw records. Scanning again only adds requests the recorder did not flag.
   const flagged = new Set(real.flatMap((f) => f.recordIds));
@@ -586,6 +588,65 @@ function builtInChecks(
       ? 'Expected no data that is not from the run identity, found none.'
       : `Expected no data that is not from the run identity, found ${problems.length}: ${shown}${more}.`,
   );
+}
+
+const DENIABLE = ['analytics', 'ads', 'adUserData'] as const;
+
+function deniedIdentifiersCheck(
+  scenario: Scenario,
+  ctx: Context,
+  add: (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote) => void,
+) {
+  const extra = (scenario.options.identifierFields ?? []).map(globToRegExp);
+  const leaking: Hit[] = [];
+  const unreadable: Hit[] = [];
+  const found = new Map<string, Set<string>>();
+  for (const hit of ctx.hits) {
+    const state = effectiveConsent(hit, ctx);
+    if (!DENIABLE.some((f) => state[f] === 'denied')) continue;
+    if (!hit.idFields || !hit.fields) {
+      unreadable.push(hit);
+      continue;
+    }
+    const classes = new Map<string, IdentifierClass>(hit.idFields.map((n) => [n, identifierClass(n)]));
+    for (const n of hit.fields) if (!classes.has(n) && extra.some((re) => re.test(n))) classes.set(n, 'analytics');
+    let flagged = false;
+    for (const [name, cls] of classes) {
+      const signal = identifierSignal(cls, state);
+      if (signal.value !== 'denied') continue;
+      flagged = true;
+      const key = `${hit.vendor}\0${signal.field}`;
+      found.set(key, (found.get(key) ?? new Set()).add(name));
+    }
+    if (flagged) leaking.push(hit);
+    else if (hit.fieldsComplete === false) unreadable.push(hit);
+  }
+  if (leaking.length > 0) {
+    const groups = [...found].map(([key, names]) => {
+      const [vendor, signal] = key.split('\0');
+      return `${vendor} ${listNames([...names].sort())} (${signal} denied)`;
+    });
+    const shown = groups.slice(0, MAX_LISTED).join(', ');
+    const more = groups.length > MAX_LISTED ? `, and ${groups.length - MAX_LISTED} more` : '';
+    const cut = unreadable.length > 0 ? ` ${unreadable.length} more hit${unreadable.length === 1 ? '' : 's'} could not be read.` : '';
+    add(
+      'deniedIdentifiers',
+      false,
+      leaking.map((h) => h.id),
+      `${leaking.length} hit${leaking.length === 1 ? ' carries' : 's carry'} identifiers while consent is denied: ${shown}${more}.${cut}`,
+    );
+  } else if (unreadable.length > 0) {
+    const notRecorded = unreadable.some((h) => !h.idFields || !h.fields);
+    add(
+      'deniedIdentifiers',
+      false,
+      unreadable.map((h) => h.id),
+      `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} hit${unreadable.length === 1 ? '' : 's'} sent while consent is denied.`,
+      notRecorded ? 'fieldsNotRecorded' : 'cannotEvaluateBody',
+    );
+  } else {
+    add('deniedIdentifiers', true, [], 'Expected no identifiers on hits sent while consent is denied, found none.');
+  }
 }
 
 function identityOf(run: Run | undefined): Identity | undefined {

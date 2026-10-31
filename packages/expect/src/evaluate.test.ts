@@ -83,9 +83,10 @@ test('README example: user_id present while analytics denied fails, with the hit
 });
 
 test('README example passes when user_id is absent and a vendor fires only after consent', () => {
-  const afterAccept = hit({ vendor: 'meta', t: 2000 });
+  const recorded = { fields: [], idFields: [], fieldsComplete: true };
+  const afterAccept = hit({ vendor: 'meta', t: 2000, ...recorded });
   const results = run(README_SCENARIO, [
-    afterAccept, hit({ consent: denied, t: 10 }), hit({ consent: denied, t: 20 }), ...UNDECIDED_THEN_ACCEPT,
+    afterAccept, hit({ consent: denied, t: 10, ...recorded }), hit({ consent: denied, t: 20, ...recorded }), ...UNDECIDED_THEN_ACCEPT,
   ]);
   expect(results.every((r) => r.pass)).toBe(true);
 });
