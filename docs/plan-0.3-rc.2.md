@@ -106,26 +106,35 @@ The 0.1, 0.2 and 0.3 rules still hold (AGENTS.md, docs/plan-0.3.md):
 More for rc.2:
 
 - **Each PR adds a regression test with fake-value fixtures.** The test fails when the fix is removed. The PR description says how it checked.
-- **Existing e2e tests do not change.** Each PR adds a new `e2e/<name>.e2e.test.ts` and new scenarios under `e2e/scenarios/`. New fixture pages only. One named exception is in S04.
+- **Existing e2e tests do not change.** Each PR adds a new `e2e/<name>.e2e.test.ts` and new scenarios under `e2e/scenarios/`. New fixture pages only. One named exception is in S04. Handoff e2e tests (S05, S07) are the other kind: they do not run as CLI scenarios, because a scenario with a handoff launches headed and CI has no display. They use `launchRecorder` plus `playScenario` with `headed: false`, as `packages/recorder/test/e2e/handoff-overlay.e2e.test.ts` does, and need a page handle to click Done, read the pill box and count state calls.
 - **CHANGELOG and docs.** See the next section.
 - **No record schema bump.** `recordSchemaVersion` stays 2. S02 adds two codes to the optional `Result.note` (and lists them in design §2). An older reader that meets an unknown note code ignores it (it prints no note text).
 
 ## CHANGELOG and docs without collisions
 
-Choice: S01 creates the `## 0.3.0-rc.2` heading and one marker line per PR, in a fixed order. Each PR replaces only its own marker with its lines. Two PRs never edit the same line, so a merge has no conflict, even inside one wave.
+Choice: S01 creates the `## 0.3.0-rc.2` heading and one marker line per PR, in a fixed order. Each PR replaces only its own marker with its lines. A blank line separates each pair of markers. Git treats edits to adjacent lines as one conflict, so without the blank lines two parallel PRs would conflict. With them, two PRs never edit the same or a neighbouring line, so a merge has no conflict, even inside one wave. Each PR keeps the blank line around its block.
 
 ```markdown
 ## 0.3.0-rc.2
 
 <!-- S06 -->
+
 <!-- S08 -->
+
 <!-- S02 -->
+
 <!-- S03 -->
+
 <!-- S04 -->
+
 <!-- S05 -->
+
 <!-- S07 -->
+
 <!-- F01 -->
+
 <!-- S01 -->
+
 <!-- S09 -->
 ```
 
@@ -146,8 +155,9 @@ The "Known in 0.3.0-rc.2" list is written by S09 from the issues still open at t
 **F01 Fixture pages for wave 2.** Touches: `fixtures/site/src/index.ts`, `fixtures/site/README.md`, `fixtures/site/public/` (new pages), `fixtures/site/src/pages-0.3.test.ts` (or a new test file beside it), `CHANGELOG.md` (the F01 marker). It touches none of the files of S01.
 - `/set-cookie-unstored`: a page that requests an endpoint whose `Set-Cookie` the browser always rejects, with a `Domain` attribute that does not match the host (value `pw-fixture-cookie-value`). The rejection does not depend on the browser's third-party cookie policy.
 - `/sgtm-data-tag?form=nested`: a variant of the existing page that sends the hash as nested `customerHashed.email` (fake hash of `pw-fixture@example.com`). The current page has top-level hashes and `user_data.email_address` only, so the nested field does not exist yet.
+- `/sgtm-data-tag?form=flat-email`: sends a top-level `email` (fake hash of `pw-fixture@example.com`) for the `**.email` e2e.
 - `/handoff-patched`: a page whose inline script patches DOM accessors (see S05).
-- No `/swatches` page. `/tiles?theme=radio` already has radios named `White (01)` and `Black (02)`, which S04 uses.
+- `/tiles?theme=radio-mixed`: a link and a button before the two radios `White (01)` and `Black (02)`, for the S04 role filter. No `/swatches` page; the plain `/tiles?theme=radio` has only the radios.
 - Regression test: unit tests in the fixture package that each route answers, that the unstored endpoint sets a `Set-Cookie` with a mismatched `Domain`, and that the README table lists every route in `index.ts`.
 Acceptance: `pnpm test` passes, and the route-table test fails when a route has no README row.
 
@@ -179,8 +189,8 @@ Acceptance: `pnpm lint`, `pnpm docs:build` and `pnpm docs:test` pass, and the ne
 - Flagged: the issue asks for `stored: true|false` in the result evidence. Evidence is a list of IDs. A new note code carries the same fact and needs no new record field, so the plan uses the note.
 - Field names in the nested note go through `guardFieldName`, so a value used as a JSON key prints as `(other)`.
 
-Regression test: unit tests on the evaluator for both rules and for the old behaviour. The #461 cases are: stored; no later checkpoint has it; no checkpoint after the response (no note); a checkpoint before the response only (no claim of storage); a same-named cookie on another domain (not counted as stored). Fixture: `/set-cookie-unstored` and `/sgtm-data-tag?form=nested` from F01. Fake email `pw-fixture@example.com`. The leak test asserts neither the cookie value nor the email nor its hash appears in the message, the note or the report.
-Acceptance: the e2e tests run in `stub` mode only. The fixture's own endpoint passes through and sets real cookies, and the mismatched `Domain` makes the rejection deterministic. They check the two messages and notes and the exit code (1, because the rules still fail). They fail when `cookieNotStored` is not set, and when `**.email` is treated as a plain name.
+Regression test: unit tests on the evaluator for both rules and for the old behaviour. The #461 cases are: stored; no later checkpoint has it; no checkpoint after the response (no note); a checkpoint before the response only (no claim of storage); a same-named cookie on another domain (not counted as stored). The `**.email` cases: a payload with only a top-level `email` (matches `**.email`; the old code treats `**.email` as a plain glob, so this fails on the old code), a payload with `customerHashed.email`, and a negative case with `useremail` (no match). These are unit tests on the evaluator. F01 also adds a variant, `/sgtm-data-tag?form=flat-email`, that sends a top-level `email`, so the e2e shows it end to end. Fixture: `/set-cookie-unstored`, `/sgtm-data-tag?form=nested` and `/sgtm-data-tag?form=flat-email` from F01. Fake email `pw-fixture@example.com`. The leak test asserts neither the cookie value nor the email nor its hash appears in the message, the note or the report.
+Acceptance: the e2e tests run in `stub` mode only. The fixture's own endpoint passes through and sets real cookies, and the mismatched `Domain` makes the rejection deterministic. They check the two messages and notes and the exit code (1, because the rules still fail). They fail when `cookieNotStored` is not set, and when `**.email` stops matching the top-level `email` on the flat-email page (a plain glob `^.*.*\.email$` does not match it) or matches `useremail`.
 
 **S03 Public suffix list (#427).** Touches: `packages/expect/src/hosts.ts`, `packages/expect/src/hosts.test.ts`, `packages/expect/package.json`, `pnpm-lock.yaml`, `docs/release.md`, `docs/design.md` (§5.3, the `serverHosts` rule text), `CHANGELOG.md` (the S03 marker), `e2e/server-hosts-suffix.e2e.test.ts`.
 Replaces `SHARED_SUFFIXES` and the two-letter rule with `tldts` (see "Dependency decision for #427"). The `isSpecificServerHost` function keeps its other checks (vendor domains, the tracker list, loopback hosts). Design §5.3 describes the old rule (`*.<2 to 3 letters>.<two-letter tld>` and a short list of shared hosting suffixes). S03 rewrites it to say the check uses the Public Suffix List.
@@ -198,18 +208,18 @@ Acceptance: the unit tests, and `e2e/server-hosts-suffix.e2e.test.ts`. A scenari
 - Names pass through `visibleName`, so an email, a phone or a digest in a name prints as `(hidden)`. The requested name is the scenario's own text and is printed as written.
 - Named exception to "existing e2e tests do not change": `e2e/locators-select.e2e.test.ts` line 16 asserts `Controls on the page:` for a role locator. If it fails after this change, S04 updates that one assertion and says so in the PR. The unit test in `steps.test.ts` line 320 changes for the same reason.
 
-Regression test: unit tests for the ranking (`White (99)` against `White (01)`, `Natural (02)`, `Black (03)`), the empty-role fallback, and the hiding of an email-like name. Fixture: `/tiles?theme=radio` (radios named `White (01)` and `Black (02)`, plus a link and a button, so the page's first controls are not radios). The ranking unit test uses `Natural (02)` as a plain string.
-Acceptance: the e2e scenario clicks `{ role: radio, name: "White (99)" }` with a short timeout, exits 2, and its stderr contains `Closest radio controls: "White (01)"` and no `link`. It fails when the message goes back to the first ten controls.
+Regression test: unit tests for the ranking (`White (99)` against `White (01)`, `Natural (02)`, `Black (03)`), the empty-role fallback, and the hiding of an email-like name. Fixture: `/tiles?theme=radio` (radios named `White (01)` and `Black (02)`; the page has no link and no button). For the end-to-end role filter, F01 adds a theme `/tiles?theme=radio-mixed` that puts a link and a button before the radios, so the page's first controls are not radios. The ranking unit test uses `Natural (02)` as a plain string.
+Acceptance: the e2e scenario opens `/tiles?theme=radio-mixed` and clicks `{ role: radio, name: "Black (99)" }` with a short timeout. It exits 2, and its stderr contains `Closest radio controls:`, lists `"Black (02)"` before `"White (01)"` (the ranking differs from page order), and names no link or button. It fails when the message goes back to the first ten controls, when the role filter is missing, and when ranking is replaced by page order.
 
-**S05 Handoff overlay, show-time accessors and width (#446, #464; #398 is already fixed).** Touches: `packages/recorder/src/handoff-overlay.ts`, `packages/recorder/src/handoff-overlay.test.ts`, `docs/cli.md` (handoff section), `CHANGELOG.md` (the S05 marker), `e2e/handoff-hardening.e2e.test.ts`, `e2e/scenarios/`. The fixture page comes from F01.
+**S05 Handoff overlay, show-time accessors and width (#446, #464; #398 is already fixed).** Touches: `packages/recorder/src/handoff-overlay.ts`, `packages/recorder/src/handoff-overlay.test.ts`, `docs/cli.md` (handoff section), `CHANGELOG.md` (the S05 marker), `packages/recorder/test/e2e/handoff-hardening.e2e.test.ts` (beside `handoff-overlay.e2e.test.ts`; it uses `launchRecorder` plus `playScenario` with `headed: false`). The fixture page comes from F01.
 - **#398 is resolved by #447** (commit 399ba92). `build()` already runs at document start in the init script, and every listener goes through a captured `EventTarget.prototype.addEventListener`. The e2e `a page script that patches DOM prototypes cannot end the wait` in `packages/recorder/test/e2e/handoff-overlay.e2e.test.ts` already calls the caught listeners with `{ isTrusted: true }`. S05 uses `Refs #398` only and does not rebuild this.
 - **#446.** What is still open happens at show and hide time. S05 captures, at script start, the accessors the overlay calls later: the label `textContent` and `title` setters, the `style` getter and `setProperty` used in `apply()`, `append`, `remove`, the `documentElement` and `parentNode` getters, and `getBoundingClientRect` and `setPointerCapture` in the drag handlers. It calls them with `.call`.
 - **`isTrusted` check.** Do not take the getter from `Event.prototype`. In Chromium `Object.getOwnPropertyDescriptor(Event.prototype, 'isTrusted')` is `undefined`, because `isTrusted` is an own, non-configurable property of each event. The script reads it once from an instance, `Object.getOwnPropertyDescriptor(new Event('x'), 'isTrusted').get`, which is the same function for every event. It calls it in a `try`/`catch` and treats a throw as untrusted. Followed literally, #398's suggestion would throw at script start and disable the overlay on every page. This is flagged below.
 - **#464.** The host gets `max-width: calc(100vw - 32px)` as an inline `!important` style, and the label shrinks first (`min-width: 0`, ellipsis) so the Done button stays whole. At 390 px the pill is at most 358 px wide and sits inside the viewport. The optional "move to the top when a focused control is under it" is not built: it adds a focus listener on every page and moves the pill under a person's hand. The pill can be dragged already.
 - The comment above the script says what the code guarantees and what it does not: a page can still move the host or cover it, and the person's real click is what ends the wait.
 
-Regression test: a unit test on the generated script (the captures happen before page code, and a throw from the `isTrusted` getter reads as untrusted) and two e2e cases. (1) `/handoff-patched` from F01: an inline script patches the `textContent` setter and the `style` getter and records what they receive. After the handoff shows and hides, the patch has never received the label or the host, and `getRootNode` never returns the closed root. A real click ends the wait. (2) A viewport of 390 by 844 on `/handoff`: the pill's box is inside `[0, 390]`, and its Done button is visible and whole. Fixture: `/handoff-patched` and the existing `/handoff`, fake identity only.
-Acceptance: `e2e/handoff-hardening.e2e.test.ts`. It fails when the show-time captures are removed (the patch receives the label) and when `max-width` is removed (the pill's left edge is below 0).
+Regression test: a unit test on the generated script (the captures happen before page code, and a throw from the `isTrusted` getter reads as untrusted) and two e2e cases. (1) `/handoff-patched` from F01: an inline script patches the `textContent` setter and the `style` getter and records what they receive. After the handoff shows and hides, the patch has never received the label or the host, and `getRootNode` never returns the closed root. A real click ends the wait. (2) A viewport of 390 by 844 on `/handoff`, with a fake handoff text of about 120 characters, long enough that the label reaches its 300 px cap (the existing texts, `Pay the test order` and `Log in`, give a pill of about 200 px that fits with or without the fix). The pill's box is inside `[0, 390]`, and its Done button is visible and whole. Fixture: `/handoff-patched` and the existing `/handoff`, fake identity only.
+Acceptance: `packages/recorder/test/e2e/handoff-hardening.e2e.test.ts`. It fails when the show-time captures are removed (the patch receives the label) and when `max-width` is removed (the pill's left edge is below 0). The PR shows that the box check fails with the `max-width` line removed.
 
 ### Wave 3
 
@@ -226,13 +236,13 @@ Acceptance: `e2e/handoff-hardening.e2e.test.ts`. It fails when the show-time cap
 Regression test: model tests for each mark, including the four #378 cases, and a render test that a passing result has no severity text and a failed one has `on failure:`. A summary test for `severity` on every `--json` result. Fixture: the existing `/identifiers`, `/sgtm-data-tag` and `/meta-purchase-no-hash` pages, and a new scenario for a pre-answer Meta hit. Fake pixel `100000000000001`. The leak test checks the HTML has no email, hash or cookie value.
 Acceptance: `e2e/report-marks.e2e.test.ts` runs a scenario and reports it. The HTML has an `early` mark for the pre-answer hit, no `severity: fail` on a passing result, and `on failure: fail` on a failed one. The `--json` check reads `severity` on every result. It fails when `ExpectationView.severity` is set on passing results again.
 
-**S07 Handoff overlay, polling and wake (#443, #444, #445).** Touches: `packages/recorder/src/handoff-overlay.ts`, `packages/recorder/src/handoff-overlay.test.ts`, `docs/cli.md` (handoff section, if the wait text changes), `CHANGELOG.md` (the S07 marker), `e2e/handoff-polling.e2e.test.ts`, `e2e/scenarios/`. It starts after S05 merges, because both edit the same file.
+**S07 Handoff overlay, polling and wake (#443, #444, #445).** Touches: `packages/recorder/src/handoff-overlay.ts`, `packages/recorder/src/handoff-overlay.test.ts`, `docs/cli.md` (handoff section, if the wait text changes), `CHANGELOG.md` (the S07 marker), `packages/recorder/test/e2e/handoff-polling.e2e.test.ts` (it uses `launchRecorder` plus `playScenario` with `headed: false`, and a page handle to click Done and count state calls). It starts after S05 merges, because both edit the same file.
 - **#444.** A generation counter that `start()` increments. A tick stops polling on a `not waiting` answer only if no `start()` happened since the tick began.
 - **#445.** `waitForHandoff` does not await the wake. It starts it with `void`, and each `page.evaluate` is raced against a short timer (2 s) and its error is ignored. Enter and Done both end the wait even if one page cannot evaluate.
 - **#443.** An e2e test that counts calls of the state binding.
 
 Regression test: a unit test for the generation counter (a stale answer does not clear a newer timer) and one for `waitForHandoff` with a `wake` that never settles (the wait still ends on a Done signal). Fixture: the existing `/handoff` and `/handoff-second` pages. The e2e counts state calls: the count grows while a handoff waits, stops growing after it ends, and grows again on the second handoff.
-Acceptance: `e2e/handoff-polling.e2e.test.ts`. It fails when `stopPolling()` is removed (the count keeps growing), when the generation counter is removed (the pill stays after the second handoff), and when the wake is awaited again.
+Acceptance: `packages/recorder/test/e2e/handoff-polling.e2e.test.ts`. It fails when `stopPolling()` is removed (the count keeps growing), when the generation counter is removed (the pill stays after the second handoff), and when the wake is awaited again.
 
 ### Wave 4
 
