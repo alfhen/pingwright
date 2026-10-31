@@ -1,4 +1,6 @@
 start: /identifiers?state=denied
+identity:
+  email: pw-fixture@example.com
 steps:
   - fill:
       "#email": email
@@ -7,4 +9,5 @@ steps:
 expect:
   mustNot:
     - { vendor: meta, event: Purchase, in: epoch(denied) }
+    - { vendor: ga4, in: epoch(denied), params: { em: pw-fixture@example.com } }
 options: { seed: 1, allowUnknownDestination: true }

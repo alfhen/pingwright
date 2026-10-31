@@ -10,7 +10,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const cli = join(root, 'dist/cli.js');
 const EMAIL = 'pw-fixture@example.com';
-const HASHES = [EMAIL, EMAIL.toLowerCase()].map((e) => createHash('sha256').update(e).digest('hex'));
+const HASH = createHash('sha256').update(EMAIL).digest('hex');
 
 let site: FixtureSite;
 let outDir: string;
@@ -18,6 +18,7 @@ let table: string;
 let html: string;
 let pairTable: string;
 let pairHtml: string;
+let recordText: string;
 
 function node(args: string[], env: NodeJS.ProcessEnv = process.env) {
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
@@ -41,6 +42,9 @@ beforeAll(async () => {
   const report = await node(['report', join(out, name!), '--html', page]);
   expect(report.code, report.stderr).toBe(0);
   html = await readFile(page, 'utf8');
+  const runDir = join(out, name!);
+  const files = (await readdir(runDir)).filter((f) => f.endsWith('.jsonl'));
+  recordText = (await Promise.all(files.map((f) => readFile(join(runDir, f), 'utf8')))).join('\n');
 
   const overridePath = join(outDir, 'workspace-override.json');
   await writeFile(overridePath, JSON.stringify({ container: 'GTM-PWTEST1', gtmAuth: fakeWorkspace.gtm_auth, gtmPreview: fakeWorkspace.gtm_preview }));
@@ -88,7 +92,8 @@ test('the verdict comes first, then the results table, the timelines, and the di
 });
 
 test('the table and the page hold no identity value', () => {
-  for (const secret of [EMAIL, ...HASHES]) {
+  expect(recordText, 'positive control: the records carry the hash').toContain(HASH);
+  for (const secret of [EMAIL, HASH]) {
     expect(table).not.toContain(secret);
     expect(html).not.toContain(secret);
   }

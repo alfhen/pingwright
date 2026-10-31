@@ -186,6 +186,15 @@ test('a single-run report has the verdict line before the timeline', () => {
   expect(clean).toContain('<p class="verdict">Verdict: no leaks.</p>');
 });
 
+test('a run whose only failure could not be evaluated does not read as clean', () => {
+  const base = records('checkout', 'published', ['page_view']);
+  const result = { type: 'result' as const, id: newId('result'), runId: base.run.id, expectation: 'builtin: deniedIdentifiers', pass: false, evidence: [], note: 'cannotEvaluateBody' as const, message: COOKIE };
+  const html = renderReport(buildReportModel({ ...base, results: [result] }));
+  expect(html).toContain('<p class="verdict">Verdict: 1 expectation could not be checked.</p>');
+  expect(html).not.toContain('no leaks');
+  expect(html).not.toContain(COOKIE);
+});
+
 test('a flag with no host has no placeholder in the diff table', () => {
   const html = renderSuiteReport({
     header: { id: 's', startedAt: 'x', host: 'h', variants: ['a', 'b'], exitCode: 0 },

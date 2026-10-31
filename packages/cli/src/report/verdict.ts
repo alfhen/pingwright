@@ -6,10 +6,11 @@ export interface Findings {
   identifiers: Map<string, Set<string>>;
   failed: number;
   warned: number;
+  unchecked: number;
 }
 
 export function emptyFindings(): Findings {
-  return { hits: new Map(), identifiers: new Map(), failed: 0, warned: 0 };
+  return { hits: new Map(), identifiers: new Map(), failed: 0, warned: 0, unchecked: 0 };
 }
 
 export function addFindings(into: Findings, model: ReportModel): void {
@@ -26,6 +27,7 @@ export function addFindings(into: Findings, model: ReportModel): void {
   for (const e of model.expectations) {
     if (e.status === 'FAIL') into.failed++;
     else if (e.status === 'WARN') into.warned++;
+    else if (e.status === 'CANNOT EVALUATE') into.unchecked++;
   }
 }
 
@@ -41,8 +43,9 @@ export function findingsSentence(f: Findings): string {
   const parts: string[] = [];
   for (const [label, vendors] of [...f.hits].sort(([a], [b]) => a.localeCompare(b))) parts.push(`${list(vendors)} send hits in the ${label} state`);
   for (const [label, vendors] of [...f.identifiers].sort(([a], [b]) => a.localeCompare(b))) parts.push(`identifiers go out to ${list(vendors)} in the ${label} state`);
-  if (parts.length === 0) parts.push('no leaks');
+  if (parts.length === 0 && f.unchecked === 0) parts.push('no leaks');
   if (f.failed > 0) parts.push(plural(f.failed, 'failed expectation'));
+  if (f.unchecked > 0) parts.push(`${plural(f.unchecked, 'expectation')} could not be checked`);
   if (f.warned > 0) parts.push(plural(f.warned, 'accepted warning'));
   return parts.join(', ');
 }

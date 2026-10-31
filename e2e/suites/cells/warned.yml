@@ -1,4 +1,6 @@
 start: /identifiers?state=denied
+identity:
+  email: pw-fixture@example.com
 steps:
   - fill:
       "#email": email
