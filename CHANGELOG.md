@@ -17,6 +17,7 @@
 <!-- V04 -->
 
 <!-- V03 -->
+- Docs: design §8.5 says what is visible of a server container and what is not. `expectedTags` is stored and not evaluated. (#358)
 
 <!-- H07 -->
 

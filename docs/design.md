@@ -299,6 +299,38 @@ The server container runs on a remote host and cannot reach the user's machine. 
 
 Setup commands for the tunnel and the Worker are deferred until after the first releases.
 
+### 8.5 What the server container sends on
+
+A server container receives a hit from the browser and may send it on to vendors, for example Meta's Conversions API. What Pingwright can see of that depends on where the traffic is.
+
+| Step | Visible | How |
+| --- | --- | --- |
+| Browser to server container | Yes | Recorded and decoded (`sgtm-data-client`, `stape-custom-loader`). |
+| Server container's answer | Yes, in `server` mode | Status and `Set-Cookie` names for hosts in `serverHosts`. |
+| Server container to vendors | No, not from the browser | Needs an endpoint the user runs (below). |
+| Server preview data | No | Only a signed-in person in the GTM UI sees it. |
+
+```mermaid
+flowchart LR
+  B[Test browser] -->|recorded| S[Server container]
+  S -->|not visible| V[Vendors]
+  S -.->|reporter or test sink| K[User-run sink]
+  K -.->|sink reader, not built| P[Pingwright]
+```
+
+The browser sees the first hop only. Two dotted paths can show the second, and the user runs the endpoint in both.
+
+- **Server tag-firing reporter (§8.3).** A template in the server container reports tag status per event to the sink.
+- **Test sink as the vendor endpoint.** In a test workspace, the server container's vendor tags point at an endpoint the user runs. It records what the server container sent on. Real vendors receive nothing from that workspace.
+
+Pingwright reads either one only through the sink reader (§9). The sink reader is not built. Until it is, a run cannot say what the server container sent on, and the report must not imply it can.
+
+**Server preview.** `X-Gtm-Server-Preview` puts the traffic in the server container's preview. Only a signed-in person in the GTM UI sees the preview data. Pingwright cannot read it without the GTM API, which it never calls. The header value is a secret like `gtmAuth`. It must not appear in a record, a log line, an error message or test output. In 0.3 and 0.4 the recorder does not send the header (§8.2).
+
+**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports and the sink reader ingests them.
+
+**Out of scope.** Stape's logs and the API of any hosted service. Pingwright runs no hosted service, and each user runs their own sink.
+
 ## 9. Collector and run store
 
 - **Collector origin.** The platform bridge and the web reporter post to a reserved origin, `https://collector.pingwright.invalid/`. The recorder answers these requests itself through `context.route`. No DNS lookup, private address, certificate or browser flag is involved, so Chrome's local-network checks do not apply.
