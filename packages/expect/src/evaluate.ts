@@ -236,7 +236,7 @@ function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleO
     ? `found ${listNames(names)} from ${sources.join(' and ')} (${total} before narrowing)${sources.some((s) => s !== 'Set-Cookie') ? '. A checkpoint shows the cookie was present then, not when it was set' : ''}`
     : `found no matching cookie (${total} before narrowing)`;
   const expected = rule.kind === 'must' ? `Expected a matching cookie${where}` : `Expected no matching cookie${where}`;
-  const stubbed = low && ctx.networkMode === 'stub';
+  const stubbed = low && rule.kind === 'mustNot' && ctx.networkMode === 'stub';
   return {
     pass: low,
     evidence,

@@ -114,6 +114,14 @@ test('in stub mode a passing cookie rule says stubbed endpoints set no cookies',
   expect(server.message ?? "").not.toContain('stub mode');
 });
 
+test('a passing must cookie rule in stub mode has no stub note', () => {
+  const req = request(10);
+  const r = run('expect:\n  must:\n    - { cookie: _pwid }', [req, response(req, ['_pwid'])], 'stub')[0]!;
+  expect(r.pass).toBe(true);
+  expect(r.note).toBeUndefined();
+  expect(r.message).not.toContain('stub mode');
+});
+
 test('a failing cookie rule in stub mode has no stub note', () => {
   const early = request(10);
   const r = run('expect:\n  mustNot:\n    - { cookie: _pwid, before: consent }', [early, response(early, ['_pwid'])], 'stub')[0]!;
