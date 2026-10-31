@@ -2,7 +2,7 @@ import { newId, RunWriter, type PingwrightRecord, type Result, type RunRecords }
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { parseCli } from '../args.ts';
 import { main } from '../main.ts';
@@ -136,6 +136,11 @@ test('a crafted severity cannot inject markup', () => {
   expect(html).toContain('severity: fail');
 });
 
+test('every result shows its severity', () => {
+  const html = renderReport(buildReportModel(records()));
+  expect(html).toMatch(/<code>mustNot: [^<]*<\/code><span class="severity">severity: fail<\/span>/);
+});
+
 test('the page makes no request and runs no script', () => {
   const html = renderReport(buildReportModel(records()));
   expect(html).toContain(`<meta http-equiv="Content-Security-Policy" content="${CSP}">`);
@@ -153,7 +158,8 @@ test('the page makes no request and runs no script', () => {
 
 test('the sgtm row has a leak mark and the header keeps the host only', () => {
   const html = renderReport(buildReportModel(records()));
-  expect(html).toMatch(/<th scope="row">sgtm<\/th>(?:<td class="m-\w+">.*?<\/td>)*?<td class="m-leak">/);
+  const row = /<tr><th scope="row">sgtm<\/th>.*?<\/tr>/.exec(html)![0];
+  expect(row).toContain('class="m-leak"');
   expect(html).toContain('shop.example.com');
   expect(html).not.toContain('/products/');
 });
@@ -215,6 +221,16 @@ test('a missing file, a directory and a file that is not a run record exit 2', a
     expect(await main(['report', input, '--html', join(dir, 'x.html')], capture.io)).toBe(2);
     expect(capture.err.join('')).not.toBe('');
   }
+});
+
+test('report refuses to overwrite its own input', async () => {
+  const data = records();
+  const writer = await RunWriter.create(dir, { ...data.run, id: newId('run') });
+  await writer.close();
+  const before = await readFile(writer.path, 'utf8');
+  const capture = io();
+  expect(await main(['report', writer.path, '--html', join(dir, '.', basename(writer.path))], capture.io)).toBe(2);
+  expect(await readFile(writer.path, 'utf8')).toBe(before);
 });
 
 test('report needs --html and one file', () => {
