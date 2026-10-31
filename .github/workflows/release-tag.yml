@@ -1,0 +1,66 @@
+name: release-tag
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  check-tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Check the tag against package.json and dist
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          test "$GITHUB_REF_NAME" = "v$version"
+          test -f dist/cli.js
+      - name: Pack the tarball
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          ls "$RUNNER_TEMP"/pingwright-*.tgz
+      - name: Install the tarball and check the version
+        run: |
+          prefix=$(mktemp -d)
+          npm i -g --prefix "$prefix" "$RUNNER_TEMP"/pingwright-*.tgz
+          version=$(node -p 'require("./package.json").version')
+          test "$("$prefix/bin/pingwright" --version)" = "$version"
+          echo "PW_BIN=$prefix/bin/pingwright" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: $PW_BIN install-browser
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+      - name: Run a scenario against the fixture site
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+        run: |
+          pnpm fixture > fixture.log 2>&1 &
+          for i in $(seq 1 30); do grep -q '^shop:' fixture.log && break; sleep 1; done
+          url=$(sed -n 's/^shop: *//p' fixture.log)
+          set +e
+          "$PW_BIN" run e2e/scenarios/reject.yml --site "$url" --out "$RUNNER_TEMP/runs" --json > summary.json
+          code=$?
+          set -e
+          # The fixture's sandboxed pixel fails the built-in sandbox check, so exit 1 is expected.
+          test "$code" = 1
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync("summary.json", "utf8"));
+            const failed = s.results.filter((r) => !r.pass).map((r) => r.expectation);
+            const ok = JSON.stringify(failed) === JSON.stringify(["builtin: sandboxPageUrl"])
+              && s.hits.ga4 && s.hits.meta && require("fs").existsSync(s.path);
+            if (!ok) { console.error(JSON.stringify(s, null, 2)); process.exit(1); }
+          '
+          kill %1
+      - name: Dry-run publish
+        run: |
+          case "$GITHUB_REF_NAME" in
+            v*-rc.*) dist_tag=next ;;
+            *) dist_tag=latest ;;
+          esac
+          npm publish --dry-run --tag "$dist_tag"

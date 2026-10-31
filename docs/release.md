@@ -7,6 +7,12 @@ Releases are git tags. Each tag points at a commit that carries a built `dist/`.
 3. Run `scripts/release.sh <version>`. It builds, then commits `dist/` and a `package.json` without the `build` script on a detached HEAD and creates the annotated tag `v<version>`. The commit and tag use the maintainer's identity (`user.name` and `user.email`, or `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`). The committer and tagger default to the same identity unless `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` are set. The script stops if none is set.
 4. Push the tag with the command the script prints: `git push origin v<version>`.
 
+5. Wait for the `release-tag` workflow on the tag. It checks the tag against `package.json`, packs the tarball, installs it, runs `pingwright --version` and a fixture scenario, and runs `npm publish --dry-run`. It holds no npm token. It never publishes and never creates a GitHub release.
+6. Publish by hand from the tag commit, with your own one-time password. For a release candidate (`-rc.N`) run `npm publish --tag next`. For a final release run `npm publish`, which moves `latest`.
+7. Check the result with `npm view pingwright dist-tags`. Install with `npm i -g pingwright@next` (release candidate) or `npm i -g pingwright` (final).
+
+There is no provenance yet. `npm publish --provenance` needs a publish from CI, and publishing stays manual.
+
 The script refuses to run if the tree is dirty, HEAD is not origin/main, or `package.json` does not match `<version>`. It does not push and it does not create a GitHub release.
 
 The release commit drops the `build` script because npm runs a nested install for git dependencies that have one, and that install races with the outer one.
