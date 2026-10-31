@@ -1,6 +1,8 @@
 start: /meta-early
 steps:
   - wait: 1s
+  - visit: /sgtm-data-tag
+  - wait: 1s
 expect:
   must:
     - { vendor: meta, event: PageView }

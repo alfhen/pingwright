@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -36,7 +37,12 @@ test('a Meta hit before any answer is early, severity shows only on a failed res
   const failing = /<li class="s-fail">.*?<\/li>/.exec(html);
   expect(failing![0]).toContain('on failure: fail');
 
-  const email = r.records!.run.identity?.email;
-  for (const secret of [email, 'pw-fixture@example.com'].filter((x): x is string => !!x)) expect(html).not.toContain(secret);
+  const records = r.records!;
+  const email = records.run.identity!.email;
+  const hash = createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
+  expect(records.hits.some((h) => h.vendor === 'sgtm')).toBe(true);
+  for (const secret of [email, hash, 'pw-fixture@example.com']) {
+    expect(html).not.toContain(secret);
+  }
   expect(html).not.toMatch(/<script|<link|<img|url\(|@import/i);
 }, 120_000);
