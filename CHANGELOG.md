@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+<!-- T05 -->
+
+<!-- T01 -->
+
+<!-- T02 -->
+
+<!-- T03 -->
+
 ## 0.3.0-rc.2
 
 Release candidate. Install it with `npm i -g pingwright@next`.
