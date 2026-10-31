@@ -147,10 +147,12 @@ test('meta ud keys and GA4 uid are identifiers; cid and fbp are not', () => {
 
 test('no value reaches fields or idFields', () => {
   const dtdc = Buffer.from(JSON.stringify({ event_name: 'e', page_location: 'http://localhost:3000/', user_data: { email_address: EMAIL_HASH } })).toString('base64');
+  const sgtmPost = post('https://sgtm.example.com/data?v=2&event=e', { email: EMAIL, user_data: { email_address: EMAIL_HASH }, neutral: EMAIL_HASH, cookie_data: 'cv-fake-cookie-value' });
+  const metaReq = req(`https://www.facebook.com/tr?id=100000000000001&ev=e&ud[em]=${EMAIL_HASH}&em=${EMAIL}`);
   const hits = [
-    ...decodeRequest(post('https://sgtm.example.com/data?v=2&event=e', { email: EMAIL, user_data: { email_address: EMAIL_HASH }, neutral: EMAIL_HASH, cookie_data: 'cv-fake-cookie-value' })),
+    ...decodeRequest(sgtmPost),
     ...decodeRequest(req(`https://sgtm.example.com/data?v=2&dtdc=${encodeURIComponent(dtdc)}`)),
-    ...decodeRequest(req(`https://www.facebook.com/tr?id=100000000000001&ev=e&ud[em]=${EMAIL_HASH}&em=${EMAIL}`)),
+    ...decodeRequest(metaReq),
     ...decodeRequest(post(GA4, `en=e&uid=${EMAIL_HASH}&ep.token=${EMAIL_HASH}&ep.mail=${EMAIL}`)),
   ];
   expect(hits.length).toBeGreaterThan(3);
@@ -160,7 +162,8 @@ test('no value reaches fields or idFields', () => {
   }
   const meta = hits.find((h) => h.vendor === 'meta');
   expect(meta?.params.hashedEmail).toBe(EMAIL_HASH);
-  expect(hits.map((h) => JSON.stringify(h.params)).join()).toContain(EMAIL_HASH);
+  expect(metaReq.url).toContain(EMAIL_HASH);
+  expect(sgtmPost.postData).toContain(EMAIL_HASH);
 });
 
 test('identifier classes and signals', () => {
