@@ -54,7 +54,7 @@ function failing(rules: number, check?: string, severity: 'fail' | 'warn' = 'fai
   return { code: severity === 'fail' ? 1 : 0, summary: { ok: severity === 'warn', pass: false, results } as unknown as RunOutcome['summary'] };
 }
 
-function recorder(outcomes: (spec: RunSpec) => RunOutcome = () => pass) {
+function recorder(outcomes: (spec: RunSpec) => RunOutcome | Promise<RunOutcome> = () => pass) {
   const specs: RunSpec[] = [];
   return {
     specs,
@@ -207,6 +207,24 @@ test('an error carrying a fake email, its hash and a cookie value stays out of t
   await suiteCommand(args(dir, out), table.io, fake);
   expect(table.out()).toContain('a published: run did not finish (exit 2)');
   for (const secret of [email, hash, cookie, 'cannot fill']) expect(table.out()).not.toContain(secret);
+});
+
+test('an unfinished run with a record path points to the record and prints no error text', async () => {
+  const email = 'pw-fixture@example.com';
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const fake = recorder(async (spec) => {
+    const path = join(spec.out, 'a.published.jsonl');
+    const run = { type: 'run', id: 'run_0123456789ABCDEFGHJKMNPQRS', scenario: 'a', site: 'http://localhost:1234', startedAt: 1_800_000_000_000 };
+    await writeFile(path, `${JSON.stringify(run)}\n`);
+    return { code: 2, path, error: `Run failed: cannot fill ${email}\n` };
+  });
+  const c = capture();
+  expect(await suiteCommand(args(dir, out), c.io, fake)).toBe(2);
+  const [suiteDir] = await readdir(out);
+  const errors = c.out().split('\nErrors\n')[1]!.split('\n')[0];
+  expect(errors).toBe(`  a published: run did not finish (exit 2), details in ${join(out, suiteDir!, 'a.published.jsonl')}`);
+  expect(c.out()).not.toContain('the stderr above');
+  for (const secret of [email, 'cannot fill']) expect(c.out()).not.toContain(secret);
 });
 
 test('the manifest stores only the origin of --site', async () => {
