@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { SuiteManifest } from '../suite.ts';
 import { buildReportModel, type ReportModel } from './model.ts';
-import { definitionList, escapeHtml, page, runSections } from './render.ts';
+import { definitionList, escapeHtml, page, runHeader, runSections } from './render.ts';
 
 export interface SuiteCellView {
   variant: string;
@@ -86,6 +86,7 @@ export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords):
       if (!cell) return [];
       const loaded = records.get(recordKey(name, variant));
       if (!loaded && cell.status !== 'skipped') warnings.push(`${name} (${variant}): no record, so the run is not in this report`);
+      if (loaded?.truncatedAtLine) warnings.push(`${name} (${variant}): record is truncated at line ${loaded.truncatedAtLine}, so later records are missing from this report`);
       return [{ variant, status: cell.status, exitCode: cell.exitCode, model: loaded && buildReportModel(loaded) }];
     }),
   }));
@@ -191,7 +192,7 @@ export function renderSuiteReport(model: SuiteReportModel): string {
         .map((c) => {
           const title = `<h3>${escapeHtml(s.name)} (${escapeHtml(c.variant)}): ${escapeHtml(c.status.toUpperCase())}</h3>`;
           if (!c.model) return `${title}<p class="empty">${c.status === 'skipped' ? 'Skipped.' : 'No record to show.'}</p>`;
-          return `${title}${runSections(c.model, 'h4')}`;
+          return `${title}${definitionList(runHeader(c.model.header))}${runSections(c.model, 'h4')}`;
         })
         .join('');
       return `<section><h2>${escapeHtml(s.name)}</h2>${cells}</section>`;

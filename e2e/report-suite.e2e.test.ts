@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readRun } from '../packages/core/src/index.ts';
 import { fakeWorkspace } from '../fixtures/site/src/containers.ts';
 import { startFixtureSite, type FixtureSite } from '../fixtures/site/src/index.ts';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -12,6 +14,7 @@ const auth = fakeWorkspace.gtm_auth;
 
 let site: FixtureSite;
 let outDir: string;
+let suiteDir: string;
 let html: string;
 let overridePath: string;
 
@@ -37,7 +40,7 @@ beforeAll(async () => {
   );
   expect(suite.code, suite.stderr).toBe(1);
   const [name] = await readdir(out);
-  const suiteDir = join(out, name!);
+  suiteDir = join(out, name!);
   const page = join(outDir, 'suite.html');
   const report = await node(['report', suiteDir, '--html', page]);
   expect(report.code, report.stderr).toBe(0);
@@ -63,6 +66,19 @@ test('the diff section shows workspace_only as added', () => {
   const rows = [...section.matchAll(/<tr><td>[^<]*<\/td><td>[^<]*<\/td><td>workspace_only<\/td><td>(\d+)<\/td>/g)];
   expect(rows.length).toBeGreaterThanOrEqual(2);
   for (const row of rows) expect(Number(row[1])).toBeGreaterThanOrEqual(1);
+});
+
+test('the page holds no run identity and no hash of it', async () => {
+  const files = (await readdir(suiteDir)).filter((f) => f.endsWith('.jsonl'));
+  expect(files.length).toBeGreaterThanOrEqual(4);
+  for (const file of files) {
+    const { identity } = (await readRun(join(suiteDir, file))).run;
+    expect(identity, file).not.toBeNull();
+    const hash = createHash('sha256').update(identity!.email.trim().toLowerCase()).digest('hex');
+    expect(html).not.toContain(identity!.email);
+    expect(html).not.toContain(hash);
+  }
+  expect(html).not.toContain('pw-fixture@example.com');
 });
 
 test('the page holds no value and makes no request', () => {

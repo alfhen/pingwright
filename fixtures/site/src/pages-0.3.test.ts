@@ -42,7 +42,36 @@ describe('0.3 pages', () => {
   });
 });
 
-describe('/sgtm-leak', () => {
+describe('routes the 0.3 pages call', () => {
+  test('/fixture-config.js hands the pages the real sgtm and third-party origins', async () => {
+    const res = await fetch(`${site.url}/fixture-config.js`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = await res.text();
+    expect(body).toContain(JSON.stringify(site.sgtmUrl));
+    expect(body).toContain(JSON.stringify(site.thirdPartyUrl));
+  });
+
+  test('the sgtm host answers a /data POST with 204 and no cookie', async () => {
+    const res = await fetch(`${site.sgtmUrl}/data?v=2&event=page_view`, { method: 'POST', body: '{}', headers: { 'content-type': 'text/plain' } });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  test('the third-party host answers any hit with a GIF', async () => {
+    const res = await fetch(`${site.thirdPartyUrl}/g/collect?v=2&tid=G-PWTEST0001`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/gif');
+    expect(new Uint8Array(await res.arrayBuffer()).slice(0, 3)).toEqual(new TextEncoder().encode('GIF'));
+  });
+
+  test('a path that is not a page is a 404', async () => {
+    expect((await fetch(`${site.url}/tiles-missing`)).status).toBe(404);
+  });
+});
+
+// The blocks marked as source smoke checks only search the page source. The behaviour is checked in pages-0.3.e2e.test.ts.
+describe('/sgtm-leak (source smoke checks)', () => {
   test('the leaking body lists every dataLayer field and posts to the data form', async () => {
     const html = await (await fetch(`${site.url}/sgtm-leak`)).text();
     for (const name of ['event_name', 'page_location', 'page_title', 'email', 'phone', 'address', 'cookie_data', 'clientIdHash']) {
@@ -61,7 +90,7 @@ describe('/sgtm-leak', () => {
   });
 });
 
-describe('/identifiers', () => {
+describe('/identifiers (source smoke checks)', () => {
   test('sends the identifier fields after the banner is answered', async () => {
     const html = await (await fetch(`${site.url}/identifiers`)).text();
     for (const name of ["uid: 'fixture-user-0001'", "'ep.token'", "'ud[em]'", 'external_id', 'user_data', 'email_address', 'fbp']) {
@@ -93,7 +122,7 @@ describe('mock Stape host cookie path', () => {
   });
 });
 
-describe('/tiles, /select and /handoff', () => {
+describe('/tiles, /select and /handoff (source smoke checks)', () => {
   test('tiles are titled White (01) and Black (02) with three themes', async () => {
     const html = await (await fetch(`${site.url}/tiles`)).text();
     for (const text of ['White (01)', 'Black (02)', "'button'", "'radio'", "theme === 'button'"]) {
