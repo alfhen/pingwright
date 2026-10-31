@@ -1,4 +1,5 @@
 import { trackerList } from '@pingwright/decoders';
+import { getPublicSuffix } from 'tldts';
 
 const HOST_PATTERN = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i;
 
@@ -17,15 +18,16 @@ export function hostMatches(host: string, patterns: readonly string[]): boolean 
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
-/** Shared hosting suffixes whose subdomains belong to different owners. A short list, not the full Public Suffix List. */
-const SHARED_SUFFIXES = new Set(['myshopify.com', 'github.io', 'herokuapp.com', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com', 'blogspot.com', 'wordpress.com', 'wixsite.com', 'azurewebsites.net', 'cloudfront.net', 'appspot.com']);
+/** Shared hosting suffixes that the Public Suffix List lacks. */
+const EXTRA_SHARED_SUFFIXES = new Set(['wordpress.com']);
 
-/** `*.<tld>` and `*.<2 to 3 letters>.<two-letter tld>` (`*.co.uk`, `*.com.au`, `*.co.kr`) are public suffixes. */
+/** A suffix, or the parent of a wildcard suffix rule, under which unrelated owners register names, by the Public Suffix List (private section included) or the local list. */
 function isPublicSuffix(domain: string): boolean {
-  const labels = domain.split('.');
-  if (labels.length === 1) return true;
-  if (SHARED_SUFFIXES.has(domain)) return true;
-  return labels.length === 2 && labels[1]!.length === 2 && labels[0]!.length <= 3;
+  if (EXTRA_SHARED_SUFFIXES.has(domain)) return true;
+  const opts = { allowPrivateDomains: true };
+  if (getPublicSuffix(domain, opts) === domain) return true;
+  const child = `pw-probe.${domain}`;
+  return getPublicSuffix(child, opts) === child;
 }
 
 const VENDOR_DOMAINS = [
