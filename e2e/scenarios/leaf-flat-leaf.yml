@@ -1,0 +1,9 @@
+start: /sgtm-data-tag?form=flat-email
+identity:
+  email: pw-fixture@example.com
+steps:
+  - wait: 2s
+expect:
+  mustNot:
+    - { vendor: sgtm, body.has: ["**.email"] }
+options: { seed: 1, allowUnknownDestination: true, builtins: { deniedIdentifiers: warn } }

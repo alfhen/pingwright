@@ -71,7 +71,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
 | `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`), `outcome` (optional: `granted`, `denied` or `mixed`; on a withdrawn epoch, the label it had before) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `t`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
-| `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `severity` (optional: `fail` or `warn`; absent means `fail`), `evidence[]` (record IDs), `note` (optional: `stubNoCookies`, `cannotEvaluateBody` or `fieldsNotRecorded`) |
+| `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `severity` (optional: `fail` or `warn`; absent means `fail`), `evidence[]` (record IDs), `note` (optional: `stubNoCookies`, `cannotEvaluateBody`, `fieldsNotRecorded`, `cookieNotStored` or `nestedNameOnly`) |
 
 `recordSchemaVersion` on a `Run` is an integer. Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. Do not bump it within 0.2. A reader treats a record with no version as version 0, and warns when the version is newer than it knows.
 

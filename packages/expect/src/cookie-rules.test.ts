@@ -213,3 +213,55 @@ test('a fake email, its SHA-256 and a cookie value show in no result when they a
     expect(JSON.stringify(results)).not.toContain(secret);
   }
 });
+
+function stored(cookies: { name: string; domain: string }[], label: string, t: number): Checkpoint {
+  return { ...checkpoint(label, t, []), cookies: cookies.map((c) => ({ ...c, expires: null, firstParty: true })) };
+}
+
+const NOT_BEFORE = 'expect:\n  mustNot:\n    - { cookie: _dcid, before: consent }';
+
+test('a later checkpoint holding the cookie says it was stored by the browser', () => {
+  const req = request(10, 'http://localhost:3000/data');
+  const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain: 'localhost' }], 'later', 20)])[0]!;
+  expect(r.pass).toBe(false);
+  expect(r.message).toContain('found _dcid from Set-Cookie (1 request); stored by the browser');
+  expect(r.note).toBeUndefined();
+});
+
+test('a later checkpoint without the cookie sets cookieNotStored and the rule still fails', () => {
+  const reqs = Array.from({ length: 7 }, (_, i) => request(10 + i, 'http://localhost:3000/data'));
+  const records = [...reqs.flatMap((q) => [q, response(q, ['_dcid'])]), stored([], 'later', 50)];
+  const r = run(NOT_BEFORE, records)[0]!;
+  expect(r.pass).toBe(false);
+  expect(r.message).toContain('found _dcid from Set-Cookie (7 requests); no later checkpoint has it');
+  expect(r.note).toBe('cookieNotStored');
+});
+
+test('no checkpoint after the response gives no storage text and no note', () => {
+  const req = request(10);
+  const records = [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain: 'localhost' }], 'early', 5)];
+  const r = run(NOT_BEFORE, records)[0]!;
+  expect(r.pass).toBe(false);
+  expect(r.message).not.toMatch(/stored|later checkpoint/);
+  expect(r.note).toBeUndefined();
+  const alone = run(NOT_BEFORE, [req, response(req, ['_dcid'])])[0]!;
+  expect(alone.message).not.toMatch(/stored|later checkpoint/);
+  expect(alone.note).toBeUndefined();
+});
+
+test('a cookie set with Domain=example.com by a subdomain host counts as stored', () => {
+  const req = request(10, 'https://sgtm.example.com/data');
+  for (const domain of ['.example.com', 'example.com', 'sgtm.example.com']) {
+    const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain }], 'later', 20)])[0]!;
+    expect(r.message).toContain('stored by the browser');
+  }
+});
+
+test('a same-named cookie on another domain does not count as stored', () => {
+  const req = request(10, 'https://sgtm.example.com/data');
+  for (const domain of ['.other.example', 'notexample.com', 'sgtm.example.com.evil.example']) {
+    const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain }], 'later', 20)])[0]!;
+    expect(r.message).toContain('no later checkpoint has it');
+    expect(r.note).toBe('cookieNotStored');
+  }
+});

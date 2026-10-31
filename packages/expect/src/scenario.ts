@@ -452,6 +452,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         if (!(BODY_KEYS as readonly string[]).includes(key)) fail(p, `unknown key, expected one of ${BODY_KEYS.map((b) => `body.${b}`).join(', ')}`);
         else if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names');
         else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);
+        else if (v.some((x: string) => x === '**.')) fail(p, '"**." needs a name after the dot');
         else (rule.body ??= {})[key as (typeof BODY_KEYS)[number]] = v as string[];
       } else if (k === 'cookie') {
         const l = list(k, v);
