@@ -243,7 +243,7 @@ A run report has these parts:
 
 - **Header.** Scenario, variant, run ID, date, network mode, site host, Pingwright version and record schema version.
 - **Timeline per vendor.** One row per vendor and one segment per consent epoch, each with a mark and a hit count. The mark also has a text label, so it reads without colour.
-- **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, the severity and up to five evidence IDs.
+- **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, up to five evidence IDs and, on a failed or warned result, `on failure: fail` or `on failure: warn`. A passing result shows no severity.
 - **Flags** and **fields.** The flag kinds with counts and hosts, and the field names seen on denied hits.
 
 A suite report has a header with the variants and the exit code, a results table, a diff section per variant pair, and the run sections for each scenario and variant.
@@ -253,9 +253,10 @@ The marks, worst first:
 | Mark | Meaning |
 | --- | --- |
 | `leak` | A hit that `deniedIdentifiers` flags, or that is in the evidence of a failed `deniedIdentifiers` result at either severity, or of a failed `mustNot` with a consent scope (`in: epoch(denied)`, `in: epoch(withdrawn)`, `before: consent` or a `consent.<field>: denied` filter). A failed `mustNot` with no consent scope does not mark a hit. |
-| `unchecked` | A hit with a denied signal whose body was not fully recorded, or that has identifier names whose own consent signal is not denied. Pingwright cannot call it clean. |
-| `mixed` | Granted and denied hits in one segment, or a hit with some signals granted and some denied. |
-| `full` | Hits with consent granted. A hit with unknown consent before the first answer also shows `full`, with the label "before an answer". |
+| `unchecked` | A hit with a denied signal whose body was not fully recorded, or that has identifier names whose own consent signal is unknown. A result that cannot be evaluated also gives `unchecked`, never `leak`. Pingwright cannot call it clean. |
+| `mixed` | Granted and denied hits in one segment, or a hit with some signals granted and some denied. A hit with any denied signal is never shown as plain `full`. |
+| `early` | A hit with unknown consent in the undecided epoch, with the label "before an answer". The page set no Consent Mode default, so the hit fired before the person answered. A page with a denied default gives `ping` instead. |
+| `full` | Hits with every known signal granted, or with no signal known after an answer. |
 | `ping` | Hits sent while consent is denied, with no identifier names recorded. `cid`, `fbp` and click IDs are not identifiers here. |
 | `nothing` | No hit. |
 
@@ -293,7 +294,7 @@ options:
   builtins: { sandboxPageUrl: warn }
 ```
 
-The `--json` summary has `severity` on each built-in result. `pass` is true when every result passed, warnings included. `ok` is true when the exit code is 0, so a CI script can read `ok`.
+The `--json` summary has `severity` on every result, `expect` rules included. A rule with no recorded severity reads `fail`, which is what the exit code uses. `pass` is true when every result passed, warnings included. `ok` is true when the exit code is 0, so a CI script can read `ok`.
 
 A CI job can gate on the exit code, or on `ok` in the `--json` summary:
 

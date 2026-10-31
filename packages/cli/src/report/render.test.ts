@@ -133,12 +133,15 @@ test('a crafted severity cannot inject markup', () => {
   const html = renderReport(buildReportModel(records({ results })));
   expect(html).not.toContain('attacker.example');
   expect(html).not.toMatch(/<meta http-equiv="refresh"/i);
-  expect(html).toContain('severity: fail');
+  expect(html).toContain('on failure: fail');
 });
 
-test('every result shows its severity', () => {
+test('a failed result shows on failure, a passing result shows no severity', () => {
   const html = renderReport(buildReportModel(records()));
-  expect(html).toMatch(/<code>mustNot: [^<]*<\/code><span class="severity">severity: fail<\/span>/);
+  expect(html).toMatch(/<code>mustNot: [^<]*<\/code><span class="severity">on failure: fail<\/span>/);
+  expect(html).not.toContain('severity: ');
+  const passing = [{ type: 'result', id: newId('result'), runId, expectation: 'builtin: x', pass: true, evidence: [], severity: 'fail' }] as Result[];
+  expect(renderReport(buildReportModel(records({ results: passing })))).not.toContain('class="severity"');
 });
 
 test('the page makes no request and runs no script', () => {

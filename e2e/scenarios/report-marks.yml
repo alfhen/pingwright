@@ -1,0 +1,9 @@
+start: /meta-early
+steps:
+  - wait: 1s
+expect:
+  must:
+    - { vendor: meta, event: PageView }
+  mustNot:
+    - { vendor: meta, event: PageView }
+options: { seed: 1, allowUnknownDestination: true }

@@ -2,7 +2,7 @@ import type { ConsentEpoch, ConsentState, Hit, Result, ResultNote, RunRecords } 
 import { guardFieldName, identifierClass, identifierSignal } from '@pingwright/decoders';
 import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit } from '@pingwright/expect';
 
-export type Mark = 'full' | 'ping' | 'nothing' | 'leak' | 'unchecked' | 'mixed';
+export type Mark = 'full' | 'ping' | 'nothing' | 'leak' | 'unchecked' | 'mixed' | 'early';
 export type EpochLabel = ConsentEpoch['label'];
 
 export interface Segment {
@@ -25,7 +25,8 @@ export interface ExpectationView {
   kind: string;
   /** Rule keys and names. Never the values of `params`, `ids` or `page`. */
   text: string;
-  severity: 'fail' | 'warn';
+  /** Set only on a result that failed or warned. */
+  severity?: 'fail' | 'warn';
   note: string | undefined;
   evidence: string[];
   evidenceCount: number;
@@ -69,7 +70,7 @@ export const NOTE_TEXT: Record<ResultNote, string> = {
   nestedNameOnly: 'a plain name matches a top-level field only; use **.name to match at any depth',
 };
 
-const WORST_FIRST: Mark[] = ['leak', 'unchecked', 'mixed', 'full', 'ping'];
+const WORST_FIRST: Mark[] = ['leak', 'unchecked', 'mixed', 'early', 'full', 'ping'];
 const CONSENT_FIELDS: (keyof ConsentState)[] = ['analytics', 'ads', 'adUserData', 'adPersonalization'];
 const MAX_EVIDENCE = 5;
 const MAX_VALUE = 80;
@@ -149,7 +150,7 @@ function expectationView(result: Result): ExpectationView {
     status,
     kind,
     text,
-    severity,
+    ...(!result.pass && { severity }),
     note: result.note ? NOTE_TEXT[result.note] : undefined,
     evidence: result.evidence.slice(0, MAX_EVIDENCE),
     evidenceCount: result.evidence.length,
@@ -197,7 +198,8 @@ function judge(hit: Hit, state: ConsentState, undecided: boolean, named: Readonl
       : { mark: 'ping', label: 'hit sent while denied, no identifiers recorded' };
   }
   if (granted) return { mark: 'full', label: '' };
-  return { mark: 'full', label: undecided ? 'before an answer' : 'consent state unknown' };
+  if (undecided) return { mark: 'early', label: 'before an answer' };
+  return { mark: 'full', label: 'consent state unknown' };
 }
 
 function segmentOf(verdicts: Verdict[]): Segment {
