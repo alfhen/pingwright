@@ -90,7 +90,7 @@ test('name segments that look like values are stored as (other)', () => {
 });
 
 test.each([
-  ['longer than 64 characters', 'a'.repeat(65)],
+  ['longer than 64 characters', 'g'.repeat(65)],
   ['a character outside the name set', 'x%y'],
   ['a hex token with few digits', 'abcdefabcdefabcdefabcdefabcdefab'],
   ['six digits in a row among letters', 'ab_123456_cdefghijkl'],
