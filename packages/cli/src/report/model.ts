@@ -154,25 +154,39 @@ function expectationView(result: Result): ExpectationView {
   };
 }
 
-/** Hit IDs in the evidence of a failed `mustNot` that is scoped to a denied or withdrawn consent state. */
-function consentScopedLeakIds(results: readonly Result[]): Set<string> {
-  const ids = new Set<string>();
+const RULE_LEAK = 'named by a failed consent-scoped rule';
+const IDENTIFIER_LEAK = 'identifiers sent while denied';
+
+/**
+ * Hit IDs that a result names as leaks, with the label that says why: the evidence of a failed `mustNot`
+ * scoped to a denied or withdrawn state, and of a `deniedIdentifiers` check that did not pass, at any severity.
+ * The record keeps no scenario options, so the evidence is the only way to see hits flagged through `identifierFields`.
+ */
+function namedLeaks(results: readonly Result[]): Map<string, string> {
+  const named = new Map<string, string>();
   for (const result of results) {
     if (result.pass || result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded') continue;
-    const parsed = parseEntry(result);
-    if (parsed?.kind !== 'mustNot' || !consentScoped(parsed.entry)) continue;
-    for (const id of result.evidence) ids.add(id);
+    let label: string;
+    if (result.expectation === 'builtin: deniedIdentifiers') label = IDENTIFIER_LEAK;
+    else {
+      const parsed = parseEntry(result);
+      if (parsed?.kind !== 'mustNot' || !consentScoped(parsed.entry)) continue;
+      label = RULE_LEAK;
+    }
+    for (const id of result.evidence) if (named.get(id) !== IDENTIFIER_LEAK) named.set(id, label);
   }
-  return ids;
+  return named;
 }
 
-function judge(hit: Hit, state: ConsentState, undecided: boolean, named: ReadonlySet<string>): Verdict {
+function judge(hit: Hit, state: ConsentState, undecided: boolean, named: ReadonlyMap<string, string>): Verdict {
   const known = CONSENT_FIELDS.map((f) => state[f]).filter((v) => v !== 'unknown');
   const denied = known.includes('denied');
   const granted = known.includes('granted');
   const idFields = hit.idFields;
   const flagged = (idFields ?? []).some((name) => identifierSignal(identifierClass(name), state).value === 'denied');
-  if (named.has(hit.id) || flagged) return { mark: 'leak', label: 'identifiers sent while denied' };
+  if (flagged) return { mark: 'leak', label: IDENTIFIER_LEAK };
+  const why = named.get(hit.id);
+  if (why) return { mark: 'leak', label: why };
   if (denied && (hit.fieldsComplete === false || idFields === undefined)) return { mark: 'unchecked', label: 'body not fully recorded' };
   if (denied && granted) return { mark: 'mixed', label: MIXED_HIT };
   if (denied) {
@@ -231,7 +245,7 @@ export function buildReportModel(records: RunRecords): ReportModel {
   const { run } = records;
   const graceMs = run.graceWindowMs ?? DEFAULT_GRACE_MS;
   const epochs = [...records.consentEpochs].sort((a, b) => a.startT - b.startT);
-  const named = consentScopedLeakIds(records.results);
+  const named = namedLeaks(records.results);
 
   const placed = records.hits.map((hit) => {
     const epoch = epochForHit(epochs, hit.t, graceMs);

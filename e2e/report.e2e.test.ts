@@ -28,8 +28,11 @@ test('report --html marks the sgtm row as a leak and holds no value from the run
   expect((await report([summary.path, '--html', out])).code).toBe(0);
   const html = await readFile(out, 'utf8');
 
-  expect(html).toMatch(/<th scope="row">sgtm<\/th>(?:<td class="m-\w+">.*?<\/td>)*?<td class="m-leak">/);
-  expect(html).toMatch(/<th scope="row">meta<\/th>(?:<td class="m-\w+">.*?<\/td>)*?<td class="m-leak">/);
+  for (const vendor of ['sgtm', 'meta']) {
+    const row = new RegExp(`<tr><th scope="row">${vendor}</th>.*?</tr>`).exec(html);
+    expect(row, vendor).not.toBeNull();
+    expect(row![0], vendor).toContain('class="m-leak"');
+  }
   expect(html).toContain('params.em');
   for (const secret of [email, hash, 'pw-fixture@example.com', 'fixture-user-0001', '0123456789abcdef0123456789abcdef']) {
     expect(html).not.toContain(secret);

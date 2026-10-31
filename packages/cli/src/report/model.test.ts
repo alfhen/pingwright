@@ -196,7 +196,9 @@ describe('consent-scoped mustNot evidence', () => {
 
   test.each([
     ['in epoch(denied)', '{"vendor":"ga4","in":"epoch(denied)"}'],
-    ['in epoch(withdrawn)', '{"vendor":"ga4","in":"epoch(withdrawn)"}'],
+    ['in epoch(label=denied)', '{"vendor":"ga4","in":"epoch(label=denied)"}'],
+    ['in epoch(analytics=denied)', '{"vendor":"ga4","in":"epoch(analytics=denied)"}'],
+    ['in epoch(label=withdrawn)', '{"vendor":"ga4","in":"epoch(label=withdrawn)"}'],
     ['consent.ad_storage: denied', '{"vendor":"ga4","consent.ads":"denied"}'],
     ['a nested consent group', '{"vendor":"ga4","consent":{"ads":"denied"}}'],
     ['before consent', '{"vendor":"ga4","before":"consent"}'],
@@ -204,6 +206,12 @@ describe('consent-scoped mustNot evidence', () => {
     const h = granted();
     const model = buildReportModel(records({ consentEpochs: [epoch('granted', 0, GRANTED)], hits: [h], results: [failed(`mustNot: ${entry}`, h)] }));
     expect(marksOf(model, 'ga4')).toEqual(['leak']);
+  });
+
+  test('a hit named by a rule has its own label, not the identifier one', () => {
+    const h = granted();
+    const model = buildReportModel(records({ consentEpochs: [epoch('granted', 0, GRANTED)], hits: [h], results: [failed('mustNot: {"vendor":"ga4","in":"epoch(denied)"}', h)] }));
+    expect(model.rows[0]!.segments[0]!.label).toBe('named by a failed consent-scoped rule');
   });
 
   test('a passing consent-scoped mustNot and a cannot-evaluate one mark nothing', () => {
@@ -320,4 +328,25 @@ test('the header keeps the host only', () => {
   const model = buildReportModel(records());
   expect(model.header.host).toBe('127.0.0.1:4000');
   expect(model.header.networkMode).toBe('stub');
+});
+
+describe('deniedIdentifiers evidence', () => {
+  const denied = () => hit('sgtm', 1500);
+  const failedCheck = (h: Hit, severity: 'fail' | 'warn') => result('builtin: deniedIdentifiers', false, { evidence: [h.id], severity });
+
+  test.each(['fail', 'warn'] as const)('a denied hit with no idFields named in a failed check at %s is a leak, not a ping', (severity) => {
+    const h = denied();
+    expect(marksOf(buildReportModel(records({ hits: [h] })), 'sgtm')).toEqual(['nothing', 'ping', 'nothing']);
+    const model = buildReportModel(records({ hits: [h], results: [failedCheck(h, severity)] }));
+    expect(marksOf(model, 'sgtm')).toEqual(['nothing', 'leak', 'nothing']);
+    expect(model.rows[0]!.segments[1]!.label).toBe('identifiers sent while denied');
+  });
+
+  test('a passing check and a cannot-evaluate check mark nothing', () => {
+    const h = denied();
+    const model = buildReportModel(
+      records({ hits: [h], results: [result('builtin: deniedIdentifiers', true, { evidence: [h.id] }), result('builtin: deniedIdentifiers', false, { evidence: [h.id], note: 'cannotEvaluateBody' })] }),
+    );
+    expect(marksOf(model, 'sgtm')).toEqual(['nothing', 'ping', 'nothing']);
+  });
 });

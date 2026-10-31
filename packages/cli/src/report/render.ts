@@ -45,7 +45,7 @@ function segmentCell(segment: Segment): string {
   return `<td class="m-${segment.mark}">${glyph(segment.mark)}<span class="name">${MARK_NAME[segment.mark]}</span>${count}${label}</td>`;
 }
 
-function timeline(model: ReportModel): string {
+export function timeline(model: ReportModel): string {
   if (model.rows.length === 0) return '<p class="empty">No vendor hits were recorded.</p>';
   const head = model.columns.map((c) => `<th scope="col">${escapeHtml(c.label)}</th>`).join('');
   const body = model.rows
@@ -63,16 +63,16 @@ function expectation(e: ExpectationView): string {
     ? `<span class="evidence">evidence: ${e.evidence.map(escapeHtml).join(', ')}${e.evidenceCount > e.evidence.length ? ` and ${e.evidenceCount - e.evidence.length} more` : ''} (${e.evidenceCount})</span>`
     : '';
   const note = e.note ? `<span class="note">${escapeHtml(e.note)}</span>` : '';
-  const severity = e.kind === 'builtin' ? `<span class="severity">severity: ${escapeHtml(e.severity)}</span>` : '';
+  const severity = `<span class="severity">severity: ${escapeHtml(e.severity)}</span>`;
   return `<li class="s-${status}"><span class="status">${escapeHtml(e.status)}</span><code>${escapeHtml(e.text)}</code>${severity}${note}${evidence}</li>`;
 }
 
-function expectations(model: ReportModel): string {
+export function expectations(model: ReportModel): string {
   if (model.expectations.length === 0) return '<p class="empty">The scenario has no expectations.</p>';
   return `<ul class="results">${model.expectations.map(expectation).join('')}</ul>`;
 }
 
-function flags(model: ReportModel): string {
+export function flags(model: ReportModel): string {
   if (model.flags.length === 0) return '<p class="empty">No flags.</p>';
   const rows = model.flags
     .map((f) => `<tr><td>${escapeHtml(f.kind)}</td><td>${f.count}</td><td>${f.hosts.map(escapeHtml).join(', ')}</td></tr>`)
@@ -80,7 +80,7 @@ function flags(model: ReportModel): string {
   return `<div class="scroll"><table><thead><tr><th scope="col">Kind</th><th scope="col">Count</th><th scope="col">Hosts</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function fields(model: ReportModel): string {
+export function fields(model: ReportModel): string {
   if (!model.fields) return `<p class="empty">not recorded (record schema version ${model.header.schemaVersion})</p>`;
   if (model.fields.length === 0) return '<p class="empty">No hit was sent while a signal was denied.</p>';
   const items = model.fields
@@ -89,7 +89,7 @@ function fields(model: ReportModel): string {
   return `<ul class="fields">${items}</ul>`;
 }
 
-const STYLE = `
+export const STYLE = `
 :root{color-scheme:light dark;--bg:#fff;--fg:#1b1f24;--muted:#57606a;--line:#d0d7de;--card:#f6f8fa;--full:#1a7f37;--ping:#9a6700;--nothing:#6e7781;--leak:#cf222e;--unchecked:#8250df;--mixed:#bc4c00}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8d96a0;--line:#30363d;--card:#161b22;--full:#3fb950;--ping:#d29922;--nothing:#8b949e;--leak:#ff7b72;--unchecked:#d2a8ff;--mixed:#ffa657}}
 *{box-sizing:border-box}
@@ -119,10 +119,16 @@ td .count,td .why{display:block;color:var(--muted);font-size:.85rem}
 code{font:13px ui-monospace,monospace}
 .empty{color:var(--muted)}
 .caveat{color:var(--muted);font-size:.85rem;margin-top:32px}
+.warn-box{color:var(--ping);border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--card);margin:8px 0}
+h3{font-size:1rem;margin:20px 0 6px}
+h4{font-size:.95rem;margin:16px 0 6px;color:var(--muted)}
 `;
 
-export function renderReport(model: ReportModel): string {
-  const h = model.header;
+export function definitionList(pairs: [string, string][]): string {
+  return `<dl class="header">${pairs.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`;
+}
+
+export function runHeader(h: ReportModel['header']): [string, string][] {
   const header: [string, string][] = [
     ['Run', h.runId],
     ['Started', h.startedAt],
@@ -132,7 +138,21 @@ export function renderReport(model: ReportModel): string {
     ['Record schema', String(h.schemaVersion)],
   ];
   if (h.variant) header.splice(1, 0, ['Variant', h.variant]);
-  const items = header.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('');
+  return header;
+}
+
+export function runSections(model: ReportModel, level: 'h2' | 'h4'): string {
+  return `<${level}>Timeline per vendor</${level}>
+${timeline(model)}
+<${level}>Expectations</${level}>
+${expectations(model)}
+<${level}>Flags</${level}>
+${flags(model)}
+<${level}>Fields seen while a signal was denied</${level}>
+${fields(model)}`;
+}
+
+export function page(body: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -144,19 +164,16 @@ export function renderReport(model: ReportModel): string {
 </head>
 <body>
 <main>
-<h1>${escapeHtml(h.scenario)}</h1>
-<dl class="header">${items}</dl>
-<h2>Timeline per vendor</h2>
-${timeline(model)}
-<h2>Expectations</h2>
-${expectations(model)}
-<h2>Flags</h2>
-${flags(model)}
-<h2>Fields seen while a signal was denied</h2>
-${fields(model)}
+${body}
 <p class="caveat">Names and counts only. A mark describes what Pingwright recorded. It is not a statement of legal compliance.</p>
 </main>
 </body>
 </html>
 `;
+}
+
+export function renderReport(model: ReportModel): string {
+  return page(`<h1>${escapeHtml(model.header.scenario)}</h1>
+${definitionList(runHeader(model.header))}
+${runSections(model, 'h2')}`);
 }
