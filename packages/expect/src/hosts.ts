@@ -17,7 +17,16 @@ export function hostMatches(host: string, patterns: readonly string[]): boolean 
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
-const PUBLIC_SUFFIXES = new Set(['co.uk', 'org.uk', 'ac.uk', 'com.au', 'net.au', 'co.nz', 'co.jp', 'co.in', 'com.br', 'com.mx', 'co.za', 'com.cn', 'com.tr']);
+/** Shared hosting suffixes whose subdomains belong to different owners. A short list, not the full Public Suffix List. */
+const SHARED_SUFFIXES = new Set(['myshopify.com', 'github.io', 'herokuapp.com', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com', 'blogspot.com', 'wordpress.com', 'wixsite.com', 'azurewebsites.net', 'cloudfront.net', 'appspot.com']);
+
+/** `*.<tld>` and `*.<2 to 3 letters>.<two-letter tld>` (`*.co.uk`, `*.com.au`, `*.co.kr`) are public suffixes. */
+function isPublicSuffix(domain: string): boolean {
+  const labels = domain.split('.');
+  if (labels.length === 1) return true;
+  if (SHARED_SUFFIXES.has(domain)) return true;
+  return labels.length === 2 && labels[1]!.length === 2 && labels[0]!.length <= 3;
+}
 
 const VENDOR_DOMAINS = [
   'google-analytics.com',
@@ -56,7 +65,7 @@ export function isSpecificServerHost(pattern: string): boolean {
   if (isLoopbackPattern(pattern)) return true;
   const domain = bareDomain(pattern);
   const wildcard = pattern.startsWith('*.');
-  if (wildcard && (!domain.includes('.') || PUBLIC_SUFFIXES.has(domain))) return false;
+  if (wildcard && isPublicSuffix(domain)) return false;
   const owned = [...VENDOR_DOMAINS, ...trackerList.map((entry) => bareDomain(entry.host))];
   return !owned.some((vendor) => sameOrBelow(domain, vendor) || (wildcard && sameOrBelow(vendor, domain)));
 }

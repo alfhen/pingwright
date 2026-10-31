@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { run } from './cli-helpers.ts';
 
@@ -9,14 +10,16 @@ async function cookieRun(name: string) {
   const r = await run(name);
   const summary = JSON.parse(r.stdout) as Summary;
   const result = summary.results.find((x) => x.expectation.includes('cookie') && x.expectation.startsWith('must'))!;
+  const rawRecord = readFileSync((JSON.parse(r.stdout) as { path: string }).path, 'utf8');
   const note = r.records!.results.find((x) => x.expectation === result.expectation)?.note;
-  return { ...r, result, note, records: r.records! };
+  return { ...r, result, note, rawRecord, records: r.records! };
 }
 
 test('mustNot cookie before consent fails and names the request that set it', async () => {
-  const { code, result, records, stdout, stderr } = await cookieRun('cookies-before');
+  const { code, result, records, stdout, stderr, rawRecord } = await cookieRun('cookies-before');
   expect(code).toBe(1);
   expect(stdout + stderr + JSON.stringify(records.results)).not.toMatch(/pwfake/);
+  expect(rawRecord).not.toMatch(/pwfake/);
   expect(result.pass).toBe(false);
   const setter = records.requests.find((q) => new URL(q.url).pathname === '/session/start')!;
   expect(result.evidence).toEqual([setter.id]);
@@ -54,10 +57,11 @@ test('stub mode does not see the cookie of the stubbed loader request and says w
 }, 90_000);
 
 test('server mode lets the mock host answer, and only that host passes', async () => {
-  const { code, result, note, records, stdout, stderr } = await cookieRun('cookies-server');
+  const { code, result, note, records, stdout, stderr, rawRecord } = await cookieRun('cookies-server');
   expect(code).toBe(1);
   expect(result.pass).toBe(false);
   expect(stdout + stderr + JSON.stringify(records.results)).not.toMatch(/pwfake/);
+  expect(rawRecord).not.toMatch(/pwfake/);
   expect(note).toBeUndefined();
   expect(records.run.networkMode).toBe('server');
   const loader = records.requests.find((q) => new URL(q.url).pathname === '/pwcookie')!;

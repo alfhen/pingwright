@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { Request } from '@pingwright/core';
-import { isKnownVendorCollection, isStubbedCollection, setCookieNamesOf, stubResponse } from './stub.ts';
+import { isKnownVendorCollection, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
 
 test('fetch, xhr and ping get 204 with CORS that echoes the origin and allows credentials', () => {
   for (const resourceType of ['fetch', 'xhr', 'ping']) {
@@ -108,6 +108,12 @@ test('server mode matches wildcard hosts and bracketed IPv6', () => {
 test('a request that is not a collection request is never stubbed', () => {
   const o = { networkMode: 'stub' as const, trackers: [] };
   expect(isStubbedCollection(collect('http://127.0.0.1:4000/app.js'), o)).toBe(false);
+});
+
+test('a Set-Cookie line with no name records nothing, never its value', () => {
+  const value = 'pwfake-cookie-value-9f3a';
+  expect(setCookieNamesOf({ 'set-cookie': `${value}; Path=/\n=${value}\nok=${value}` })).toEqual(['ok']);
+  expect(setCookieNameOf(value)).toEqual([]);
 });
 
 test('setCookieNamesOf returns names only, from every Set-Cookie line', () => {

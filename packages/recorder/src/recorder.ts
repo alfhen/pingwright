@@ -46,7 +46,7 @@ import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
-import { isKnownVendorCollection, isStubbedCollection, setCookieNamesOf, stubResponse } from './stub.ts';
+import { isKnownVendorCollection, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
@@ -447,7 +447,7 @@ export class Recorder {
     if (this.stubRecorded.has(record.id)) return;
     let setCookieNames: string[] = [];
     try {
-      setCookieNames = (await response.headerValues('set-cookie')).map((c) => c.split('=')[0]!.trim());
+      setCookieNames = (await response.headerValues('set-cookie')).flatMap(setCookieNameOf);
     } catch {
       // The page closed before the headers arrived.
     }
@@ -675,7 +675,7 @@ export class Recorder {
     const setCookieNames = response
       .headersArray()
       .filter((h) => h.name.toLowerCase() === 'set-cookie')
-      .map((h) => h.value.split('=')[0]!.trim());
+      .flatMap((h) => setCookieNameOf(h.value));
     this.recordResponseFor(record, response.status(), setCookieNames);
   }
 
