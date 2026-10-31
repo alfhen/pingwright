@@ -86,6 +86,8 @@ export interface Step {
   runId: Id<'run'>;
   index: number;
   label: string;
+  /** Index of the selector in an `any` locator that the step used. */
+  locator?: number;
   startedAt: number;
   endedAt: number | null;
   /** Why the step failed. Absent when it passed. */

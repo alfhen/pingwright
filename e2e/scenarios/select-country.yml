@@ -1,0 +1,6 @@
+start: /select
+steps:
+  - consent: reject
+  - select: { "select[name=countryCode]": DE }
+  - wait: '#current:has-text("DE")'
+options: { seed: 1, allowUnknownDestination: true }

@@ -44,12 +44,16 @@ export interface Rule {
   cookie?: string[];
 }
 
+/** A selector string, a role and accessible name, or a list of selectors tried in order. */
+export type Locator = string | { role: string; name?: string; exact?: boolean } | { any: string[] };
+
 export type StepBody =
   | { kind: 'visit'; value: string }
-  | { kind: 'click'; value: string }
+  | { kind: 'click'; value: Locator }
   | { kind: 'fill'; value: Record<string, string> }
+  | { kind: 'select'; value: Record<string, string> }
   | { kind: 'consent'; value: 'accept' | 'reject' | 'none' | 'withdraw' }
-  | { kind: 'wait'; value: number | { selector: string } }
+  | { kind: 'wait'; value: number | { selector: Locator } }
   | { kind: 'addToCart'; value: string }
   | { kind: 'evaluate'; value: string }
   | { kind: 'checkpoint'; value: string }
@@ -115,7 +119,7 @@ const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
 const OUTCOMES = ['passed', 'stubbed', 'failed'];
 const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
-const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
+const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
 const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts'];
 
@@ -271,6 +275,36 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       fail([...path, kind], 'must be a non-empty string');
       return undefined;
     };
+    const locator = (): Locator | undefined => {
+      if (typeof value === 'string' && value) return value;
+      if (!isMap(value)) {
+        fail([...path, kind], 'must be a non-empty selector or a mapping with role and name, or any');
+        return undefined;
+      }
+      const keys = Object.keys(value);
+      if (keys.includes('any')) {
+        const list = value.any;
+        if (keys.length > 1) fail([...path, kind], 'any cannot be combined with other keys');
+        else if (!Array.isArray(list) || list.length === 0 || !list.every((x) => typeof x === 'string' && x !== '')) {
+          fail([...path, kind, 'any'], 'must be a non-empty list of selectors');
+        } else return { any: list as string[] };
+        return undefined;
+      }
+      const unknown = keys.find((k) => !['role', 'name', 'exact'].includes(k));
+      if (unknown !== undefined) fail([...path, kind, unknown], 'unknown key, expected role, name, exact or any');
+      else if (typeof value.role !== 'string' || !/^[a-z]+$/.test(value.role)) fail([...path, kind, 'role'], 'must be a role name such as button or radio');
+      else if (value.name !== undefined && (typeof value.name !== 'string' || value.name === '')) fail([...path, kind, 'name'], 'must be a non-empty string');
+      else if (value.exact !== undefined && typeof value.exact !== 'boolean') fail([...path, kind, 'exact'], 'must be true or false');
+      else if (value.exact !== undefined && value.name === undefined) fail([...path, kind, 'exact'], 'needs a name');
+      else {
+        return {
+          role: value.role,
+          ...(value.name !== undefined ? { name: value.name as string } : {}),
+          ...(value.exact !== undefined ? { exact: value.exact as boolean } : {}),
+        };
+      }
+      return undefined;
+    };
     switch (kind) {
       case 'visit': {
         const v = str();
@@ -280,13 +314,31 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         }
         return;
       }
-      case 'click':
+      case 'click': {
+        const v = locator();
+        if (v !== undefined) add({ kind, value: v });
+        return;
+      }
       case 'addToCart':
       case 'evaluate':
       case 'checkpoint':
       case 'handoff': {
         const v = str();
         if (v !== undefined) add({ kind, value: v });
+        return;
+      }
+      case 'select': {
+        if (!isMap(value) || Object.keys(value).length === 0) {
+          fail([...path, kind], 'must be a mapping of selector to option value or label');
+          return;
+        }
+        const fields: Record<string, string> = {};
+        for (const [sel, v] of Object.entries(value)) {
+          if (typeof v === 'string' && v) fields[sel] = v;
+          else if (typeof v === 'number' && Number.isFinite(v)) fields[sel] = String(v);
+          else fail([...path, kind, sel], 'must be a non-empty string');
+        }
+        add({ kind, value: fields });
         return;
       }
       case 'fill': {
@@ -315,7 +367,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         if (ms !== undefined) add({ kind, value: ms });
         else if (typeof value === 'string' && /^\s*\d/.test(value)) fail([...path, kind], `"${value}" is not a duration such as 4s, 500ms or 2m`);
         else if (typeof value === 'string' && value.trim()) add({ kind, value: { selector: value } });
-        else fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m, or a selector');
+        else if (isMap(value)) {
+          const v = locator();
+          if (v !== undefined) add({ kind, value: { selector: v } });
+        } else fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m, a selector, or a locator mapping');
         return;
       }
       default:

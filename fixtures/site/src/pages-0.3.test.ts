@@ -106,6 +106,7 @@ describe('/tiles, /select and /handoff', () => {
     expect(html).toContain('name="countryCode"');
     expect(html).toContain('<option value="DE">Germany</option>');
     expect(html).toContain("query.get('broken') === '1'");
+    expect(html).toContain("query.get('autocomplete')");
     expect(html).toContain("query.get('send') === 'hash'");
   });
 

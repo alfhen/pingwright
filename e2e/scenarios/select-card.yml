@@ -1,0 +1,6 @@
+start: /select?autocomplete=cc-exp-month
+steps:
+  - consent: reject
+  - select: { "select": "03" }
+  - wait: '#current:has-text("03")'
+options: { seed: 1, allowUnknownDestination: true }

@@ -1,10 +1,11 @@
 import { createInterface } from 'node:readline/promises';
 import { createIdentity, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
-import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Scenario, type Step } from '@pingwright/expect';
+import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
 import { waitForHandoff } from './handoff-overlay.ts';
+import { resolveLocator, timeoutMessage } from './locators.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
 export type ConsentAnswer = Extract<Step, { kind: 'consent' }>['value'];
@@ -139,8 +140,14 @@ async function activePage(recorder: Recorder): Promise<Page> {
   return pages[pages.length - 1] ?? recorder.context.newPage();
 }
 
-/** Returns true when the field is a card or password field (only allowed on loopback hosts). */
-async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<boolean> {
+interface InspectedField {
+  field: ReturnType<Page['locator']>;
+  tag: string;
+  sensitive: boolean;
+}
+
+/** Finds the field and refuses a card or password field on a host that is not on this machine. */
+async function inspectField(page: Page, selector: string, timeout: number): Promise<InspectedField> {
   const field = page.locator(selector).first();
   const inspected = await field.evaluate(
     (el): { tag: string; host: string; fields: FieldAttributes[] } => {
@@ -163,12 +170,62 @@ async function fillField(page: Page, selector: string, value: string, timeout: n
     undefined,
     { timeout },
   );
-  if (inspected.fields.some(isSensitiveField) && !isLoopbackHost(inspected.host)) {
+  const sensitive = inspected.fields.some(isSensitiveField);
+  if (sensitive && !isLoopbackHost(inspected.host)) {
     throw new Error(`${selector} is a card or password field. ${HANDOFF_REQUIRED}`);
   }
-  if (inspected.tag === 'select') await field.selectOption(value, { timeout });
+  return { field, tag: inspected.tag, sensitive };
+}
+
+/** Returns true when the field is a card or password field (only allowed on loopback hosts). */
+async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<boolean> {
+  const { field, tag, sensitive } = await inspectField(page, selector, timeout);
+  if (tag === 'select') await field.selectOption(value, { timeout });
   else await field.fill(value, { timeout });
-  return inspected.fields.some(isSensitiveField);
+  return sensitive;
+}
+
+/** Chooses the option whose value is `wanted`, else the one whose label is, and checks by reading the select back. */
+async function selectOption(
+  page: Page,
+  selector: string,
+  wanted: string,
+  timeout: number,
+): Promise<{ sensitive: boolean; value: string; label: string }> {
+  const { field, tag, sensitive } = await inspectField(page, selector, timeout);
+  if (tag !== 'select') throw new Error(`${selector} is not a select`);
+  const options = await field.evaluate((el) => [...(el as HTMLSelectElement).options].map((o) => ({ value: o.value, label: o.label.trim() })), undefined, { timeout });
+  const byValue = options.findIndex((o) => o.value === wanted);
+  const chosen = byValue >= 0 ? byValue : options.findIndex((o) => o.label === wanted.trim());
+  if (chosen < 0) throw new Error(`${selector} has no option with value or label "${wanted}"`);
+  await field.selectOption({ index: chosen }, { timeout });
+  const now = await field.evaluate((el) => {
+    const select = el as HTMLSelectElement;
+    return { index: select.selectedIndex, label: select.selectedOptions[0]?.label.trim() ?? '' };
+  }, undefined, { timeout });
+  if (now.index !== chosen) throw new Error(`value not applied (still: ${now.label})`);
+  return { sensitive, ...options[chosen]! };
+}
+
+/** A timeout in a locator step also lists the controls on the page, unless a person is in a handoff. */
+async function withControlList<T>(page: Page, recorder: Recorder, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    const handoff = (recorder as { handoff?: Recorder['handoff'] }).handoff?.state().waiting === true;
+    if (error instanceof Error && error.name === 'TimeoutError' && !handoff) {
+      throw new Error(await timeoutMessage(page, error.message.split('\n')[0]!));
+    }
+    throw error;
+  }
+}
+
+async function locate(page: Page, recorder: Recorder, locator: Locator, record: StepRecord, timeout: number) {
+  return withControlList(page, recorder, async () => {
+    const resolved = await resolveLocator(page, locator, timeout);
+    if (resolved.index !== undefined) record.locator = resolved.index;
+    return resolved.locator;
+  });
 }
 
 interface PageField extends FieldAttributes {
@@ -275,9 +332,11 @@ async function runStep(
     case 'visit':
       await page.goto(resolveSitePath(step.value, recorder.site, scenario.vars), { waitUntil: 'load', timeout });
       return;
-    case 'click':
-      await page.locator(step.value).first().click({ timeout });
+    case 'click': {
+      const target = await locate(page, recorder, step.value, record, timeout);
+      await withControlList(page, recorder, () => target.click({ timeout }));
       return;
+    }
     case 'addToCart':
       await page.locator(step.value).first().click({ timeout });
       await waitForCart(recorder, record, scenario, options);
@@ -291,9 +350,20 @@ async function runStep(
         recorder.setIdentity(identity);
       }
       return;
+    case 'select':
+      for (const [selector, wanted] of Object.entries(step.value)) {
+        const chosen = await selectOption(page, selector, wanted, timeout);
+        if (chosen.sensitive || SECRET_FIELD.test(selector)) continue;
+        identity.extra = [...new Set([...(identity.extra ?? []), chosen.value, chosen.label].filter((v) => v !== ''))];
+        recorder.setIdentity(identity);
+      }
+      return;
     case 'wait':
       if (typeof step.value === 'number') await recorder.wait(step.value);
-      else await page.locator(step.value.selector).first().waitFor({ state: 'attached', timeout });
+      else {
+        const target = await locate(page, recorder, step.value.selector, record, timeout);
+        await withControlList(page, recorder, () => target.waitFor({ state: 'attached', timeout }));
+      }
       return;
     case 'evaluate':
       await evaluateGuarded(page, step.value);

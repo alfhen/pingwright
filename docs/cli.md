@@ -64,6 +64,18 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData` and `deniedIdentifiers`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
 | `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` treats as analytics identifiers, matched against the field names of each hit. |
 
+Locators: `click` and `wait` take a selector string, or a mapping:
+
+```yaml
+- click: { role: radio, name: "White (01)" }
+- click: { any: ['[role=radio][title$="White (01)"]', 'text=White (01)'] }
+- wait: { role: button, name: "Add to cart" }
+```
+
+`role` and `name` are Playwright's `getByRole(role, { name })`. `exact: true` (with a `name`) matches the whole name. `any` is a list of selectors. The step uses the first one that matches an element within the step timeout, and the step record stores its position in `locator` (the step label is not changed). `any` cannot be combined with `role`. `fill`, `select` and `addToCart` take selector strings only. When a `click` or `wait` times out, the error lists up to ten buttons, radios, checkboxes, links, tabs and options on the page, as role and accessible name cut at 60 characters, for example `Controls on the page: button "White (01)", button "Black (02)".` The names come from the accessibility tree only, never from text content or form values. A name that is an email, has a run of 6 or more digits or looks like a hash is printed as `(hidden)`. No list is made while a handoff is waiting.
+
+`select` chooses an option of a `<select>`: `select: { "select[name=countryCode]": DE }`. It matches the option value first, then the option label. After the change it reads the select back. If the option is not selected, the step fails with `value not applied (still: <option label>)`. A select that is a card field (for example `autocomplete=cc-exp-month`) fails with the same handoff message as `fill` on a site that is not on this machine. The chosen option value and label join the run identity as extra values under the rule below, so a hashed country can match in `identity.hashesMatch`. `fill` on a select still works as before.
+
 Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. A value joins the run identity only after it is typed into a field that is not a card or password field, whatever the selector: Pingwright checks the field when it fills it. If the run stops before that, the value is not in the run record. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
 
 ```yaml

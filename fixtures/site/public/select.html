@@ -8,7 +8,7 @@
 </head>
 <body>
 <h1>Select</h1>
-<p>A country select with values and labels (<code>DE</code> / <code>Germany</code>). <code>?send=hash</code> sends a server container hit with the SHA-256 of the chosen value as <code>country</code>. <code>?broken=1</code> resets the select to its default after every change.</p>
+<p>A country select with values and labels (<code>DE</code> / <code>Germany</code>). <code>?send=hash</code> sends a server container hit with the SHA-256 of the chosen value as <code>country</code>. <code>?broken=1</code> resets the select to its default inside the change event. <code>?autocomplete=cc-exp-month</code> turns it into a month select with that autocomplete value (a card field, which a script may only drive on a loopback host).</p>
 <label>Country
   <select id="country-code" name="countryCode">
     <option value="">Choose</option>
@@ -24,6 +24,19 @@
   var query = new URLSearchParams(location.search);
   var select = document.getElementById('country-code');
   var current = document.getElementById('current');
+  var autocomplete = query.get('autocomplete');
+  if (autocomplete) {
+    select.setAttribute('autocomplete', autocomplete);
+    select.name = 'expMonth';
+    select.id = 'exp-month';
+    select.innerHTML = '<option value="">Month</option>';
+    ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].forEach(function (label, i) {
+      var option = document.createElement('option');
+      option.value = (i < 9 ? '0' : '') + (i + 1);
+      option.textContent = label;
+      select.appendChild(option);
+    });
+  }
   function show() {
     current.textContent = select.value;
   }
@@ -40,10 +53,7 @@
       });
     }
     if (query.get('broken') === '1') {
-      setTimeout(function () {
-        select.value = '';
-        show();
-      }, 0);
+      select.value = '';
     }
     show();
   });
