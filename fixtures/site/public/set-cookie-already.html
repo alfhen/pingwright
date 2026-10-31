@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cookie that is already set</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/banner.js"></script>
+</head>
+<body>
+<h1>Cookie that is already set</h1>
+<p>On load, a script sets <code>_pwalready</code>. One second later it requests <code>/session/already</code>, which answers <code>Set-Cookie: _pwalready</code> with <code>Domain=other.example</code>. The browser rejects that header, but the cookie from the script is already there.</p>
+<script>
+document.cookie = '_pwalready=pw-fixture-cookie-value; path=/; max-age=3600; SameSite=Lax';
+setTimeout(function () {
+  fetch('/session/already').catch(function () {});
+}, 1000);
+</script>
+</body>
+</html>

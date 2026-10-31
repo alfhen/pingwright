@@ -184,31 +184,50 @@ function domainMatches(host: string, cookieDomain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
-type Stored = 'stored' | 'notStored' | 'unknown';
+type Stored = 'stored' | 'notStored' | 'alreadySet' | 'unknown';
 
-/** Reads the checkpoints taken after the response: any with the cookie means stored, some without it means not stored. */
+/** A checkpoint this close after the request may have run while the response was still arriving. */
+const STORAGE_MARGIN_MS = 50;
+
+const STORED_RANK: Record<Stored, number> = { stored: 3, notStored: 2, alreadySet: 1, unknown: 0 };
+
+/**
+ * Reads the checkpoints around the request. One before it with the cookie means it was already set. Otherwise, one
+ * more than the margin after the request with the cookie means stored, and some without it means not stored.
+ */
 function storedState(sighting: CookieSighting, ctx: Context): Stored {
   if (sighting.t === undefined || !sighting.host) return 'unknown';
-  const later = ctx.checkpoints.filter((c) => c.t !== undefined && c.t > sighting.t!);
-  if (later.length === 0) return 'unknown';
+  const t = sighting.t;
   const host = sighting.host;
-  return later.some((c) => c.cookies.some((k) => k.name === sighting.name && domainMatches(host, k.domain))) ? 'stored' : 'notStored';
+  const holds = (c: { cookies: { name: string; domain: string }[] }) => c.cookies.some((k) => k.name === sighting.name && domainMatches(host, k.domain));
+  if (ctx.checkpoints.some((c) => c.t !== undefined && c.t < t && holds(c))) return 'alreadySet';
+  const later = ctx.checkpoints.filter((c) => c.t !== undefined && c.t > t + STORAGE_MARGIN_MS);
+  if (later.length === 0) return 'unknown';
+  return later.some(holds) ? 'stored' : 'notStored';
 }
+
+const STORED_TEXT = { stored: 'stored by the browser', notStored: 'no later checkpoint has it', alreadySet: 'the cookie was already set before this response' };
 
 function storageText(sightings: CookieSighting[], ctx: Context): { text: string; notStored: boolean } | undefined {
   const byName = new Map<string, Stored>();
   for (const sighting of sightings.filter((x) => x.source === 'Set-Cookie')) {
     const state = storedState(sighting, ctx);
     const previous = byName.get(sighting.name);
-    if (!previous || previous === 'unknown' || (previous === 'notStored' && state === 'stored')) byName.set(sighting.name, state);
+    if (previous === undefined || STORED_RANK[state] > STORED_RANK[previous]) byName.set(sighting.name, state);
   }
   const named = (want: Stored) => [...byName].filter(([, state]) => state === want).map(([name]) => guardFieldName(name)).sort();
   const stored = named('stored');
   const notStored = named('notStored');
-  if (!stored.length && !notStored.length) return undefined;
-  if (!notStored.length) return { text: 'stored by the browser', notStored: false };
-  if (!stored.length) return { text: 'no later checkpoint has it', notStored: true };
-  return { text: `stored by the browser: ${listNames(stored)}; no later checkpoint has: ${listNames(notStored)}`, notStored: true };
+  const alreadySet = named('alreadySet');
+  const groups = [
+    { state: 'stored', names: stored, mixed: 'stored by the browser' },
+    { state: 'notStored', names: notStored, mixed: 'no later checkpoint has' },
+    { state: 'alreadySet', names: alreadySet, mixed: 'the cookie was already set before this response' },
+  ] as const;
+  const present = groups.filter((g) => g.names.length);
+  if (!present.length) return undefined;
+  const text = present.length === 1 ? STORED_TEXT[present[0]!.state] : present.map((g) => `${g.mixed}: ${listNames(g.names)}`).join('; ');
+  return { text, notStored: notStored.length > 0 };
 }
 
 function beforeConsentAt(t: number, ctx: Context): boolean {

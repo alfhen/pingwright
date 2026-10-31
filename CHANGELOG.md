@@ -8,7 +8,7 @@
 
 <!-- T02 -->
 
-<!-- T03 -->
+- A `cookie` rule no longer says a cookie was stored by the browser when it was already set before the response. The message reads `the cookie was already set before this response`, with no `cookieNotStored` note. A checkpoint taken within 50 ms after the request no longer counts as evidence. (#470, #485, #518)
 
 ## 0.3.0-rc.2
 
