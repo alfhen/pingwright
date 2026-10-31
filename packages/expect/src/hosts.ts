@@ -1,3 +1,5 @@
+import { trackerList } from '@pingwright/decoders';
+
 const HOST_PATTERN = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i;
 
 export function isHostPattern(value: unknown): value is string {
@@ -11,4 +13,50 @@ export function hostMatches(host: string, patterns: readonly string[]): boolean 
     const p = pattern.toLowerCase();
     return p.startsWith('*.') ? h.endsWith(p.slice(1)) : h === p;
   });
+}
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+const PUBLIC_SUFFIXES = new Set(['co.uk', 'org.uk', 'ac.uk', 'com.au', 'net.au', 'co.nz', 'co.jp', 'co.in', 'com.br', 'com.mx', 'co.za', 'com.cn', 'com.tr']);
+
+const VENDOR_DOMAINS = [
+  'google-analytics.com',
+  'analytics.google.com',
+  'googletagmanager.com',
+  'doubleclick.net',
+  'googleadservices.com',
+  'googlesyndication.com',
+  'google.com',
+  'facebook.com',
+  'facebook.net',
+  'pinterest.com',
+];
+
+function bareDomain(pattern: string): string {
+  return pattern.toLowerCase().replace(/^\*\./, '');
+}
+
+function sameOrBelow(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+export function isLoopbackPattern(pattern: string): boolean {
+  return LOOPBACK.has(pattern.toLowerCase());
+}
+
+export function isServerHostPattern(value: unknown): value is string {
+  return isHostPattern(value) || (typeof value === 'string' && isLoopbackPattern(value));
+}
+
+/**
+ * A `serverHosts` entry must name the server container's own host. A wildcard on a public suffix, and any host a
+ * vendor or the tracker list owns, would pass vendor hits through while the run reports `server` mode.
+ */
+export function isSpecificServerHost(pattern: string): boolean {
+  if (isLoopbackPattern(pattern)) return true;
+  const domain = bareDomain(pattern);
+  const wildcard = pattern.startsWith('*.');
+  if (wildcard && (!domain.includes('.') || PUBLIC_SUFFIXES.has(domain))) return false;
+  const owned = [...VENDOR_DOMAINS, ...trackerList.map((entry) => bareDomain(entry.host))];
+  return !owned.some((vendor) => sameOrBelow(domain, vendor) || (wildcard && sameOrBelow(vendor, domain)));
 }

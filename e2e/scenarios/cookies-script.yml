@@ -1,0 +1,10 @@
+start: /cookies?when=after
+steps:
+  - checkpoint: early
+  - wait: 1s
+  - consent: reject
+  - wait: 1s
+expect:
+  must:
+    - { cookie: _ga_PWTEST, before: consent }
+options: { seed: 1, allowUnknownDestination: true }

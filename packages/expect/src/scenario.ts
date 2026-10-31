@@ -1,7 +1,7 @@
 import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@pingwright/core';
 import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
-import { isHostPattern } from './hosts.ts';
+import { isHostPattern, isServerHostPattern, isSpecificServerHost } from './hosts.ts';
 
 export type ConsentField = 'analytics' | 'ads' | 'adUserData' | 'adPersonalization';
 
@@ -40,6 +40,8 @@ export interface Rule {
   after?: string;
   hashesMatch?: boolean;
   body?: { has?: string[]; only?: string[]; ignore?: string[] };
+  /** Cookie names or `*` globs. A cookie rule selects cookies, not hits. */
+  cookie?: string[];
 }
 
 export type StepBody =
@@ -70,6 +72,8 @@ export interface ScenarioOptions {
   unloadGapIgnore?: string[];
   /** Extra field names or `*` globs that `deniedIdentifiers` treats as analytics identifiers, matched against `Hit.fields`. */
   identifierFields?: string[];
+  /** Hosts or `*.domain` wildcards that `server` mode passes through to the network. Every other collection request stays stubbed. */
+  serverHosts?: string[];
   /** Severity per built-in check. A check that is not listed is `fail`. */
   builtins?: Partial<Record<BuiltinName, Severity>>;
 }
@@ -104,6 +108,7 @@ export class ScenarioError extends Error {
 
 const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after']);
 const GROUP_KEYS = ['consent', 'ids', 'params', 'identity', 'body'] as const;
+const COOKIE_RULE_KEYS = ['cookie', 'before', 'in', 'after'];
 const BODY_KEYS = ['has', 'only', 'ignore'] as const;
 const MAX_FIELD_NAME = 64;
 const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
@@ -112,7 +117,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -393,6 +398,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         else if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names');
         else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);
         else (rule.body ??= {})[key as (typeof BODY_KEYS)[number]] = v as string[];
+      } else if (k === 'cookie') {
+        const l = list(k, v);
+        if (l?.some((name) => name.length > MAX_FIELD_NAME)) fail(p, `cookie names are at most ${MAX_FIELD_NAME} characters`);
+        else if (l) rule.cookie = l;
       } else if (k === 'vendor') {
         const l = list(k, v, [...vendorKeys, ...trackerVendorKeys, ...extraVendorKeys]);
         if (l) filter.vendor = l;
@@ -434,6 +443,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         fail(p, 'unknown key');
       }
     }
+    if (rule.cookie) {
+      const mixed = Object.keys(flat).filter((k) => !COOKIE_RULE_KEYS.includes(k));
+      if (mixed.length) fail(path, `cookie cannot be combined with ${mixed.join(', ')}; it only takes before, in and after`);
+    }
     if (rule.before && rule.inEpoch) fail(path, 'use either before or in, not both');
     if (rule.body?.has && rule.body.only) fail(path, 'body.has and body.only cannot be in the same entry');
     if (rule.body && rule.hashesMatch) fail(path, 'identity.hashesMatch cannot be combined with body.has or body.only');
@@ -463,6 +476,13 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         } else if (k === 'unloadGapIgnore') {
           if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
           else fail(p, 'must be a list of event names or globs such as consent_*');
+        } else if (k === 'serverHosts') {
+          if (!Array.isArray(v) || v.length === 0 || !v.every(isServerHostPattern)) fail(p, `must be a non-empty list of hosts${HOST_HINT}`);
+          else {
+            const bad = v.find((host: string) => !isSpecificServerHost(host));
+            if (bad !== undefined) fail(p, `"${bad}" is a vendor host or a wildcard on a public suffix. List the server container's own host, such as sgtm.example.com or *.example.com`);
+            else options.serverHosts = v as string[];
+          }
         } else if (k === 'identifierFields') {
           if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names or globs such as user_data.*');
           else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);

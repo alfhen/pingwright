@@ -42,6 +42,7 @@ import {
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
+import { hostMatches } from '@pingwright/expect';
 import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
@@ -71,7 +72,9 @@ const REDACTED_VALUE = '[redacted]';
 
 
 export interface RecorderOptions {
-  networkMode: Extract<NetworkMode, 'stub' | 'live'>;
+  networkMode: NetworkMode;
+  /** Needed by `server` mode: hosts or `*.domain` wildcards whose collection requests pass through. Every other one is still stubbed. */
+  serverHosts?: string[];
   /** Directory that receives `<runId>.jsonl`. */
   outDir: string;
   /** The site under test. Requests to other hosts can be flagged as unknown destinations. */
@@ -202,6 +205,9 @@ export class Recorder {
   static async launch(options: RecorderOptions): Promise<Recorder> {
     const testGtmOrigin = parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
     const gtmOverride = options.gtmOverride === undefined ? undefined : parseGtmOverride(options.gtmOverride);
+    if (options.networkMode === 'server' && !options.serverHosts?.length) {
+      throw new Error('networkMode "server" needs serverHosts: the hosts whose requests pass through.');
+    }
     if (options.netLog && options.networkMode !== 'live') {
       throw new Error('netLog needs networkMode "live": in stub mode the requests a frame sends while it unloads would leave the machine.');
     }
@@ -457,7 +463,7 @@ export class Recorder {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
     if (record && (await this.routeGtm(route, record))) return;
-    if (record && this.options.networkMode !== 'live' && (isCollectionEndpoint(record, this.trackers) || isKnownVendorCollection(record))) {
+    if (record && this.options.networkMode !== 'live' && this.isStubbedCollection(record)) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
@@ -468,6 +474,23 @@ export class Recorder {
       return;
     }
     await route.continue();
+  }
+
+  /** A collection request that stub and `server` mode answer locally. `server` mode lets the hosts in `serverHosts` through. */
+  private isStubbedCollection(record: Request): boolean {
+    if (!isCollectionEndpoint(record, this.trackers) && !isKnownVendorCollection(record)) return false;
+    return !(this.options.networkMode === 'server' && this.isServerHost(record.url));
+  }
+
+  private isServerHost(url: string): boolean {
+    let host: string;
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      return false;
+    }
+    const bare = (h: string) => h.replace(/^\[|\]$/g, '');
+    return hostMatches(bare(host), (this.options.serverHosts ?? []).map(bare));
   }
 
   /** Answers a gtm.js request, directly or through a loader, with the preview build, or from the test origin. Returns false when the request is not one of those. */
@@ -585,7 +608,7 @@ export class Recorder {
         postData = null;
       }
       const hop = this.hopRecord(first, next.href, method, headers, postData);
-      if (isCollectionEndpoint(hop, this.trackers) || isKnownVendorCollection(hop)) {
+      if (this.isStubbedCollection(hop)) {
         hop.outcome = 'stubbed';
         this.routed.add(hop.id);
         this.extraRequests.push(hop);

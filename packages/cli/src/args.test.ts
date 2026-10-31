@@ -79,7 +79,7 @@ test.each([
   [['--variant', 'a=x.json', '--variant', 'a=y.json'], 'given twice'],
   [['--gtm-override', 'g.json'], 'not an option of suite'],
   [['--headed'], 'not an option of suite'],
-  [['--network', 'server'], 'stub or live'],
+  [['--network', 'bogus'], 'stub, server or live'],
 ])('suite usage error for %j', (extra, message) => {
   expect(() => parseCli([...suiteBase, ...extra])).toThrow(UsageError);
   expect(() => parseCli([...suiteBase, ...extra])).toThrow(message);
@@ -95,7 +95,7 @@ test.each([
   [['run', '--site', 'http://x.test'], 'one scenario file'],
   [['run', 's.yml', '--site', 'ftp://x.test'], 'http or https'],
   [['run', 's.yml', '--site', 'nope'], 'http or https'],
-  [['run', 's.yml', '--site', 'http://x.test', '--network', 'server'], 'stub or live'],
+  [['run', 's.yml', '--site', 'http://x.test', '--network', 'bogus'], 'stub, server or live'],
   [['run', 's.yml', '--site', 'http://x.test', '--seed', 'x'], 'non-negative integer'],
   [['run', 's.yml', '--site', 'http://x.test', '--var', 'novalue'], 'name=value'],
   [['run', 's.yml', '--site', 'http://x.test', '--bogus'], 'bogus'],
@@ -103,4 +103,9 @@ test.each([
 ])('usage error for %j', (argv, message) => {
   expect(() => parseCli(argv)).toThrow(UsageError);
   expect(() => parseCli(argv)).toThrow(message);
+});
+
+test('--network server is accepted by run and suite', () => {
+  expect(parseCli(['run', 's.yml', '--site', 'http://x.test', '--network', 'server'])).toMatchObject({ network: 'server' });
+  expect(parseCli([...suiteBase, '--network', 'server'])).toMatchObject({ network: 'server' });
 });

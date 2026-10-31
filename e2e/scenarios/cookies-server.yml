@@ -1,0 +1,9 @@
+start: /cookies?when=after
+steps:
+  - wait: 1s
+  - consent: reject
+  - wait: 1s
+expect:
+  mustNot:
+    - { cookie: _pwdcid, before: consent }
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true }

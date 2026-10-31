@@ -1,0 +1,9 @@
+start: /cookies?when=before
+steps:
+  - wait: 1s
+  - consent: reject
+  - wait: 1s
+expect:
+  mustNot:
+    - { cookie: _pwid, before: consent }
+options: { seed: 1, allowUnknownDestination: true }

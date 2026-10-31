@@ -1,0 +1,9 @@
+start: /products/fake-tee
+steps:
+  - consent: none
+  - wait: 4s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+    - { vendor: meta, event: PageView }
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }
