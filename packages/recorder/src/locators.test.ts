@@ -172,4 +172,26 @@ describe('a role locator timeout', () => {
     const out = await timeoutMessage(page(many), 'Timeout.', { role: 'radio', name: 'R' });
     expect(out.match(/"R\d+"/g)).toHaveLength(10);
   });
+
+  test('leak: never prints the fake email, its hashes or a cookie value', async () => {
+    const email = 'pw-fixture@example.com';
+    const secrets = [
+      email,
+      createHash('sha256').update(email).digest('hex'),
+      createHash('sha256').update(email).digest('base64'),
+      createHash('sha256').update(email).digest('base64url'),
+      'pwsession=Zk3Qm8Lp0Xv7Rt5Yb2Nc4Dd9Aa',
+    ];
+    const snapshot = [
+      ...secrets.map((s) => `- button "${s}"`),
+      ...secrets.map((s) => `- link "${s}"`),
+      '- button "Buy now"',
+      '- link "Buy now"',
+    ].join('\n');
+    for (const role of ['button', 'link']) {
+      const out = await timeoutMessage(page(snapshot), 'Timeout.', { role, name: email });
+      for (const secret of secrets) expect(out).not.toContain(secret);
+      expect(out).toContain('"Buy now"');
+    }
+  });
 });
