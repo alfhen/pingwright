@@ -18,10 +18,12 @@ import {
   type Run,
   type Request,
   type Result,
+  type ResultNote,
   type Severity,
   type Step,
+  globToRegExp,
 } from '@pingwright/core';
-import { isSandboxPageUrl } from '@pingwright/decoders';
+import { GA4_BODY_ONLY_IGNORE, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList } from '@pingwright/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -36,6 +38,7 @@ export interface EvaluateOptions {
 export const DEFAULT_GRACE_MS = 50;
 
 const MAX_LISTED = 5;
+const MAX_NAMES = 12;
 const GOOGLE_VENDORS = new Set(['ga4', 'google-ads']);
 
 type Input = PingwrightRecord | EvalEpoch;
@@ -64,20 +67,22 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
   };
 
   const results: Result[] = [];
-  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity) =>
-    results.push({ type: 'result', id: newId('result'), runId, expectation, pass, evidence, message, ...(severity && { severity }) });
+  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) =>
+    results.push({ type: 'result', id: newId('result'), runId, expectation, pass, evidence, message, ...(severity && { severity }), ...(note && { note }) });
 
   for (const kind of ['mustNot', 'must'] as const)
     for (const rule of scenario.expect[kind]) {
-      const { pass, evidence, message } = evaluateRule(rule, ctx);
-      add(`${kind}: ${rule.description}`, pass, evidence, message);
+      const { pass, evidence, message, note } = evaluateRule(rule, ctx);
+      add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note);
     }
 
   builtInChecks(records, scenario, ctx, add);
   return results;
 }
 
-function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: string[]; message: string } {
+type RuleOutcome = { pass: boolean; evidence: string[]; message: string; note?: ResultNote };
+
+function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
   let hits = ctx.hits.filter((h) => matchesFilter(h, rule.filter, ctx));
   const total = hits.length;
   const narrowed: string[] = [];
@@ -104,6 +109,7 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
 
   const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
   const vacuous = rule.before ? vacuousBeforeConsent(rule, ctx) : undefined;
+  if (rule.body) return evaluateBodyRule(rule, rule.body, hits, where, total, vacuous);
   const ids = hits.map((h) => h.id);
   const found = `found ${hits.length} matching hit${hits.length === 1 ? '' : 's'}${narrowed.length ? ` (${total} before narrowing)` : ''}`;
 
@@ -126,6 +132,81 @@ function evaluateRule(rule: Rule, ctx: Context): { pass: boolean; evidence: stri
     return { pass: false, evidence: check.evidence, message: `${headline} ${matched}, but identity.hashesMatch failed: ${check.message}` };
   }
   return { pass, evidence: ids, message };
+}
+
+const NOT_RECORDED = 'cannot evaluate: field names not recorded';
+const BODY_CUT = 'cannot evaluate: body not fully recorded';
+const VENDOR_IGNORE: Record<string, readonly string[]> = { ga4: GA4_BODY_ONLY_IGNORE, meta: META_BODY_ONLY_IGNORE, sgtm: SGTM_BODY_ONLY_IGNORE };
+
+function listNames(names: string[]): string {
+  return names.length > MAX_NAMES ? `${names.slice(0, MAX_NAMES).join(', ')} and ${names.length - MAX_NAMES} more` : names.join(', ');
+}
+
+function cannotEvaluate(unreadable: Hit[], where: string): RuleOutcome {
+  const notRecorded = unreadable.some((h) => !h.fields);
+  return {
+    pass: false,
+    evidence: unreadable.map((h) => h.id),
+    message: `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} selected hit${unreadable.length === 1 ? '' : 's'}${where}.`,
+    note: notRecorded ? 'fieldsNotRecorded' : 'cannotEvaluateBody',
+  };
+}
+
+function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected: Hit[], where: string, total: number, vacuous?: string): RuleOutcome {
+  const tail = vacuous ? ` ${vacuous}` : '';
+  const narrowed = `${selected.length} selected hit${selected.length === 1 ? '' : 's'}${where}`;
+  if (body.has) {
+    const matchers = body.has.map((name) => globToRegExp(name));
+    const unreadable: Hit[] = [];
+    const matching: { hit: Hit; names: string[] }[] = [];
+    for (const hit of selected) {
+      if (!hit.fields) {
+        unreadable.push(hit);
+        continue;
+      }
+      const names = hit.fields.filter((f) => matchers.some((m) => m.test(f)));
+      if (names.length) matching.push({ hit, names });
+      else if (hit.fieldsComplete === false) unreadable.push(hit);
+    }
+    const count = rule.kind === 'must' ? (rule.count ?? { op: '>=' as const, n: 1 }) : { op: '=' as const, n: 0 };
+    const low = countHolds(count, matching.length);
+    const high = countHolds(count, matching.length + unreadable.length);
+    if (low !== high) return cannotEvaluate(unreadable, where);
+    const names = [...new Set(matching.flatMap((m) => m.names))].sort();
+    const evidence = matching.map((m) => m.hit.id);
+    const found = matching.length
+      ? `found ${matching.length} hit${matching.length === 1 ? '' : 's'} with body.has fields: ${listNames(names)}`
+      : 'found no hit with the body.has fields';
+    const expected = rule.kind === 'must' ? `Expected ${describeCount(count)} hits with body.has fields${where}` : `Expected no hit with body.has fields${where}`;
+    return { pass: low, evidence, message: `${expected}, ${found} (${total} before narrowing).${tail}` };
+  }
+
+  const only = body.only!;
+  const allowed = [...only, ...(body.ignore ?? [])].map((name) => globToRegExp(name));
+  if (rule.kind === 'must') {
+    const count = rule.count ?? { op: '>=' as const, n: 1 };
+    if (!countHolds(count, selected.length))
+      return { pass: false, evidence: selected.map((h) => h.id), message: `Expected ${describeCount(count)} matching hits${where}, found ${selected.length}.${tail}` };
+  }
+  const unreadable: Hit[] = [];
+  const offenders: { hit: Hit; outside: string[] }[] = [];
+  for (const hit of selected) {
+    if (!hit.fields) {
+      unreadable.push(hit);
+      continue;
+    }
+    const vendorIgnore = VENDOR_IGNORE[hit.vendor] ?? [];
+    const outside = hit.fields.filter((f) => !allowed.some((m) => m.test(f)) && !matchesIgnoreList(f, vendorIgnore));
+    if (outside.length) offenders.push({ hit, outside });
+    else if (hit.fieldsComplete === false) unreadable.push(hit);
+  }
+  if (offenders.length) {
+    const lines = offenders.slice(0, MAX_LISTED).map((o) => `${o.hit.id} has fields outside body.only: ${listNames(o.outside)} (${o.outside.length} of ${o.hit.fields!.length})`);
+    const more = offenders.length > MAX_LISTED ? ` and ${offenders.length - MAX_LISTED} more hits` : '';
+    return { pass: false, evidence: offenders.map((o) => o.hit.id), message: `${lines.join('; ')}${more}.${tail}` };
+  }
+  if (unreadable.length) return cannotEvaluate(unreadable, where);
+  return { pass: true, evidence: selected.map((h) => h.id), message: `All ${narrowed} have only fields allowed by body.only.${tail}` };
 }
 
 function describeSelector(filter: Filter): string {
