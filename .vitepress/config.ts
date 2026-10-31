@@ -34,7 +34,8 @@ function repoFileLinks(md: MarkdownIt) {
   const fallback = md.renderer.rules.link_open;
   md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     const token = tokens[idx]!;
-    if (token.attrGet('href') === 'LICENSE') token.attrSet('href', `${repo}/blob/main/LICENSE`);
+    const href = token.attrGet('href');
+    if (href === 'LICENSE' || href === 'CHANGELOG.md') token.attrSet('href', `${repo}/blob/main/${href}`);
     return fallback ? fallback(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
   };
 }
@@ -81,6 +82,7 @@ export default defineConfig({
     'test-results/**',
     'coverage/**',
     'AGENTS.md',
+    'CHANGELOG.md',
     'CLAUDE.md',
     'docs/plan-*.md',
     'docs/proposal-*.md',
