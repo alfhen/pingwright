@@ -11,6 +11,7 @@
 <!-- S03 -->
 
 <!-- S04 -->
+- A `click` or `wait` on a `{ role, name }` locator that times out now lists the closest controls of that role, ranked by name, for example `Closest radio controls: "White (01)", "Black (02)".` If the page has none of that role, the error says so first. (#460)
 
 <!-- S05 -->
 

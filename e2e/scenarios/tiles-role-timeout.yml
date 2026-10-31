@@ -1,0 +1,4 @@
+start: /tiles?theme=radio-mixed
+steps:
+  - click: { role: radio, name: "Black (99)" }
+options: { seed: 1, allowUnknownDestination: true }

@@ -132,3 +132,44 @@ test('leak: the closest-match list never prints the fake email, its hashes or a 
   for (const secret of secrets) expect(out).not.toContain(secret);
   expect(out).toContain('button "Buy now"');
 });
+
+describe('a role locator timeout', () => {
+  const page = (snapshot: string) => ({ locator: () => ({ ariaSnapshot: () => Promise.resolve(snapshot) }) }) as never;
+  const mixed = ['- link "Size guide"', '- button "Help"', '- radio "White (01)"', '- radio "Natural (02)"', '- radio "Black (03)"'].join('\n');
+
+  test('lists the controls of the role, closest name first, and no other role', async () => {
+    const out = await timeoutMessage(page(mixed), 'Timeout.', { role: 'radio', name: 'White (99)' });
+    expect(out).toBe('Timeout. Closest radio controls: "White (01)", "Black (03)", "Natural (02)".');
+  });
+
+  test('ranks by shared words before page order', async () => {
+    const out = await timeoutMessage(page('- radio "White (01)"\n- radio "Black (02)"'), 'Timeout.', { role: 'radio', name: 'Black (99)' });
+    expect(out).toBe('Timeout. Closest radio controls: "Black (02)", "White (01)".');
+  });
+
+  test('keeps page order on equal scores', async () => {
+    const out = await timeoutMessage(page('- radio "Aa"\n- radio "Bb"'), 'Timeout.', { role: 'radio', name: 'Zz' });
+    expect(out).toBe('Timeout. Closest radio controls: "Aa", "Bb".');
+  });
+
+  test('says so and falls back to the first controls when the page has none of the role', async () => {
+    const out = await timeoutMessage(page('- link "Size guide"\n- button "Help"'), 'Timeout.', { role: 'radio', name: 'x' });
+    expect(out).toBe('Timeout. No radio controls on the page. Controls on the page: link "Size guide", button "Help".');
+  });
+
+  test('a locator without a name lists the role in page order', async () => {
+    const out = await timeoutMessage(page(mixed), 'Timeout.', { role: 'radio' });
+    expect(out).toBe('Timeout. Closest radio controls: "White (01)", "Natural (02)", "Black (03)".');
+  });
+
+  test('hides an email-like name', async () => {
+    const out = await timeoutMessage(page('- radio "ada@example.com"'), 'Timeout.', { role: 'radio', name: 'x' });
+    expect(out).toBe('Timeout. Closest radio controls: "(hidden)".');
+  });
+
+  test('lists at most ten', async () => {
+    const many = Array.from({ length: 15 }, (_, i) => `- radio "R${i}"`).join('\n');
+    const out = await timeoutMessage(page(many), 'Timeout.', { role: 'radio', name: 'R' });
+    expect(out.match(/"R\d+"/g)).toHaveLength(10);
+  });
+});

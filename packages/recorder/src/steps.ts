@@ -217,13 +217,13 @@ async function selectOption(
 }
 
 /** A timeout in a locator step also lists the controls on the page, unless a person is in a handoff. */
-async function withControlList<T>(page: Page, recorder: Recorder, action: () => Promise<T>): Promise<T> {
+async function withControlList<T>(page: Page, recorder: Recorder, locator: Locator, action: () => Promise<T>): Promise<T> {
   try {
     return await action();
   } catch (error) {
     const handoff = (recorder as { handoff?: Recorder['handoff'] }).handoff?.state().waiting === true;
     if (error instanceof Error && error.name === 'TimeoutError' && !handoff) {
-      throw new Error(await timeoutMessage(page, error.message.split('\n')[0]!));
+      throw new Error(await timeoutMessage(page, error.message.split('\n')[0]!, typeof locator === 'object' && 'role' in locator ? locator : undefined));
     }
     throw error;
   }
@@ -235,7 +235,7 @@ function remaining(deadline: number): number {
 }
 
 async function locate(page: Page, recorder: Recorder, locator: Locator, record: StepRecord, timeout: number) {
-  return withControlList(page, recorder, async () => {
+  return withControlList(page, recorder, locator, async () => {
     const resolved = await resolveLocator(page, locator, timeout);
     if (resolved.index !== undefined) record.locator = resolved.index;
     return resolved.locator;
@@ -349,7 +349,7 @@ async function runStep(
     case 'click': {
       const deadline = Date.now() + timeout;
       const target = await locate(page, recorder, step.value, record, timeout);
-      await withControlList(page, recorder, () => target.click({ timeout: remaining(deadline) }));
+      await withControlList(page, recorder, step.value, () => target.click({ timeout: remaining(deadline) }));
       return;
     }
     case 'addToCart':
@@ -378,7 +378,7 @@ async function runStep(
       else {
         const deadline = Date.now() + timeout;
         const target = await locate(page, recorder, step.value.selector, record, timeout);
-        await withControlList(page, recorder, () => target.waitFor({ state: 'attached', timeout: remaining(deadline) }));
+        await withControlList(page, recorder, step.value.selector, () => target.waitFor({ state: 'attached', timeout: remaining(deadline) }));
       }
       return;
     case 'evaluate':
