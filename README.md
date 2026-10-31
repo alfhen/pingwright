@@ -72,7 +72,7 @@ npm i -g pingwright
 pingwright install-browser
 ```
 
-Node 22.18 or later. `npm i -g pingwright@next` installs the release candidate, `0.3.0-rc.1`. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `npm i -g pingwright` installs 0.2.0 until 0.3.0 is released. The suite, report, `body`, `cookie`, `select` and role locator sections of this README need the release candidate, which `npm i -g pingwright@next` installs (`0.3.0-rc.1`). Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
 
 ## Quick start
 

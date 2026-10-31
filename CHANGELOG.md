@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0-rc.2
+
+<!-- S06 -->
+
+<!-- S08 -->
+
+<!-- S02 -->
+
+<!-- S03 -->
+
+<!-- S04 -->
+
+<!-- S05 -->
+
+<!-- S07 -->
+
+### Docs
+
+- The README says the 0.3 sections need `npm i -g pingwright@next`, and that the plain install gives 0.2.0 (#450).
+- The Shopify guide says a handoff ends when the person clicks Done or presses Enter (#449).
+- The handoff docs say a `body` rule does not hide the Done pill, because the host is a sibling of `<body>`. Use `html { display: none }` (#454).
+- The docs no longer say Enter always works (#451).
+- Design section 11 lists `deniedIdentifiers` as a built-in check (#455).
+
+<!-- S09 -->
+
 ## 0.3.0-rc.1
 
 Release candidate. Install it with `npm i -g pingwright@next`.
@@ -13,13 +39,13 @@ options:
   builtins: { deniedIdentifiers: warn }
 ```
 
-`cid`, `client_id`, `fbp` and click IDs are not flagged. See "deniedIdentifiers" in [docs/cli.md](docs/cli.md).
+The check also fails when a denied hit has a body that was not fully recorded: cut at 64 KiB, JSON that did not parse, or a `--net-log` hit with no body. `cid`, `client_id`, `fbp` and click IDs are not flagged. See "deniedIdentifiers" in [docs/cli.md](docs/cli.md).
 
 ### Record schema version 2
 
 - `Run.recordSchemaVersion` is 2. 0.2 readers warn on it. Version 1 records still read.
 - New optional fields: `Hit.fields` (names of non-empty payload fields), `Hit.fieldsComplete`, `Hit.idFields`, `Checkpoint.t`, `Run.graceWindowMs`, `Run.variant`, `Result.note` and `Step.locator`. They hold names and numbers, never values.
-- A rule that needs field names and finds a version 1 record, or a body cut at 64 KiB, reports `cannot evaluate` and does not pass.
+- A rule that needs field names and finds a version 1 record, or a body cut at 64 KiB, reports `cannot evaluate` and does not pass, unless the recorded fields already decide the rule.
 
 ### New rules and checks
 
@@ -41,6 +67,12 @@ options:
 ### Server network mode
 
 `--network server` is `stub` plus pass-through for the hosts in `options.serverHosts`. Every other collection request is still stubbed. It exists so that cookies set by a server container can be seen. Sends a page makes while it unloads are still answered in the page, also to server hosts.
+
+Known in 0.3.0-rc.1, fixed in 0.3.0-rc.2:
+
+- `diff` prints `unloadGap (no host)` for flags without a host (#348).
+- In `--json` output, `expect` results have no `severity` (#349).
+- Enter in the terminal can fail to end a handoff when a page does not answer the wake call (#445).
 
 ## 0.2.0
 
