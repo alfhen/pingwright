@@ -68,11 +68,13 @@ export interface ScenarioOptions {
   cartRequest?: string;
   /** dataLayer event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
+  /** Extra field names or `*` globs that `deniedIdentifiers` treats as analytics identifiers, matched against `Hit.fields`. */
+  identifierFields?: string[];
   /** Severity per built-in check. A check that is not listed is `fail`. */
   builtins?: Partial<Record<BuiltinName, Severity>>;
 }
 
-export const BUILTIN_NAMES = ['unknownDestination', 'sandboxPageUrl', 'possibleRealData'] as const;
+export const BUILTIN_NAMES = ['unknownDestination', 'sandboxPageUrl', 'possibleRealData', 'deniedIdentifiers'] as const;
 export type BuiltinName = (typeof BUILTIN_NAMES)[number];
 export const SEVERITIES = ['fail', 'warn'] as const;
 
@@ -110,7 +112,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -461,6 +463,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         } else if (k === 'unloadGapIgnore') {
           if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
           else fail(p, 'must be a list of event names or globs such as consent_*');
+        } else if (k === 'identifierFields') {
+          if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names or globs such as user_data.*');
+          else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);
+          else options.identifierFields = v as string[];
         } else if (k === 'builtins') {
           if (!isMap(v)) fail(p, `must be a mapping of check name to ${SEVERITIES.join(' or ')}`);
           else {
