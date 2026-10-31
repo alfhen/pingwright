@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 export const HANDOFF_STATE_BINDING = '__pwHandoffState';
 export const HANDOFF_DONE_BINDING = '__pwHandoffDone';
 export const HANDOFF_HOST_ID = 'pingwright-handoff';
+export const HANDOFF_WAKE_EVENT = 'pingwright-handoff-wake';
 export const HANDOFF_REMINDER_MS = 60_000;
 
 export interface HandoffState {
@@ -46,6 +47,8 @@ export interface HandoffWait {
   resolver: (text: string, signal: AbortSignal) => Promise<void>;
   print: (text: string) => void;
   reminderMs?: number;
+  /** Called once the gate is open, so a document whose polling stopped asks for the state again. */
+  wake?: () => Promise<void>;
 }
 
 /** Waits for the first of the Done button and the terminal, and reminds the person in the terminal while it waits. */
@@ -54,6 +57,7 @@ export async function waitForHandoff(wait: HandoffWait): Promise<void> {
   const reminder = setInterval(() => wait.print(`Still waiting for the handoff: ${wait.text}`), wait.reminderMs ?? HANDOFF_REMINDER_MS);
   const fromButton = wait.gate.begin(wait.text);
   try {
+    await wait.wake?.().catch(() => undefined);
     await Promise.race([fromButton, wait.resolver(wait.text, abort.signal)]);
   } finally {
     clearInterval(reminder);
@@ -64,14 +68,18 @@ export async function waitForHandoff(wait: HandoffWait): Promise<void> {
 
 /**
  * Runs in the top frame of every document, never in a subframe. It stays dormant until the state binding
- * says a handoff is waiting. The pill lives in a closed shadow root and the Done click counts only when
- * trusted. The nonce stays in this closure, so a page script that calls the done binding is refused.
+ * says a handoff is waiting. It polls while one is waiting and stops when none is, until the wake event.
+ * The pill lives in a closed shadow root and the Done click counts only when trusted. The nonce stays in
+ * this closure, so a page script that calls the done binding is refused. The pill and its listeners are
+ * built at document start, before page scripts run, so a patched DOM prototype cannot see or call them.
+ * A page script can still restyle or remove the host, which hides the pill but cannot end the wait.
  */
 export function handoffOverlayScript(nonce: string): string {
   return `(() => {
   if (window.top !== window) return;
   const NONCE = ${JSON.stringify(nonce)};
   const HOST_ID = ${JSON.stringify(HANDOFF_HOST_ID)};
+  const WAKE = ${JSON.stringify(HANDOFF_WAKE_EVENT)};
   const stateFn = window[${JSON.stringify(HANDOFF_STATE_BINDING)}];
   const doneFn = window[${JSON.stringify(HANDOFF_DONE_BINDING)}];
   if (typeof stateFn !== 'function' || typeof doneFn !== 'function') return;
@@ -85,6 +93,7 @@ export function handoffOverlayScript(nonce: string): string {
   let host = null;
   let label = null;
   let dropped = null;
+  const addListener = EventTarget.prototype.addEventListener;
   const apply = (el, styles) => { for (const k in styles) el.style.setProperty(k, styles[k], 'important'); };
   const build = () => {
     host = document.createElement('div');
@@ -101,18 +110,18 @@ export function handoffOverlayScript(nonce: string): string {
     apply(pill, { display: 'flex', 'align-items': 'center', gap: '10px', padding: '6px 6px 6px 12px', background: '#1d2530', color: '#fff', font: '13px/1.3 system-ui, sans-serif', 'border-radius': '999px', 'box-shadow': '0 2px 10px rgba(0,0,0,.35)', cursor: 'grab', 'user-select': 'none', 'touch-action': 'none' });
     apply(label, { overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap', 'max-width': '300px' });
     apply(button, { all: 'unset', 'box-sizing': 'border-box', background: '#2f7d4f', color: '#fff', padding: '4px 14px', 'border-radius': '999px', 'font-weight': '600', cursor: 'pointer' });
-    button.addEventListener('click', (event) => {
+    addListener.call(button, 'click', (event) => {
       if (!event.isTrusted) return;
       Promise.resolve(doneFn(NONCE)).catch(() => {});
     });
     let grab = null;
-    pill.addEventListener('pointerdown', (event) => {
+    addListener.call(pill, 'pointerdown', (event) => {
       if (event.target === button) return;
       const box = host.getBoundingClientRect();
       grab = { dx: event.clientX - box.left, dy: event.clientY - box.top };
       pill.setPointerCapture(event.pointerId);
     });
-    pill.addEventListener('pointermove', (event) => {
+    addListener.call(pill, 'pointermove', (event) => {
       if (!grab) return;
       const box = host.getBoundingClientRect();
       const left = Math.min(Math.max(0, event.clientX - grab.dx), Math.max(0, innerWidth - box.width));
@@ -121,8 +130,8 @@ export function handoffOverlayScript(nonce: string): string {
       apply(host, dropped);
     });
     const release = () => { grab = null; };
-    pill.addEventListener('pointerup', release);
-    pill.addEventListener('pointercancel', release);
+    addListener.call(pill, 'pointerup', release);
+    addListener.call(pill, 'pointercancel', release);
     try {
       const sheet = new CSSStyleSheet();
       sheet.replaceSync('button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }');
@@ -130,12 +139,11 @@ export function handoffOverlayScript(nonce: string): string {
     } catch {}
     const stop = (event) => event.stopPropagation();
     for (const type of STOPPED) {
-      root.addEventListener(type, stop);
-      host.addEventListener(type, stop);
+      addListener.call(root, type, stop);
+      addListener.call(host, type, stop);
     }
   };
   const show = (text) => {
-    if (!host) build();
     label.textContent = text;
     label.title = text;
     apply(host, IMPORTANT);
@@ -144,6 +152,8 @@ export function handoffOverlayScript(nonce: string): string {
     if (parent && host.parentNode !== parent) parent.append(host);
   };
   const hide = () => { if (host && host.parentNode) host.remove(); };
+  let timer = null;
+  const stopPolling = () => { if (timer !== null) { clearInterval(timer); timer = null; } };
   const tick = async () => {
     let state;
     try { state = await stateFn(); } catch { return; }
@@ -152,8 +162,14 @@ export function handoffOverlayScript(nonce: string): string {
       return;
     }
     hide();
+    stopPolling();
   };
-  tick();
-  setInterval(tick, 500);
+  const start = () => {
+    if (timer === null) timer = setInterval(tick, 500);
+    tick();
+  };
+  build();
+  addListener.call(window, WAKE, start);
+  start();
 })();`;
 }
