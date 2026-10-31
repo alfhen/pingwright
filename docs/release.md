@@ -12,3 +12,7 @@ The script refuses to run if the tree is dirty, HEAD is not origin/main, or `pac
 The release commit drops the `build` script because npm runs a nested install for git dependencies that have one, and that install races with the outer one.
 
 CI runs `scripts/release.sh --no-tag` in a temporary clone and installs the result, so a broken release commit shows up before a tag exists.
+
+## Public Suffix List
+
+The `serverHosts` check and the first-party check use the Public Suffix List that ships inside `tldts`. Nothing fetches it at run time. Before each release, bump `tldts` in the root package, `packages/recorder` and `packages/expect` to the newest version that is at least two weeks old. A bump needs no code change.

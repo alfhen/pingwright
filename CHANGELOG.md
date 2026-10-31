@@ -10,6 +10,10 @@
 
 <!-- S03 -->
 
+### Fixed
+
+- `serverHosts` uses the Public Suffix List (`tldts`) to reject wildcards on public suffixes. `*.police.uk`, `*.uk.com`, `*.fly.dev` and `*.onrender.com` are now rejected, and `*.abc.de` is no longer rejected. `*.wordpress.com` stays rejected through a short local list (#427).
+
 <!-- S04 -->
 
 <!-- S05 -->
