@@ -26,8 +26,9 @@ const terminal = (_text: string, signal: AbortSignal) => new Promise<void>((reso
 
 const LONG_TEXT = 'Pay the test order with the fake card on the checkout page, then wait here until the confirmation number shows up on screen';
 
-async function open(path: string, text: string, narrow = false) {
+async function open(path: string, text: string, narrow = false, initScript?: string) {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url, headed: false, handoffOverlay: true });
+  if (initScript) await recorder.context.addInitScript(initScript);
   const scenario = parseScenario(`start: ${path}\nsteps:\n  - handoff: ${JSON.stringify(text)}\n`);
   const played = playScenario(recorder, scenario, { handoffResolver: terminal, print: () => {} });
   played.catch(() => undefined);
@@ -64,6 +65,35 @@ test('a page that patches textContent, style and getRootNode never receives the 
   expect(seen.textContent).not.toContain('Pay the test order');
   expect(seen.style).not.toContain('div#pingwright-handoff');
   expect(seen.rootNodes).not.toContain('[object ShadowRoot]');
+  await run.recorder.close();
+}, 60_000);
+
+test('a page that patches Function.prototype.call and Event.prototype.stopPropagation never sees the label or the closed root', async () => {
+  const run = await open('/handoff', 'Pay the test order', false, `(() => {
+    const seen = { call: [], stop: [] };
+    window.__pwSeen = seen;
+    const call = Function.prototype.call;
+    Function.prototype.call = function (self, ...args) {
+      try { seen.call.push(String(self) + '|' + args.map(String).join(',')); } catch {}
+      return call.apply(this, [self, ...args]);
+    };
+    const stop = Event.prototype.stopPropagation;
+    Event.prototype.stopPropagation = function () {
+      try { seen.stop.push(String(this.currentTarget)); } catch {}
+      return stop.call(this);
+    };
+  })();`);
+  const box = await pillBox(run.page);
+  await run.page.mouse.move(box.x + 20, box.y + box.height / 2);
+  await run.page.mouse.down();
+  await run.page.mouse.move(box.x - 40, box.y - 40, { steps: 4 });
+  await run.page.mouse.up();
+  await clickDone(run.page);
+  await run.played;
+  const seen = await run.page.evaluate(() => (window as unknown as { __pwSeen: { call: string[]; stop: string[] } }).__pwSeen);
+  expect(seen.call.join('\n')).not.toContain('Pay the test order');
+  expect(seen.call.join('\n')).not.toContain('HTMLSpanElement');
+  expect(seen.stop).not.toContain('[object ShadowRoot]');
   await run.recorder.close();
 }, 60_000);
 
