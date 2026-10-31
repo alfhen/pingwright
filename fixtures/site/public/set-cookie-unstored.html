@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cookie the browser rejects</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/banner.js"></script>
+</head>
+<body>
+<h1>Cookie the browser rejects</h1>
+<p>On load, requests <code>/session/unstored</code>, which answers <code>Set-Cookie: _pwunstored</code> with <code>Domain=other.example</code>. The domain does not match the host, so the browser always rejects the cookie.</p>
+<script>
+fetch('/session/unstored').catch(function () {});
+</script>
+</body>
+</html>

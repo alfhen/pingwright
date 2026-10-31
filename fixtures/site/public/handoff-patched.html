@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Handoff with patched DOM</title>
+<script>
+(function () {
+  var seen = { textContent: [], style: [], rootNodes: [] };
+  window.__pwPatched = seen;
+  var text = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+  Object.defineProperty(Node.prototype, 'textContent', {
+    configurable: true,
+    get: text.get,
+    set: function (value) {
+      seen.textContent.push(String(value));
+      return text.set.call(this, value);
+    }
+  });
+  var style = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'style');
+  Object.defineProperty(HTMLElement.prototype, 'style', {
+    configurable: true,
+    get: function () {
+      seen.style.push(this.localName + (this.id ? '#' + this.id : ''));
+      return style.get.call(this);
+    },
+    set: style.set
+  });
+  var getRootNode = Node.prototype.getRootNode;
+  Node.prototype.getRootNode = function () {
+    var root = getRootNode.apply(this, arguments);
+    seen.rootNodes.push(Object.prototype.toString.call(root));
+    return root;
+  };
+})();
+</script>
+</head>
+<body>
+<h1>Handoff with patched DOM</h1>
+<p>An inline script patches the <code>textContent</code> setter, the <code>style</code> getter and <code>getRootNode</code> before any other script runs. It records what they receive in <code>window.__pwPatched</code> (<code>textContent</code>, <code>style</code>, <code>rootNodes</code>). The page itself never calls them.</p>
+<button id="handoff-submit" type="button">Save</button>
+</body>
+</html>

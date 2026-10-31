@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Early Meta hit</title>
+</head>
+<body>
+<h1>Early Meta hit</h1>
+<p>Sends a Meta <code>PageView</code> hit for the fake pixel at once. The page has no banner and sets no Consent Mode default, so the consent state stays unknown.</p>
+<script>
+new Image().src = 'https://www.facebook.com/tr/?id=100000000000001&ev=PageView&dl=' + encodeURIComponent(location.href);
+</script>
+</body>
+</html>
