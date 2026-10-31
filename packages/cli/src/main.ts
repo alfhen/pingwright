@@ -1,6 +1,7 @@
 import { parseCli, RUN_USAGE, UsageError, USAGE } from './args.ts';
 import { diffCommand } from './diff.ts';
 import { installBrowser } from './install-browser.ts';
+import { reportCommand } from './report/index.ts';
 import { runCommand, type Io } from './run.ts';
 import { readVersion } from './version.ts';
 
@@ -24,6 +25,8 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         return (await installBrowser()) === 0 ? 0 : 2;
       case 'diff':
         return await diffCommand(command, io);
+      case 'report':
+        return await reportCommand(command, io);
       case 'run':
         return await runCommand(command, io);
     }

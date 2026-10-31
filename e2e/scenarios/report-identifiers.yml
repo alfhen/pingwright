@@ -1,0 +1,11 @@
+start: /identifiers?state=denied
+steps:
+  - fill:
+      "#email": email
+  - consent: reject
+  - wait: 3s
+expect:
+  mustNot:
+    - { vendor: sgtm, in: epoch(denied) }
+    - { vendor: meta, params: { em: pw-fixture@example.com }, ids: { user_id: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef } }
+options: { seed: 1, allowUnknownDestination: true }
