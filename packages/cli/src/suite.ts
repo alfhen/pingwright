@@ -15,6 +15,8 @@ export interface SuiteCell {
   labels: Record<string, string>;
   status: CellStatus;
   exitCode: 0 | 1 | 2;
+  /** Set on a `fail` or `warn` cell: how many rules failed and which built-in checks. Names and counts only. */
+  failed?: { rules: number; checks: string[] };
   /** File name inside the suite directory. Absent when the run wrote none. */
   record?: string;
 }
@@ -63,6 +65,29 @@ function statusOf(outcome: RunOutcome): CellStatus {
   return !summary.ok ? 'fail' : summary.pass ? 'pass' : 'warn';
 }
 
+function failedOf(outcome: RunOutcome, status: CellStatus): SuiteCell['failed'] {
+  if (status !== 'fail' && status !== 'warn') return undefined;
+  const severity = status === 'fail' ? 'fail' : 'warn';
+  const checks = new Set<string>();
+  let rules = 0;
+  for (const r of outcome.summary!.results) {
+    if (r.pass || r.severity !== severity) continue;
+    const name = /^builtin: ([A-Za-z]+)$/.exec(r.expectation)?.[1];
+    if (name) checks.add(name);
+    else rules++;
+  }
+  return { rules, checks: [...checks] };
+}
+
+/** The text of a cell in the terminal table and in the report. Never a rule's text or a message. */
+export function cellText(cell: Pick<SuiteCell, 'status' | 'exitCode' | 'failed'>): string {
+  if (cell.status === 'error') return `ERROR (exit ${cell.exitCode})`;
+  const label = cell.status.toUpperCase();
+  const { rules = 0, checks = [] } = cell.failed ?? {};
+  const parts = [rules > 0 && `${rules} rule${rules === 1 ? '' : 's'}`, ...checks].filter(Boolean);
+  return parts.length ? `${label}: ${parts.join(', ')}` : label;
+}
+
 function diffText(d: SuiteDiff | undefined): string {
   if (!d) return '';
   const parts = [
@@ -80,7 +105,7 @@ export function formatSuiteTable(manifest: SuiteManifest, dir: string): string {
   const header = ['scenario', ...manifest.variants, ...others.map((v) => `diff (${first} -> ${v})`)];
   const rows = scenarios.map((scenario) => [
     scenario,
-    ...manifest.variants.map((v) => manifest.cells.find((c) => c.scenario === scenario && c.variant === v)!.status.toUpperCase()),
+    ...manifest.variants.map((v) => cellText(manifest.cells.find((c) => c.scenario === scenario && c.variant === v)!)),
     ...others.map((v) => diffText(manifest.diffs.find((d) => d.scenario === scenario && d.to === v))),
   ]);
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
@@ -246,7 +271,9 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
         },
         io,
       );
-      cells.push({ ...cell, status: statusOf(outcome), exitCode: outcome.code, ...(outcome.path && { record: basename(outcome.path) }) });
+      const status = statusOf(outcome);
+      const failed = failedOf(outcome, status);
+      cells.push({ ...cell, status, exitCode: outcome.code, ...(failed && { failed }), ...(outcome.path && { record: basename(outcome.path) }) });
     }
   }
   const position = (c: SuiteCell) => scenarios.findIndex((s) => s.name === c.scenario) * variants.length + variants.indexOf(c.variant);

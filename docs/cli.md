@@ -220,18 +220,18 @@ pingwright suite scenarios/ --site https://staging.example.com \
 | `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
 | `--network`, `--out`, `--seed`, `--var`, `--tracker-list`, `--autoconsent-rules`, `--json` | As in `run`. `--gtm-override`, `--headed` and `--net-log` are not options of `suite`. A `--var` that no scenario declares exits 2. |
 
-The runs go one after another, with one browser at a time. The variants of one scenario use the same seed, so they have the same fake identity. Output goes to `<out>/suite_<id>/`: one record per run, named `<scenario>.<variant>.jsonl` (each has `Run.variant` set), and the manifest `suite.json`. The manifest has the site origin, the variants, one cell per scenario and variant with its status, exit code and record file name, and the diff counts. It holds no path, no query value, no override file path and no run message.
+The runs go one after another, with one browser at a time. The variants of one scenario use the same seed, so they have the same fake identity. Output goes to `<out>/suite_<id>/`: one record per run, named `<scenario>.<variant>.jsonl` (each has `Run.variant` set), and the manifest `suite.json`. The manifest has the site origin, the variants, one cell per scenario and variant with its status, exit code and record file name, the failed rule count and the failed built-in check names on a failed or warned cell, and the diff counts. It holds no path, no query value, no override file path and no run message.
 
 When a scenario has two or more variants, the suite compares the first variant with each other one, with the same engine as `diff`. The table shows the counts per pair:
 
 ```
-scenario        published   workspace   diff (published -> workspace)
-checkout        PASS        FAIL        +1 added, 1 changed
+scenario        published   workspace      diff (published -> workspace)
+checkout        PASS        FAIL: 1 rule   +1 added, 1 changed
 consent-reject  PASS        PASS        no change
 checkout-pay    SKIPPED     SKIPPED
 ```
 
-A difference between variants is not a failure. Your rules decide. A run that exits 2 (for example, the banner was not shown) shows `ERROR` and does not stop the suite. The suite's exit code is the worst cell, in this order: 2, then 1, then 0. With `--json`, stdout is the manifest instead of the table.
+A difference between variants is not a failure. Your rules decide. A run that exits 2 (for example, the banner was not shown) shows `ERROR (exit 2)` and does not stop the suite. A failed or warned cell says what failed: `FAIL: 5 rules, deniedIdentifiers` counts the failed rules and names the failed built-in checks, and `WARN: 1 rule` does the same for warnings. It never prints a rule or a message. The report uses the same text. The suite's exit code is the worst cell, in this order: 2, then 1, then 0. With `--json`, stdout is the manifest instead of the table.
 
 ### `pingwright report <run.jsonl | suite dir> --html <out.html>`
 
@@ -242,11 +242,12 @@ The input is one record, or a suite directory from `suite`. A suite directory ne
 A run report has these parts:
 
 - **Header.** Scenario, variant, run ID, date, network mode, site host, Pingwright version and record schema version.
+- **Verdict.** One plain-language line built from the marks and counts: which vendors send hits or identifiers in which consent state, how many expectations failed and how many warnings were accepted. `no leaks` when there are none. It holds no value.
 - **Timeline per vendor.** One row per vendor and one segment per consent epoch, each with a mark and a hit count. The mark also has a text label, so it reads without colour.
 - **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, up to five evidence IDs and, on a failed or warned result, `on failure: fail` or `on failure: warn`. A passing result shows no severity.
 - **Flags** and **fields.** The flag kinds with counts and hosts, and the field names seen on denied hits.
 
-A suite report has a header with the variants and the exit code, a results table, a diff section per variant pair, and the run sections for each scenario and variant.
+A suite report has these parts, in this order: a header with the variants and the exit code, a verdict per variant, a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`.
 
 The marks, worst first:
 

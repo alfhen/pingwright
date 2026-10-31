@@ -158,7 +158,7 @@ function expectationView(result: Result): ExpectationView {
 }
 
 const RULE_LEAK = 'named by a failed consent-scoped rule';
-const IDENTIFIER_LEAK = 'identifiers sent while denied';
+export const IDENTIFIER_LEAK = 'identifiers sent while denied';
 
 /**
  * Hit IDs that a result names as leaks, with the label that says why: the evidence of a failed `mustNot`

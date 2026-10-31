@@ -2,14 +2,17 @@ import { readRun, type RunRecords } from '@pingwright/core';
 import { diffRuns } from '@pingwright/expect';
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import type { SuiteManifest } from '../suite.ts';
+import { flagChangeLabel } from '../diff.ts';
+import { cellText, type SuiteCell, type SuiteManifest } from '../suite.ts';
 import { buildReportModel, type ReportModel } from './model.ts';
+import { addFindings, emptyFindings, findingsSentence } from './verdict.ts';
 import { definitionList, escapeHtml, page, runHeader, runSections } from './render.ts';
 
 export interface SuiteCellView {
   variant: string;
   status: string;
   exitCode: number;
+  failed?: { rules: number; checks: string[] };
   /** Undefined when the manifest names no record or the record could not be read. */
   model: ReportModel | undefined;
 }
@@ -87,7 +90,7 @@ export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords):
       const loaded = records.get(recordKey(name, variant));
       if (!loaded && cell.status !== 'skipped') warnings.push(`${name} (${variant}): no record, so the run is not in this report`);
       if (loaded?.truncatedAtLine) warnings.push(`${name} (${variant}): record is truncated at line ${loaded.truncatedAtLine}, so later records are missing from this report`);
-      return [{ variant, status: cell.status, exitCode: cell.exitCode, model: loaded && buildReportModel(loaded) }];
+      return [{ variant, status: cell.status, exitCode: cell.exitCode, ...(cell.failed && { failed: cell.failed }), model: loaded && buildReportModel(loaded) }];
     }),
   }));
 
@@ -158,7 +161,7 @@ function diffTable(d: DiffView): string {
   const warnings = d.warnings.map((w) => `<p class="warn-box">${escapeHtml(w)}</p>`).join('');
   if (d.rows.length === 0 && d.flags.length === 0) return `${heading}${warnings}<p class="empty">No differences.</p>`;
   const flags = d.flags.length
-    ? `<ul class="fields">${d.flags.map((f) => `<li>flag ${escapeHtml(f.kind)} ${escapeHtml(f.host || '(no host)')}: ${f.a} to ${f.b}</li>`).join('')}</ul>`
+    ? `<ul class="fields">${d.flags.map((f) => `<li>flag ${escapeHtml(flagChangeLabel(f))}</li>`).join('')}</ul>`
     : '';
   const body = d.rows
     .map((r) => `<tr><td>${escapeHtml(r.epoch)}</td><td>${escapeHtml(r.vendor)}</td><td>${escapeHtml(r.event)}</td><td>${r.added}</td><td>${r.removed}</td><td>${r.changed}</td><td>${r.countMismatches}</td></tr>`)
@@ -169,13 +172,34 @@ function diffTable(d: DiffView): string {
   return `${heading}${warnings}${table}${flags}`;
 }
 
+function verdicts(model: SuiteReportModel): string {
+  const items = model.header.variants.map((variant) => {
+    const findings = emptyFindings();
+    let unfinished = 0;
+    let noRecord = 0;
+    for (const s of model.scenarios) {
+      const cell = s.cells.find((c) => c.variant === variant);
+      if (cell?.status === 'error') unfinished++;
+      else if (cell?.model) addFindings(findings, cell.model);
+      else if (cell?.status === 'fail' || cell?.status === 'warn') noRecord++;
+    }
+    const sentence = findingsSentence(findings);
+    const base = noRecord && sentence === 'no leaks' ? 'leaks not known' : sentence;
+    const tail =
+      (unfinished ? `, ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '') +
+      (noRecord ? `, ${noRecord} run${noRecord === 1 ? ' has' : 's have'} no record` : '');
+    return `<li><strong>${escapeHtml(variant)}:</strong> ${escapeHtml(base + tail)}</li>`;
+  });
+  return `<ul class="verdicts">${items.join('')}</ul>`;
+}
+
 function overview(model: SuiteReportModel): string {
   const head = model.header.variants.map((v) => `<th scope="col">${escapeHtml(v)}</th>`).join('');
   const rows = model.scenarios
     .map((s) => {
       const cells = model.header.variants.map((v) => {
         const cell = s.cells.find((c) => c.variant === v);
-        return `<td>${cell ? `${escapeHtml(cell.status.toUpperCase())} (exit ${Number(cell.exitCode)})` : ''}</td>`;
+        return `<td>${cell ? escapeHtml(cellText({ status: cell.status as SuiteCell['status'], exitCode: cell.exitCode as SuiteCell['exitCode'], failed: cell.failed })) : ''}</td>`;
       });
       return `<tr><th scope="row">${escapeHtml(s.name)}</th>${cells.join('')}</tr>`;
     })
@@ -207,9 +231,11 @@ ${definitionList([
   ['Exit code', String(Number(h.exitCode))],
 ])}
 ${warnings}
+<h2>Verdict</h2>
+${verdicts(model)}
 <h2>Results</h2>
 ${overview(model)}
+${scenarios}
 <h2>Diff per variant pair</h2>
-${diffs}
-${scenarios}`);
+${diffs}`);
 }

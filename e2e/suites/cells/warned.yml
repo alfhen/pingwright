@@ -1,0 +1,9 @@
+start: /identifiers?state=denied
+identity:
+  email: pw-fixture@example.com
+steps:
+  - fill:
+      "#email": email
+  - consent: reject
+  - wait: 3s
+options: { seed: 1, allowUnknownDestination: true, builtins: { deniedIdentifiers: warn } }

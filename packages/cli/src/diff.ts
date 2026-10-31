@@ -36,6 +36,11 @@ function add(tree: Tree, key: DiffKey, line: string): void {
   tree.set(key.epoch, vendors);
 }
 
+/** A flag count change, with the host when the flag has one. Shared by the terminal and the suite report. */
+export function flagChangeLabel(f: { kind: string; host: string; a: number; b: number }): string {
+  return `${f.host ? `${f.kind} ${f.host}` : f.kind}: ${f.a} -> ${f.b}`;
+}
+
 export function formatDiff(result: DiffResult, a: string, b: string, options: { allFlags?: boolean } = {}): string {
   const tree: Tree = new Map();
   for (const h of result.added) add(tree, h.key, `added${where(h.key, h.step, h.page)}: ${h.hitId}`);
@@ -67,7 +72,7 @@ export function formatDiff(result: DiffResult, a: string, b: string, options: { 
   }
   if (shownFlags.length) {
     out.push('', 'Flags');
-    for (const f of shownFlags) out.push(`  ${f.kind} ${f.host || '(no host)'}: ${f.a} -> ${f.b}`);
+    for (const f of shownFlags) out.push(`  ${flagChangeLabel(f)}`);
   }
   if (hiddenFlags) out.push('', `${hiddenFlags} flag count change${hiddenFlags === 1 ? '' : 's'} for hosts allowed by allowUnknownDestination not shown (use --all-flags)`);
   return `${out.join('\n')}\n`;
