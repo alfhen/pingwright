@@ -22,7 +22,7 @@ All servers listen on port 0 (random).
 | `thirdPartyUrl` | `http://127.0.0.1:<p3>` | Unknown third-party host. Answers every path with a 1x1 GIF. |
 | `paymentFrameUrl` | `http://127.0.0.1:<p5>` | Card frame host for `/checkout/test-payment`. Answers only `GET /card-frame` and `POST /card-submit`. Each submit adds the posted card number (a test card value) to `cardSubmits`. |
 
-`localhost` and `127.0.0.1` are different sites, so requests to the last two are cross-site.
+`localhost` and `127.0.0.1` are different sites, so requests to every 127.0.0.1 server are cross-site.
 
 ## Pages
 
