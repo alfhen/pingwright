@@ -10,5 +10,9 @@
 <nav><a href="/">Home</a></nav>
 <h1>Unload gap</h1>
 <iframe id="pw-gap-pixel" sandbox="allow-scripts" src="/web-pixels@0.0.0-fixture/sandbox/gap/" style="width:0;height:0;border:0"></iframe>
+<script>
+  var mode = new URLSearchParams(location.search).get('mode');
+  if (mode) document.getElementById('pw-gap-pixel').src += '?mode=' + encodeURIComponent(mode);
+</script>
 </body>
 </html>

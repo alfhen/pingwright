@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Test payment</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Test payment</h1>
+<p>Fake form. No real payment happens.</p>
+<!--pw-marker-->
+<form id="payment-form">
+  <label>Card number (top page) <input id="card-number" autocomplete="cc-number" inputmode="numeric"></label><br>
+  <iframe id="card-frame" title="Card details" style="width:320px;height:140px;border:1px solid #888"></iframe><br>
+  <button id="pay" type="submit">Pay</button>
+</form>
+<script>
+(function () {
+  var frame = document.getElementById('card-frame');
+  frame.src = window.__PW_FIXTURE.paymentFrameUrl + '/card-frame';
+  window.addEventListener('message', function (e) {
+    if (e.source === frame.contentWindow && e.data === 'pw-card-submitted') location.href = '/thank-you-late';
+  });
+  document.getElementById('payment-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    frame.contentWindow.postMessage('pw-pay', '*');
+  });
+})();
+</script>
+</body>
+</html>

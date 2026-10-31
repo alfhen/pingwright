@@ -8,7 +8,9 @@ export interface FixtureSite {
   sgtmUrl: string;
   thirdPartyUrl: string;
   containerUrl: string;
+  paymentFrameUrl: string;
   receivedGtmAuth: string[];
+  cardSubmits: string[];
   close(): Promise<void>;
 }
 
@@ -21,7 +23,11 @@ const pages: Record<string, string> = {
   '/cart': 'cart.html',
   '/checkout': 'checkout.html',
   '/checkout/payment': 'payment.html',
+  '/checkout/test-payment': 'test-payment.html',
   '/thank-you': 'thank-you.html',
+  '/thank-you-late': 'thank-you-late.html',
+  '/handoff/until': 'handoff-until.html',
+  '/viewport': 'viewport.html',
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
   '/unload-beacons': 'unload-beacons.html',
@@ -75,10 +81,13 @@ function listen(server: Server): Promise<number> {
   });
 }
 
-async function sendFile(res: ServerResponse, file: string): Promise<void> {
+const testModeMarker = '<p id="pw-test-mode">Test mode</p>';
+
+async function sendFile(res: ServerResponse, file: string, transform?: (html: string) => string): Promise<void> {
   const ext = file.slice(file.lastIndexOf('.'));
   try {
-    const body = await readFile(new URL(file, publicDir));
+    const raw = await readFile(new URL(file, publicDir));
+    const body = transform ? transform(raw.toString('utf8')) : raw;
     res.writeHead(200, { 'content-type': contentTypes[ext] ?? 'application/octet-stream', 'cache-control': 'no-store' });
     res.end(body);
   } catch {
@@ -109,6 +118,9 @@ function shopHandler(config: string) {
       await sendFile(res, 'gap-pixel.html');
     } else if (path === containerScriptPixelPath) {
       await sendFile(res, 'container-frame-script.html');
+    } else if (path === '/checkout/test-payment') {
+      const marker = new URL(req.url ?? '/', 'http://localhost').searchParams.get('marker') === 'off' ? '' : testModeMarker;
+      await sendFile(res, page!, (html) => html.replace('<!--pw-marker-->', marker));
     } else if (page) {
       await sendFile(res, page);
     } else if (/^\/assets\/app-[0-9a-f]{64}\.js$/.test(path)) {
@@ -179,6 +191,22 @@ function thirdPartyHandler(_req: IncomingMessage, res: ServerResponse): void {
   res.end(gif);
 }
 
+function paymentFrameHandler(submits: string[]) {
+  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
+    if (req.method === 'GET' && path === '/card-frame') {
+      await sendFile(res, 'card-frame.html');
+    } else if (req.method === 'POST' && path === '/card-submit') {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      submits.push(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(204, { 'cache-control': 'no-store' }).end();
+    } else {
+      res.writeHead(404).end('not found');
+    }
+  };
+}
+
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve) => {
     server.close(() => resolve());
@@ -194,7 +222,10 @@ export async function startFixtureSite(): Promise<FixtureSite> {
   const sgtmUrl = `http://127.0.0.1:${await listen(sgtm)}`;
   const container = createServer(containerHandler(thirdPartyUrl, received));
   const containerUrl = `http://127.0.0.1:${await listen(container)}`;
-  const config = `window.__PW_FIXTURE=${JSON.stringify({ sgtmUrl, thirdPartyUrl })};`;
+  const cardSubmits: string[] = [];
+  const paymentFrame = createServer((req, res) => void paymentFrameHandler(cardSubmits)(req, res));
+  const paymentFrameUrl = `http://127.0.0.1:${await listen(paymentFrame)}`;
+  const config = `window.__PW_FIXTURE=${JSON.stringify({ sgtmUrl, thirdPartyUrl, paymentFrameUrl })};`;
   const handler = shopHandler(config);
   const shop = createServer((req, res) => void handler(req, res));
   const url = `http://localhost:${await listen(shop)}`;
@@ -203,9 +234,11 @@ export async function startFixtureSite(): Promise<FixtureSite> {
     sgtmUrl,
     thirdPartyUrl,
     containerUrl,
+    paymentFrameUrl,
     receivedGtmAuth: received,
+    cardSubmits,
     close: async () => {
-      await Promise.all([shop, sgtm, thirdParty, container].map(closeServer));
+      await Promise.all([shop, sgtm, thirdParty, container, paymentFrame].map(closeServer));
     },
   };
 }

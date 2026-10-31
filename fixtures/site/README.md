@@ -13,13 +13,14 @@ Opened in a normal browser, the shop sends live GA4, Google Ads, remarketing, Co
 
 ## Servers
 
-All three listen on port 0 (random).
+All servers listen on port 0 (random).
 
 | Name | URL | Role |
 | --- | --- | --- |
 | `url` | `http://localhost:<p1>` | The shop. |
 | `sgtmUrl` | `http://127.0.0.1:<p2>` | Mock server-container host. `/pwstape?pk=<base64 path>`: 200 with a tiny script when the decoded path starts with `/gtag/js`, 204 otherwise. |
 | `thirdPartyUrl` | `http://127.0.0.1:<p3>` | Unknown third-party host. Answers every path with a 1x1 GIF. |
+| `paymentFrameUrl` | `http://127.0.0.1:<p5>` | Card frame host for `/checkout/test-payment`. Answers only `GET /card-frame` and `POST /card-submit`. Each submit adds the posted card number (a test card value) to `cardSubmits`. |
 
 `localhost` and `127.0.0.1` are different sites, so requests to the last two are cross-site.
 
@@ -122,7 +123,7 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 ## Server container Data Tag page
 
-`/sgtm-data-tag` posts a `purchase` body to `sgtmUrl/data?v=2&event=purchase` (a JSON body sent as `text/plain`). The values are SHA-256 hashes of the identity typed in the checkout form, read from `sessionStorage` (`pw_checkout`), so a scenario fills `/checkout` and then visits this page. `?form=top` (default) is the Stape Data Tag protocol 2 shape: `email_address`, `first_name`, `last_name`, `street`, `city`, `postal_code` and `country` as hashed top-level fields, and an empty `phone_number`. `?wrong=postal` or `?wrong=country` hashes `00000` or `FR` for that one field, so a run must fail `identity.hashesMatch`. `?form=nested` sends `event_name`, `page_location` and `customerHashed.email` only. `?form=flat-email` sends the same with a top-level `email`. Both hash the typed email, or `pw-fixture@example.com` when nothing was typed. `?form=list` sends a `user_data` object with `email_address` and `phone_number` as one-item lists and `address` as a one-item list of objects.
+`/sgtm-data-tag` posts a `purchase` body to `sgtmUrl/data?v=2&event=purchase` (a JSON body sent as `text/plain`). The values are SHA-256 hashes of the identity typed in the checkout form, read from `sessionStorage` (`pw_checkout`), so a scenario fills `/checkout` and then visits this page. `?form=top` (default) is the Stape Data Tag protocol 2 shape: `email_address`, `first_name`, `last_name`, `street`, `city`, `postal_code` and `country` as hashed top-level fields, and an empty `phone_number`. `?wrong=postal` or `?wrong=country` hashes `00000` or `FR` for that one field, so a run must fail `identity.hashesMatch`. `?form=nested` sends `event_name`, `page_location` and `customerHashed.email` only. `?form=flat-email` sends the same with a top-level `email`. Both hash the typed email. In every form, the email is `pw-fixture@example.com` when nothing was typed, not only in `nested` and `flat-email`. `?form=list` sends a `user_data` object with `email_address` and `phone_number` as one-item lists and `address` as a one-item list of objects.
 
 ## Shared hashes page
 
@@ -170,3 +171,14 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 | `/handoff`, `/handoff/second` | `?listener=1` | A form (`#note`, `#handoff-submit`, result in `#saved`) and a link `#to-second`. `listener=1` adds a document-level click listener that loads a GA4 image from `www.google-analytics.com`. | None. |
 
 For a stub-mode run, `/pwcookie` is a Stape loader request, so stub mode answers it and the `Set-Cookie` is not seen. Only a mode that lets the request through shows it. List `sgtmUrl` as an allowed destination, because the mock host is not a known vendor.
+
+## Pages for 0.4
+
+| Page | Switches | What it sends or does | Consent step |
+| --- | --- | --- | --- |
+| `/handoff/until` | none | A link `#pw-to-thank-you` to `/thank-you-late`. Sends nothing. | None. |
+| `/thank-you-late` | none | 2 s after load, a GA4 `purchase` image hit for `G-PWTEST0001` (`transaction_id` `fixture-order-0002`) to `www.google-analytics.com`. A handoff that ends at the URL match with no settle time misses it. | None. |
+| `/checkout/test-payment` | `?marker=off` | A top page on `localhost` with a test-mode marker `#pw-test-mode`, a plain `#card-number` input on the top page, a card iframe from `paymentFrameUrl` (`/card-frame`, cross-origin) with `#cc-number`, `#cc-exp` and `#cc-csc` (`cc-*` autocomplete), and `#pay`. `#pay` asks the frame to post its card number to its own origin, then goes to `/thank-you-late`. `marker=off` leaves out `#pw-test-mode`. Loads neither banner nor tags. | None. |
+| `/viewport` | none | Pushes a dataLayer event `layout_mobile` when `innerWidth` is below 600, else `layout_desktop`, and sends a GA4 image hit with that event name. Pushes `ua_mobile: true` when the user agent contains `Mobile`. | None. |
+
+`/unload-gap` takes a `mode` switch that the gap frame reads. Without `mode` the page is as described above. `?mode=custom`: 1.8 s after load the frame pushes `custom_add`, sends a `/data` hit named `custom_add` and a GA4 `/g/collect` hit named `custom_add_ga` to `https://sgtm.pingwright.invalid`, and sends nothing in `pagehide`. `?mode=close`: the frame pushes `add_to_cart` and holds the hit until `pagehide`. The scenario does not navigate, so the hit goes out only when the page closes.
