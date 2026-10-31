@@ -283,6 +283,13 @@ test('a cookie an earlier checkpoint already held reads as already set, with no 
   }
 });
 
+test('a cookie deleted before the request and set again after it reads as stored, not already set', () => {
+  const req = request(100, 'http://localhost:3000/data');
+  const r = run(NOT_BEFORE, [stored([HERE('_dcid')], 'early', 5), stored([], 'consent', 50), req, response(req, ['_dcid']), AT_LATER([HERE('_dcid')])])[0]!;
+  expect(r.message).toContain('stored by the browser');
+  expect(r.message).not.toContain('already set');
+});
+
 test('an earlier checkpoint on another domain does not make the cookie already set', () => {
   const req = request(100, 'http://localhost:3000/data');
   const r = run(NOT_BEFORE, [stored([{ name: '_dcid', domain: '.other.example' }], 'early', 5), req, response(req, ['_dcid']), AT_LATER([HERE('_dcid')])])[0]!;

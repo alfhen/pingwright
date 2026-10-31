@@ -192,7 +192,7 @@ const STORAGE_MARGIN_MS = 50;
 const STORED_RANK: Record<Stored, number> = { stored: 3, notStored: 2, alreadySet: 1, unknown: 0 };
 
 /**
- * Reads the checkpoints around the request. One before it with the cookie means it was already set. Otherwise, one
+ * Reads the checkpoints around the request. The last one before it holding the cookie means it was already set. Otherwise, one
  * more than the margin after the request with the cookie means stored, and some without it means not stored.
  */
 function storedState(sighting: CookieSighting, ctx: Context): Stored {
@@ -200,7 +200,8 @@ function storedState(sighting: CookieSighting, ctx: Context): Stored {
   const t = sighting.t;
   const host = sighting.host;
   const holds = (c: { cookies: { name: string; domain: string }[] }) => c.cookies.some((k) => k.name === sighting.name && domainMatches(host, k.domain));
-  if (ctx.checkpoints.some((c) => c.t !== undefined && c.t < t && holds(c))) return 'alreadySet';
+  const before = ctx.checkpoints.filter((c) => c.t !== undefined && c.t < t).sort((a, b) => b.t! - a.t!)[0];
+  if (before && holds(before)) return 'alreadySet';
   const later = ctx.checkpoints.filter((c) => c.t !== undefined && c.t > t + STORAGE_MARGIN_MS);
   if (later.length === 0) return 'unknown';
   return later.some(holds) ? 'stored' : 'notStored';
