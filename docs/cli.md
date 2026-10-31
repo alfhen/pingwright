@@ -7,7 +7,7 @@ npm i -g pingwright
 pingwright install-browser
 ```
 
-`npm i -g pingwright@next` installs the newest release candidate, when there is one. Pingwright needs Node 22.18 or later.
+`npm i -g pingwright@next` installs the newest release candidate, `0.3.0-rc.1` at the time of writing. Pingwright needs Node 22.18 or later.
 
 You can also install a release from its git tag:
 
@@ -35,7 +35,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | Option | Meaning |
 | --- | --- |
 | `--site <url>` | The site to test. Required. Scenario paths are resolved against it. |
-| `--network stub\|server\|live` | `stub` (default) answers known collection endpoints locally. `server` is `stub`, except that collection requests to the hosts in `options.serverHosts` pass through (see Rules on cookies). `live` lets every hit through and warns on stderr that hits reach real vendor accounts. Overrides `options.network` in the scenario. |
+| `--network stub\|server\|live` | `stub` (default) answers known collection endpoints locally. `server` is `stub`, except that collection requests to the hosts in `options.serverHosts` pass through (see Rules on cookies). Sends from a page while it unloads are still answered in the page, also to those hosts. `live` lets every hit through and warns on stderr that hits reach real vendor accounts. Overrides `options.network` in the scenario. |
 | `--out <dir>` | Directory for the record, `runs` by default. The file is `<dir>/run_<id>.jsonl`. |
 | `--seed <n>` | Seed for the fake identity. Overrides `options.seed`. |
 | `--headed` | Show the browser window. Scenarios with a `handoff` step are always headed. |
@@ -59,7 +59,7 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `cartRequest` | Regular expression matched against request URLs. In an `addToCart` step, a matching request counts as a cart change, for a site whose cart endpoint the built-in check does not know. |
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. Use it for custom events that are not meant to produce a hit. |
-| `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. |
+| `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. A `pagehide` or `visibilitychange` send to a server host is answered in the page, so the cookies it would set are not seen. A passing cookie rule in `server` mode can miss them. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
 | `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData` and `deniedIdentifiers`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
 | `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` treats as analytics identifiers, matched against the field names of each hit. |
@@ -72,7 +72,7 @@ Locators: `click` and `wait` take a selector string, or a mapping:
 - wait: { role: button, name: "Add to cart" }
 ```
 
-`role` and `name` are Playwright's `getByRole(role, { name })`. `exact: true` (with a `name`) matches the whole name. `any` is a list of selectors. The step uses the first one that matches an element within the step timeout, and the step record stores its position in `locator` (the step label is not changed). `any` cannot be combined with `role`. `fill`, `select` and `addToCart` take selector strings only. When a `click` or `wait` times out, the error lists up to ten buttons, radios, checkboxes, links, tabs and options on the page, as role and accessible name cut at 60 characters, for example `Controls on the page: button "White (01)", button "Black (02)".` The names come from the accessibility tree only, never from text content or form values. A name that is an email, has a run of 6 or more digits or looks like a hash is printed as `(hidden)`. No list is made while a handoff is waiting.
+`role` and `name` are Playwright's `getByRole(role, { name })`. `exact: true` (with a `name`) matches the whole name. `any` is a list of selectors. The step uses the first one that matches an element within the step timeout, and the step record stores its position in `locator` (the step label is not changed). `any` cannot be combined with `role`. `fill`, `select` and `addToCart` take selector strings only. When a `click` or `wait` times out, the error lists up to ten buttons, radios, checkboxes, links, tabs and options on the page, as role and accessible name cut at 60 characters, for example `Controls on the page: button "White (01)", button "Black (02)".` The names are accessible names from the accessibility tree, and for a button or link that is usually its visible text. No other page text and no form value is listed. A name that is an email, has a run of 6 or more digits or looks like a hash is printed as `(hidden)`. No list is made while a handoff is waiting.
 
 `select` chooses an option of a `<select>`: `select: { "select[name=countryCode]": DE }`. It matches the option value first, then the option label. Quote a number (`"01"`), because YAML drops leading zeros and the step is refused otherwise. After the change it reads the select back. If the option is not selected, the step fails with `value not applied (still: <option label>)`. A select that is a card field (for example `autocomplete=cc-exp-month`) fails with the same handoff message as `fill` on a site that is not on this machine. The chosen option value and label join the run identity as extra values under the rule below, so a hashed country can match in `identity.hashesMatch`. `fill` on a select still works as before.
 
@@ -107,6 +107,8 @@ steps:
 ```
 
 `addToCart` clicks the selector and then needs proof that the cart changed: a cart request, or an `add_to_cart` dataLayer event. Cart requests it knows are a Shopify POST to `/cart/add`, `/cart/change` or `/cart/update` and a GET of `/cart/add?id=`, a POST to `/cart` (Hydrogen), Magento `/checkout/cart/add/...`, WooCommerce `?wc-ajax=add_to_cart` and a Storefront `cartCreate` or `cartLinesAdd` mutation. A request counts once its response arrived with a 2xx or 3xx status (a form POST often answers with a redirect). A request that is still pending, failed or got a 4xx or 5xx response does not count. Without proof the step fails with "click did not add to cart", for example when the click only opened a variant picker. For a cart endpoint it does not know, set the `cartRequest` option, or use a plain `click` step, which checks nothing. Through the library, `cartCheck` and `cartTimeoutMs` in the play options replace the check and the 5 s wait.
+
+A `handoff` step waits for a person. In the headed window a small pill with the handoff text and a **Done** button sits in a corner of the top document. Click Done, or press Enter in the terminal: the first of the two ends the wait. The pill is a closed shadow root on one element, `#pingwright-handoff`, installed by a context init script. It is not drawn in sandboxed iframes, it survives navigations during the handoff, and it makes no network request. While the wait lasts, the terminal prints `Still waiting for the handoff: <text>` every 60 seconds. The pill is part of the page, so a page can still hide it (a script that edits the element, or a rule such as `body { display: none }`), and a capture-phase listener on `window` or `document` sees a click on it. Enter in the terminal always works.
 
 During a `handoff` step, requests that are not tracking hits are stored without their body and query values (`redacted: handoff`), so passwords typed by the person are not kept. For those requests the query values of the frame URL and of the `Referer` and `Origin` headers are redacted too. Later requests that are not redacted keep the page URL as it is.
 
@@ -164,7 +166,7 @@ expect:
 - A rule with `before`, `in` or `after` that matches a checkpoint without a time (a record from before 0.3) cannot be placed. The result is `cannot evaluate` and never passes.
 - Cookie names are guarded like field names: a name that looks like a value is shown as `(other)`.
 
-In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for that reason, so a passing result in `stub` mode ends with `stub mode: stubbed endpoints set no cookies` and has `note: stubNoCookies`. To see the cookies of a server container, run with `--network server` and list its host in `options.serverHosts`, or use `--network live`.
+In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for that reason, so a passing result in `stub` mode ends with `stub mode: stubbed endpoints set no cookies` and has `note: stubNoCookies`. To see the cookies of a server container, run with `--network server` and list its host in `options.serverHosts`, or use `--network live`. In `server` mode a send from `pagehide` or `visibilitychange` to a server host is still answered in the page, so a cookie that such a send would set is not seen, and a passing cookie rule can miss it.
 
 ### GTM override
 
@@ -199,6 +201,70 @@ Compares two runs of the same scenario, for example one with a GTM override and 
 The text summary is grouped by consent epoch label, then vendor, then event. Under each event it lists hits that were added (only in the second run), removed (only in the first), and changed. A changed hit is one that pairs up but differs in a consent field, in `gcs` or `gcd`, or in whether an ID is present. Hits are paired by epoch label, vendor and event (and the page path with `--by-page`), in time order: the first hit of a group in one run with the first in the other, and so on. The step is not part of the match, so a hit that lands in a different step in the two runs still pairs. Each line shows the step of the hit. A changed line shows `step "a" -> "b"` when the step differs, and with `--by-page` it shows `recorded as <page a> -> <page b>` when either raw page differs from the key. A hit left over in a group after pairing is reported as added or removed. When a group has a different number of hits in the two runs, its event also gets a line such as `count 2 -> 1 (pairing by order)`, which with `--by-page` also shows the page, because the pairing may then match the wrong hits. A line at the end lists flag counts that changed per host.
 
 Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missing, is not JSONL, or does not start with a `run` record exits 2 with a message that names the file. A run record with a newer schema version than Pingwright knows prints a warning and the diff goes on. A file whose last line is cut off (a crashed run) is read up to that line, and the diff prints a warning that names the file and the line.
+
+### `pingwright suite <dir> --site <url>`
+
+Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
+
+```bash
+pingwright suite scenarios/ --site https://staging.example.com \
+  --variant published --variant workspace=override.json
+```
+
+| Option | Meaning |
+| --- | --- |
+| `--site <url>` | The site to test. Required. |
+| `--variant <name[=file]>` | A GTM build to test. Can be repeated. `published` means no override and takes no file. `name=file` serves an override file in the `--gtm-override` format. The name matches `^[a-z0-9][a-z0-9_-]*$`, and a name given twice exits 2. Default: `published`. |
+| `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
+| `--network`, `--out`, `--seed`, `--var`, `--tracker-list`, `--autoconsent-rules`, `--json` | As in `run`. `--gtm-override`, `--headed` and `--net-log` are not options of `suite`. A `--var` that no scenario declares exits 2. |
+
+The runs go one after another, with one browser at a time. The variants of one scenario use the same seed, so they have the same fake identity. Output goes to `<out>/suite_<id>/`: one record per run, named `<scenario>.<variant>.jsonl` (each has `Run.variant` set), and the manifest `suite.json`. The manifest has the site origin, the variants, one cell per scenario and variant with its status, exit code and record file name, and the diff counts. It holds no path, no query value, no override file path and no run message.
+
+When a scenario has two or more variants, the suite compares the first variant with each other one, with the same engine as `diff`. The table shows the counts per pair:
+
+```
+scenario        published   workspace   diff (published -> workspace)
+checkout        PASS        FAIL        +1 added, 1 changed
+consent-reject  PASS        PASS        no change
+checkout-pay    SKIPPED     SKIPPED
+```
+
+A difference between variants is not a failure. Your rules decide. A run that exits 2 (for example, the banner was not shown) shows `ERROR` and does not stop the suite. The suite's exit code is the worst cell, in this order: 2, then 1, then 0. With `--json`, stdout is the manifest instead of the table.
+
+### `pingwright report <run.jsonl | suite dir> --html <out.html>`
+
+Writes one HTML file that people can read without knowing JSONL. It opens no browser and reads no network. `--html` is required, and the command refuses to overwrite its own input. A missing file, or a file that is not a run record, exits 2, as `diff` does.
+
+The input is one record, or a suite directory from `suite`. A suite directory needs its `suite.json`. A record that the manifest names and that is missing becomes a warning in the page.
+
+A run report has these parts:
+
+- **Header.** Scenario, variant, run ID, date, network mode, site host, Pingwright version and record schema version.
+- **Timeline per vendor.** One row per vendor and one segment per consent epoch, each with a mark and a hit count. The mark also has a text label, so it reads without colour.
+- **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, the severity and up to five evidence IDs.
+- **Flags** and **fields.** The flag kinds with counts and hosts, and the field names seen on denied hits.
+
+A suite report has a header with the variants and the exit code, a results table, a diff section per variant pair, and the run sections for each scenario and variant.
+
+The marks, worst first:
+
+| Mark | Meaning |
+| --- | --- |
+| `leak` | A hit that `deniedIdentifiers` flags, or that is in the evidence of a failed `deniedIdentifiers` result at either severity, or of a failed `mustNot` with a consent scope (`in: epoch(denied)`, `in: epoch(withdrawn)`, `before: consent` or a `consent.<field>: denied` filter). A failed `mustNot` with no consent scope does not mark a hit. |
+| `unchecked` | A hit with a denied signal whose body was not fully recorded, or that has identifier names whose own consent signal is not denied. Pingwright cannot call it clean. |
+| `mixed` | Granted and denied hits in one segment, or a hit with some signals granted and some denied. |
+| `full` | Hits with consent granted. A hit with unknown consent before the first answer also shows `full`, with the label "before an answer". |
+| `ping` | Hits sent while consent is denied, with no identifier names recorded. `cid`, `fbp` and click IDs are not identifiers here. |
+| `nothing` | No hit. |
+
+Only names and counts are shown: no request URL, query value, body, page path, cookie value, hash, identity value or result message. A result's `note` is shown as a fixed sentence, for example "stub mode: stubbed endpoints set no cookies, so this pass says nothing about server cookies". A scenario's `params`, `ids` and `page` keys show their names and never their values. Every string from the records is escaped. The file has no script, no link, no image and no font, one inline style and a `Content-Security-Policy` meta tag. It does not claim that a site complies with a law.
+
+```bash
+pingwright report runs/run_<id>.jsonl --html report.html
+pingwright report runs/suite_<id> --html suite-report.html
+```
+
+`report` for a record from before schema version 2 shows `not recorded` where field names are missing.
 
 ### `pingwright install-browser`
 

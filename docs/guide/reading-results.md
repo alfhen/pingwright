@@ -25,8 +25,9 @@ Expectations
   FAIL builtin: sandboxPageUrl
        Expected no hit to carry a sandbox URL as its page, found 1: http://localhost:57308/web-pixels@0.0.0-fixture/sandbox/modern/.
        evidence: hit_01M66G9M2S992B5DF1MZ15ZQ07
+  PASS builtin: deniedIdentifiers
   PASS builtin: possibleRealData
-Result: fail (3 of 4)
+Result: fail (3 of 5)
 Record: runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
@@ -76,6 +77,7 @@ Built-in checks run on every run. You do not write them:
 
 - `unknownDestination` fails if a request went to a host that is not your site and that Pingwright does not know. The scenario can allow a host with `options.allowUnknownDestination`.
 - `sandboxPageUrl` fails if a vendor received the address of a sandboxed iframe as the page address. The vendor then reports the wrong page. Shopify custom pixels run in such an iframe.
+- `deniedIdentifiers` fails if a hit carries an identifier, such as a user ID or a hashed email, while the matching consent signal is denied. See [deniedIdentifiers](../cli.md#deniedidentifiers).
 - `possibleRealData` fails if the record holds an email address, a phone number or a hash that does not belong to the fake identity. A hash is a fixed code made from a value, such as an email address.
 
 The [CLI page](../cli.md) lists the options that change these checks. One of them, `options.builtins`, sets a check to `warn`. The summary then shows `WARN` for it and the exit code stays 0.

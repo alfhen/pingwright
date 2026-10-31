@@ -5,15 +5,17 @@
   </picture>
 </h1>
 
-Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Reports of which tags fired are planned.
+Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 
-> **Status: 0.2 (`0.2.0`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.2 adds a GTM workspace override, `pingwright diff`, a Pinterest decoder, stubbing of known tracker hosts and a Shopify checkout pattern. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
+> **Status: 0.3 release candidate (`0.3.0-rc.1`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `pingwright suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
 > **In 0.1:** `pingwright run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
 > **In 0.2:** `--gtm-override` runs the page against an unpublished GTM web workspace, also through a Stape-style custom loader; `pingwright diff` compares two runs; a Pinterest decoder; a curated tracker list (LinkedIn, Microsoft UET, Reddit) that is stubbed and recorded as minimal hits, extendable with `--tracker-list` (X, for example); a record schema version; a Shopify checkout pattern ([docs/shopify-checkout.md](docs/shopify-checkout.md)).
 >
-> **Not built yet:** MCP server, `report`, GTM tag-firing reporters, `server` network mode, Shopify bridge, a full Microsoft UET decoder, Firefox and WebKit.
+> **In 0.3:** `body.has` and `body.only` rules on the field names of a hit; `cookie` rules; a `deniedIdentifiers` check that fails when an identifier goes out on a denied hit; `pingwright suite` runs a folder of scenarios against several GTM builds; `pingwright report` writes an HTML report of one run or a suite; a Done button in the handoff window; `click` and `wait` by role and name or from a list of selectors; a `select` step; the `server` network mode; record schema version 2. `deniedIdentifiers` fails by default, so a run that passed in 0.2 can exit 1. See [CHANGELOG.md](CHANGELOG.md).
+>
+> **Not built yet:** MCP server, GTM tag-firing reporters, the server tag reporter, Shopify bridge, a full Microsoft UET decoder, Firefox and WebKit.
 
 ## Why
 
@@ -37,7 +39,8 @@ Pingwright is built so that a coding agent, a CI job or a person can answer thes
 4. **Reports tag firing (not built yet).** An optional GTM template reports which tags fired or failed for each event, in the web container and the server container. Agents get this without a Google sign-in. Given the container's tag list, Pingwright also reports which expected tags did not fire.
 5. **Checks expectations.** Each scenario lists what must and must not happen, for example "no Meta request before consent" or "GA4 hits after a reject carry no user ID". Pingwright reports pass or fail, with the evidence. A scenario that names a vendor Pingwright does not know is rejected when it is parsed.
 6. **Checks hashing.** Because Pingwright knows the fake identity it typed, it can check that the hashed email and phone sent to Google and Meta are correct.
-7. **Compares runs.** `pingwright diff` shows what changed per vendor and per event between two runs, for example before and after a GTM change.
+7. **Compares runs.** `pingwright diff` shows what changed per vendor and per event between two runs, for example before and after a GTM change. `pingwright suite` does this for a folder of scenarios.
+8. **Reports.** `pingwright report` turns a run or a suite into one HTML file for people who do not read JSONL.
 
 ## A scenario
 
@@ -69,7 +72,7 @@ npm i -g pingwright
 pingwright install-browser
 ```
 
-Node 22.18 or later. `npm i -g pingwright@next` installs the newest release candidate, when there is one. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `npm i -g pingwright@next` installs the release candidate, `0.3.0-rc.1`. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
 
 ## Quick start
 
@@ -121,6 +124,41 @@ Run one scenario against the published container and against an unpublished work
 
 The override fetches the workspace build of `gtm.js?id=<container>` and answers the page with it. If no request matched, or the build did not return 200, the run exits 2. The `gtmAuth` value never appears in the record or in any output. For a site that loads the container through a Stape-style custom loader, the override works through the loader by default. Add `"loader": {"replace": "<script URL>"}` to replace the loader script instead. Details are in [docs/cli.md](docs/cli.md).
 
+## Suite and report quick start
+
+Run a folder of scenarios against the published container and an unpublished workspace, then make a report that people can read without JSONL.
+
+```bash
+pingwright suite scenarios/ --site https://staging.example.com \
+  --variant published --variant workspace=override.json --out runs
+pingwright report runs/suite_<id> --html suite-report.html
+```
+
+`suite` runs every `*.yml` file in the folder once per variant, and prints a table with the result of each run and the diff between the variants. The runs and a `suite.json` manifest go to `runs/suite_<id>/`. The exit code is 2 if a run did not finish, 1 if an expectation failed, else 0. A scenario with a `handoff` step is skipped unless you add `--with-handoff`. `report` writes one HTML file with a timeline per vendor and consent state, the expectations, the flags and the diff. It has names and counts only, no script and no network request. `pingwright report runs/run_<id>.jsonl --html report.html` makes the report for one run. Details are in [docs/cli.md](docs/cli.md).
+
+## Rules and steps added in 0.3
+
+```yaml
+steps:
+  - consent: reject
+  - click: { role: radio, name: "White (01)" }
+  - click: { any: ['[role=radio][title$="White (01)"]', 'text=White (01)'] }
+  - select: { "select[name=countryCode]": DE }
+expect:
+  mustNot:
+    - { vendor: sgtm, body.has: [email, phone, "user_data.*", "cookie*"], in: epoch(denied) }
+    - { cookie: "_ga*", in: epoch(denied) }
+  must:
+    - { vendor: sgtm, event: page_view, body.only: [event_name, page_location, page_title, page_referrer] }
+options:
+  builtins: { deniedIdentifiers: warn }
+```
+
+- `body.has` matches hits by the names of the fields they sent, and `body.only` is an allowlist of field names. They read names, never values.
+- `cookie` checks which cookies were set, by name, before or after consent. In `stub` mode a stubbed endpoint sets no cookies, so use `--network server` with `options.serverHosts` to see the cookies of a server container.
+- `deniedIdentifiers` is a built-in check. It fails when a hit carries `user_id`, `uid`, a hashed `user_data` field or another identifier while the matching consent signal is denied. It is `fail` by default. Set it to `warn` to keep the old exit code while you fix the cause.
+- `click` and `wait` take `{ role, name }` or `{ any: [selectors] }`, so a theme change does not break every scenario. `select` chooses an option of a `<select>` by value, then by label, and reads it back.
+
 ## Tracker list
 
 In `stub` mode, Pingwright stubs and records requests to a curated list of tracker hosts, so a pixel without a decoder no longer leaks to the vendor. The list is small, kept in the repo, and each entry links to the vendor's own docs. A listed request becomes a minimal hit with the vendor name, so rules, flags and `diff` work on it. Add your own entries with `--tracker-list`:
@@ -144,7 +182,7 @@ pingwright run scenario.yml --site https://staging.example.com --tracker-list tr
 
 ## For agents
 
-The MCP server is not built yet. It will let an agent run a scenario, query the records, read tag firing per event, and compare runs. Today an agent can call the CLI: `run --json` and `diff --json` print structured results. Every record has a stable ID, and every result names the run and step.
+The MCP server is not built yet. It will let an agent run a scenario, query the records, read tag firing per event, and compare runs. Today an agent can call the CLI: `run --json`, `diff --json` and `suite --json` print structured results. Every record has a stable ID, and every result names the run and step.
 
 Pingwright will not change GTM containers or sign in to Google. An agent that edits a workspace with a GTM API client (for example a GTM MCP server) passes the workspace preview values to Pingwright for one run with `--gtm-override`.
 
@@ -152,12 +190,12 @@ Pingwright will not change GTM containers or sign in to Google. An agent that ed
 
 | Package | Job | State |
 | --- | --- | --- |
-| `core` | IDs, clock, record types, record schema version, JSONL run store, fake identity | 0.2 |
-| `recorder` | Launch the browser, play steps, capture requests, responses, cookies and dataLayer events, GTM override | 0.2 |
-| `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.2 (GA4, Google Ads, Meta, Pinterest, Stape, server-container data client, tracker list) |
+| `core` | IDs, clock, record types, record schema version, JSONL run store, fake identity | 0.3 |
+| `recorder` | Launch the browser, play steps, capture requests, responses, cookies and dataLayer events, GTM override, Done control, locators, `server` mode | 0.3 |
+| `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.3 (GA4, Google Ads, Meta, Pinterest, Stape, server-container data client, tracker list; hit field names) |
 | `consent` | Banner handling through DuckDuckGo autoconsent, Consent Mode probe, epochs | 0.1 |
-| `expect` | Scenario format, expectations, diff engine | 0.2 |
-| `cli` | `pingwright run`, `diff`, `install-browser` | 0.2 |
+| `expect` | Scenario format, expectations, `deniedIdentifiers`, diff engine | 0.3 |
+| `cli` | `pingwright run`, `diff`, `suite`, `report`, `install-browser` | 0.3 |
 | `gtm` | Tag-firing reporter templates | not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
 | `mcp` | MCP server | not built yet |

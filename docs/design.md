@@ -1,6 +1,6 @@
 # Pingwright design
 
-Status: revision 7, for release 0.2.0. Milestones 0.1 and 0.2 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2.
+Status: revision 8, for release 0.3.0-rc.1. Milestones 0.1, 0.2 and 0.3 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15.
 
 ## 1. Problem
 
@@ -63,7 +63,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | Entity | Fields (main) |
 | --- | --- |
 | `Run` | `id` (`run_…`), `recordSchemaVersion`, `scenario`, `site`, `startedAt`, `graceWindowMs` (the consent grace window used), `variant` (set by `suite`), `pingwrightVersion`, `browser` (name and version), `networkMode`, `gtmOverride` (`container`, `gtmPreview`, `gtmAuth` always `[redacted]`, `expectedTags`, and `applied`: `{way, url, status}` for each match, plus `loses` for the `loader` and `replace` ways, and `loader` (the loader kind) for the `loader` way), `testGtmOrigin` (set only when the test-only GTM origin was used), `containerVersions` (read from `google_tag_manager[id]` where exposed), `identity` (the fake identity used, §13) |
-| `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt` |
+| `Step` | `id` (`stp_…`), `runId`, `index`, `label`, `startedAt`, `endedAt`, `locator` (optional: the position of the selector that an `any` locator used) |
 | `Request` | `id` (`req_…`), `runId`, `stepId`, `t`, `method`, `url`, `resourceType`, `frameUrl`, `initiator`, `headers` (secrets redacted), `postData` (size-capped), `outcome` (`passed`, `stubbed`, `failed`), `failure` (Playwright's error text for a failed request), `redacted` (`handoff` when a handoff step replaced the body and query values) |
 | `Response` | `id` (`res_…`), `requestId`, `status`, `setCookieNames[]` |
 | `Hit` | `id` (`hit_…`), `runId`, `stepId`, `requestId`, `t`, `vendor`, `event`, `consent`, `ids`, `page`, `transport`, `params`, `fields`, `fieldsComplete`, `idFields` |
@@ -170,9 +170,9 @@ What Pingwright does:
 
 `visit`, `click`, `fill` (from the fake identity, §13), `select` (an option by value, then label), `consent` (`accept`, `reject`, `none`, or a named choice), `wait`, `addToCart` (through the platform adapter or a selector), `evaluate`, `checkpoint`, and `handoff`.
 
-The scenario's `start` is played first, as step 0 labelled `start`. A step may carry `label: <name>`; the default is the kind and the step's index (`click-3`), and a checkpoint is named by its value. Labels are unique, and `after:` must name one. Each Request, Hit and DataLayerEvent carries the id of the step that was running when it was recorded, and a step that ends records a checkpoint of the cookies. A `fill` on a card or password field (autocomplete `cc-*`, `type=password`, or a name or id matching card, cvc, cvv, iban or password) fails unless the page host is loopback. An `evaluate` step is no way around this: while it runs, such fields in non-loopback frames refuse plain writes through the value setters, setAttribute, setAttributeNS and Attr.value, and the step fails; a field left changed is cleared. This is a guard, not a sandbox. A script that works around it (HTML parsing such as innerHTML, a setter taken from another frame, frames created during the script, writes after the step returns, redefining the setters, execCommand, setRangeText) can still send a value. Do not rely on it to keep card data off a site. `addToCart` clicks the selector and then fails with "click did not add to cart" unless the step recorded a cart request (a Shopify POST to `/cart/add`, `/cart/change` or `/cart/update`, a GET of `/cart/add`, a POST to `/cart`, Magento `/checkout/cart/add`, WooCommerce `wc-ajax=add_to_cart`, a Storefront `cartCreate` or `cartLinesAdd` mutation, or a URL that `options.cartRequest` matches) or an `add_to_cart` dataLayer event within 5 s. A cart request counts only when its response has a 2xx or 3xx status.
+The scenario's `start` is played first, as step 0 labelled `start`. A step may carry `label: <name>`; the default is the kind and the step's index (`click-3`), and a checkpoint is named by its value. Labels are unique, and `after:` must name one. Each Request, Hit and DataLayerEvent carries the id of the step that was running when it was recorded, and a step that ends records a checkpoint of the cookies. A `fill` or `select` on a card or password field (autocomplete `cc-*`, `type=password`, or a name or id matching card, cvc, cvv, iban or password) fails unless the page host is loopback. An `evaluate` step is no way around this: while it runs, such fields in non-loopback frames refuse plain writes through the value setters, setAttribute, setAttributeNS and Attr.value, and the step fails; a field left changed is cleared. This is a guard, not a sandbox. A script that works around it (HTML parsing such as innerHTML, a setter taken from another frame, frames created during the script, writes after the step returns, redefining the setters, execCommand, setRangeText) can still send a value. Do not rely on it to keep card data off a site. `addToCart` clicks the selector and then fails with "click did not add to cart" unless the step recorded a cart request (a Shopify POST to `/cart/add`, `/cart/change` or `/cart/update`, a GET of `/cart/add`, a POST to `/cart`, Magento `/checkout/cart/add`, WooCommerce `wc-ajax=add_to_cart`, a Storefront `cartCreate` or `cartLinesAdd` mutation, or a URL that `options.cartRequest` matches) or an `add_to_cart` dataLayer event within 5 s. A cart request counts only when its response has a 2xx or 3xx status.
 
-`handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done. Pingwright never automates payment or log-in on a hosted site. The one exception is a loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, where no real payment can happen. There, a scenario may fill a fake payment form so the test suite can cover a whole checkout.
+`handoff` opens a visible window, prints what the person must do and a reminder to use test accounts and test cards, and keeps recording until the person signals done, with the Done button in the page or Enter in the terminal (§15.3). Pingwright never automates payment or log-in on a hosted site. The one exception is a loopback host (`localhost`, `127.0.0.1`, `::1`), such as Pingwright's own fixture shop, where no real payment can happen. There, a scenario may fill a fake payment form so the test suite can cover a whole checkout.
 
 While a handoff waits, a person types real-looking values into the page. Requests sent in that time that do not decode as tracking hits are stored without their body and with every query value replaced by `[redacted]`, and carry `redacted: handoff`. Tracking hits keep theirs, so a purchase made during a handoff is still checked. Later requests that are not redacted keep the page URL as it is.
 
@@ -346,7 +346,7 @@ Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`)
 
 ## 12. Interfaces
 
-**CLI:** `pingwright run`, `pingwright diff`, `pingwright report` (terminal, JSON, JUnit).
+**CLI:** `pingwright run`, `pingwright diff`, `pingwright suite` and `pingwright report` (an HTML file for one run or a suite). Terminal, JSON and JUnit output of `report` is not built (§15.3).
 
 **MCP tools:**
 
@@ -406,11 +406,11 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
 2. **0.2 (built, `0.2.0`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
-3. **0.3:** MCP server (schema frozen first), web tag-firing reporter template, expected tag lists, `microsoft-uet` decoder.
-4. **0.4:** Shopify custom pixel bridge, collector origin bridge.
-5. **0.5:** `server` mode, server reporter, sink reader, server workspace preview header.
+3. **0.3 (built, `0.3.0-rc.1`):** rules on payload fields (`body.has`, `body.only`) and cookies, the `deniedIdentifiers` check, `suite`, an HTML `report` for one run and for a suite, the Done control for handoff steps, role and `any` locators, a `select` step, a minimal `server` network mode (`serverHosts`), record schema version 2. See docs/plan-0.3.md.
+4. **0.4 (planned):** MCP server (schema frozen first), web tag-firing reporter template and expected tag lists, full `microsoft-uet` decoder, server-container visibility (#358), baselines (#359), multi-store runs (#360), a WebKit probe (#361), Shopify custom pixel bridge, collector origin bridge.
+5. **0.5 (planned):** server tag reporter, sink reader, server workspace preview header. The `server` network mode itself is built in 0.3 in its minimal form.
 
-Deferred: HTML report, sink setup commands, a replay page.
+Deferred: terminal, JSON and JUnit output for `report`, sink setup commands, a replay page.
 
 ### 15.1 Differences in 0.1
 
@@ -450,6 +450,22 @@ Where the code in 0.2 differs from the design above. Section 15.1 still applies,
 - **A `pinterest` decoder exists.** In `stub` mode every path on `ct.pinterest.com` is stubbed (§6).
 - **Vendor keys in scenarios** are the built-in decoders plus every vendor in the tracker list and in a `--tracker-list` file.
 - **The Shopify checkout pattern is a doc and fixture pages,** not an adapter (`docs/shopify-checkout.md`). Payment is a `handoff`. `addToCart` is still a selector click with a cart check.
+
+### 15.3 Differences in 0.3
+
+Where the code in 0.3 differs from the design above. Sections 15.1 and 15.2 still apply, except where noted.
+
+- **`Run.recordSchemaVersion` is 2.** Version 2 adds `Hit.fields`, `Hit.fieldsComplete`, `Hit.idFields`, `Checkpoint.t`, `Run.graceWindowMs`, `Run.variant`, `Result.note` and `Step.locator`. A version 1 record reads with those fields undefined. Rules never pass on a record that cannot answer them (`cannot evaluate`).
+- **`body.has` and `body.only` read the whole decoded payload,** not only the body: the query string, a JSON or form body and the `dtdc` object. They read names only. A body cut at 64 KiB or a JSON body that does not parse gives `cannot evaluate`, unless a visible field already decides the rule.
+- **`cookie` rules read names only.** A `Set-Cookie` header on any response is placed at its request's time. A script cookie is seen only at a checkpoint, so the rule says "present then", not "set then". In `stub` mode a stubbed endpoint sets no cookies, and a pass carries `note: stubNoCookies`.
+- **`deniedIdentifiers` is a built-in check with severity `fail` by default.** Google hits are judged by their own `gcs` and `gcd`, every other hit by its consent epoch. `cid`, `client_id`, `fbp` and click IDs are not flagged.
+- **`server` network mode is minimal.** It is `stub` plus pass-through for `options.serverHosts`. Sends from `pagehide` and `visibilitychange` are still answered in the page, also to those hosts (§5.3). There is no server tag reporter and no preview header.
+- **Commands are `run`, `diff`, `suite`, `report`, `install-browser` and `--version`.** `suite` runs scenarios one after another, once per variant, with one seed per scenario. A diff between variants never changes the exit code. `suite.json` holds names, statuses, exit codes, record file names and counts, and no path or value. Its `labels` are empty, as the store axis (#360) is not built.
+- **`report` writes HTML only,** from one record or a suite directory. It shows names and counts, never values or result messages, and has no script and no network request. A `leak` mark comes from `deniedIdentifiers` and from the evidence of a failed `mustNot` with a consent scope. The report does not claim legal compliance.
+- **The Done control is a pill in the page,** not a window of its own. It is installed by a context init script, sits in a closed shadow root and is not drawn in sandboxed iframes. Drawing outside the page needs CDP or a browser flag, which the rules forbid. A page can still hide it, and a capture-phase listener on `window` or `document` sees its click. Enter in the terminal always works.
+- **`click` and `wait` take `{ role, name }` and `{ any: [selectors] }`.** `fill` and `addToCart` keep selector strings. `select` chooses by value, then by label, and reads the value back.
+- **Older fields still hold values.** `Request.url`, `Request.postData`, `Hit.params` and `DataLayerEvent.args` are unchanged. The names-and-counts rule covers only what 0.3 adds: fields, messages, `suite.json` and the report.
+- **Still not built:** the MCP server, the GTM tag-firing reporters, evaluation of `expectedTags`, a full `microsoft-uet` decoder, Firefox and WebKit. `Run.containerVersions` is still `{}`.
 
 ## 16. Related tools
 

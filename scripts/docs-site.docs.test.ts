@@ -51,6 +51,8 @@ test('builds the landing page as /, the README as /readme, the guides and every 
     expect(existsSync(join(dist, `${page}.html`)), page).toBe(true);
   }
   expect(existsSync(join(dist, 'docs/plan-0.2.html'))).toBe(false);
+  expect(existsSync(join(dist, 'docs/plan-0.3.html'))).toBe(false);
+  expect(existsSync(join(dist, 'CHANGELOG.html'))).toBe(false);
   expect(existsSync(join(dist, 'docs/release.html'))).toBe(false);
   expect(existsSync(join(dist, 'AGENTS.html'))).toBe(false);
 });
