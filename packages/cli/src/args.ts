@@ -32,11 +32,18 @@ export interface DiffArgs {
   json: boolean;
 }
 
-export type Command = RunArgs | DiffArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
+export interface ReportArgs {
+  command: 'report';
+  input: string;
+  html: string;
+}
+
+export type Command = RunArgs | DiffArgs | ReportArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
 
 export const USAGE = `Usage:
   pingwright run <scenario.yml> --site <url> [options]
   pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
+  pingwright report <run.jsonl> --html <out.html>
   pingwright install-browser
   pingwright --version
 
@@ -101,6 +108,7 @@ export function parseCli(argv: string[]): Command {
         'tracker-list': { type: 'string' },
         var: { type: 'string', multiple: true },
         json: { type: 'boolean' },
+        html: { type: 'string' },
         'by-page': { type: 'boolean' },
         'all-flags': { type: 'boolean' },
         version: { type: 'boolean' },
@@ -122,6 +130,11 @@ export function parseCli(argv: string[]): Command {
   if (command === 'diff') {
     if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
     return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
+  }
+  if (command === 'report') {
+    if (rest.length !== 1) throw new UsageError('report takes one JSONL file');
+    if (!values.html) throw new UsageError('report needs --html <file>');
+    return { command: 'report', input: rest[0]!, html: values.html };
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}"`);
 
