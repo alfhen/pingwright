@@ -55,16 +55,19 @@ test('hasHandoff is true only for a scenario with a handoff step', () => {
   expect(hasHandoff(parseScenario('start: /\nsteps:\n  - click: a\n  - handoff: Pay\n'))).toBe(true);
 });
 
-test('a scenario with a handoff launches headed and one without does not', async () => {
+test('a scenario with a handoff launches headed with the Done control and one without does not', async () => {
   const launched: (boolean | undefined)[] = [];
-  const launch = (options: { headed?: boolean }) => {
+  const overlay: (boolean | undefined)[] = [];
+  const launch = (options: { headed?: boolean; handoffOverlay?: boolean }) => {
     launched.push(options.headed);
+    overlay.push(options.handoffOverlay);
     return Promise.reject(new Error('stop'));
   };
   const base = { networkMode: 'stub' as const, outDir: 'unused', site: 'http://localhost', launch: launch as never };
   await recordScenario({ ...base, parsed: parseScenario('start: /\nsteps:\n  - handoff: Pay\n') }).catch(() => undefined);
   await recordScenario({ ...base, parsed: parseScenario('start: /\n') }).catch(() => undefined);
   expect(launched).toEqual([true, false]);
+  expect(overlay).toEqual([true, false]);
 });
 
 const request = (over: Partial<Request>): Request =>
