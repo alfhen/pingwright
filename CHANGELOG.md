@@ -30,7 +30,11 @@
 - The Done pill calls the DOM accessors it needs at show and hide time from copies taken at document start, so a page that patches `textContent`, `style`, `getRootNode`, `String`, `Function.prototype.call` or `Event.prototype.stopPropagation` never sees the label or the host. The Done click reads `isTrusted` from a captured getter and treats a throw as untrusted (#446, Refs #398).
 - The Done pill is at most the viewport width minus 32 px, and a long handoff text shrinks before the Done button does (#464).
 
-<!-- S07 -->
+### Handoff
+
+- A late "not waiting" answer no longer stops the Done pill polling after a wake, so the pill hides when the second handoff ends (#444).
+- A page that cannot answer the wake no longer blocks Enter or Done from ending a handoff (#445).
+- Tests now show the pill stops asking for the handoff state when none is waiting, and asks again on the next handoff (#443).
 
 ### Docs
 
