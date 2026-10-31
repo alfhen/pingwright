@@ -488,7 +488,7 @@ Acceptance: unit tests for the multi-run model, a model test where a denied hit 
 ### Wave 5
 
 **R10 Robust locators and a `select` step (#355, #356).** Touches: `packages/expect/src/scenario.ts` (step parsing), `packages/recorder/src/steps.ts`, `docs/cli.md`.
-Locators. The `click`, `wait` and `select` steps accept an object as well as a selector string:
+Locators. The `click` and `wait` steps accept an object as well as a selector string. `select` keeps its selector-to-value map, like `fill`:
 
 ```yaml
 - click: { role: radio, name: "White (01)" }
@@ -496,9 +496,9 @@ Locators. The `click`, `wait` and `select` steps accept an object as well as a s
 ```
 
 - `role` and `name` map to `getByRole(role, { name, exact })`. `exact: true` is optional.
-- `any` tries the selectors in order and uses the first that matches an element within the step timeout. The record's step label tells which one was used by index, not by text.
+- `any` tries the selectors in order and uses the first that matches an element within the step timeout. The step record's optional `locator` field holds the index used. `Step.label` does not change, because `after:` refers to it.
 - `fill` keeps a selector-to-value map, because a YAML map key cannot be an object. It is not changed.
-- On a timeout, the error lists up to ten controls of the same role family that are on the page: role and accessible name (cut at 60 characters). The role families are button, radio, checkbox, link, tab, option. Names come from the accessibility tree of controls only, never from text content or form values. In a handoff step the list is not made.
+- On a timeout, the error lists up to ten controls of the same role family that are on the page: role and accessible name (cut at 60 characters; a name that looks like an email, a 6+ digit run or a hash is shown as `(hidden)`). The role families are button, radio, checkbox, link, tab, option. Names come from the accessibility tree of controls only, never from text content or form values. In a handoff step the list is not made.
 
 Select. `select: { "select[name=countryCode]": DE }` chooses by value, then by label. `select` runs the same `isSensitiveField` check as `fill` (for example `autocomplete=cc-exp-month` and `cc-exp-year`) and fails with `HANDOFF_REQUIRED` on a host that is not loopback. After the change it reads the select's value and checks it. If it is not the requested option, the step fails with `value not applied (still: <option label>)`. The option label may be a country or size name. It is a label, not a typed value. The chosen option value and its label join `identity.extra` under the same rule as a literal `fill` into a non-sensitive field (`steps.ts`), so `identity.hashesMatch` accepts a hashed country and `possibleRealData` does not flag it. Using `fill` on a select is unchanged.
 

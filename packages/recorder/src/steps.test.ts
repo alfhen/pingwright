@@ -207,3 +207,106 @@ test('a password value is never saved in the identity when the run fails at or b
   expect(saved.length).toBeGreaterThan(0);
   expect(JSON.stringify(saved)).not.toContain('secret-fake-value');
 });
+
+describe('select and locator steps on a fake page', () => {
+  const options = [
+    { value: '', label: 'Choose' },
+    { value: 'DE', label: 'Germany' },
+    { value: 'SE', label: 'Sweden' },
+  ];
+  const selectPage = (host: string, over: { autocomplete?: string; stays?: number } = {}) => {
+    let selected = 0;
+    const field = {
+      evaluate: (fn: (el: unknown) => unknown) => {
+        const source = fn.toString();
+        if (source.includes('tagName')) {
+          return Promise.resolve({ tag: 'select', host, fields: [{ autocomplete: over.autocomplete ?? null, name: 'countryCode', id: null, type: null }] });
+        }
+        if (source.includes('selectedIndex')) return Promise.resolve({ index: selected, label: options[selected]!.label });
+        return Promise.resolve(options);
+      },
+      selectOption: (arg: { index: number }) => {
+        selected = over.stays ?? arg.index;
+        return Promise.resolve([]);
+      },
+    };
+    return { goto: () => Promise.resolve(), locator: () => ({ first: () => field }) };
+  };
+  const play = (page: unknown, yaml: string, extras: Partial<Record<string, unknown>> = {}) => {
+    const saved: { extra?: string[] }[] = [];
+    const recorder = {
+      site: 'https://shop.example.com',
+      setIdentity: (i: { extra?: string[] }) => saved.push(structuredClone(i)),
+      beginStep: () => ({}),
+      endStep: () => undefined,
+      checkpoint: () => Promise.resolve(),
+      context: { pages: () => [page] },
+      ...extras,
+    };
+    return playScenario(recorder as never, parseScenario(yaml), { seed: 1 }).then((identity) => ({ identity, saved }));
+  };
+  const select = (value: string) => `start: /\nsteps:\n  - select: { "select[name=countryCode]": ${value} }\n`;
+
+  test('chooses by value, then by label, and adds both to the run identity extras', async () => {
+    const byValue = await play(selectPage('shop.example.com'), select('DE'));
+    expect(byValue.identity.extra).toEqual(['DE', 'Germany']);
+    const byLabel = await play(selectPage('shop.example.com'), select('Sweden'));
+    expect(byLabel.identity.extra).toEqual(['SE', 'Sweden']);
+    expect(byLabel.saved.at(-1)?.extra).toEqual(['SE', 'Sweden']);
+  });
+
+  test('fails when no option matches and when the value is not applied', async () => {
+    await expect(play(selectPage('shop.example.com'), select('FR'))).rejects.toThrow(/no option with value or label "FR"/);
+    await expect(play(selectPage('shop.example.com', { stays: 0 }), select('DE'))).rejects.toThrow('value not applied (still: Choose)');
+  });
+
+  test('a card select is refused on a hosted host and allowed on a loopback host', async () => {
+    const card = { autocomplete: 'cc-exp-month' };
+    await expect(play(selectPage('shop.example.com', card), select('DE'))).rejects.toThrow(/card or password field. Payments and log-ins must be handoff/);
+    const local = await play(selectPage('localhost', card), select('DE'));
+    expect(local.identity.extra).toBeUndefined();
+  });
+
+  test('an any locator records the index used, and a role locator maps to getByRole', async () => {
+    const records: { locator?: number }[] = [];
+    const clicked: string[] = [];
+    const page = {
+      goto: () => Promise.resolve(),
+      locator: (selector: string) => ({
+        count: () => Promise.resolve(selector === 'text=Two' ? 1 : 0),
+        first: () => ({ click: () => (clicked.push(selector), Promise.resolve()) }),
+      }),
+      getByRole: (role: string, o: { name: string }) => ({ first: () => ({ click: () => (clicked.push(`${role}:${o.name}`), Promise.resolve()) }) }),
+    };
+    const yaml = "start: /\nsteps:\n  - click: { any: ['#one', 'text=Two'] }\n  - click: { role: radio, name: One }\n";
+    await play(page, yaml, {
+      beginStep: () => {
+        const record = {};
+        records.push(record);
+        return record;
+      },
+    });
+    expect(clicked).toEqual(['text=Two', 'radio:One']);
+    expect(records.map((r) => r.locator)).toEqual([undefined, 1, undefined]);
+  });
+
+  test('a locator timeout lists the controls, and not during a handoff', async () => {
+    const timeout = Object.assign(new Error('locator.click: Timeout 10ms exceeded.\nCall log: ...'), { name: 'TimeoutError' });
+    const page = {
+      goto: () => Promise.resolve(),
+      getByRole: () => ({ first: () => ({ click: () => Promise.reject(timeout) }) }),
+      locator: () => ({ ariaSnapshot: () => Promise.resolve('- button "White (01)"\n- button "Black (02)"') }),
+    };
+    const yaml = 'start: /\nsteps:\n  - click: { role: radio, name: "White (01)" }\n';
+    const failure = await play(page, yaml).then(
+      () => '',
+      (e: Error) => e.message,
+    );
+    expect(failure).toBe('step "click-1": locator.click: Timeout 10ms exceeded. Controls on the page: button "White (01)", button "Black (02)".');
+    const inHandoff = await play(page, yaml, { handoff: { state: () => ({ waiting: true, text: '' }) } }).then(
+      () => '',
+      (e: Error) => e.message,
+    );
+    expect(inHandoff).toBe('step "click-1": locator.click: Timeout 10ms exceeded.');
+  });
+});

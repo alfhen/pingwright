@@ -1,0 +1,7 @@
+start: /tiles?theme={theme}
+vars: { theme: radio }
+steps:
+  - click: { any: ['[role=radio][title$="White (01)"]', '[role=button][title$="White (01)"]'] }
+    label: pick
+  - wait: { any: ['#white[data-on]'] }
+options: { seed: 1, allowUnknownDestination: true }

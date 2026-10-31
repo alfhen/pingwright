@@ -1,0 +1,5 @@
+start: /select?broken=1
+steps:
+  - consent: reject
+  - select: { "select[name=countryCode]": DE }
+options: { seed: 1, allowUnknownDestination: true }

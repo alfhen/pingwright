@@ -1,0 +1,9 @@
+start: /select?send=hash
+steps:
+  - consent: accept
+  - select: { "select[name=countryCode]": DE }
+  - wait: 2s
+expect:
+  must:
+    - { vendor: sgtm, event: country_selected, identity.hashesMatch: true }
+options: { seed: 1, allowUnknownDestination: true }
