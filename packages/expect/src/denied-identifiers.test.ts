@@ -126,6 +126,13 @@ test('a leak is reported as a leak when another hit is unreadable', () => {
   expect(r.message).toContain('1 more hit could not be read');
 });
 
+test('a cut-body hit with a recorded identifier is reported as a leak', () => {
+  const r = check([{ ...withIds('sgtm', 'uid'), fieldsComplete: false }]);
+  expect(r.note).toBeUndefined();
+  expect(r.message).toContain('uid');
+  expect(r.message).not.toContain('could not be read');
+});
+
 test('the message groups names by vendor and signal, up to five groups', () => {
   const r = check([withIds('sgtm', 'uid', 'external_id'), withIds('sgtm', 'uid'), withIds('ga4', 'uid')]);
   expect(r.message).toContain('3 hits carry identifiers while consent is denied: sgtm uid (analytics denied), sgtm external_id (adUserData denied), ga4 uid (analytics denied).');

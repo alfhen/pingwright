@@ -604,7 +604,7 @@ function deniedIdentifiersCheck(
   for (const hit of ctx.hits) {
     const state = effectiveConsent(hit, ctx);
     if (!DENIABLE.some((f) => state[f] === 'denied')) continue;
-    if (!hit.idFields || !hit.fields || hit.fieldsComplete === false) {
+    if (!hit.idFields || !hit.fields) {
       unreadable.push(hit);
       continue;
     }
@@ -619,6 +619,7 @@ function deniedIdentifiersCheck(
       found.set(key, (found.get(key) ?? new Set()).add(name));
     }
     if (flagged) leaking.push(hit);
+    else if (hit.fieldsComplete === false) unreadable.push(hit);
   }
   if (leaking.length > 0) {
     const groups = [...found].map(([key, names]) => {
