@@ -94,3 +94,33 @@ test('a throw from the isTrusted getter reads as untrusted', () => {
   expect(run({ isTrusted: true })).toBe(false);
   expect(run({ real: true })).toBe(true);
 });
+
+test('a wake that never answers does not hold up Enter', async () => {
+  const gate = new HandoffGate();
+  await waitForHandoff({ text: 'Pay', gate, resolver: () => Promise.resolve(), print: () => {}, wake: () => new Promise<void>(() => {}) });
+  expect(gate.state().waiting).toBe(false);
+});
+
+test('a wake that never answers does not hold up Done', async () => {
+  const gate = new HandoffGate();
+  const wait = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, wake: () => new Promise<void>(() => {}) });
+  expect(gate.done(gate.nonce)).toBe(true);
+  await wait;
+});
+
+test('a wake that fails does not end the wait', async () => {
+  const gate = new HandoffGate();
+  let ended = false;
+  const wait = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, wake: () => Promise.reject(new Error('no page')) }).then(() => void (ended = true));
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(ended).toBe(false);
+  gate.done(gate.nonce);
+  await wait;
+});
+
+test('a tick stops the polling only when no wake started since it began', () => {
+  const script = handoffOverlayScript('nonce-1');
+  expect(script).toContain('const began = generation');
+  expect(script).toContain('if (began === generation) stopPolling()');
+});

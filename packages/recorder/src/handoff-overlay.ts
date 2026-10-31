@@ -47,7 +47,7 @@ export interface HandoffWait {
   resolver: (text: string, signal: AbortSignal) => Promise<void>;
   print: (text: string) => void;
   reminderMs?: number;
-  /** Called once the gate is open, so a document whose polling stopped asks for the state again. */
+  /** Called once the gate is open, so a document whose polling stopped asks for the state again. Never awaited: a page that cannot answer must not hold up Enter or Done. */
   wake?: () => Promise<void>;
 }
 
@@ -57,7 +57,7 @@ export async function waitForHandoff(wait: HandoffWait): Promise<void> {
   const reminder = setInterval(() => wait.print(`Still waiting for the handoff: ${wait.text}`), wait.reminderMs ?? HANDOFF_REMINDER_MS);
   const fromButton = wait.gate.begin(wait.text);
   try {
-    await wait.wake?.().catch(() => undefined);
+    void wait.wake?.().catch(() => undefined);
     await Promise.race([fromButton, wait.resolver(wait.text, abort.signal)]);
   } finally {
     clearInterval(reminder);
@@ -179,7 +179,9 @@ export function handoffOverlayScript(nonce: string): string {
   const hide = () => { if (host && getParent(host)) removeNode(host); };
   let timer = null;
   const stopPolling = () => { if (timer !== null) { clearInterval(timer); timer = null; } };
+  let generation = 0;
   const tick = async () => {
+    const began = generation;
     let state;
     try { state = await stateFn(); } catch { return; }
     if (state && state.waiting) {
@@ -187,9 +189,10 @@ export function handoffOverlayScript(nonce: string): string {
       return;
     }
     hide();
-    stopPolling();
+    if (began === generation) stopPolling();
   };
   const start = () => {
+    generation++;
     if (timer === null) timer = setInterval(tick, 500);
     tick();
   };
