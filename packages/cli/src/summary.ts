@@ -1,4 +1,5 @@
-import type { Result, RunRecords, Severity } from '@pingwright/core';
+import type { Result, ResultNote, RunRecords, Severity } from '@pingwright/core';
+import { NOTE_TEXT } from './report/model.ts';
 
 export interface Summary {
   runId: string;
@@ -10,7 +11,7 @@ export interface Summary {
   hits: Record<string, Record<string, number>>;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
-  results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; evidence: string[] }[];
+  results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; note?: ResultNote; evidence: string[] }[];
 }
 
 const EVIDENCE_CAP = 5;
@@ -43,7 +44,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     hits: countHits(records.hits),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
-    results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, evidence: r.evidence, severity: r.severity ?? 'fail' })),
+    results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, ...(r.note && { note: r.note }), evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
 }
 
@@ -130,6 +131,7 @@ export function formatSummary(summary: Summary): string {
   lines.push('Expectations');
   for (const r of summary.results) {
     lines.push(`  ${r.pass ? 'PASS' : r.severity === 'warn' ? 'WARN' : 'FAIL'} ${r.expectation}`);
+    if (r.note) lines.push(`       note: ${NOTE_TEXT[r.note]}`);
     if (!r.pass && r.message) lines.push(`       ${r.message}`);
     if (r.evidence.length) {
       const shown = r.evidence.slice(0, EVIDENCE_CAP);

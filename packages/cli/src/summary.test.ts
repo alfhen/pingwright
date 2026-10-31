@@ -209,3 +209,18 @@ test('every --json result carries a severity, fail when the record has none', ()
   const summary = buildSummary(records, [result(true), result(false), warn, { ...result(true), severity: 'warn' as const }], 'p');
   expect(summary.results.map((r) => r.severity)).toEqual(['fail', 'fail', 'warn', 'warn']);
 });
+
+test.each([
+  ['nestedNameOnly', 'a plain name matches a top-level field only; use **.name to match at any depth'],
+  ['stubNoCookies', 'stub mode: stubbed endpoints set no cookies, so this pass says nothing about server cookies'],
+] as const)('prints the %s note under a passing result and keeps the code in the summary', (note, text) => {
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [] } as unknown as RunRecords;
+  const passing = { expectation: 'mustNot: a', pass: true, evidence: [], note, message: 'secret-field' } as unknown as Result;
+  const summary = buildSummary(records, [passing, result(true)], 'runs/run_1.jsonl');
+  expect(summary.results[0]!.note).toBe(note);
+  expect(summary.results[1]).not.toHaveProperty('note');
+  const lines = formatSummary(summary).split('\n');
+  const at = lines.indexOf('  PASS mustNot: a');
+  expect(lines[at + 1]).toBe(`       note: ${text}`);
+  expect(lines.join('\n')).not.toContain('secret-field');
+});

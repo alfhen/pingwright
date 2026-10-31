@@ -6,7 +6,9 @@
 
 <!-- T01 -->
 
-<!-- T02 -->
+### Terminal notes
+
+- The text summary prints the note under a result, passing or failing, for example that a plain name matches a top-level field only. `--json` has the note code in `note` (#510, #520).
 
 <!-- T03 -->
 
