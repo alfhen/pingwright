@@ -7,7 +7,7 @@
 
 Agent-first testing for tags and consent. Pingwright plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 
-> **Status: 0.3 release candidate (`0.3.0-rc.2`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `pingwright suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
+> **Status: 0.3 (`0.3.0`).** Pingwright plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `pingwright suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. The rest of this README describes where Pingwright is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
 > **In 0.1:** `pingwright run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
@@ -72,7 +72,7 @@ npm i -g pingwright
 pingwright install-browser
 ```
 
-Node 22.18 or later. `npm i -g pingwright` installs 0.2.0 until 0.3.0 is released. The "Suite and report quick start" and "Rules and steps added in 0.3" sections of this README need the release candidate, which `npm i -g pingwright@next` installs (`0.3.0-rc.2`). Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `npm i -g pingwright` installs `0.3.0`. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
 
 ## Quick start
 

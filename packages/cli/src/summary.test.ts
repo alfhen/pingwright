@@ -97,7 +97,7 @@ test('main prints the version and exits 2 on a usage error', async () => {
   const io = { stdout: (t: string) => void out.push(t), stderr: (t: string) => void err.push(t) };
   expect(await main(['--version'], io)).toBe(0);
   expect(out.join('')).toBe(`${readVersion()}\n`);
-  expect(readVersion()).toBe('0.3.0-rc.2');
+  expect(readVersion()).toBe('0.3.0');
   out.length = 0;
   expect(await main(['run', '--help'], io)).toBe(0);
   expect(out.join('')).toContain('Usage: pingwright run <scenario.yml>');
