@@ -84,7 +84,7 @@ Why this order:
 
 - **F01 first.** It creates the `## 0.4.0-rc.1` heading and one marker per PR with a user-visible change, and adds every fixture page that later waves need. Every later PR fills in its own marker, so the markers must exist first. Wave 1 PRs add no CHANGELOG line.
 - **U01 in wave 1, U05 in wave 5.** U01 changes the rule in `AGENTS.md` and the design. It needs the maintainer's explicit OK before it merges (see "The payment rule"). U05 depends on U01 being merged. Writing U01 early gives the maintainer the most time to decide.
-- **U02 before U05.** The test payment flow ends with `wait: { url: "/thank-you" }`, which U02 adds. U02 also adds the shared URL and locator matcher.
+- **U02 before U05.** The test payment flow ends with `wait: { url: "/thank-you-late" }`, which U02 adds. U02 also adds the shared URL and locator matcher.
 - **The scenario parser is one file.** `packages/expect/src/scenario.ts` changes in U02, U03, U04 and U05. They are in waves 2, 3, 4 and 5. `packages/recorder/src/steps.ts` changes in U02, U03 and U05.
 - **The CLI flags are three files.** `packages/cli/src/args.ts`, `run.ts` and `suite.ts` change in V01, V02, U04 and U05. They are in waves 2, 3, 4 and 5. V01 does not touch `suite.ts`, and V02 does not touch `run.ts`.
 - **The recorder is one file.** `packages/recorder/src/recorder.ts` changes in H07, H08, U04 and U05. They are in waves 2, 3, 4 and 5.
