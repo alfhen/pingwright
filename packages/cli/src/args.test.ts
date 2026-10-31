@@ -99,6 +99,8 @@ test.each([
   [['run', 's.yml', '--site', 'http://x.test', '--seed', 'x'], 'non-negative integer'],
   [['run', 's.yml', '--site', 'http://x.test', '--var', 'novalue'], 'name=value'],
   [['run', 's.yml', '--site', 'http://x.test', '--bogus'], 'bogus'],
+  [['run', 's.yml', '--site', 'http://x.test', '--variant', 'workspace=o.json'], 'not an option of run'],
+  [['run', 's.yml', '--site', 'http://x.test', '--with-handoff'], 'not an option of run'],
   [['dance'], 'Unknown command'],
 ])('usage error for %j', (argv, message) => {
   expect(() => parseCli(argv)).toThrow(UsageError);

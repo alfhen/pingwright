@@ -97,3 +97,19 @@ test('a scenario declares identity fields and rejects unknown ones', () => {
   expect(() => parseScenario('start: /\nidentity:\n  phone: 5\n')).toThrow(/non-empty string/);
   expect(parseScenario('start: /\nidentity:\n  email: real.person@gmail.com\n').warnings[0]).toContain('looks like a real email');
 });
+
+test('hashesMatch passes a decoded Meta hit with the identity hash and fails a wrong one', () => {
+  const metaRule = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, identity.hashesMatch: true }');
+  const run = (hash: string) => {
+    const req: Request = {
+      type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: 'GET',
+      url: `https://www.facebook.com/tr?id=100000000000001&ev=Purchase&ud[em]=${hash}`,
+      resourceType: 'image', frameUrl: null, initiator: null, headers: {}, postData: null, outcome: 'stubbed',
+    };
+    const hit = decodeRequest(req)[0]!;
+    expect(hit.vendor).toBe('meta');
+    return evaluate([hit, req], metaRule, { identity })[0]!;
+  };
+  expect(run(hashEmail(identity.email).hex).pass).toBe(true);
+  expect(run(hashEmail('other@example.com').hex).pass).toBe(false);
+});

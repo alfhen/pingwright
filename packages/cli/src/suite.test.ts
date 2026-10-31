@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -176,6 +177,25 @@ test('the manifest holds no path, query, override file path or auth value', asyn
     expect(c.err()).not.toContain(forbidden);
   }
   expect(JSON.parse(c.out())).toEqual(manifest);
+});
+
+test('an error carrying a fake email, its hash and a cookie value stays out of the manifest, and the table keeps the message', async () => {
+  const email = 'pw-fixture@example.com';
+  const hash = createHash('sha256').update(email).digest('hex');
+  const cookie = 'session-fake-cookie-value';
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const fake = recorder(() => ({ code: 2, error: `Run failed: cannot fill ${email} ${hash} ${cookie}\n` }));
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { json: true }), c.io, fake)).toBe(2);
+  const [suiteDir] = await readdir(out);
+  const text = await readFile(join(out, suiteDir!, 'suite.json'), 'utf8');
+  for (const secret of [email, hash, cookie]) {
+    expect(text).not.toContain(secret);
+    expect(c.out()).not.toContain(secret);
+  }
+  const table = capture();
+  await suiteCommand(args(dir, out), table.io, fake);
+  expect(table.out()).toContain('a published: Run failed: cannot fill');
 });
 
 test('the table shows one diff column per extra variant and the record paths', () => {
