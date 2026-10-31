@@ -40,6 +40,9 @@ const pages: Record<string, string> = {
   '/select': 'select.html',
   '/handoff': 'handoff.html',
   '/handoff/second': 'handoff-second.html',
+  '/handoff-patched': 'handoff-patched.html',
+  '/set-cookie-unstored': 'set-cookie-unstored.html',
+  '/meta-early': 'meta-early.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',
@@ -91,6 +94,8 @@ function shopHandler(config: string) {
       res.end(config);
     } else if (path === '/session/start') {
       res.writeHead(204, { 'set-cookie': '_pwid=pwfake-0001; Path=/; Max-Age=3600; SameSite=Lax', 'cache-control': 'no-store' }).end();
+    } else if (path === '/session/unstored') {
+      res.writeHead(204, { 'set-cookie': '_pwunstored=pw-fixture-cookie-value; Domain=other.example; Path=/; Max-Age=3600', 'cache-control': 'no-store' }).end();
     } else if (/^\/web-pixels@[\w.-]+\/sandbox\/modern\/$/.test(path)) {
       await sendFile(res, 'pixel.html');
     } else if (path === containerPixelPath) {

@@ -7,7 +7,7 @@
 </head>
 <body>
 <h1>Server container Data Tag</h1>
-<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields with an empty phone and hashed postal code and country, <code>?form=list</code> sends <code>user_data</code> with lists. <code>?wrong=postal</code> or <code>?wrong=country</code> hashes a different value for that field.</p>
+<p>Posts a Stape Data Tag style <code>purchase</code> body to the mock server container. The values are hashes of the identity typed in the checkout form. <code>?form=top</code> (default) sends them as top-level fields with an empty phone and hashed postal code and country, <code>?form=list</code> sends <code>user_data</code> with lists, <code>?form=nested</code> sends the email hash as <code>customerHashed.email</code>, <code>?form=flat-email</code> sends it as a top-level <code>email</code>. <code>?wrong=postal</code> or <code>?wrong=country</code> hashes a different value for that field.</p>
 <script>
 (function () {
   var query = new URLSearchParams(location.search);
@@ -20,7 +20,7 @@
     });
   }
   var fields = {
-    email_address: stored.email || '',
+    email_address: stored.email || 'pw-fixture@example.com',
     phone_number: '+' + (stored.phone || '').replace(/\D/g, ''),
     first_name: stored['first-name'] || '',
     last_name: stored['last-name'] || '',
@@ -34,7 +34,11 @@
     var h = {};
     names.forEach(function (k, i) { h[k] = hashes[i]; });
     var body;
-    if (form === 'list') {
+    if (form === 'nested') {
+      body = { event_name: 'purchase', page_location: location.href, customerHashed: { email: h.email_address } };
+    } else if (form === 'flat-email') {
+      body = { event_name: 'purchase', page_location: location.href, email: h.email_address };
+    } else if (form === 'list') {
       body = {
         event_name: 'purchase',
         page_location: location.href,
