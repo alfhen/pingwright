@@ -50,7 +50,8 @@ test('an invalid locator object is an error that names the step', () => {
 test('select takes a selector to option mapping and keeps its label', () => {
   const [step] = steps('  - select: { "select[name=countryCode]": DE }\n    label: pick\n');
   expect(step).toMatchObject({ kind: 'select', value: { 'select[name=countryCode]': 'DE' }, label: 'pick' });
-  expect(steps('  - select: { "#size": 42 }\n')[0]).toMatchObject({ value: { '#size': '42' } });
+  expect(steps('  - select: { "#size": "42" }\n')[0]).toMatchObject({ value: { '#size': '42' } });
+  expect(issue('  - select: { "#size": 01 }\n')).toContain('quote it');
   expect(issue('  - select: "#a"\n')).toContain('steps[0].select');
   expect(issue('  - select: {}\n')).toContain('steps[0].select');
   expect(issue('  - select: { "#a": "" }\n')).toContain('steps[0].select');

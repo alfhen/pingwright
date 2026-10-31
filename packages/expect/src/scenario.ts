@@ -335,7 +335,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         const fields: Record<string, string> = {};
         for (const [sel, v] of Object.entries(value)) {
           if (typeof v === 'string' && v) fields[sel] = v;
-          else if (typeof v === 'number' && Number.isFinite(v)) fields[sel] = String(v);
+          else if (typeof v === 'number') fail([...path, kind, sel], `must be a string, so quote it ("${v}") to keep leading zeros`);
           else fail([...path, kind, sel], 'must be a non-empty string');
         }
         add({ kind, value: fields });
