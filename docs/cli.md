@@ -7,7 +7,7 @@ npm i -g pingwright
 pingwright install-browser
 ```
 
-`npm i -g pingwright@next` installs the newest release candidate, `0.3.0-rc.1` at the time of writing. Pingwright needs Node 22.18 or later.
+`npm i -g pingwright@next` installs the newest release candidate, `0.3.0-rc.2` at the time of writing. Pingwright needs Node 22.18 or later.
 
 You can also install a release from its git tag:
 
@@ -316,7 +316,7 @@ The `deniedIdentifiers` check fails when a hit carries an identifier field while
 
 These are not flagged on purpose: `cid`, `client_id`, `_ga`, `fbp`, `fbc` and `gclid`. GA4 cookieless pings carry a random `cid`.
 
-The result lists vendor, field names and the denied signal, and its evidence is the hit IDs. If a hit sent while consent is denied has no recorded field names (a version 1 record) or a body that was cut, the check reports `cannot evaluate` and fails, with `note` set to `fieldsNotRecorded` or `cannotEvaluateBody`. The same holds for a denied hit whose body was not fully recorded: cut at 64 KiB, JSON that did not parse, or a `--net-log` hit, which has no body.
+The result lists vendor, field names and the denied signal, and its evidence is the hit IDs. If a hit sent while consent is denied has no recorded field names (a version 1 record) or a body that was cut, the check reports `cannot evaluate` and fails, with `note` set to `fieldsNotRecorded` or `cannotEvaluateBody`. The same holds for a denied hit whose body was not fully recorded: cut at 64 KiB, JSON that did not parse, or a `--net-log` POST hit, which has no body.
 
 Upgrading to 0.3 can change exit codes. The check is `fail` by default, like the other built-in checks, so a run that sent a hashed custom parameter on a denied hit now exits 1. To keep the old exit code while you fix it, set the check to `warn`:
 
