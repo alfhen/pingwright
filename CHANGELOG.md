@@ -48,7 +48,7 @@ Added a GTM workspace override (`--gtm-override`, also through a Stape-style cus
 
 Notes:
 
-- In `stub` mode, a hit that a frame sends while it unloads is not recorded. Pingwright only raises an `unloadGap` warning. To record it, run with `--network live --net-log`.
+- In `stub` mode, a hit that a sandboxed frame without `allow-same-origin` (such as a Shopify custom pixel) sends while it unloads is not recorded. Pingwright raises an `unloadGap` warning. To record it, run with `--network live --net-log`. Unload sends from other frames are answered in the page and recorded, unless the tab goes to another origin.
 - For Shopify custom pixels, set `builtins: { sandboxPageUrl: warn }`. The pixel runs in a sandboxed iframe, and a vendor that receives the sandbox URL as the page URL is a defect to report, not to fail on.
 - A failed `identity.hashesMatch` names the params that do not match and the fields that do (#347).
 
