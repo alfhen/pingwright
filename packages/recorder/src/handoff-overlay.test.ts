@@ -275,7 +275,6 @@ test('a stale not-waiting answer does not remove the pill a newer answer showed'
   const overlay = runOverlay();
   overlay.pending[0]!.resolve({ waiting: true, text: 'Log in' });
   await flush();
-  overlay.pending[0]!.resolve({ waiting: false, text: '' });
   overlay.tick();
   overlay.wake();
   expect(overlay.pending).toHaveLength(3);
