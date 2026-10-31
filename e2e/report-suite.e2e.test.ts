@@ -68,11 +68,11 @@ test('the suite page lists both variants and both scenarios', () => {
   expect(html).toContain('<th scope="col">published</th><th scope="col">workspace</th>');
   expect(html).toContain('<h2>container-direct</h2>');
   expect(html).toContain('<h2>no-workspace-event</h2>');
-  expect(html).toMatch(/no-workspace-event<\/th><td>PASS \(exit 0\)<\/td><td>FAIL \(exit 1\)<\/td>/);
+  expect(html).toMatch(/no-workspace-event<\/th><td>PASS<\/td><td>FAIL: 1 rule<\/td>/);
 });
 
 test('the diff section shows workspace_only as added', () => {
-  const section = html.slice(html.indexOf('<h2>Diff per variant pair</h2>'), html.indexOf('<section>'));
+  const section = html.slice(html.indexOf('<h2>Diff per variant pair</h2>'));
   expect(section).not.toContain('No differences.');
   expect(section).not.toContain('No variant pair has two records');
   const rows = [...section.matchAll(/<tr><td>[^<]*<\/td><td>[^<]*<\/td><td>workspace_only<\/td><td>(\d+)<\/td>/g)];

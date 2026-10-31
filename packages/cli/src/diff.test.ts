@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { DiffResult } from '@pingwright/expect';
 import { describe, expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
-import { formatDiff } from './diff.ts';
+import { flagChangeLabel, formatDiff } from './diff.ts';
 import { main } from './main.ts';
 
 const empty: DiffResult = { warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] };
@@ -134,5 +134,16 @@ describe('flag changes', () => {
     const text = formatDiff(result, 'a', 'b', { allFlags: true });
     expect(text).toContain('unknownDestination allowed.example.com: 17 -> 18');
     expect(text).not.toContain('not shown');
+  });
+
+  test('a flag with no host prints no placeholder', () => {
+    const noHost = [{ host: '', kind: 'unloadGap', a: 0, b: 1, allowed: false }];
+    const text = formatDiff({ ...result, flags: noHost }, 'a', 'b');
+    expect(text).toContain('  unloadGap: 0 -> 1\n');
+    expect(text).not.toContain('no host');
+  });
+
+  test('a flag with a host names it', () => {
+    expect(flagChangeLabel({ host: 'api.example.com', kind: 'unloadGap', a: 0, b: 1 })).toBe('unloadGap api.example.com: 0 -> 1');
   });
 });

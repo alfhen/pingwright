@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { main } from '../main.ts';
 import type { SuiteManifest } from '../suite.ts';
-import { CSP } from './render.ts';
+import { buildReportModel } from './model.ts';
+import { CSP, renderReport } from './render.ts';
 import { buildSuiteModel, recordKey, renderSuiteReport, type SuiteRecords } from './suite.ts';
 
 const EMAIL = 'pw-fixture@example.com';
@@ -128,6 +129,72 @@ test('the suite page holds no value and makes no request', () => {
   expect(html).not.toMatch(/<script|<link|<img|@import|url\(/i);
   const tags = (html.match(/<[^>]*>/g) ?? []).join('\n');
   expect(tags).not.toMatch(/https?:|\b(?:src|href|action)=|\son\w+=/i);
+});
+
+function leaking(scenario: string, variant: string): RunRecords {
+  const base = records(scenario, variant, ['page_view']);
+  const results: RunRecords['results'] = [
+    { type: 'result', id: newId('result'), runId: base.run.id, expectation: 'mustNot: {"vendor":"ga4","in":"epoch(denied)","params":{"em":"x"}}', pass: false, evidence: [base.hits[0]!.id], message: `${EMAIL} ${HASH}` },
+    { type: 'result', id: newId('result'), runId: base.run.id, expectation: 'builtin: sandboxPageUrl', pass: false, evidence: [], severity: 'warn', message: COOKIE },
+  ];
+  return { ...base, results };
+}
+
+const mixedManifest: SuiteManifest = {
+  ...manifest,
+  cells: [
+    { scenario: 'checkout', variant: 'published', labels: {}, status: 'fail', exitCode: 1, failed: { rules: 5, checks: ['deniedIdentifiers'] }, record: 'checkout.published.jsonl' },
+    { scenario: 'checkout', variant: 'workspace', labels: {}, status: 'warn', exitCode: 0, failed: { rules: 0, checks: ['sandboxPageUrl'] }, record: 'checkout.workspace.jsonl' },
+    { scenario: 'gone', variant: 'published', labels: {}, status: 'pass', exitCode: 0 },
+    { scenario: 'gone', variant: 'workspace', labels: {}, status: 'error', exitCode: 2 },
+  ],
+};
+const leakRecords: SuiteRecords = new Map([
+  [recordKey('checkout', 'published'), leaking('checkout', 'published')],
+  [recordKey('checkout', 'workspace'), records('checkout', 'workspace', ['page_view'], { results: [leaking('x', 'y').results[1]!] })],
+]);
+
+function headingPositions(html: string): number[] {
+  return ['<h2>Verdict</h2>', '<h2>Results</h2>', 'Timeline per vendor', '<h2>Diff per variant pair</h2>'].map((h) => html.indexOf(h));
+}
+
+test('the page order is verdict, results, timelines, diff tables', () => {
+  const positions = headingPositions(renderSuiteReport(buildSuiteModel(manifest, loaded)));
+  expect(positions.every((p) => p >= 0)).toBe(true);
+  expect(positions).toEqual([...positions].sort((a, b) => a - b));
+});
+
+test('the verdict names vendors, states and counts per variant, and holds no value', () => {
+  const html = renderSuiteReport(buildSuiteModel(mixedManifest, leakRecords));
+  expect(html).toContain('<li><strong>published:</strong> ga4 send hits in the denied state, 1 failed expectation, 1 accepted warning</li>');
+  expect(html).toContain('<li><strong>workspace:</strong> no leaks, 1 accepted warning, 1 run did not finish</li>');
+  for (const secret of [EMAIL, HASH, COOKIE]) expect(html).not.toContain(secret);
+});
+
+test('a suite cell in the report names the failed rules and checks', () => {
+  const html = renderSuiteReport(buildSuiteModel(mixedManifest, leakRecords));
+  expect(html).toContain('<td>FAIL: 5 rules, deniedIdentifiers</td><td>WARN: sandboxPageUrl</td>');
+  expect(html).toContain('<td>ERROR (exit 2)</td>');
+  expect(html).not.toContain('FAIL (exit 1)');
+});
+
+test('a single-run report has the verdict line before the timeline', () => {
+  const leak = renderReport(buildReportModel(leaking('checkout', 'published')));
+  expect(leak).toContain('<p class="verdict">Verdict: ga4 send hits in the denied state, 1 failed expectation, 1 accepted warning.</p>');
+  expect(leak.indexOf('class="verdict"')).toBeLessThan(leak.indexOf('Timeline per vendor'));
+  const clean = renderReport(buildReportModel(records('checkout', 'published', ['page_view'])));
+  expect(clean).toContain('<p class="verdict">Verdict: no leaks.</p>');
+});
+
+test('a flag with no host has no placeholder in the diff table', () => {
+  const html = renderSuiteReport({
+    header: { id: 's', startedAt: 'x', host: 'h', variants: ['a', 'b'], exitCode: 0 },
+    warnings: [],
+    scenarios: [],
+    diffs: [{ scenario: 'c', from: 'a', to: 'b', warnings: [], rows: [], flags: [{ kind: 'unloadGap', host: '', a: 0, b: 1 }] }],
+  });
+  expect(html).toContain('flag unloadGap: 0 -&gt; 1');
+  expect(html).not.toContain('no host');
 });
 
 test('a suite with one variant has no diff and says so', () => {

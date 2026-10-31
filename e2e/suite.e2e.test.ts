@@ -107,7 +107,7 @@ test('the table prints a header and one row per scenario with a status per varia
   const lines = r.stdout.split('\n');
   expect(lines.find((l) => /^scenario\s+published\s+workspace/.test(l)), r.stdout).toBeDefined();
   expect(lines.find((l) => l.startsWith('container-direct'))).toMatch(/^container-direct\s+PASS\s+PASS\s+\+\d+ added/);
-  expect(lines.find((l) => l.startsWith('no-workspace-event'))).toMatch(/^no-workspace-event\s+PASS\s+FAIL\s+\+\d+ added/);
+  expect(lines.find((l) => l.startsWith('no-workspace-event'))).toMatch(/^no-workspace-event\s+PASS\s+FAIL: 1 rule\s+\+\d+ added/);
   expect(r.stdout).toContain('diff (published -> workspace)');
   for (const form of forms) expect(r.stdout + r.stderr).not.toContain(form);
 }, 300_000);

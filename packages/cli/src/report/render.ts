@@ -1,4 +1,5 @@
 import type { ExpectationView, Mark, ReportModel, Segment } from './model.ts';
+import { runVerdict } from './verdict.ts';
 
 export const CSP = "default-src 'none'; style-src 'unsafe-inline'";
 
@@ -120,6 +121,8 @@ td .count,td .why{display:block;color:var(--muted);font-size:.85rem}
 .s-pass .status{color:var(--full)}.s-warn .status{color:var(--ping)}.s-fail .status{color:var(--leak)}.s-cannot-evaluate .status{color:var(--unchecked)}
 .results .note,.results .evidence,.results .severity{display:block;color:var(--muted);font-size:.85rem}
 code{font:13px ui-monospace,monospace}
+.verdict{font-size:1.05rem;font-weight:600;margin:12px 0}
+.verdicts{padding-left:20px}
 .empty{color:var(--muted)}
 .caveat{color:var(--muted);font-size:.85rem;margin-top:32px}
 .warn-box{color:var(--ping);border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--card);margin:8px 0}
@@ -178,5 +181,6 @@ ${body}
 export function renderReport(model: ReportModel): string {
   return page(`<h1>${escapeHtml(model.header.scenario)}</h1>
 ${definitionList(runHeader(model.header))}
+<p class="verdict">${escapeHtml(runVerdict(model))}</p>
 ${runSections(model, 'h2')}`);
 }

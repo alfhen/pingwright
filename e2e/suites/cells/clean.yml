@@ -1,0 +1,7 @@
+start: /identifiers?state=granted
+steps:
+  - fill:
+      "#email": email
+  - consent: accept
+  - wait: 3s
+options: { seed: 1, allowUnknownDestination: true }

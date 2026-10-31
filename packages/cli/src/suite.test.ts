@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import type { SuiteArgs } from './args.ts';
 import type { RunOutcome, RunSpec } from './run.ts';
-import { formatSuiteTable, suiteCommand, suiteExitCode, type SuiteManifest } from './suite.ts';
+import { cellText, formatSuiteTable, suiteCommand, suiteExitCode, type SuiteManifest } from './suite.ts';
 
 const VALID = 'start: /\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
 const HANDOFF = 'start: /\nsteps:\n  - handoff: Pay with the test card\nexpect:\n  must: []\n  mustNot: []\n';
@@ -44,6 +44,15 @@ function capture() {
 }
 
 const pass: RunOutcome = { code: 0, summary: { ok: true, pass: true } as RunOutcome['summary'] };
+
+function failing(rules: number, check?: string, severity: 'fail' | 'warn' = 'fail'): RunOutcome {
+  const results = [
+    ...Array.from({ length: rules }, (_, i) => ({ expectation: `mustNot: {"vendor":"meta","n":${i}}`, pass: false, severity, message: 'pw-fixture@example.com', evidence: [] })),
+    ...(check ? [{ expectation: `builtin: ${check}`, pass: false, severity, message: undefined, evidence: [] }] : []),
+    { expectation: 'must: {"vendor":"ga4"}', pass: true, severity: 'fail', message: undefined, evidence: [] },
+  ];
+  return { code: severity === 'fail' ? 1 : 0, summary: { ok: severity === 'warn', pass: false, results } as unknown as RunOutcome['summary'] };
+}
 
 function recorder(outcomes: (spec: RunSpec) => RunOutcome = () => pass) {
   const specs: RunSpec[] = [];
@@ -111,7 +120,7 @@ test('exit code order: a run that did not finish, then a failure, then pass', ()
 
 test('a failing and an erroring run set the exit code and do not stop the suite', async () => {
   const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID, 'c.yml': VALID });
-  const fail: RunOutcome = { code: 1, summary: { ok: false, pass: false } as RunOutcome['summary'] };
+  const fail = failing(2, 'deniedIdentifiers');
   const fake = recorder((s) => (s.scenarioName === 'a' ? fail : s.scenarioName === 'b' ? { code: 2, error: 'Run failed: banner not shown\n' } : pass));
   const c = capture();
   expect(await suiteCommand(args(dir, out), c.io, fake)).toBe(2);
@@ -127,7 +136,7 @@ test('a failing and an erroring run set the exit code and do not stop the suite'
 test('a warning result is WARN with exit 0', async () => {
   const { dir, out } = await workDir({ 'a.yml': VALID });
   const c = capture();
-  const warn: RunOutcome = { code: 0, summary: { ok: true, pass: false } as RunOutcome['summary'] };
+  const warn = failing(1, undefined, 'warn');
   expect(await suiteCommand(args(dir, out), c.io, recorder(() => warn))).toBe(0);
   expect(c.out()).toMatch(/a\s+WARN/);
 });
@@ -257,4 +266,24 @@ test('--var applies to scenarios that declare it and is refused when none does',
   const c = capture();
   expect(await suiteCommand(args(dir, out, { vars: { nope: '1' } }), c.io, recorder())).toBe(2);
   expect(c.err()).toContain('--var nope not declared');
+});
+
+test('a failing cell names the failed rule count and built-in checks, and no message or rule text', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID, 'c.yml': VALID });
+  const c = capture();
+  const fake = recorder((s) => (s.scenarioName === 'a' ? failing(5, 'deniedIdentifiers') : s.scenarioName === 'b' ? failing(1, undefined, 'warn') : pass));
+  await suiteCommand(args(dir, out), c.io, fake);
+  expect(c.out()).toMatch(/a\s+FAIL: 5 rules, deniedIdentifiers\n/);
+  expect(c.out()).toMatch(/b\s+WARN: 1 rule\n/);
+  expect(c.out()).toMatch(/c\s+PASS\n/);
+  expect(c.out()).not.toContain('pw-fixture@example.com');
+  expect(c.out()).not.toContain('"vendor"');
+});
+
+test('cell text: a check-only failure, a warn with a check, an unfinished run and a cell from an older manifest', () => {
+  expect(cellText({ status: 'fail', exitCode: 1, failed: { rules: 0, checks: ['sandboxPageUrl'] } })).toBe('FAIL: sandboxPageUrl');
+  expect(cellText({ status: 'warn', exitCode: 0, failed: { rules: 2, checks: ['unloadGap'] } })).toBe('WARN: 2 rules, unloadGap');
+  expect(cellText({ status: 'error', exitCode: 2 })).toBe('ERROR (exit 2)');
+  expect(cellText({ status: 'fail', exitCode: 1 })).toBe('FAIL');
+  expect(cellText({ status: 'pass', exitCode: 0 })).toBe('PASS');
 });
