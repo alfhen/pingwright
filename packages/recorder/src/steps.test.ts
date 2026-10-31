@@ -317,7 +317,7 @@ describe('select and locator steps on a fake page', () => {
       () => '',
       (e: Error) => e.message,
     );
-    expect(failure).toBe('step "click-1": locator.click: Timeout 10ms exceeded. Controls on the page: button "White (01)", button "Black (02)".');
+    expect(failure).toBe('step "click-1": locator.click: Timeout 10ms exceeded. No radio controls on the page. Controls on the page: button "White (01)", button "Black (02)".');
     const inHandoff = await play(page, yaml, { handoff: { state: () => ({ waiting: true, text: '' }) } }).then(
       () => '',
       (e: Error) => e.message,

@@ -13,7 +13,7 @@ test('a role locator passes on the radio theme', async () => {
 test('a wrong role times out and the error lists the controls on the page', async () => {
   const r = await run('tiles-role', theme('button'));
   expect(r.code).toBe(2);
-  expect(r.stderr).toContain('Controls on the page:');
+  expect(r.stderr).toContain('No radio controls on the page. Controls on the page:');
   expect(r.stderr).toContain('button "White (01)"');
   expect(r.stderr).toContain('button "Black (02)"');
 }, 90_000);
