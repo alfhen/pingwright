@@ -230,6 +230,9 @@ export function parseCli(argv: string[]): Command {
       json: values.json ?? false,
     };
   }
+  for (const flag of ['variant', 'with-handoff'] as const) {
+    if (values[flag] !== undefined) throw new UsageError(`--${flag} is not an option of run`);
+  }
   return {
     command: 'run',
     scenario: rest[0]!,

@@ -281,8 +281,8 @@ function evaluateBodyRule(rule: Rule, body: NonNullable<Rule['body']>, selected:
     }
     const count = rule.kind === 'must' ? (rule.count ?? { op: '>=' as const, n: 1 }) : { op: '=' as const, n: 0 };
     const low = countHolds(count, matching.length);
-    const high = countHolds(count, matching.length + unreadable.length);
-    if (low !== high) return cannotEvaluate(unreadable, where);
+    const undecided = Array.from({ length: unreadable.length }, (_, k) => countHolds(count, matching.length + k + 1)).some((holds) => holds !== low);
+    if (undecided) return cannotEvaluate(unreadable, where);
     const names = [...new Set(matching.flatMap((m) => m.names))].sort();
     const evidence = matching.map((m) => m.hit.id);
     const found = matching.length

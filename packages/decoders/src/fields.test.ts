@@ -160,6 +160,7 @@ test('no value reaches fields or idFields', () => {
   }
   const meta = hits.find((h) => h.vendor === 'meta');
   expect(meta?.params.hashedEmail).toBe(EMAIL_HASH);
+  expect(hits.map((h) => JSON.stringify(h.params)).join()).toContain(EMAIL_HASH);
 });
 
 test('identifier classes and signals', () => {

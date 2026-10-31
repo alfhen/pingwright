@@ -229,7 +229,7 @@ The `deniedIdentifiers` check fails when a hit carries an identifier field while
 | Class | Field names | Signal that must not be denied |
 | --- | --- | --- |
 | Analytics id | `user_id`, `uid`, `up.user_id`, any other field with a 64-character hex value, and the names in `identifierFields` | `analytics` |
-| Ads identity | `external_id`, `ud`, `ud[*]`, `user_data`, `user_data.*`, `em`, `ph`, `hashed_email`, `customer_hashed`, `cookieData` | `adUserData`, or `ads` when `adUserData` is unknown (Meta hits, and Google hits with `gcs` but no `gcd`) |
+| Ads identity | `external_id`, `ud`, `ud[*]`, `user_data`, `user_data.*`, `em`, `ph`, `hashed_email`, `customer_hashed`, `cookieData` | `adUserData`, or `ads` when `adUserData` is unknown (Google hits with `gcs` but no `gcd`, and hits in an epoch that has no `adUserData`) |
 | Client-ID hash | `clientIdHash`, `client_id_hash`, `cid_hash` | `analytics` |
 
 These are not flagged on purpose: `cid`, `client_id`, `_ga`, `fbp`, `fbc` and `gclid`. GA4 cookieless pings carry a random `cid`.

@@ -40,7 +40,16 @@ test('warn turns the failed check into a warning and exit 0', async () => {
 
 test('a cid-only GA4 hit and an fbp-only Meta hit pass while denied', async () => {
   const { code, result, records } = await denied('identifiers-control');
-  expect(records.hits.some((h) => h.vendor === 'ga4')).toBe(true);
+  const ga4 = records.hits.find((h) => h.vendor === 'ga4' && h.fields?.includes('cid'));
+  const meta = records.hits.find((h) => h.vendor === 'meta' && h.fields?.includes('fbp'));
+  expect(ga4).toBeDefined();
+  expect(meta).toBeDefined();
+  expect(ga4!.idFields).toEqual([]);
+  expect(meta!.idFields).toEqual([]);
+  expect(ga4!.consent.analytics).toBe('denied');
+  const deniedAt = records.consentEpochs.find((e) => e.label === 'denied')?.startT;
+  expect(deniedAt).toBeDefined();
+  expect(meta!.t).toBeGreaterThanOrEqual(deniedAt!);
   expect(code).toBe(0);
   expect(result.pass).toBe(true);
 }, 90_000);

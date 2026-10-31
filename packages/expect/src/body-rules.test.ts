@@ -140,6 +140,16 @@ test('a cut body that already shows a listed field is a plain failure', () => {
   expect(r.message).toContain('email');
 });
 
+test('an exact count with cut hits cannot be evaluated when the cut hits could change the count', () => {
+  const cut = () => hit({ fieldsComplete: false });
+  const yaml = 'expect:\n  must:\n    - { body.has: [email], count: 2 }';
+  const r = one(yaml, [hit({ fields: ['email'] }), cut(), cut()]);
+  expect(r.pass).toBe(false);
+  expect(r.note).toBe('cannotEvaluateBody');
+  expect(one(yaml, [hit({ fields: ['email'] }), hit({ fields: ['email'] }), cut()]).note).toBe('cannotEvaluateBody');
+  expect(one(yaml, [hit({ fields: ['email'] }), hit({ fields: ['email'] })]).pass).toBe(true);
+});
+
 test('must body.has passes on a readable match even when another hit is cut', () => {
   const r = one('expect:\n  must:\n    - { body.has: [email] }', [hit({ fields: ['email'] }), hit({ fieldsComplete: false })]);
   expect(r.pass).toBe(true);
