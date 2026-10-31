@@ -52,6 +52,44 @@ test('other commands', () => {
   expect(parseCli(['--help'])).toEqual({ command: 'help' });
 });
 
+const suiteBase = ['suite', 'dir', '--site', 'https://shop.example.com'];
+
+test('suite defaults to the published variant', () => {
+  expect(parseCli(suiteBase)).toMatchObject({ command: 'suite', dir: 'dir', variants: [{ name: 'published' }], out: 'runs', withHandoff: false, json: false });
+});
+
+test('suite parses variants, name=file and the options of run', () => {
+  const parsed = parseCli([...suiteBase, '--variant', 'published', '--variant', 'workspace=a=b/o.json', '--with-handoff', '--network', 'live', '--seed', '3', '--var', 'k=v', '--json']);
+  expect(parsed).toMatchObject({
+    variants: [{ name: 'published' }, { name: 'workspace', file: 'a=b/o.json' }],
+    withHandoff: true,
+    network: 'live',
+    seed: 3,
+    vars: { k: 'v' },
+    json: true,
+  });
+});
+
+test.each([
+  [['--variant', 'Bad Name=f.json'], 'must match'],
+  [['--variant', 'published=f.json'], 'reserved'],
+  [['--variant', 'workspace'], 'needs an override file'],
+  [['--variant', 'workspace='], 'needs an override file'],
+  [['--variant', 'published', '--variant', 'published'], 'given twice'],
+  [['--variant', 'a=x.json', '--variant', 'a=y.json'], 'given twice'],
+  [['--gtm-override', 'g.json'], 'not an option of suite'],
+  [['--headed'], 'not an option of suite'],
+  [['--network', 'server'], 'stub or live'],
+])('suite usage error for %j', (extra, message) => {
+  expect(() => parseCli([...suiteBase, ...extra])).toThrow(UsageError);
+  expect(() => parseCli([...suiteBase, ...extra])).toThrow(message);
+});
+
+test('suite takes one directory and needs --site', () => {
+  expect(() => parseCli(['suite', '--site', 'https://x.test'])).toThrow('one scenario directory');
+  expect(() => parseCli(['suite', 'dir'])).toThrow('--site is required');
+});
+
 test.each([
   [['run', 's.yml'], '--site is required'],
   [['run', '--site', 'http://x.test'], 'one scenario file'],
