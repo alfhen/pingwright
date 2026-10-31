@@ -89,9 +89,23 @@ test('name segments that look like values are stored as (other)', () => {
   }
 });
 
+test.each([
+  ['longer than 64 characters', 'a'.repeat(65)],
+  ['a character outside the name set', 'x%y'],
+  ['a hex token with few digits', 'abcdefabcdefabcdefabcdefabcdefab'],
+  ['six digits in a row among letters', 'ab_123456_cdefghijkl'],
+  ['mostly digits without a run of six', 'order_123_456_789'],
+  ['a mixed-case digest token', 'AbCdEfGhIjKlMnOpQrSt1234'],
+])('the %s guard alone stores (other)', (_guard, name) => {
+  expect(guardFieldName(name)).toBe('(other)');
+  expect(guardFieldName(`user.${name}.x`)).toBe('user.(other).x');
+});
+
 test('a body keyed by values stores (other), not the values', () => {
   const [hit] = decodeRequest(post('https://sgtm.example.com/data?v=2&event=x', { [EMAIL]: 'yes', [EMAIL_HASH]: 'yes', '5551234567': 'yes' }));
   expect(hit?.fields).toEqual(['(other)', 'event', 'v']);
+  const [odd] = decodeRequest(post('https://sgtm.example.com/data?v=2&event=x', { 'x%y': 'yes', abcdefabcdefabcdefabcdefabcdefab: 'yes' }));
+  expect(odd?.fields).toEqual(['(other)', 'event', 'v']);
 });
 
 test('a /data POST over the cap that matches only by body signature is incomplete', () => {

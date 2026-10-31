@@ -17,6 +17,8 @@ let outDir: string;
 let suiteDir: string;
 let html: string;
 let overridePath: string;
+let idSuiteDir: string;
+let idHtml: string;
 
 function node(args: string[], env: NodeJS.ProcessEnv = process.env) {
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
@@ -45,6 +47,16 @@ beforeAll(async () => {
   const report = await node(['report', suiteDir, '--html', page]);
   expect(report.code, report.stderr).toBe(0);
   html = await readFile(page, 'utf8');
+
+  const idOut = join(outDir, 'id-runs');
+  const idSuite = await node(['suite', join(root, 'e2e/suites/identifiers'), '--site', site.url, '--out', idOut]);
+  expect(idSuite.code, idSuite.stderr).toBe(0);
+  const [idName] = await readdir(idOut);
+  idSuiteDir = join(idOut, idName!);
+  const idPage = join(outDir, 'suite-identifiers.html');
+  const idReport = await node(['report', idSuiteDir, '--html', idPage]);
+  expect(idReport.code, idReport.stderr).toBe(0);
+  idHtml = await readFile(idPage, 'utf8');
 }, 300_000);
 
 afterAll(async () => {
@@ -79,6 +91,19 @@ test('the page holds no run identity and no hash of it', async () => {
     expect(html).not.toContain(hash);
   }
   expect(html).not.toContain('pw-fixture@example.com');
+});
+
+test('a suite page of hits that carry the hashed email holds neither the email nor its hash', async () => {
+  const [file] = (await readdir(idSuiteDir)).filter((f) => f.endsWith('.jsonl'));
+  const records = await readRun(join(idSuiteDir, file!));
+  const { identity } = records.run;
+  const hash = createHash('sha256').update(identity!.email.trim().toLowerCase()).digest('hex');
+  const carrying = records.requests.filter((q) => q.url.includes(hash) || (q.postData ?? '').includes(hash));
+  expect(carrying.length, 'no request carries the hashed email, so this check proves nothing').toBeGreaterThan(0);
+  expect(records.hits.length).toBeGreaterThan(0);
+  expect(idHtml).toContain('<h2>identifiers</h2>');
+  expect(idHtml).not.toContain(identity!.email);
+  expect(idHtml).not.toContain(hash);
 });
 
 test('the page holds no value and makes no request', () => {

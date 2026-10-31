@@ -74,7 +74,7 @@ function diffText(d: SuiteDiff | undefined): string {
   return parts.length ? parts.join(', ') : 'no change';
 }
 
-export function formatSuiteTable(manifest: SuiteManifest, dir: string, errors: Map<string, string> = new Map()): string {
+export function formatSuiteTable(manifest: SuiteManifest, dir: string): string {
   const [first, ...others] = manifest.variants;
   const scenarios = [...new Set(manifest.cells.map((c) => c.scenario))];
   const header = ['scenario', ...manifest.variants, ...others.map((v) => `diff (${first} -> ${v})`)];
@@ -88,7 +88,10 @@ export function formatSuiteTable(manifest: SuiteManifest, dir: string, errors: M
   const out = [line(header), ...rows.map(line)];
   const records = manifest.cells.filter((c) => c.record);
   if (records.length) out.push('', 'Records', ...records.map((c) => `  ${c.scenario} ${c.variant}: ${join(dir, c.record!)}`));
-  if (errors.size) out.push('', 'Errors', ...[...errors].map(([key, message]) => `  ${key}: ${message}`));
+  const unfinished = manifest.cells.filter((c) => c.exitCode === 2);
+  if (unfinished.length) {
+    out.push('', 'Errors', ...unfinished.map((c) => `  ${c.scenario} ${c.variant}: run did not finish (exit 2), ${c.record ? `details in ${join(dir, c.record)}` : 'details in the stderr above'}`));
+  }
   out.push('', `Manifest: ${join(dir, 'suite.json')}`);
   return `${out.join('\n')}\n`;
 }
@@ -215,7 +218,6 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   const startedAt = Date.now();
   const variants = args.variants.map((v) => v.name);
   const cells: SuiteCell[] = [];
-  const errors = new Map<string, string>();
 
   const ordered = [...scenarios.filter((s) => !s.handoff), ...scenarios.filter((s) => s.handoff)];
   for (const s of ordered) {
@@ -244,7 +246,6 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
         },
         io,
       );
-      if (outcome.error) errors.set(`${s.name} ${variant}`, outcome.error.trim().split('\n')[0]!);
       cells.push({ ...cell, status: statusOf(outcome), exitCode: outcome.code, ...(outcome.path && { record: basename(outcome.path) }) });
     }
   }
@@ -262,6 +263,6 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     exitCode: suiteExitCode(cells),
   };
   await writeFile(join(dir, 'suite.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  io.stdout(args.json ? `${JSON.stringify(manifest, null, 2)}\n` : formatSuiteTable(manifest, dir, errors));
+  io.stdout(args.json ? `${JSON.stringify(manifest, null, 2)}\n` : formatSuiteTable(manifest, dir));
   return manifest.exitCode;
 }
