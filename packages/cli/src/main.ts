@@ -3,6 +3,7 @@ import { diffCommand } from './diff.ts';
 import { installBrowser } from './install-browser.ts';
 import { reportCommand } from './report/index.ts';
 import { runCommand, type Io } from './run.ts';
+import { suiteCommand } from './suite.ts';
 import { readVersion } from './version.ts';
 
 const processIo: Io = {
@@ -27,6 +28,8 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         return await diffCommand(command, io);
       case 'report':
         return await reportCommand(command, io);
+      case 'suite':
+        return await suiteCommand(command, io);
       case 'run':
         return await runCommand(command, io);
     }

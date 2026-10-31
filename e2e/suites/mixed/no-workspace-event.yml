@@ -1,0 +1,7 @@
+start: /container/direct
+steps:
+  - wait: 12s
+expect:
+  mustNot:
+    - { vendor: ga4, event: workspace_only }
+options: { allowUnknownDestination: true }
