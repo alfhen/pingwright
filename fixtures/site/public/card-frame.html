@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card frame</title>
+</head>
+<body>
+<label>Card number <input id="cc-number" autocomplete="cc-number" inputmode="numeric"></label><br>
+<label>Expiry <input id="cc-exp" autocomplete="cc-exp"></label><br>
+<label>CVC <input id="cc-csc" autocomplete="cc-csc"></label>
+<script>
+window.addEventListener('message', function (e) {
+  if (e.data !== 'pw-pay') return;
+  fetch('/card-submit', { method: 'POST', body: document.getElementById('cc-number').value }).then(function () {
+    parent.postMessage('pw-card-submitted', '*');
+  });
+});
+</script>
+</body>
+</html>

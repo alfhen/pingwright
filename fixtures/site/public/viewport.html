@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Viewport</title>
+</head>
+<body>
+<h1>Viewport</h1>
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  var name = window.innerWidth < 600 ? 'layout_mobile' : 'layout_desktop';
+  window.dataLayer.push({ event: name });
+  if (navigator.userAgent.indexOf('Mobile') !== -1) window.dataLayer.push({ ua_mobile: true });
+  new Image().src =
+    'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=' + name +
+    '&gcs=G100&dl=' + encodeURIComponent(location.href);
+})();
+</script>
+</body>
+</html>
