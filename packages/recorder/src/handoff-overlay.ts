@@ -203,8 +203,9 @@ export function handoffOverlayScript(nonce: string): string {
       show(toText(state.text));
       return;
     }
+    if (began !== generation) return;
     hide();
-    if (began === generation) stopPolling();
+    stopPolling();
   };
   const start = () => {
     generation++;
