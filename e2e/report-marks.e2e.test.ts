@@ -39,9 +39,16 @@ test('a Meta hit before any answer is early, severity shows only on a failed res
 
   const records = r.records!;
   const email = records.run.identity!.email;
-  const hash = createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
+  const fixtureEmail = 'pw-fixture@example.com';
+  const sha = (v: string) => createHash('sha256').update(v.trim().toLowerCase());
+  const hash = sha(fixtureEmail).digest('hex');
+  const cookieValue = 'pw-fixture-cookie-value';
+  const traffic = JSON.stringify(records.hits) + JSON.stringify(records.requests);
   expect(records.hits.some((h) => h.vendor === 'sgtm')).toBe(true);
-  for (const secret of [email, hash, 'pw-fixture@example.com']) {
+  expect(traffic).toContain(hash);
+  expect(traffic).toContain(cookieValue);
+  const secrets = [email, fixtureEmail, hash, sha(fixtureEmail).digest('base64'), sha(fixtureEmail).digest('base64url'), cookieValue];
+  for (const secret of secrets) {
     expect(html).not.toContain(secret);
   }
   expect(html).not.toMatch(/<script|<link|<img|url\(|@import/i);
