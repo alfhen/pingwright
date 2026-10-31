@@ -7,11 +7,13 @@ export class UsageError extends Error {
   }
 }
 
+export type Network = 'stub' | 'server' | 'live';
+
 export interface RunArgs {
   command: 'run';
   scenario: string;
   site: string;
-  network: 'stub' | 'live' | undefined;
+  network: Network | undefined;
   out: string;
   seed: number | undefined;
   headed: boolean;
@@ -49,7 +51,7 @@ export interface SuiteArgs {
   dir: string;
   site: string;
   variants: VariantArg[];
-  network: 'stub' | 'live' | undefined;
+  network: Network | undefined;
   out: string;
   seed: number | undefined;
   withHandoff: boolean;
@@ -82,7 +84,7 @@ Options for suite:
 
 Options for run:
   --site <url>               The site to test (required)
-  --network stub|live        stub (default) answers tracking requests locally; live sends them
+  --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
@@ -101,7 +103,7 @@ and writes one JSONL record.
 
 Options:
   --site <url>               The site to test (required)
-  --network stub|live        stub (default) answers tracking requests locally; live sends them
+  --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
@@ -195,8 +197,8 @@ export function parseCli(argv: string[]): Command {
     throw new UsageError(`--site must be an http or https URL, got "${values.site}"`);
   }
   const network = values.network;
-  if (network !== undefined && network !== 'stub' && network !== 'live') {
-    throw new UsageError(`--network must be stub or live, got "${network}"`);
+  if (network !== undefined && network !== 'stub' && network !== 'server' && network !== 'live') {
+    throw new UsageError(`--network must be stub, server or live, got "${network}"`);
   }
   let seed: number | undefined;
   if (values.seed !== undefined) {

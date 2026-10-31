@@ -2,7 +2,7 @@ import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { PingwrightRecord, Result, Run, RunRecords } from '@pingwright/core';
 import { parseTrackerList, type TrackerEntry } from '@pingwright/decoders';
-import { DEFAULT_GRACE_MS, evaluate, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
+import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
 import {
   GtmOverrideError,
   GtmOverrideFailure,
@@ -14,7 +14,7 @@ import {
   TEST_GTM_ORIGIN_ENV,
   type GtmOverrideInput,
 } from '@pingwright/recorder';
-import { NET_LOG_NEEDS_LIVE, type RunArgs } from './args.ts';
+import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
 import { buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 
 export interface Io {
@@ -71,7 +71,7 @@ export interface RunSpec {
   parsed: Scenario;
   /** Written to `Run.scenario`. */
   scenarioName: string;
-  network: 'stub' | 'live';
+  network: Network;
   site: string;
   out: string;
   seed: number | undefined;
@@ -94,11 +94,16 @@ export interface RunOutcome {
 }
 
 /** Applies the network rules shared by `run` and `suite`. Returns undefined after writing the reason to stderr. */
-export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog'>, parsed: Scenario, io: Io): 'stub' | 'live' | undefined {
+export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog'>, parsed: Scenario, io: Io): Network | undefined {
   const networkMode = args.network ?? parsed.options.network ?? 'stub';
+  const serverHosts = parsed.options.serverHosts ?? [];
   if (networkMode === 'server') {
-    io.stderr('Network mode "server" is not available yet. Use stub or live.\n');
-    return undefined;
+    if (serverHosts.length === 0) {
+      io.stderr('Network mode "server" needs options.serverHosts in the scenario: the hosts whose requests pass through, such as sgtm.example.com.\n');
+      return undefined;
+    }
+    const hosted = serverHosts.filter((host) => !isLoopbackPattern(host));
+    if (hosted.length) io.stderr(`Warning: server mode. Requests to ${hosted.join(', ')} reach the network.\n`);
   }
   if (args.netLog && networkMode !== 'live') {
     io.stderr(`${NET_LOG_NEEDS_LIVE}\n`);
@@ -140,6 +145,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
   try {
     const result = await recordScenario({
       networkMode: spec.network,
+      serverHosts: parsed.options.serverHosts,
       outDir: spec.out,
       site: spec.site,
       scenario: spec.scenarioName,

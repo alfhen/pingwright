@@ -10,6 +10,7 @@ import {
   type ConsentEpoch,
   type ConsentState,
   type ConsentValue,
+  type Checkpoint,
   type Flag,
   type HashForms,
   type Hit,
@@ -17,13 +18,14 @@ import {
   type PingwrightRecord,
   type Run,
   type Request,
+  type Response,
   type Result,
   type ResultNote,
   type Severity,
   type Step,
   globToRegExp,
 } from '@pingwright/core';
-import { GA4_BODY_ONLY_IGNORE, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@pingwright/decoders';
+import { GA4_BODY_ONLY_IGNORE, guardFieldName, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@pingwright/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -48,6 +50,9 @@ interface Context {
   requests: Map<string, Request>;
   epochs: EvalEpoch[];
   steps: Step[];
+  responses: Response[];
+  checkpoints: Checkpoint[];
+  networkMode?: Run['networkMode'];
   grace: number;
   identity?: Identity;
 }
@@ -62,6 +67,9 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
       .filter((r): r is EvalEpoch => r.type === 'consentEpoch')
       .sort((a, b) => a.startT - b.startT),
     steps: records.filter((r): r is Step => r.type === 'step'),
+    responses: records.filter((r): r is Response => r.type === 'response'),
+    checkpoints: records.filter((r): r is Checkpoint => r.type === 'checkpoint'),
+    networkMode: runRecord?.networkMode,
     grace: options.graceWindowMs ?? scenario.options.graceWindow ?? DEFAULT_GRACE_MS,
     identity: options.identity ?? identityOf(runRecord),
   };
@@ -83,6 +91,7 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
 type RuleOutcome = { pass: boolean; evidence: string[]; message: string; note?: ResultNote };
 
 function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
+  if (rule.cookie) return evaluateCookieRule(rule, rule.cookie, ctx);
   let hits = ctx.hits.filter((h) => matchesFilter(h, rule.filter, ctx));
   const total = hits.length;
   const narrowed: string[] = [];
@@ -132,6 +141,108 @@ function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
     return { pass: false, evidence: check.evidence, message: `${headline} ${matched}, but identity.hashesMatch failed: ${check.message}` };
   }
   return { pass, evidence: ids, message };
+}
+
+const STUB_NO_COOKIES = 'stub mode: stubbed endpoints set no cookies';
+
+interface CookieSighting {
+  name: string;
+  /** Request ID for a Set-Cookie header, checkpoint ID for a cookie jar. */
+  evidence: string;
+  /** Absent when the record has no time to place it by. */
+  t: number | undefined;
+  source: string;
+}
+
+function cookieSightings(matchers: RegExp[], ctx: Context): CookieSighting[] {
+  const out: CookieSighting[] = [];
+  const wanted = (name: string) => matchers.some((m) => m.test(name));
+  for (const response of ctx.responses) {
+    const t = ctx.requests.get(response.requestId)?.t;
+    for (const name of response.setCookieNames) if (wanted(name)) out.push({ name, evidence: response.requestId, t, source: 'Set-Cookie' });
+  }
+  for (const checkpoint of ctx.checkpoints)
+    for (const cookie of checkpoint.cookies) if (wanted(cookie.name)) out.push({ name: cookie.name, evidence: checkpoint.id, t: checkpoint.t, source: `checkpoint "${checkpoint.label}"` });
+  return out;
+}
+
+function beforeConsentAt(t: number, ctx: Context): boolean {
+  const epoch = epochForHit(ctx.epochs, t, ctx.grace);
+  return !epoch || (epoch === ctx.epochs[0] && epoch.label === 'undecided');
+}
+
+function inEpochAt(t: number, selector: string, ctx: Context): boolean {
+  const epoch = epochForHit(ctx.epochs, t, ctx.grace);
+  if (selector === 'undecided') return !epoch || epoch.label === 'undecided';
+  if (!epoch) return false;
+  if (selector.startsWith('label=')) return epoch.label === selector.slice('label='.length);
+  if (selector === 'granted' || selector === 'denied') return (epoch.outcome ?? epoch.label) === selector;
+  return stateMatches(epoch.state, selector);
+}
+
+/**
+ * Reads cookie names only. A Set-Cookie header is placed at its request's time. A cookie in a checkpoint is
+ * placed at the checkpoint's time, which says it was present then, not when it was set.
+ */
+function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleOutcome {
+  let sightings = cookieSightings(patterns.map((p) => globToRegExp(p)), ctx);
+  const total = sightings.length;
+  const narrowed: string[] = [];
+  let from: number | undefined;
+  if (rule.after) {
+    const step = ctx.steps.find((s) => s.label === rule.after);
+    if (!step) {
+      const known = ctx.steps.map((s) => s.label).join(', ') || 'none';
+      return { pass: false, evidence: [], message: `Expected a step labelled "${rule.after}", but the run has steps: ${known}.` };
+    }
+    from = step.endedAt ?? step.startedAt;
+  }
+  const timed = rule.before || rule.inEpoch || from !== undefined;
+  const unplaced = timed ? sightings.filter((s) => s.t === undefined) : [];
+  if (timed) sightings = sightings.filter((s) => s.t !== undefined);
+  const keep = (test: (t: number) => boolean) => {
+    sightings = sightings.filter((s) => test(s.t!));
+  };
+  if (rule.before) {
+    keep((t) => beforeConsentAt(t, ctx));
+    narrowed.push('before consent');
+  }
+  if (rule.inEpoch) {
+    const selector = rule.inEpoch;
+    keep((t) => inEpochAt(t, selector, ctx));
+    narrowed.push(`in epoch(${selector})`);
+  }
+  if (from !== undefined) {
+    keep((t) => t >= from);
+    narrowed.push(`after ${rule.after}`);
+  }
+
+  const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
+  const headerNames = new Set(sightings.filter((s) => s.source === 'Set-Cookie').map((s) => s.name));
+  sightings = sightings.filter((s) => s.source === 'Set-Cookie' || !headerNames.has(s.name));
+  const evidence = [...new Set(sightings.map((s) => s.evidence))];
+  const wantedCount = rule.kind === 'must' ? { op: '>=' as const, n: 1 } : { op: '=' as const, n: 0 };
+  const low = countHolds(wantedCount, sightings.length);
+  if (low !== countHolds(wantedCount, sightings.length + unplaced.length)) {
+    return {
+      pass: false,
+      evidence: unplaced.map((s) => s.evidence),
+      message: `cannot evaluate: ${unplaced.length} matching cookie${unplaced.length === 1 ? '' : 's'} in a checkpoint with no time${where}.`,
+    };
+  }
+  const names = [...new Set(sightings.map((s) => guardFieldName(s.name)))].sort();
+  const sources = [...new Set(sightings.map((s) => s.source))];
+  const found = sightings.length
+    ? `found ${listNames(names)} from ${sources.join(' and ')} (${total} before narrowing)${sources.some((s) => s !== 'Set-Cookie') ? '. A checkpoint shows the cookie was present then, not when it was set' : ''}`
+    : `found no matching cookie (${total} before narrowing)`;
+  const expected = rule.kind === 'must' ? `Expected a matching cookie${where}` : `Expected no matching cookie${where}`;
+  const stubbed = low && rule.kind === 'mustNot' && ctx.networkMode === 'stub';
+  return {
+    pass: low,
+    evidence,
+    message: `${expected}, ${found}.${stubbed ? ` ${STUB_NO_COOKIES}` : ''}`,
+    ...(stubbed && { note: 'stubNoCookies' as const }),
+  };
 }
 
 const NOT_RECORDED = 'cannot evaluate: field names not recorded';

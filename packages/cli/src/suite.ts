@@ -4,7 +4,7 @@ import { readRun, ulid } from '@pingwright/core';
 import type { TrackerEntry } from '@pingwright/decoders';
 import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
 import { GtmOverrideError, hasHandoff, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput } from '@pingwright/recorder';
-import type { SuiteArgs } from './args.ts';
+import type { Network, SuiteArgs } from './args.ts';
 import { executeRun, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, type Io, type RunOutcome, type RunSpec } from './run.ts';
 
 export type CellStatus = 'pass' | 'warn' | 'fail' | 'error' | 'skipped';
@@ -199,7 +199,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     return 2;
   }
 
-  const networks = new Map<string, 'stub' | 'live'>();
+  const networks = new Map<string, Network>();
   for (const s of scenarios) {
     const network = resolveNetwork({ network: args.network, netLog: false }, s.parsed, io);
     if (!network) return 2;

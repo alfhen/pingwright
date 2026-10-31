@@ -10,7 +10,7 @@ The spec is [docs/design.md](docs/design.md). The current plan is the newest `do
 - **The `gtmAuth` value**, in any form, never appears in a record, a log line, an error message or test output.
 - **Payments and log-ins** are always `handoff` steps for a person on any hosted site. Only loopback hosts (`localhost`, `127.0.0.1`, `::1`), such as the fixture site, may be automated through payment.
 - **No hosted service.** Pingwright never calls the GTM API. Each user runs their own sink.
-- **Tests stay local.** E2E tests run only against `fixtures/site` in `stub` mode. Never use a real store as an e2e target.
+- **Tests stay local.** E2E tests run only against `fixtures/site` in `stub` mode. The one exception is a `server` mode test whose pass-through host is the fixture's own loopback host. Never use a real store as an e2e target.
 - **Browser.** Use context-level hooks only (`context.route`, `context.on('request')`, `context.addInitScript`, `context.exposeBinding`). Send a normal Chrome user agent, never one containing `HeadlessChrome`. No browser flags in the default launch. `--net-log` (opt-in) adds Chromium's `--log-net-log`, and nothing else uses a CDP session or a flag. CDP auto-attach on every target was measured and does not see unload-time requests (design §5.3).
 - **Third-party code.** `@duckduckgo/autoconsent` (MPL-2.0) is an unmodified dependency. Never copy or patch its files. Tracker Radar, EasyPrivacy and Disconnect are not sources: never ship them or derive tracker entries from them. Tracker entries link to the vendor's own docs.
 - **Releases.** Never publish to npm or create a GitHub release without the maintainer's say-so. Never force-push `main`.

@@ -35,7 +35,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | Option | Meaning |
 | --- | --- |
 | `--site <url>` | The site to test. Required. Scenario paths are resolved against it. |
-| `--network stub\|live` | `stub` (default) answers known collection endpoints locally. `live` lets every hit through and warns on stderr that hits reach real vendor accounts. Overrides `options.network` in the scenario. |
+| `--network stub\|server\|live` | `stub` (default) answers known collection endpoints locally. `server` is `stub`, except that collection requests to the hosts in `options.serverHosts` pass through (see Rules on cookies). `live` lets every hit through and warns on stderr that hits reach real vendor accounts. Overrides `options.network` in the scenario. |
 | `--out <dir>` | Directory for the record, `runs` by default. The file is `<dir>/run_<id>.jsonl`. |
 | `--seed <n>` | Seed for the fake identity. Overrides `options.seed`. |
 | `--headed` | Show the browser window. Scenarios with a `handoff` step are always headed. |
@@ -59,6 +59,7 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `cartRequest` | Regular expression matched against request URLs. In an `addToCart` step, a matching request counts as a cart change, for a site whose cart endpoint the built-in check does not know. |
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. Use it for custom events that are not meant to produce a hit. |
+| `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
 | `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData` and `deniedIdentifiers`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
 | `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` treats as analytics identifiers, matched against the field names of each hit. |
@@ -130,6 +131,28 @@ Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not
 | `sgtm` | `v`, `tid`, `event`, `en`, `dtdc` |
 
 The lists are exported from `@pingwright/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
+
+### Rules on cookies
+
+`cookie` checks which cookies were set, by name. A value is never read, recorded or shown.
+
+```yaml
+expect:
+  mustNot:
+    - { cookie: _dcid, before: consent }
+    - { cookie: "_ga*", in: epoch(denied) }
+  must:
+    - { cookie: pw_consent, in: epoch(granted) }
+```
+
+- `cookie` is a name or a glob (`*` matches zero or more characters, so `_ga*` matches `_ga` and `_ga_PWTEST`), or a list of them. Names of at most 64 characters.
+- The entry stands alone. It takes `before: consent`, `in: epoch(...)` and `after: <step label>` as a hit rule does, and nothing else. `vendor`, `event`, `count`, `body.*` and the other hit keys are scenario errors.
+- Two sources count. A `Set-Cookie` header on any response, from any host, is placed at its request's time, and the evidence is that request ID. A cookie in a checkpoint (set by a script, or earlier) is placed at the checkpoint's time and the evidence is the checkpoint ID. A checkpoint only shows that the cookie was present then, not when it was set, and the message says so. To test a script cookie before consent, add a `checkpoint` step before the consent step. When a header and a checkpoint show the same name, the result cites the request.
+- A time is placed in an epoch like a hit's, with the same grace window. A cookie set less than the grace window before the consent answer counts after it. Wait before the consent step when a test depends on it.
+- A rule with `before`, `in` or `after` that matches a checkpoint without a time (a record from before 0.3) cannot be placed. The result is `cannot evaluate` and never passes.
+- Cookie names are guarded like field names: a name that looks like a value is shown as `(other)`.
+
+In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for that reason, so a passing result in `stub` mode ends with `stub mode: stubbed endpoints set no cookies` and has `note: stubNoCookies`. To see the cookies of a server container, run with `--network server` and list its host in `options.serverHosts`, or use `--network live`.
 
 ### GTM override
 

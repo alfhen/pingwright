@@ -46,7 +46,7 @@ import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
-import { isKnownVendorCollection, stubResponse } from './stub.ts';
+import { isKnownVendorCollection, isStubbedCollection, setCookieNamesOf, stubResponse } from './stub.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
@@ -71,7 +71,9 @@ const REDACTED_VALUE = '[redacted]';
 
 
 export interface RecorderOptions {
-  networkMode: Extract<NetworkMode, 'stub' | 'live'>;
+  networkMode: NetworkMode;
+  /** Needed by `server` mode: hosts or `*.domain` wildcards whose collection requests pass through. Every other one is still stubbed. */
+  serverHosts?: string[];
   /** Directory that receives `<runId>.jsonl`. */
   outDir: string;
   /** The site under test. Requests to other hosts can be flagged as unknown destinations. */
@@ -184,6 +186,7 @@ export class Recorder {
   private readonly loaderCandidates = new Map<string, boolean>();
   private readonly crossOriginScripts = new Set<string>();
   private readonly trackers: readonly TrackerEntry[];
+  private readonly stubRecorded = new Set<string>();
   private readonly navigations: number[] = [];
   private readonly navigationWindows = new NavigationWindows<PwRequest>();
 
@@ -202,6 +205,9 @@ export class Recorder {
   static async launch(options: RecorderOptions): Promise<Recorder> {
     const testGtmOrigin = parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
     const gtmOverride = options.gtmOverride === undefined ? undefined : parseGtmOverride(options.gtmOverride);
+    if (options.networkMode === 'server' && !options.serverHosts?.length) {
+      throw new Error('networkMode "server" needs serverHosts: the hosts whose requests pass through.');
+    }
     if (options.netLog && options.networkMode !== 'live') {
       throw new Error('netLog needs networkMode "live": in stub mode the requests a frame sends while it unloads would leave the machine.');
     }
@@ -438,6 +444,7 @@ export class Recorder {
     const record = this.recordFor(response.request());
     if (!record) return;
     this.navigationWindows.respond(response.request(), nodeNow());
+    if (this.stubRecorded.has(record.id)) return;
     let setCookieNames: string[] = [];
     try {
       setCookieNames = (await response.headerValues('set-cookie')).map((c) => c.split('=')[0]!.trim());
@@ -457,9 +464,11 @@ export class Recorder {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
     if (record && (await this.routeGtm(route, record))) return;
-    if (record && this.options.networkMode !== 'live' && (isCollectionEndpoint(record, this.trackers) || isKnownVendorCollection(record))) {
+    if (record && this.options.networkMode !== 'live' && this.isStubbedCollection(record)) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
+      this.stubRecorded.add(record.id);
+      this.recordResponseFor(record, stub.status, setCookieNamesOf(stub.headers));
       await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
       return;
     }
@@ -468,6 +477,14 @@ export class Recorder {
       return;
     }
     await route.continue();
+  }
+
+  private isStubbedCollection(record: Request): boolean {
+    return isStubbedCollection(record, {
+      networkMode: this.options.networkMode,
+      serverHosts: this.options.serverHosts,
+      trackers: this.trackers,
+    });
   }
 
   /** Answers a gtm.js request, directly or through a loader, with the preview build, or from the test origin. Returns false when the request is not one of those. */
@@ -585,12 +602,12 @@ export class Recorder {
         postData = null;
       }
       const hop = this.hopRecord(first, next.href, method, headers, postData);
-      if (isCollectionEndpoint(hop, this.trackers) || isKnownVendorCollection(hop)) {
+      if (this.isStubbedCollection(hop)) {
         hop.outcome = 'stubbed';
         this.routed.add(hop.id);
         this.extraRequests.push(hop);
         const stub = stubResponse(first);
-        this.recordResponseFor(hop, stub.status, []);
+        this.recordResponseFor(hop, stub.status, setCookieNamesOf(stub.headers));
         await route.fulfill({ status: stub.status, headers: stub.headers, body: stub.body });
         return;
       }
