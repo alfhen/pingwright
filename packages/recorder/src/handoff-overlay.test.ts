@@ -148,12 +148,18 @@ function runOverlay() {
   const intervals = new Map<number, () => void>();
   let nextInterval = 1;
   const pending: Deferred[] = [];
+  const removed = { count: 0 };
   const stateFn = () => new Promise((resolve) => pending.push({ resolve }));
   const element = () => ({ style: {}, attachShadow: () => ({}), append() {}, remove() {} });
   class FakeNode {}
   class FakeElement extends FakeNode {
-    append() {}
-    remove() {}
+    append(...children: { parent?: unknown }[]) {
+      for (const child of children) child.parent = this;
+    }
+    remove(this: { parent?: unknown }) {
+      removed.count++;
+      this.parent = null;
+    }
     getBoundingClientRect() {
       return {};
     }
@@ -169,12 +175,18 @@ function runOverlay() {
     stopPropagation() {}
   }
   Object.defineProperty(FakeNode.prototype, 'textContent', { set() {}, configurable: true });
-  Object.defineProperty(FakeNode.prototype, 'parentNode', { get: () => null, configurable: true });
+  Object.defineProperty(FakeNode.prototype, 'parentNode', {
+    get(this: { parent?: unknown }) {
+      return this.parent ?? null;
+    },
+    configurable: true,
+  });
   class FakeHTMLElement extends FakeElement {}
   Object.defineProperty(FakeHTMLElement.prototype, 'title', { set() {}, configurable: true });
   Object.defineProperty(FakeHTMLElement.prototype, 'style', { get: () => ({ setProperty() {} }), configurable: true });
   class FakeDocument {}
-  Object.defineProperty(FakeDocument.prototype, 'documentElement', { get: () => null, configurable: true });
+  const documentRoot = new FakeElement();
+  Object.defineProperty(FakeDocument.prototype, 'documentElement', { get: () => documentRoot, configurable: true });
   class FakeFragment {
     append() {}
   }
@@ -225,6 +237,7 @@ function runOverlay() {
   return {
     pending,
     intervals,
+    removed,
     wake: () => listeners.get('pingwright-handoff-wake')!(),
     tick: () => [...intervals.values()].forEach((fn) => fn()),
   };
@@ -255,5 +268,31 @@ test('a stale not-waiting answer does not stop the polling that a wake started',
   overlay.pending[2]!.resolve({ waiting: false, text: '' });
   overlay.pending[3]!.resolve({ waiting: false, text: '' });
   await flush();
+  expect(overlay.intervals.size).toBe(0);
+});
+
+test('a stale not-waiting answer does not remove the pill a newer answer showed', async () => {
+  const overlay = runOverlay();
+  overlay.pending[0]!.resolve({ waiting: true, text: 'Log in' });
+  await flush();
+  overlay.tick();
+  overlay.wake();
+  expect(overlay.pending).toHaveLength(3);
+  overlay.pending[2]!.resolve({ waiting: true, text: 'Pay' });
+  await flush();
+  overlay.pending[1]!.resolve({ waiting: false, text: '' });
+  await flush();
+  expect(overlay.removed.count).toBe(0);
+  expect(overlay.intervals.size).toBe(1);
+});
+
+test('a not-waiting answer that is current removes the pill and stops the polling', async () => {
+  const overlay = runOverlay();
+  overlay.pending[0]!.resolve({ waiting: true, text: 'Log in' });
+  await flush();
+  overlay.tick();
+  overlay.pending[1]!.resolve({ waiting: false, text: '' });
+  await flush();
+  expect(overlay.removed.count).toBe(1);
   expect(overlay.intervals.size).toBe(0);
 });
