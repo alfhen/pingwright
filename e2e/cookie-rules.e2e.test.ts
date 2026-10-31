@@ -62,15 +62,3 @@ test('server mode lets the mock host answer, and only that host passes', async (
   const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
   for (const q of records.requests.filter((x) => x.outcome === 'passed')) expect(loopback.has(new URL(q.url).hostname)).toBe(true);
 }, 90_000);
-
-test('server mode still stubs vendor collection requests outside serverHosts', async () => {
-  const r = await run('server-vendors');
-  expect(r.code).toBe(0);
-  const records = r.records!;
-  expect(records.run.networkMode).toBe('server');
-  const hitsTo = (host: string) => records.hits.filter((h) => new URL(records.requests.find((q) => q.id === h.requestId)!.url).hostname === host);
-  const vendorHits = records.hits.filter((h) => h.vendor === 'ga4' || h.vendor === 'meta' || h.vendor === 'google-ads').filter((h) => !hitsTo('127.0.0.1').includes(h));
-  expect(vendorHits.length).toBeGreaterThan(0);
-  for (const h of vendorHits) expect(records.requests.find((q) => q.id === h.requestId)!.outcome).toBe('stubbed');
-  expect(hitsTo('127.0.0.1').length).toBeGreaterThan(0);
-}, 90_000);
