@@ -11,6 +11,8 @@ The script refuses to run if the tree is dirty, HEAD is not origin/main, or `pac
 
 The release commit drops the `build` script because npm runs a nested install for git dependencies that have one, and that install races with the outer one.
 
+A plain `npm publish` moves the `latest` tag. Publish release candidates (`-rc.N`) with `npm publish --tag next`, so `latest` stays on the last release.
+
 CI runs `scripts/release.sh --no-tag` in a temporary clone and installs the result, so a broken release commit shows up before a tag exists.
 
 ## Public Suffix List

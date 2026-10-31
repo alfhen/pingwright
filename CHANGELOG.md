@@ -2,20 +2,48 @@
 
 ## 0.3.0
 
-<!-- T05 -->
+`npm i -g pingwright` installs this release. 0.3.0 adds everything in 0.3.0-rc.1 and 0.3.0-rc.2 (below) and the changes under "Since rc.2". To upgrade from 0.2.0, read the first section.
 
-### Report
+### Upgrading from 0.2.0
+
+- **A run that passed can now exit 1.** The `deniedIdentifiers` check is on by default with severity `fail`. It fails when an identifier goes out on a denied hit, or when a denied hit has a body that was not fully recorded. To keep exit code 0 while you fix the cause, set `options.builtins: { deniedIdentifiers: warn }`. See rc.1 below for the list of identifiers.
+- **Record schema version 2.** 0.2 readers warn on a version 2 record. Version 1 records still read. All new fields hold names and numbers, never values.
+- **New in the scenario format.** `body.has`, `body.only` and `body.ignore` rules on payload field names, `cookie` rules, `{ role, name }` and `{ any: [...] }` locators, and a `select` step. `body.has` and `body.only` take a leaf name such as `**.email`.
+- **New commands.** `pingwright suite` runs a folder of scenarios once per variant and writes `suite.json`. `pingwright report` writes one HTML file for a run or a suite, with names and counts only, no script and no request.
+- **New network mode.** `--network server` is `stub` plus pass-through for the hosts in `options.serverHosts`, so cookies set by a server container can be seen.
+- **Handoff.** A headed handoff shows a Done button in the page. Enter in the terminal still works.
+- **Output.** Every result in `--json` has `severity`. A result can have `note`, and the terminal summary prints it under the result.
+
+### Since rc.2
+
+#### Report
 
 - The verdict names built-in checks apart from scenario rules: `no leaks; 1 rule failed; built-in check sandboxPageUrl failed in 4 runs`. It no longer says "failed expectations" (#511).
 - The verdict and the timeline headers use plain vendor names, such as Google Analytics 4 and server container. Row headers read `Name (key)` (#512).
 - The report title says what was tested, for example `Pingwright suite: published vs workspace on shop.example.com, 2026-10-31`. The suite ID is in the details list (#513).
 - The verdict uses `sends` for one vendor (#505). The `unchecked` legend names the unknown-signal case (#497).
 
-### Terminal notes
+#### Terminal notes
 
 - The text summary prints the note under a result, passing or failing, for example that a plain name matches a top-level field only. `--json` has the note code in `note` (#510, #520).
 
-- A `cookie` rule no longer says a cookie was stored by the browser when it was already set before the response. The message reads `the cookie was already set before this response`, with no `cookieNotStored` note. A checkpoint taken within 50 ms after the request no longer counts as evidence. (#470, #485, #518)
+#### Cookie rule
+
+- A `cookie` rule no longer says a cookie was stored by the browser when it was already set before the response. The message reads `the cookie was already set before this response`, with no `cookieNotStored` note. A checkpoint taken within 50 ms after the request no longer counts as evidence (#470, #485, #518).
+
+### Known in 0.3.0
+
+Issues still open that you can meet:
+
+- Under the recorder, Playwright sometimes does not report a redirect response or the cross-origin request after it (4 of 30 runs in a live-mode probe; not seen in about 220 CI runs of the stub-mode redirect tests). A hit or cookie reached only through such a hop can be missing from the record, so a `mustNot` rule or a before-consent check can pass without seeing it. In `stub` mode the hop can reach the network with no `stubBypass` flag. In live mode, `--net-log` can record a collection request the recorder missed, without its body. It does not recover cookies (#180).
+- The `country` option does not localise zip, phone or address (#32).
+- With `--net-log`, only requests inside a navigation window are labelled `unload`. Requests seen only in the net log outside such a window get the initiator `netlog`. The label is a guess from timing, so an early `srcdoc` iframe request on a later page can still read `unload`. This corrects the rc.2 wording (#256, #323).
+- `unloadGap` maps only a small table of Shopify standard event names to GA4 names, and a custom event name that no vendor answered is skipped. Other custom names are compared literally. This corrects the rc.2 wording (#261).
+- In the report, a segment with `early`, granted and denied hits shows `early` and not `mixed` (#496).
+- A hand-edited `suite.json` with a malformed failed cell makes `report` throw instead of saying it is not a suite manifest (#506).
+- `docs/cli.md` says a locator timeout lists only controls of the requested role, but roles outside button, radio, checkbox, link, tab and option get the general list (#490).
+
+Not in 0.3.0: opt-in test payment steps for unattended checkout runs (#463), server-container visibility, baselines for CI drift checks, one scenario across several stores, WebKit support and an MCP server (#358 to #362), and a better release setup (#144).
 
 ## 0.3.0-rc.2
 
