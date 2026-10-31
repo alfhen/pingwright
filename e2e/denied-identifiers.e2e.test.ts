@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
 import { run } from './cli-helpers.ts';
 
@@ -19,7 +20,9 @@ test('identifiers on denied GA4, Meta and server hits fail the check and name th
   const flagged = records.hits.filter((h) => result.evidence.includes(h.id));
   expect(flagged.map((h) => h.vendor).sort()).toEqual(['ga4', 'meta', 'sgtm']);
   expect(flagged.length).toBe(result.evidence.length);
-  expect(result.message).not.toContain(records.run.identity!.email);
+  const email = records.run.identity!.email;
+  const text = JSON.stringify(result);
+  for (const secret of [email, createHash('sha256').update(email).digest('hex'), createHash('sha256').update(email.toLowerCase()).digest('hex')]) expect(text).not.toContain(secret);
 }, 90_000);
 
 test('identifiers on granted hits pass the check', async () => {

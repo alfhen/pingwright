@@ -133,23 +133,31 @@ test('the message groups names by vendor and signal, up to five groups', () => {
   expect(many.message).toContain('and 2 more');
 });
 
-test('the result holds names only: no email, hash, or hash-keyed or digit-keyed field name', () => {
+test('the result holds names only: no email, hash, digits or cookie value reaches the message or evidence', () => {
   const email = 'pw-fixture@example.com';
   const hash = createHash('sha256').update(email).digest('hex');
-  const digitKey = '5550100123';
-  const body = JSON.stringify({
-    event_name: 'page_view', page_location: 'http://localhost:3000/', external_id: hash, [hash]: 'x', [digitKey]: 'y', [email]: 'z', cookie_note: 'session-fake-cookie-value',
-  });
-  const req: Request = {
-    type: 'request', id: newId('request'), runId, stepId: null, t: 1500, method: 'POST',
-    url: 'https://sgtm.example.com/data?v=2&event=page_view', resourceType: 'fetch', frameUrl: 'http://localhost:3000/', initiator: null,
-    headers: { 'content-type': 'text/plain' }, postData: body, outcome: 'stubbed',
+  const digits = '5550100123';
+  const cookie = 'session-fake-cookie-value';
+  const base = { type: 'request' as const, runId, stepId: null, t: 1500, resourceType: 'fetch', frameUrl: 'http://localhost:3000/', initiator: null, outcome: 'stubbed' as const };
+  const sgtm: Request = {
+    ...base, id: newId('request'), method: 'POST', url: 'https://sgtm.example.com/data?v=2&event=page_view', headers: { 'content-type': 'text/plain' },
+    postData: JSON.stringify({
+      event_name: 'page_view', page_location: 'http://localhost:3000/', external_id: hash, note: email, cookie_note: cookie,
+      user_data: { email_address: hash, phone_number: digits }, [hash]: 'x', [digits]: 'y', [email]: 'z',
+    }),
   };
-  const hits = decodeRequest(req).map((h) => ({ ...h, t: 1500 }));
-  expect(hits.length).toBe(1);
-  const r = check(hits, deniedEpochs, 'options: { identifierFields: ["cookie_*"] }');
+  const meta: Request = {
+    ...base, id: newId('request'), method: 'GET', headers: {}, postData: null,
+    url: `https://www.facebook.com/tr/?id=100000000000001&ev=PageView&dl=${encodeURIComponent('http://localhost:3000/')}&ud[em]=${hash}&ud[ph]=${digits}&note=${encodeURIComponent(email)}&cookie_note=${cookie}`,
+  };
+  const hits = [sgtm, meta].flatMap((q) => decodeRequest(q)).map((h) => ({ ...h, t: 1500 }));
+  expect(hits.map((h) => h.vendor).sort()).toEqual(['meta', 'sgtm']);
+  const carried = JSON.stringify(hits.map((h) => [h.params, h.page]));
+  for (const secret of [hash, digits]) expect(carried).toContain(secret);
+  const scenario = parseScenario('start: /\noptions: { identifierFields: ["cookie_*"] }');
+  const r = evaluate([...deniedEpochs, sgtm, meta, ...hits], scenario).find((x) => x.expectation === 'builtin: deniedIdentifiers')!;
   expect(r.pass).toBe(false);
   expect(r.message).toContain('external_id');
   const text = JSON.stringify(r);
-  for (const secret of [email, hash, digitKey, 'session-fake-cookie-value']) expect(text).not.toContain(secret);
+  for (const secret of [email, hash, digits, cookie]) expect(text).not.toContain(secret);
 });
