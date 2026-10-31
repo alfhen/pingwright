@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { newId, type ConsentState, type ConsentValue, type HitConsent, type Hit, type Request, type Result } from '@pingwright/core';
+import { createIdentity, newId, type ConsentState, type ConsentValue, type HitConsent, type Hit, type Request, type Result } from '@pingwright/core';
 import { decodeRequest } from '@pingwright/decoders';
 import { expect, test } from 'vitest';
 import { evaluate, type EvalEpoch } from './evaluate.ts';
@@ -165,7 +165,7 @@ test('the result holds names only: no email, hash, digits or cookie value reache
     ...base, id: newId('request'), method: 'POST', url: 'https://sgtm.example.com/data?v=2&event=page_view', headers: { 'content-type': 'text/plain' },
     postData: JSON.stringify({
       event_name: 'page_view', page_location: 'http://localhost:3000/', external_id: hash, note: email, cookie_note: cookie,
-      user_data: { email_address: hash, phone_number: digits, [hash]: 'x', [digits]: 'y', [email]: 'z', [dotted]: 'w' },
+      user_data: { email_address: hash, phone_number: digits, [hash]: 'x', [digits]: 'y', [email]: 'z', [dotted]: 'w', 'x%y': 'v', abcdefabcdefabcdefabcdefabcdefab: 'u' },
     }),
   };
   const meta: Request = {
@@ -182,5 +182,11 @@ test('the result holds names only: no email, hash, digits or cookie value reache
   expect(r.message).toContain('external_id');
   expect(r.message).toContain('(other)');
   const text = JSON.stringify(r);
-  for (const secret of [email, dotted, 'zq', hash, digits, cookie]) expect(text).not.toContain(secret);
+  for (const secret of [email, dotted, 'zq', hash, digits, cookie, 'x%y', 'abcdefabcdef']) expect(text).not.toContain(secret);
+  const emailOnly: Request = { ...meta, id: newId('request'), url: `https://www.facebook.com/tr/?id=100000000000001&ev=PageView&ud[em]=${hash}` };
+  const metaHit = decodeRequest(emailOnly)[0]!;
+  const match = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, identity.hashesMatch: true }');
+  const matched = evaluate([metaHit, emailOnly], match, { identity: { ...createIdentity(1), email } })[0]!;
+  expect(matched.pass).toBe(true);
+  expect(JSON.stringify(matched)).not.toContain(hash);
 });

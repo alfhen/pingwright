@@ -118,7 +118,8 @@ test('a failing and an erroring run set the exit code and do not stop the suite'
   expect(fake.specs).toHaveLength(3);
   expect(c.out()).toMatch(/a\s+FAIL/);
   expect(c.out()).toMatch(/b\s+ERROR/);
-  expect(c.out()).toContain('b published: Run failed: banner not shown');
+  expect(c.out()).toContain('b published: run did not finish (exit 2), details in the stderr above');
+  expect(c.out()).not.toContain('banner not shown');
   const failOnly = recorder((s) => (s.scenarioName === 'a' ? fail : pass));
   expect(await suiteCommand(args(dir, out), capture().io, failOnly)).toBe(1);
 });
@@ -179,7 +180,7 @@ test('the manifest holds no path, query, override file path or auth value', asyn
   expect(JSON.parse(c.out())).toEqual(manifest);
 });
 
-test('an error carrying a fake email, its hash and a cookie value stays out of the manifest, and the table keeps the message', async () => {
+test('an error carrying a fake email, its hash and a cookie value stays out of the manifest and the table', async () => {
   const email = 'pw-fixture@example.com';
   const hash = createHash('sha256').update(email).digest('hex');
   const cookie = 'session-fake-cookie-value';
@@ -195,7 +196,18 @@ test('an error carrying a fake email, its hash and a cookie value stays out of t
   }
   const table = capture();
   await suiteCommand(args(dir, out), table.io, fake);
-  expect(table.out()).toContain('a published: Run failed: cannot fill');
+  expect(table.out()).toContain('a published: run did not finish (exit 2)');
+  for (const secret of [email, hash, cookie, 'cannot fill']) expect(table.out()).not.toContain(secret);
+});
+
+test('the manifest stores only the origin of --site', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const c = capture();
+  await suiteCommand(args(dir, out, { site: 'https://shop.example.com:8443/cart?token=abc#frag', json: true }), c.io, recorder());
+  const [suiteDir] = await readdir(out);
+  const text = await readFile(join(out, suiteDir!, 'suite.json'), 'utf8');
+  expect(JSON.parse(text).site).toBe('https://shop.example.com:8443');
+  for (const part of ['/cart', 'token', 'abc', 'frag']) expect(text).not.toContain(part);
 });
 
 test('the table shows one diff column per extra variant and the record paths', () => {
