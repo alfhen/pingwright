@@ -1,0 +1,12 @@
+start: /set-cookie-already
+steps:
+  - wait: 500ms
+  - checkpoint: early
+  - wait: 1500ms
+  - checkpoint: later
+  - consent: reject
+  - wait: 1s
+expect:
+  mustNot:
+    - { cookie: _pwalready, before: consent }
+options: { seed: 1, allowUnknownDestination: true }

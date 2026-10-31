@@ -222,7 +222,7 @@ const NOT_BEFORE = 'expect:\n  mustNot:\n    - { cookie: _dcid, before: consent 
 
 test('a later checkpoint holding the cookie says it was stored by the browser', () => {
   const req = request(10, 'http://localhost:3000/data');
-  const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain: 'localhost' }], 'later', 20)])[0]!;
+  const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain: 'localhost' }], 'later', 200)])[0]!;
   expect(r.pass).toBe(false);
   expect(r.message).toContain('found _dcid from Set-Cookie (1 request); stored by the browser');
   expect(r.note).toBeUndefined();
@@ -230,7 +230,7 @@ test('a later checkpoint holding the cookie says it was stored by the browser', 
 
 test('a later checkpoint without the cookie sets cookieNotStored and the rule still fails', () => {
   const reqs = Array.from({ length: 7 }, (_, i) => request(10 + i, 'http://localhost:3000/data'));
-  const records = [...reqs.flatMap((q) => [q, response(q, ['_dcid'])]), stored([], 'later', 50)];
+  const records = [...reqs.flatMap((q) => [q, response(q, ['_dcid'])]), stored([], 'later', 500)];
   const r = run(NOT_BEFORE, records)[0]!;
   expect(r.pass).toBe(false);
   expect(r.message).toContain('found _dcid from Set-Cookie (7 requests); no later checkpoint has it');
@@ -239,7 +239,7 @@ test('a later checkpoint without the cookie sets cookieNotStored and the rule st
 
 test('no checkpoint after the response gives no storage text and no note', () => {
   const req = request(10);
-  const records = [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain: 'localhost' }], 'early', 5)];
+  const records = [req, response(req, ['_dcid']), stored([], 'early', 5)];
   const r = run(NOT_BEFORE, records)[0]!;
   expect(r.pass).toBe(false);
   expect(r.message).not.toMatch(/stored|later checkpoint/);
@@ -252,7 +252,7 @@ test('no checkpoint after the response gives no storage text and no note', () =>
 test('a cookie set with Domain=example.com by a subdomain host counts as stored', () => {
   const req = request(10, 'https://sgtm.example.com/data');
   for (const domain of ['.example.com', 'example.com', 'sgtm.example.com']) {
-    const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain }], 'later', 20)])[0]!;
+    const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain }], 'later', 200)])[0]!;
     expect(r.message).toContain('stored by the browser');
   }
 });
@@ -260,8 +260,75 @@ test('a cookie set with Domain=example.com by a subdomain host counts as stored'
 test('a same-named cookie on another domain does not count as stored', () => {
   const req = request(10, 'https://sgtm.example.com/data');
   for (const domain of ['.other.example', 'notexample.com', 'sgtm.example.com.evil.example']) {
-    const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain }], 'later', 20)])[0]!;
+    const r = run(NOT_BEFORE, [req, response(req, ['_dcid']), stored([{ name: '_dcid', domain }], 'later', 200)])[0]!;
     expect(r.message).toContain('no later checkpoint has it');
     expect(r.note).toBe('cookieNotStored');
   }
+});
+
+const AT_LATER = (names: { name: string; domain: string }[]) => stored(names, 'later', 500);
+const HERE = (name: string) => ({ name, domain: 'localhost' });
+
+test('a cookie an earlier checkpoint already held reads as already set, with no storage claim and no note', () => {
+  const req = request(100, 'http://localhost:3000/data');
+  for (const records of [
+    [stored([HERE('_dcid')], 'early', 5), req, response(req, ['_dcid'])],
+    [stored([HERE('_dcid')], 'early', 5), req, response(req, ['_dcid']), AT_LATER([HERE('_dcid')])],
+  ]) {
+    const r = run(NOT_BEFORE, records)[0]!;
+    expect(r.pass).toBe(false);
+    expect(r.message).toContain('found _dcid from Set-Cookie (1 request); the cookie was already set before this response');
+    expect(r.message).not.toContain('stored by the browser');
+    expect(r.note).toBeUndefined();
+  }
+});
+
+test('a cookie deleted before the request and set again after it reads as stored, not already set', () => {
+  const req = request(100, 'http://localhost:3000/data');
+  const r = run(NOT_BEFORE, [stored([HERE('_dcid')], 'early', 5), stored([], 'consent', 50), req, response(req, ['_dcid']), AT_LATER([HERE('_dcid')])])[0]!;
+  expect(r.message).toContain('stored by the browser');
+  expect(r.message).not.toContain('already set');
+});
+
+test('an earlier checkpoint on another domain does not make the cookie already set', () => {
+  const req = request(100, 'http://localhost:3000/data');
+  const r = run(NOT_BEFORE, [stored([{ name: '_dcid', domain: '.other.example' }], 'early', 5), req, response(req, ['_dcid']), AT_LATER([HERE('_dcid')])])[0]!;
+  expect(r.message).toContain('stored by the browser');
+});
+
+test('a checkpoint inside the margin after the request is ignored', () => {
+  const req = request(100, 'http://localhost:3000/data');
+  const inside = stored([HERE('_dcid')], 'inside', 120);
+  const alone = run(NOT_BEFORE, [req, response(req, ['_dcid']), inside])[0]!;
+  expect(alone.message).not.toMatch(/stored|later checkpoint/);
+  expect(alone.note).toBeUndefined();
+  const withEmpty = run(NOT_BEFORE, [req, response(req, ['_dcid']), inside, AT_LATER([])])[0]!;
+  expect(withEmpty.message).toContain('no later checkpoint has it');
+});
+
+test('request 1, a checkpoint holding the cookie, then six more requests still reads stored', () => {
+  const first = request(100, 'http://localhost:3000/data');
+  const rest = Array.from({ length: 6 }, (_, i) => request(300 + i, 'http://localhost:3000/data'));
+  const records = [first, response(first, ['_dcid']), stored([HERE('_dcid')], 'mid', 200), ...rest.flatMap((q) => [q, response(q, ['_dcid'])]), AT_LATER([HERE('_dcid')])];
+  const r = run(NOT_BEFORE, records)[0]!;
+  expect(r.message).toContain('found _dcid from Set-Cookie (7 requests); stored by the browser');
+  expect(r.note).toBeUndefined();
+});
+
+test('one already-set and one not-stored sighting of the same name read as not stored', () => {
+  const first = request(100, 'https://sgtm.example.com/data');
+  const second = request(300, 'http://localhost:3000/data');
+  const early = stored([HERE('_dcid')], 'early', 200);
+  const r = run(NOT_BEFORE, [first, response(first, ['_dcid']), early, second, response(second, ['_dcid']), AT_LATER([])])[0]!;
+  expect(r.message).toContain('found _dcid from Set-Cookie (2 requests); no later checkpoint has it');
+  expect(r.note).toBe('cookieNotStored');
+});
+
+test('one name already set and another stored gives the mixed text', () => {
+  const req = request(100, 'http://localhost:3000/data');
+  const rules = 'expect:\n  mustNot:\n    - { cookie: "_d*", before: consent }';
+  const records = [stored([HERE('_da')], 'early', 5), req, response(req, ['_da', '_db']), AT_LATER([HERE('_da'), HERE('_db')])];
+  const r = run(rules, records)[0]!;
+  expect(r.message).toContain('stored by the browser: _db; the cookie was already set before this response: _da');
+  expect(r.note).toBeUndefined();
 });
