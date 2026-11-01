@@ -10,13 +10,13 @@ The work starts after `0.3.0` is merged and released (`docs/plan-0.3.0.md`). Not
 | --- | --- | --- |
 | A checkout handoff ends by itself at the thank-you page. | #515 | A handoff ends only on Done or Enter. If the person presses too early, the purchase hits are cut off. |
 | A checkout can run in CI with a test card. | #463 | Every payment is a handoff, so the purchase path always needs a person. |
-| Mobile layouts and mobile tags can be tested. | #514 | Every run uses the default desktop viewport. |
+| Layouts at another screen size can be tested. | #514 | Every run uses the default desktop viewport. rc.1 adds `<W>x<H>` only; a `mobile` preset waits. |
 | A scenario can use a fake identity for its market. | #32 | The country is never passed to `createIdentity`, and only US and SE have local formats. |
 | CI can catch drift that no rule names. | #359 | Drift shows only when someone runs `diff` by hand. |
-| One suite runs against several storefronts. | #360 | Each store is a separate run, and `suite.json` `labels` are always empty. |
+| One suite runs against several storefronts. *(Deferred to 0.5.0.)* | #360 | Each store is a separate run, and `suite.json` `labels` are always empty. |
 | A reader knows what the server container sends on. | #358 | The browser never sees it, and the docs do not say what is observable. |
-| An agent reads runs without parsing JSONL. | #362 | There is no MCP server. |
-| Safari cookie behaviour. | #361 | Nobody has shown that Playwright's WebKit applies ITP. |
+| An agent reads runs without parsing JSONL. *(Dropped: CLI only, agents use `--json`.)* | #362 | There is no MCP server. |
+| Safari cookie behaviour. *(Answered by V06: Playwright's WebKit does not apply ITP. #361 is closed.)* | #361 | Nobody had shown that Playwright's WebKit applies ITP. |
 | A release can be checked from its tag. | #144 | No CI job builds or checks the tag, and the npm steps are not written down. |
 
 Carried over and found while checking the issues against the code:
@@ -24,7 +24,7 @@ Carried over and found while checking the issues against the code:
 | Finding | Issue | What is wrong |
 | --- | --- | --- |
 | A redirect response and its cross-origin hop are sometimes missing. | #180 | 4 of 30 runs in a live-mode probe. The cause is in the recorder's context setup and is not known. |
-| `unloadGap` warns although a hit was recorded, and misses the end of a run. | #261 | An event is skipped only when no hit carries its exact name. If another vendor sent that literal name and GA4 sent a different custom name, the warning is false. Closing the browser is not an unload point (`packages/recorder/src/flags.ts`, `buildUnloadGapFlags`). |
+| `unloadGap` warns although a hit was recorded, and misses the end of a run. *(Deferred to 0.5.0.)* | #261 | An event is skipped only when no hit carries its exact name. If another vendor sent that literal name and GA4 sent a different custom name, the warning is false. Closing the browser is not an unload point (`packages/recorder/src/flags.ts`, `buildUnloadGapFlags`). |
 | An early hit hides `mixed`. | #496 | `segmentOf` in `packages/cli/src/report/model.ts` returns `mixed` only when the worst mark is `full`. |
 | A bad `failed` field in `suite.json` throws a `TypeError`. | #506 | `isManifest` in `packages/cli/src/report/suite.ts` does not check `cell.failed`. |
 | Tests that pass for the wrong reason. | #488, #493, #495, #498, #441 | Each is a weak or missing assertion. |
@@ -38,17 +38,17 @@ In `0.4.0-rc.1`:
 | --- | --- | --- | --- |
 | Handoff that ends itself, and `wait: { url }` | #515 | U02 | M |
 | Test payment step | #463 | U01 (rule), U05 (code) | S + L |
-| Country of the fake identity | #32 | U03 | S |
-| Viewport | #514 | U04 | M |
+| Country of the fake identity, optional fill, the phone warning | #32, #586, #583 | U03 | M |
+| Viewport, `--viewport WxH` only | #514 | U04 | S |
 | Baselines | #359 | V01 | M |
-| Several stores in one suite | #360 | V02 | M |
 | Server-side visibility, design only | #358 | V03 | S |
-| MCP server, read-only first slice | #362 | V04 | M |
 | Release workflow and npm steps | #144 | V05 | S |
 | WebKit probe | #361 | V06 | S |
 | Redirect hop | #180 | H07 | M |
-| `unloadGap` | #261 | H08 | S |
 | Review minors | #488, #490, #495, #496, #498, #476, #506, #441, #493 | F01, H01 to H06 | S each |
+| Report reads a suite `--out` folder | #581 | H09 | S |
+| Identity evidence names the field | #582, #584 | H10 | S |
+| Rename to Tagreeve | #573 | N01 | M |
 | Release prep | none | R01 | S |
 
 Not in `0.4.0-rc.1`:
@@ -57,11 +57,13 @@ Not in `0.4.0-rc.1`:
 | --- | --- |
 | #256, #323 net-log `unload` label on early `srcdoc` requests | The net log timestamps cannot tell an early `srcdoc` send on a later page from an unload send. No cheap second signal is known: the request's initiator origin is opaque for both. It stays in the 0.4.0 milestone. If a signal is found, it becomes its own PR. #323 is a duplicate of #256. |
 | #358, the rest | The web and server tag-firing reporters (§8.1, §8.3), `TagReport` ingestion, `expectedTags` and `tags.mustFire` evaluation, the server preview header, and the sink reader. See concern 8. |
-| #362, the rest | `run_scenario` and any tool that makes the browser visit a site, `explain_failure`, and tools that return request URLs, bodies or `Hit.params`. See concern 18. |
-| #361, a WebKit profile | Only if the V06 probe shows that ITP applies. Then it is a new plan entry. |
-| #360, `run --stores` | `suite` covers it with a one-scenario directory. |
+| #361, a WebKit profile | Not planned. The V06 probe (#564) showed that ITP does not apply in Playwright's WebKit, and #361 is closed. |
+| #360, several stores (V02) | Deferred to 0.5.0 by the maintainer on 2026-11-01. One store per run, in a shell loop, covers it for now. |
 | #359, `suite --baseline-dir` and a count tolerance | `run --baseline` first. Counts are reported, not checked. |
-| #514, a device list | rc.1 has `mobile` and `<W>x<H>`. |
+| #585, a platform infrastructure list for `unknownDestination` | 0.5.0. Each host needs a source in the platform's own docs (AGENTS.md), which is more than rc.1 has room for. `allowUnknownDestination` covers it until then. |
+| #514, a `mobile` preset and a device list | Trimmed by the maintainer on 2026-11-01. rc.1 has `<W>x<H>` only. A mobile user agent alone does not change the client hints. |
+| #261, `unloadGap` changes (H08) | Deferred to 0.5.0 by the maintainer on 2026-11-01. It is a warning flag that never changes a verdict. |
+| #362, the MCP server (V04) | Dropped. Tagreeve is CLI only (AGENTS.md, #568). |
 | #463, wallets, 3-D Secure and live payment methods | Handoff only, as the issue says. |
 | #32, NL, DK, NO and other countries | No regulator range for fictional phone numbers was found for them (concern 13). |
 | #144, npm provenance and publishing from CI | Provenance needs a publish from CI. Publishing stays manual (concern 20). |
@@ -71,11 +73,12 @@ Not in `0.4.0-rc.1`:
 
 ```mermaid
 flowchart LR
-  W1[Wave 1: F01 fixtures and changelog, U01 payment rule, H01 H03 H05 H06 tests, V05 release workflow, V06 WebKit probe] --> W2[Wave 2: U02 handoff until, V01 baselines, V03 server design, V04 MCP, H02 marks, H04 manifest, H07 redirect hop]
-  W2 --> W3[Wave 3: U03 country, V02 stores, H08 unloadGap]
+  W1[Wave 1: F01 fixtures and changelog, U01 payment rule, H01 H03 H05 H06 tests, V05 release workflow, V06 WebKit probe] --> W2[Wave 2: U02 handoff until, V01 baselines, V03 server design, H02 marks, H04 manifest, H07 redirect hop]
+  W2 --> W3[Wave 3: U03 country and optional fill, H09 report path, H10 identity messages]
   W3 --> W4[Wave 4: U04 viewport]
   W4 --> W5[Wave 5: U05 test payment]
-  W5 --> W6[Wave 6: R01 rc.1 prep]
+  W5 --> W6[Wave 6: N01 rename to Tagreeve]
+  W6 --> W7[Wave 7: R01 rc.1 prep]
 ```
 
 The waves run left to right. PRs in one wave touch different files, so they can be built in parallel. One-line summary: fixtures, the rule change and test-only fixes first, then the independent features, then the ones that share the scenario parser and the CLI flags one at a time, then the version.
@@ -86,9 +89,11 @@ Why this order:
 - **U01 in wave 1, U05 in wave 5.** U01 changes the rule in `AGENTS.md` and the design. It needs the maintainer's explicit OK before it merges (see "The payment rule"). U05 depends on U01 being merged. Writing U01 early gives the maintainer the most time to decide.
 - **U02 before U05.** The test payment flow ends with `wait: { url: "/thank-you-late" }`, which U02 adds. U02 also adds the shared URL and locator matcher.
 - **The scenario parser is one file.** `packages/expect/src/scenario.ts` changes in U02, U03, U04 and U05. They are in waves 2, 3, 4 and 5. `packages/recorder/src/steps.ts` changes in U02, U03 and U05.
-- **The CLI flags are three files.** `packages/cli/src/args.ts`, `run.ts` and `suite.ts` change in V01, V02, U04 and U05. They are in waves 2, 3, 4 and 5. V01 does not touch `suite.ts`, and V02 does not touch `run.ts`.
-- **The recorder is one file.** `packages/recorder/src/recorder.ts` changes in H07, H08, U04 and U05. They are in waves 2, 3, 4 and 5.
-- **U03 and V02 share wave 3.** V02 sets `identity.country` from the stores file. U03 makes that field choose the formats. They touch different files, so they share wave 3. V02's e2e checks only the recorded country, and U03's e2e checks the formats.
+- **The CLI flags are three files.** `packages/cli/src/args.ts`, `run.ts` and `suite.ts` change in V01, U04 and U05. They are in waves 2, 4 and 5. V01 does not touch `suite.ts`.
+- **The recorder is one file.** `packages/recorder/src/recorder.ts` changes in H07, U04 and U05. They are in waves 2, 4 and 5.
+- **Wave 3 after the 0.3.0 field test.** U03 waits for U02, because both change `packages/recorder/src/steps.ts`. H09 (the report loader) and H10 (messages in `packages/expect/src/evaluate.ts` and `identity-values.ts`) touch other files, so they run beside it. The three come from the 0.3.0 field notes of 2026-11-02 (#581 to #586).
+- **N01 alone, after U05.** The rename touches almost every file, so nothing else runs beside it. It comes after the last feature so no later PR adds the old name back.
+- **Cut on 2026-11-01.** V02 and H08 moved to 0.5.0, V04 was dropped (CLI only), and U04 lost the `mobile` preset. Their entries stay below, marked, so the reasoning is kept.
 - **R01 last.** It sets the version and writes the "Known in 0.4.0-rc.1" list from what is still open.
 
 ## Which issues share code
@@ -308,7 +313,7 @@ Acceptance: the e2e fails on main (`baseline` is an unknown command, exit 2) and
 Regression test: the docs build and link check. Fixture: none.
 Acceptance: `pnpm docs:build` and `pnpm docs:test` pass.
 
-**V04 MCP server, read-only first slice (#362).** Touches: a new `packages/mcp/` (`package.json`, `src/bin.ts`, `src/server.ts`, `src/tools.ts`, unit tests), the root `package.json` (two dependencies and the `pingwright-mcp` bin), `pnpm-lock.yaml`, `scripts/build.ts` (a second entry point to `dist/mcp.js`), `README.md` (the "Not built yet" line, the MCP paragraph and the packages table row), `docs/cli.md` (a new `pingwright-mcp` section after the `report` section), `docs/design.md` (§12, the MCP tools table and the stale sentence "The MCP output schema is frozen before 0.2"), a new `e2e/mcp.e2e.test.ts`, `CHANGELOG.md` (the V04 marker).
+**V04 MCP server, read-only first slice (#362).** *Dropped on 2026-11-01: Tagreeve is CLI only. Not built.* Touches: a new `packages/mcp/` (`package.json`, `src/bin.ts`, `src/server.ts`, `src/tools.ts`, unit tests), the root `package.json` (two dependencies and the `pingwright-mcp` bin), `pnpm-lock.yaml`, `scripts/build.ts` (a second entry point to `dist/mcp.js`), `README.md` (the "Not built yet" line, the MCP paragraph and the packages table row), `docs/cli.md` (a new `pingwright-mcp` section after the `report` section), `docs/design.md` (§12, the MCP tools table and the stale sentence "The MCP output schema is frozen before 0.2"), a new `e2e/mcp.e2e.test.ts`, `CHANGELOG.md` (the V04 marker).
 - **Start.** `pingwright-mcp --runs <dir>` serves MCP over stdio. It reads only that directory. Tools take run IDs and suite IDs, never paths. An ID that does not match `^run_[0-9A-HJKMNP-TV-Z]{26}$` or `^suite_[0-9A-HJKMNP-TV-Z]{26}$` is refused.
 - **Tools.** `list_runs` (ID, scenario name, site host, time, variant, `ok`), `get_summary` (a reduced summary: `runId`, `pass`, `ok`, hit counts, epochs, flag kinds with counts, and each result as expectation, `pass` and severity only; no `path`, no result `message`, no `evidence`, no flag `detail`, because flag details hold whole request URLs and page values), `get_hits` (filter by vendor, event, epoch label; each hit has its ID, vendor, event, epoch label, consent, ID presence, field names and step label), `diff_runs` (the diff result with page values cut to the path), `get_suite` (the manifest).
 - **Values.** No tool returns `Request.url`, `Request.postData`, `Request.headers`, `Hit.params`, `Hit.page` as recorded, `DataLayerEvent.args` or a result message. The results go to the agent's model provider (§13).
@@ -342,7 +347,7 @@ Acceptance: the unit test passes with the fix and fails without it, the chain sh
 
 ### Wave 3
 
-**U03 Country of the fake identity (#32).** Touches: `packages/core/src/identity.ts`, `packages/core/src/identity.test.ts`, `packages/recorder/src/steps.ts` (`scenarioIdentity` only), `packages/recorder/src/scenario-identity.test.ts`, `packages/expect/src/scenario.ts` (`FICTIONAL_PHONE` only), `packages/expect/src/scenario.test.ts`, `docs/cli.md` (the "Run identity" paragraph and its list of fictional ranges), `docs/design.md` (§13, the "Fake identities" paragraph), a new `e2e/identity-country.e2e.test.ts` and `e2e/scenarios/identity-country-*.yml`, `CHANGELOG.md` (the U03 marker).
+**U03 Country of the fake identity, optional fill and the phone warning (#32, #586, #583).** Touches: `packages/core/src/identity.ts`, `packages/core/src/identity.test.ts`, `packages/recorder/src/steps.ts` (`scenarioIdentity` only), `packages/recorder/src/scenario-identity.test.ts`, `packages/expect/src/scenario.ts` (`FICTIONAL_PHONE` only), `packages/expect/src/scenario.test.ts`, `docs/cli.md` (the "Run identity" paragraph and its list of fictional ranges), `docs/design.md` (§13, the "Fake identities" paragraph, and §4 the `Step` row), a new `e2e/identity-country.e2e.test.ts` and `e2e/scenarios/identity-country-*.yml`, `CHANGELOG.md` (the U03 marker). For the optional fill also: `packages/expect/src/scenario.ts` (the `fill` value form and `options.optionalTimeout`), `packages/recorder/src/steps.ts` (the `fill` step), `packages/recorder/src/steps.test.ts`, `packages/core/src/records.ts` (`Step.skippedFields`), `packages/cli/src/summary.ts`, `packages/cli/src/summary.test.ts`, `packages/cli/src/report/render.ts` and its test (the step line), `fixtures/site/public/checkout.html` and `fixtures/site/README.md` (a `?phone=off` form), `docs/cli.md` (the `fill` step), a new `e2e/optional-fill.e2e.test.ts` and its scenario.
 - `scenarioIdentity` passes `scenario.identity.country` to `createIdentity`. A two-letter value is upper-cased.
 - New formats, each with a comment that cites the regulator page, like the US and SE ones:
   - GB: Ofcom drama numbers, mobile `+44 7700 900000` to `900999`; Faker `en_GB` names, addresses and postcodes.
@@ -351,10 +356,25 @@ Acceptance: the unit test passes with the fix and fails without it, the chain sh
 - A country with no format keeps US-shaped data under its label, as today, and the run prints a warning: `identity.country DK has no local format; name, address, zip and phone are US-shaped`. NL, DK and NO are added only if the PR finds a regulator range for fictional numbers and cites it (concern 13).
 - Postcodes come from Faker's patterns for the locale. They can be real postcodes. A postcode alone is not personal data, and the identity is fake.
 
-Regression test: unit tests for GB and DE (phone in the cited range, postcode shape, seed stability) and the warning. `scenarioIdentity` with `country: SE` gives a `+4670174` phone. The e2e fills the `/checkout` form with `identity: { country: SE }` and asserts the run identity has a Swedish phone and zip. The leak test is the existing scanner: the run's own values are not flagged, and no other value appears.
-Acceptance: the e2e fails on main, where the phone starts with `+1`.
+- **Optional fill (#586).** A `fill` entry may be `{ value: <identity field or literal>, optional: true }`. If the field is not attached and visible within `options.optionalTimeout` (milliseconds, default 2000, from 100 to 30000), the step skips it and goes on. `Step.skippedFields` lists the selectors it skipped, never a value. A field that is present but cannot be filled (disabled, read-only, wrong type) still fails the step, as today. The text summary prints `SKIPPED FIELD <selector> (not present)` under the step, `--json` has the list, and the report shows it on the step line. Only `fill` gets the optional form in rc.1; `click` and `select` keep failing on a missing control.
+- **The phone warning (#583).** The identity and `fill` warnings say why a value looks real (for a phone: it is not in a fictional range for its country, and the mobile prefix is a real one) and name the fictional range to use for that country, from the formats above. There is no opt-out in rc.1: the warning never fails a run, and a better message is what the field test asked for first. *Flagged:* an explicit per-field opt-out can come later if the warning stays noisy.
 
-**V02 Several stores in one suite (#360).** Touches: a new `packages/cli/src/stores.ts` and `stores.test.ts`, `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/suite.test.ts`, `packages/cli/src/report/suite.ts`, `packages/cli/src/report/suite.test.ts`, `docs/cli.md` (the `suite` section), a new `e2e/stores.e2e.test.ts`, `e2e/stores/two-stores.json`, `e2e/suites/stores/`, `CHANGELOG.md` (the V02 marker).
+Regression test: unit tests for GB and DE (phone in the cited range, postcode shape, seed stability) and the warning. Unit tests for the optional form (parse, timeout bounds, a present-but-disabled field still fails, the summary line) and the new warning text. The optional-fill e2e fills `/checkout?phone=off` with an optional phone entry and asserts exit 0 and `Step.skippedFields`, and that the same scenario without `optional` fails on the missing field. `scenarioIdentity` with `country: SE` gives a `+4670174` phone. The e2e fills the `/checkout` form with `identity: { country: SE }` and asserts the run identity has a Swedish phone and zip. The leak test is the existing scanner: the run's own values are not flagged, and no other value appears.
+Acceptance: the country e2e fails on main, where the phone starts with `+1`. The optional-fill e2e fails on main, where the object form is a scenario error (exit 2).
+
+**H09 Report reads a suite `--out` folder (#581).** Touches: `packages/cli/src/report/suite.ts` (`loadSuite`), `packages/cli/src/report/suite.test.ts`, `packages/cli/src/report/index.ts` (where the path is resolved, if it is there), `docs/cli.md` (the `report` section), a new `e2e/report-out-folder.e2e.test.ts`, `CHANGELOG.md` (the H09 marker).
+- When the folder has no `suite.json`, `report` looks at its children. Exactly one `suite_*` child with a readable `suite.json`: use it, and say which on stderr. Several: the error lists them. None: today's error.
+- A `.jsonl` record and a suite folder work as today.
+Regression test: unit tests for one child, several children and none. The e2e runs `suite --out <tmp>` on `e2e/suites/cells` and then `report <tmp> --html`, and asserts exit 0 and the suite title in the HTML.
+Acceptance: the e2e fails on main ("has no readable suite.json").
+
+**H10 Identity evidence names the field (#582, #584).** Touches: `packages/expect/src/evaluate.ts` (`findForeignData`), `packages/expect/src/evaluate.test.ts`, `packages/expect/src/identity-values.ts`, `packages/expect/src/identity-values.test.ts`, `docs/cli.md` (the `possibleRealData` and `identity.hashesMatch` paragraphs), a new `e2e/identity-messages.e2e.test.ts` and its scenario, `CHANGELOG.md` (the H10 marker).
+- **#582.** `findForeignData` keeps where each value was found. For a value in a decoded hit parameter, the detail names the parameter path, for example `carries 1 hash value(s) that are not from the run identity, in user_data.country`. For a value in the URL or the body it says `in the URL` or `in the body`. Paths go through `guardFieldName`, so a value used as a key prints as `(other)`. Never the value.
+- **#584.** When a hit carries no identity field at all, `identity.hashesMatch` says `the hit carried no identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Pingwright`. A hit with fields that do not match keeps today's `Not matching: <field>` message.
+Regression test: unit tests for each place a value can be found, and for both `hashesMatch` messages. The e2e uses a data-tag fixture page with a hash that is not the run identity's (F01 pages) and asserts the `possibleRealData` detail names the parameter. The leak test asserts no value appears in either message.
+Acceptance: the e2e fails on main, where the detail has no field.
+
+**V02 Several stores in one suite (#360).** *Deferred to 0.5.0 on 2026-11-01. Not built in rc.1.* Touches: a new `packages/cli/src/stores.ts` and `stores.test.ts`, `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/suite.test.ts`, `packages/cli/src/report/suite.ts`, `packages/cli/src/report/suite.test.ts`, `docs/cli.md` (the `suite` section), a new `e2e/stores.e2e.test.ts`, `e2e/stores/two-stores.json`, `e2e/suites/stores/`, `CHANGELOG.md` (the V02 marker).
 - `pingwright suite <dir> --stores <stores.json>` instead of `--site`. Giving both is a usage error.
 - The file is a JSON array of `{ name, site, vars?, country?, autoconsentRules? }`. `name` follows the variant name rule. `site` is an http or https URL. Names are unique. A path in `autoconsentRules` is relative to the stores file.
 - Per store: `vars` override the scenario's declared vars, and `--var` overrides both. An undeclared name is exit 2, as for `--var`. `country` sets `identity.country`; if a scenario declares another one, the store value wins and the run prints a warning. "Consent per store" is read as `autoconsentRules`, because the consent answer is a scenario step (concern 12).
@@ -365,7 +385,7 @@ Acceptance: the e2e fails on main, where the phone starts with `+1`.
 Regression test: unit tests for the stores file (every error case), for vars precedence, and for the manifest. The e2e runs a two-scenario suite against two stores on the same fixture server: `a` at `http://localhost:<port>` and `b` at `http://127.0.0.1:<port>` with `country: SE`. It asserts four cells, the record names, `labels.store`, `run.identity.country` of `SE` for store `b`, and two rows per scenario in the report. The leak test asserts the manifest and the report have no email, hash or path.
 Acceptance: the e2e fails on main (`--stores` is unknown, exit 2) and when the store label is dropped from the cells.
 
-**H08 `unloadGap` at the end of a run and in the same frame (#261).** Touches: `packages/recorder/src/flags.ts`, `packages/recorder/src/flags.test.ts`, `packages/recorder/src/recorder.ts` (the `buildUnloadGapFlags` call and the dataLayer binding), `docs/design.md` (§5.3, the `unloadGap` bullet), a new `e2e/unload-gap-close.e2e.test.ts`, `e2e/scenarios/unload-gap-custom.yml`, `e2e/scenarios/unload-gap-close.yml`, `CHANGELOG.md` (the H08 marker).
+**H08 `unloadGap` at the end of a run and in the same frame (#261).** *Deferred to 0.5.0 on 2026-11-01. Not built in rc.1.* Touches: `packages/recorder/src/flags.ts`, `packages/recorder/src/flags.test.ts`, `packages/recorder/src/recorder.ts` (the `buildUnloadGapFlags` call and the dataLayer binding), `docs/design.md` (§5.3, the `unloadGap` bullet), a new `e2e/unload-gap-close.e2e.test.ts`, `e2e/scenarios/unload-gap-custom.yml`, `e2e/scenarios/unload-gap-close.yml`, `CHANGELOG.md` (the H08 marker).
 - **Close is an unload point.** The close time of the run is added to the navigation times that `buildUnloadGapFlags` reads. An embedded frame that pushed a tracking event up to 10 s before close, with no covering GA4 hit, gets the warning.
 - **Same frame.** The recorder keeps, in memory only, the frame URL of each embedded push. A GA4 hit whose request has the same `frameUrl`, sent after the push and before the unload point plus 1 s of slack, covers the event, whatever its name. Nothing new is written to the record.
 - The flag text for the close case says the run ended before the frame sent the hit, and advises a `wait` step after the last action.
@@ -375,14 +395,14 @@ Acceptance: the e2e fails on main for both pages.
 
 ### Wave 4
 
-**U04 Viewport (#514).** Touches: `packages/expect/src/scenario.ts`, `packages/expect/src/scenario.test.ts`, `packages/recorder/src/recorder.ts` (`newContext` and the run record), `packages/recorder/src/user-agent.ts`, `packages/recorder/src/user-agent.test.ts`, `packages/core/src/records.ts` (`Run.viewport`), `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/run.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/report/render.ts`, `packages/cli/src/report/render.test.ts`, `docs/cli.md` (the `run` options table, the scenario options table, the `suite` options row, the report header bullet), `docs/design.md` (§4 the `Run` row, §5.1 "Every profile"), a new `e2e/viewport.e2e.test.ts` and `e2e/scenarios/viewport-*.yml`, `CHANGELOG.md` (the U04 marker).
-- `options.viewport` in the scenario: `{ width, height }` or `mobile`. `--viewport <W>x<H>` or `--viewport mobile` on `run` and `suite`. The flag wins. Width and height are integers from 200 to 4000.
-- `mobile` is 390 by 844, `isMobile: true`, `hasTouch: true`, `deviceScaleFactor: 3`, and a mobile Chrome user agent from a new `chromeMobileUserAgent(version)`: `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<major>.0.0.0 Mobile Safari/537.36`. It never contains `HeadlessChrome`.
-- These are `browser.newContext` options. No browser flag and no CDP session.
-- `Run.viewport: { width, height, mobile }` is set when a viewport was asked for. Absent means the Playwright default.
-- The report header shows `Viewport: 390x844 (mobile)` when it is set.
+**U04 Viewport (#514).** *Trimmed on 2026-11-01: `<W>x<H>` only, no `mobile` preset.* Touches: `packages/expect/src/scenario.ts`, `packages/expect/src/scenario.test.ts`, `packages/recorder/src/recorder.ts` (`newContext` and the run record), `packages/core/src/records.ts` (`Run.viewport`), `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/run.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/report/render.ts`, `packages/cli/src/report/render.test.ts`, `docs/cli.md` (the `run` options table, the scenario options table, the `suite` options row, the report header bullet), `docs/design.md` (§4 the `Run` row, §5.1 "Every profile"), a new `e2e/viewport.e2e.test.ts` and `e2e/scenarios/viewport-*.yml`, `CHANGELOG.md` (the U04 marker).
+- `options.viewport` in the scenario: `{ width, height }`. `--viewport <W>x<H>` on `run` and `suite`. The flag wins. Width and height are integers from 200 to 4000. Any other value, including `mobile`, is a scenario or argument error, exit 2.
+- It is a `browser.newContext` `viewport` option. No browser flag, no CDP session, and no change to the user agent.
+- `Run.viewport: { width, height }` is set when a viewport was asked for. Absent means the Playwright default.
+- The report header shows `Viewport: 390x844` when it is set.
+- The docs say that a narrow viewport does not make the browser report itself as a mobile device: the user agent and client hints stay desktop.
 
-Regression test: unit tests for parsing, for the mobile user agent (no `HeadlessChrome`, the browser's major version), and for the report line. The e2e runs `/viewport` with `--viewport mobile` and asserts the `layout_mobile` hit, `ua_mobile` in the dataLayer record, `Run.viewport`, and that the request's user agent header has `Mobile` and not `HeadlessChrome`. A desktop run gets `layout_desktop` and no `Run.viewport`. The PR also records what `navigator.userAgentData.mobile` and `platform` say on the mobile run, and the docs state it (concern 14).
+Regression test: unit tests for parsing (valid sizes, out of range, `mobile` rejected) and for the report line. The e2e runs `/viewport` with `--viewport 390x844` and asserts the `layout_mobile` hit (the F01 page's name for a width under 600) and `Run.viewport`, and that the request's user agent has no `HeadlessChrome` and no `Mobile`. A run without the flag gets the `layout_desktop` hit and no `Run.viewport`.
 Acceptance: the e2e fails on main (`--viewport` is unknown, exit 2) and when the context option is dropped (`layout_desktop`).
 
 ### Wave 5
@@ -410,14 +430,27 @@ Acceptance: the e2e fails when the marker check is removed (case 3), when the ho
 
 ### Wave 6
 
+**N01 Rename Pingwright to Tagreeve (#573).** Runs alone. Before it starts, the maintainer has registered `tagreeve.dev`, verified it for GitHub Pages, and renamed the repository to `alfhen/tagreeve` (GitHub redirects the old URLs, including clone URLs). Touches: every file that names the tool, outside the allowlist below.
+- **Package and command.** The root package is `tagreeve`, with the bin `tagreeve`. A second bin, `pingwright`, runs the same CLI after one line on stderr: `pingwright is now tagreeve; this alias goes in 0.5.0`. The workspace packages are `@tagreeve/*` and stay private.
+- **Names in code.** The product name in output, the report and the docs is Tagreeve. Environment variables are `TAGREEVE_*` (the test seams and the version define). Test hosts are `collector.tagreeve.invalid`, `sgtm.tagreeve.invalid`, `selftest.tagreeve.invalid`, `x.tagreeve.invalid` and `shop.tagreeve.test`. The `.test` host is an existing exception to the `.invalid` rule: `shop.pingwright.test` is the route-answered top page that looks public in `packages/recorder/test/e2e/collector-origin.e2e.test.ts` and `scripts/probe-webkit.ts`, and N01 keeps its suffix. The user config folder is `$XDG_CONFIG_HOME/tagreeve/`, else `~/.config/tagreeve/`. No reader of the old folder is needed: the only file in it (U05's allowlist) has not shipped.
+- **Records.** `Run.pingwrightVersion` keeps its name. Renaming the key would stop 0.2 and 0.3 readers and older records from reading. The report labels it `Tagreeve`. Design §4 says why the key keeps the old name. `recordSchemaVersion` stays 2.
+- **Docs site.** The site, its link checks and the CI deploy step use `tagreeve.dev`. The CI rule "pingwright.dev must not appear under packages/ or fixtures/" becomes the same rule for `tagreeve.dev`.
+- **Brand.** The wordmark in `brand/` is redrawn as `tagreeve` in Jost Medium. The pixel-frame mark stays.
+- **Allowlist for the old name.** `CHANGELOG.md` sections before 0.4.0-rc.1, `docs/plan-*.md` and `docs/proposal-*.md` (history), the `pingwrightVersion` key and the code that reads it, the `pingwright` alias bin and its notice, and the rename note in README and CHANGELOG.
+- **CHANGELOG.** A `### Pingwright is now Tagreeve` block at the top of `## 0.4.0-rc.1`, above `<!-- U02 -->`: first `npm uninstall -g pingwright`, then `npm i -g tagreeve@next` (in this order: the old package owns the `pingwright` bin link, so installing first fails with EEXIST), the alias, and that records and scenarios need no change.
+Regression test: a new `scripts/no-old-name.test.ts` searches the tracked files for `pingwright`, case-insensitive, and fails on any hit outside the allowlist. A unit test runs the alias bin and checks the notice and that the arguments pass through.
+Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`, `pnpm docs:build` and `pnpm docs:test` pass. The new test fails on a copy of the tree with one `Pingwright` left in `packages/cli/src/summary.ts`. A packed tarball installs, and `tagreeve --version` and `pingwright --version` both print the version. The PR also checks the upgrade path by hand in a temporary npm prefix: install `pingwright@0.3.0`, follow the CHANGELOG steps, and confirm both commands work. It says the result in the PR body.
+
+### Wave 7
+
 **R01 `0.4.0-rc.1` prep.** Touches: `package.json`, `CHANGELOG.md`, `README.md`, `docs/cli.md` (read only, fixed where wrong), `docs/release.md` (only if V05 left a gap), `docs/design.md` (the header, §12 the CLI command list, §15 and a new §15.4), `docs/plan-0.4.md`, the docs text test if it pins the release-candidate version.
 - Version `0.4.0-rc.1`. The `packages/*/package.json` files stay at `0.0.0`.
-- CHANGELOG: removes leftover markers, adds `Install it with npm i -g pingwright@next`, and writes `### Known in 0.4.0-rc.1` from what is still open: at least #256, the parts of #358 and #362 that are not built, #361 unless V06 closed it, #463 if U01 was not approved, any country without a format, and each `review-minor` issue the rc.1 reviews filed.
-- README: the 0.4 sections need `npm i -g pingwright@next` until 0.4.0.
-- Design: revision 9; §12 lists `baseline` and `pingwright-mcp`; §15 moves 0.4 to built and moves the items in "Not in 0.4.0-rc.1" to 0.4.0 or later; §15.4 "Differences in 0.4".
+- CHANGELOG: removes leftover markers, adds `Install it with npm i -g tagreeve@next`, and writes `### Known in 0.4.0-rc.1` from what is still open: at least #256, the parts of #358 that are not built, the items deferred to 0.5.0 (#360, #261), the `mobile` viewport preset (#514), any country without a format, and each `review-minor` issue the rc.1 reviews filed. #362 (CLI only) and #361 (closed) are not known issues.
+- README: the 0.4 sections need `npm i -g tagreeve@next` until 0.4.0.
+- Design: revision 9; §12 lists `baseline`, says the tool is CLI only, and drops the stale sentence "The MCP output schema is frozen before 0.2"; §15 moves 0.4 to built and moves the items in "Not in 0.4.0-rc.1" to 0.4.0 or later; §15.4 "Differences in 0.4".
 - Marks each entry in this plan as merged, with the PR numbers.
 
-Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`, `pnpm docs:build` and `pnpm docs:test` pass, `pingwright --version` prints `0.4.0-rc.1`, and a clean clone installs and runs the e2e suite.
+Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`, `pnpm docs:build` and `pnpm docs:test` pass, `tagreeve --version` prints `0.4.0-rc.1`, and a clean clone installs and runs the e2e suite.
 
 ## After the PRs
 
