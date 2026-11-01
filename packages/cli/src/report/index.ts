@@ -5,7 +5,7 @@ import type { ReportArgs } from '../args.ts';
 import type { Io } from '../run.ts';
 import { buildReportModel } from './model.ts';
 import { renderReport } from './render.ts';
-import { buildSuiteModel, loadSuite, renderSuiteReport } from './suite.ts';
+import { buildSuiteModel, loadSuite, renderSuiteReport, resolveSuiteDir } from './suite.ts';
 
 export * from './model.ts';
 export { renderReport } from './render.ts';
@@ -40,9 +40,10 @@ async function write(args: ReportArgs, html: string, io: Io): Promise<number> {
 /** Returns 0 once the file is written. An unreadable or invalid input throws, and main turns that into exit 2. */
 export async function reportCommand(args: ReportArgs, io: Io): Promise<number> {
   if ((await stat(args.input).catch(() => undefined))?.isDirectory()) {
-    const { manifest, records } = await loadSuite(args.input);
-    const recordFiles = manifest.cells.flatMap((c) => (typeof c.record === 'string' ? [join(args.input, c.record)] : []));
-    await refuseOverwrite(args.html, [join(args.input, 'suite.json'), ...recordFiles]);
+    const suiteDir = await resolveSuiteDir(args.input, io.stderr);
+    const { manifest, records } = await loadSuite(suiteDir);
+    const recordFiles = manifest.cells.flatMap((c) => (typeof c.record === 'string' ? [join(suiteDir, c.record)] : []));
+    await refuseOverwrite(args.html, [join(suiteDir, 'suite.json'), ...recordFiles]);
     return write(args, renderSuiteReport(buildSuiteModel(manifest, records)), io);
   }
   await refuseOverwrite(args.html, [args.input]);

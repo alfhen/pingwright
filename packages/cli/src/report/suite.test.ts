@@ -251,6 +251,51 @@ test('report on a suite directory writes the page and survives a missing and an 
   expect(html).toContain('Warning: gone (published)');
 });
 
+test('a suite --out folder with one suite child reports that suite and says which', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'pw-suite-out-'));
+  try {
+    const child = join(parent, 'suite_one');
+    await mkdir(child);
+    await writeFile(join(child, 'suite.json'), JSON.stringify(manifest));
+    await mkdir(join(parent, 'other'));
+    await writeFile(join(parent, 'other', 'suite.json'), JSON.stringify(manifest));
+    const out = join(dir, 'out-folder.html');
+    const capture = io();
+    expect(await main(['report', parent, '--html', out], capture.io)).toBe(0);
+    expect(capture.err.join('')).toContain(child);
+    expect(await readFile(out, 'utf8')).toContain('Pingwright suite: published vs workspace on shop.example.com');
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('a suite --out folder with several suite children lists them and exits 2', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'pw-suite-out-'));
+  try {
+    for (const name of ['suite_a', 'suite_b']) {
+      await mkdir(join(parent, name));
+      await writeFile(join(parent, name, 'suite.json'), JSON.stringify(manifest));
+    }
+    const capture = io();
+    expect(await main(['report', parent, '--html', join(dir, 'x.html')], capture.io)).toBe(2);
+    expect(capture.err.join('')).toContain('suite_a, suite_b');
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('a folder whose suite_* child has no suite.json keeps the no readable suite.json error', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'pw-suite-out-'));
+  try {
+    await mkdir(join(parent, 'suite_empty'));
+    const capture = io();
+    expect(await main(['report', parent, '--html', join(dir, 'x.html')], capture.io)).toBe(2);
+    expect(capture.err.join('')).toContain('has no readable suite.json');
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test('a record name that is a path is not read', async () => {
   await writeFile(join(dir, 'suite.json'), JSON.stringify({ ...manifest, cells: manifest.cells.map((c) => ({ ...c, record: `../${c.record ?? 'x'}` })) }));
   const out = join(dir, 'traversal.html');
