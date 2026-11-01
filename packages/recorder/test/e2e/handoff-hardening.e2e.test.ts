@@ -26,7 +26,7 @@ const terminal = (_text: string, signal: AbortSignal) => new Promise<void>((reso
 
 const LONG_TEXT = 'Pay the test order with the fake card on the checkout page, then wait here until the confirmation number shows up on screen';
 
-async function open(path: string, text: string, narrow = false, initScript?: string) {
+async function open(path: string, text: string, initScript?: string) {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url, headed: false, handoffOverlay: true });
   if (initScript) await recorder.context.addInitScript(initScript);
   const scenario = parseScenario(`start: ${path}\nsteps:\n  - handoff: ${JSON.stringify(text)}\n`);
@@ -36,7 +36,6 @@ async function open(path: string, text: string, narrow = false, initScript?: str
   const page = recorder.context.pages()[0]!;
   await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(path);
   await page.waitForLoadState('load');
-  if (narrow) await page.setViewportSize({ width: 390, height: 844 });
   return { recorder, page, played };
 }
 
@@ -69,7 +68,7 @@ test('a page that patches textContent, style and getRootNode never receives the 
 }, 60_000);
 
 test('a page that patches Function.prototype.call and Event.prototype.stopPropagation never sees the label or the closed root', async () => {
-  const run = await open('/handoff', 'Pay the test order', false, `(() => {
+  const run = await open('/handoff', 'Pay the test order', `(() => {
     const seen = { call: [], stop: [], str: [] };
     window.__pwSeen = seen;
     const NativeString = String;
@@ -104,13 +103,34 @@ test('a page that patches Function.prototype.call and Event.prototype.stopPropag
   await run.recorder.close();
 }, 60_000);
 
+// Mirrors the pill styles in handoff-overlay.ts. Dropping only flex-shrink: 0 does not shrink the button in Chromium (min-width: auto); min-width: 0 does.
+const PILL_PADDING_LEFT = 12;
+const PILL_PADDING_RIGHT = 6;
+const PILL_GAP = 10;
+const LABEL_CAP = 300;
+
 test('a long handoff text keeps the pill inside a 390 px viewport with the Done button whole', async () => {
-  const run = await open('/handoff', LONG_TEXT, true);
-  const box = await pillBox(run.page);
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(390);
-  expect(box.width).toBeLessThanOrEqual(358);
-  await clickDone(run.page);
-  await run.played;
-  await run.recorder.close();
+  const run = await open('/handoff', LONG_TEXT);
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const wide = await pillBox(run.page);
+    const buttonWidth = wide.width - PILL_PADDING_LEFT - PILL_GAP - LABEL_CAP - PILL_PADDING_RIGHT;
+    expect(wide.width).toBeLessThan(420);
+    expect(buttonWidth).toBeGreaterThan(40);
+    expect(buttonWidth).toBeLessThan(100);
+    await run.page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(async () => (await pillBox(run.page)).width, { timeout: 10_000 }).toBeLessThanOrEqual(358);
+    const box = await pillBox(run.page);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    const doneLeftEdge = box.x + box.width - PILL_PADDING_RIGHT - buttonWidth;
+    await run.page.mouse.click(doneLeftEdge + 4, box.y + box.height / 2);
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('a click 4 px inside the Done button left edge did not end the wait')), 10_000);
+    });
+    await Promise.race([run.played, timeout]);
+  } finally {
+    clearTimeout(timer);
+    await run.recorder.close();
+  }
 }, 60_000);
