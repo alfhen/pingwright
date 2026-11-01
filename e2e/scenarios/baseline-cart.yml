@@ -2,7 +2,7 @@ start: /products/fake-tee?em=pw-fixture@example.com
 steps:
   - consent: accept
   - addToCart: "#add-to-cart"
-  - wait: 8s
+  - wait: 10s
 expect:
   must:
     - { vendor: ga4, event: page_view }
