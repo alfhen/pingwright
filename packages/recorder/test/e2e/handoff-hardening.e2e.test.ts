@@ -109,25 +109,25 @@ const PILL_PADDING_RIGHT = 6;
 const PILL_GAP = 10;
 const LABEL_CAP = 300;
 
-async function wideButtonWidth() {
-  const run = await open('/handoff', LONG_TEXT);
-  const box = await pillBox(run.page);
-  const width = box.width - PILL_PADDING_LEFT - PILL_GAP - LABEL_CAP - PILL_PADDING_RIGHT;
-  await clickDone(run.page);
-  await run.played;
-  await run.recorder.close();
-  return width;
-}
-
 test('a long handoff text keeps the pill inside a 390 px viewport with the Done button whole', async () => {
-  const run = await open('/handoff', LONG_TEXT, true);
-  const box = await pillBox(run.page);
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(390);
-  expect(box.width).toBeLessThanOrEqual(358);
-  const buttonWidth = await wideButtonWidth();
-  const doneLeftEdge = box.x + box.width - PILL_PADDING_RIGHT - buttonWidth;
-  await run.page.mouse.click(doneLeftEdge + 4, box.y + box.height / 2);
-  await Promise.race([run.played, new Promise((_, reject) => setTimeout(() => reject(new Error('a click 4 px inside the Done button left edge did not end the wait')), 10_000))]);
-  await run.recorder.close();
+  const run = await open('/handoff', LONG_TEXT);
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const wide = await pillBox(run.page);
+    const buttonWidth = wide.width - PILL_PADDING_LEFT - PILL_GAP - LABEL_CAP - PILL_PADDING_RIGHT;
+    await run.page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(async () => (await pillBox(run.page)).width, { timeout: 10_000 }).toBeLessThanOrEqual(358);
+    const box = await pillBox(run.page);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    const doneLeftEdge = box.x + box.width - PILL_PADDING_RIGHT - buttonWidth;
+    await run.page.mouse.click(doneLeftEdge + 4, box.y + box.height / 2);
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('a click 4 px inside the Done button left edge did not end the wait')), 10_000);
+    });
+    await Promise.race([run.played, timeout]);
+  } finally {
+    clearTimeout(timer);
+    await run.recorder.close();
+  }
 }, 60_000);
