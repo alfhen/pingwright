@@ -13,6 +13,17 @@ const ITP_CAP_DAYS = 7;
 const name = process.argv[2] ?? 'webkit';
 const type: BrowserType = name === 'chromium' ? chromium : webkit;
 
+const isOffMachine = (url: URL) =>
+  /^https?:$/.test(url.protocol) && !['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname);
+
+async function stubOffMachine(context: BrowserContext) {
+  await context.route(isOffMachine, (route) =>
+    route.request().resourceType() === 'script'
+      ? route.fulfill({ status: 200, contentType: 'application/javascript', body: '' })
+      : route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }),
+  );
+}
+
 const post = (path: string) => `fetch('${COLLECTOR}${path}', { method: 'POST', body: 'x' }).catch(() => {});`;
 const html = (body: string) => `<!doctype html><meta charset="utf-8"><title>t</title>${body}`;
 const srcdoc = (script: string) =>
@@ -76,7 +87,11 @@ async function main() {
   out.browser = `${name} ${browser.version()}`;
   out.playwright = (await import('playwright/package.json', { with: { type: 'json' } })).default.version;
   out.platform = `${process.platform} ${process.arch}`;
-  const fresh = () => browser.newContext();
+  const fresh = async () => {
+    const context = await browser.newContext();
+    await stubOffMachine(context);
+    return context;
+  };
 
   const probeContext = await fresh();
   const probePage = await probeContext.newPage();
