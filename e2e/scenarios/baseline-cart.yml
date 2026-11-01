@@ -1,0 +1,9 @@
+start: /products/fake-tee?em=pw-fixture@example.com
+steps:
+  - consent: accept
+  - addToCart: "#add-to-cart"
+  - wait: 8s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true, builtins: { possibleRealData: warn, sandboxPageUrl: warn } }

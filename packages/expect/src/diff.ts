@@ -105,6 +105,94 @@ export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}
   return result;
 }
 
+export interface ShapeFields {
+  /** The four consent states, then raw `gcs` and `gcd` (empty when absent). */
+  consent: Record<string, string>;
+  /** Sorted names of the IDs that are present. */
+  ids: string[];
+}
+
+export interface ShapeTuple extends ShapeFields {
+  count: number;
+}
+
+export interface ShapeKey {
+  key: DiffKey;
+  tuples: ShapeTuple[];
+}
+
+export interface ShapeChange extends ShapeFields {
+  key: DiffKey;
+  /** True when the key has no tuples on the other side. */
+  wholeKey: boolean;
+}
+
+export interface ShapeCountChange extends ShapeFields {
+  key: DiffKey;
+  a: number;
+  b: number;
+}
+
+export interface ShapeDiff {
+  added: ShapeChange[];
+  removed: ShapeChange[];
+  countChanges: ShapeCountChange[];
+  /** A key or tuple on one side only. A count change is not drift. */
+  drift: boolean;
+}
+
+/** Groups the hits by match key and by the tuple of compared fields, with a count per tuple. Holds no hit ID, time, URL or value. */
+export function hitShape(run: RunRecords, options: DiffOptions = {}): ShapeKey[] {
+  const out: ShapeKey[] = [];
+  const groups = groupHits(run, options);
+  for (const id of [...groups.keys()].sort()) {
+    const group = groups.get(id)!;
+    const tuples = new Map<string, ShapeTuple>();
+    for (const hit of group.hits) {
+      const fields = shapeFields(hit);
+      const tupleId = JSON.stringify(fields);
+      const tuple = tuples.get(tupleId) ?? { ...fields, count: 0 };
+      tuple.count += 1;
+      tuples.set(tupleId, tuple);
+    }
+    out.push({ key: group.key, tuples: [...tuples].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, t]) => t) });
+  }
+  return out;
+}
+
+function shapeFields(hit: Hit): ShapeFields {
+  const consent: Record<string, string> = {};
+  for (const f of consentFields) consent[f] = hit.consent[f];
+  for (const f of ['gcs', 'gcd']) consent[f] = hit.consent.raw[f] ?? '';
+  const ids = [...idPresence(hit.ids)].filter(([, present]) => present).map(([name]) => name).sort();
+  return { consent, ids };
+}
+
+/** Drift is a key or tuple on one side only. The order of hits and their counts do not matter. */
+export function diffShapes(a: ShapeKey[], b: ShapeKey[]): ShapeDiff {
+  const result: ShapeDiff = { added: [], removed: [], countChanges: [], drift: false };
+  const index = (shape: ShapeKey[]) => new Map(shape.map((k) => [JSON.stringify(k.key), k]));
+  const ia = index(a);
+  const ib = index(b);
+  for (const id of [...new Set([...ia.keys(), ...ib.keys()])].sort()) {
+    const ka = ia.get(id);
+    const kb = ib.get(id);
+    const key = (ka ?? kb)!.key;
+    const ta = new Map((ka?.tuples ?? []).map((t) => [JSON.stringify([t.consent, t.ids]), t]));
+    const tb = new Map((kb?.tuples ?? []).map((t) => [JSON.stringify([t.consent, t.ids]), t]));
+    for (const [tid, t] of tb) {
+      const before = ta.get(tid);
+      if (!before) result.added.push({ key, consent: t.consent, ids: t.ids, wholeKey: !ka });
+      else if (before.count !== t.count) result.countChanges.push({ key, consent: t.consent, ids: t.ids, a: before.count, b: t.count });
+    }
+    for (const [tid, t] of ta) {
+      if (!tb.has(tid)) result.removed.push({ key, consent: t.consent, ids: t.ids, wholeKey: !kb });
+    }
+  }
+  result.drift = result.added.length > 0 || result.removed.length > 0;
+  return result;
+}
+
 function ref(h: Hit, steps: Map<string, string>): DiffHit {
   return { hitId: h.id, t: h.t, step: h.stepId ? (steps.get(h.stepId) ?? '') : '', page: h.page };
 }

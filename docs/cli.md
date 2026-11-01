@@ -43,6 +43,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
 | `--tracker-list <file>` | Adds tracker entries to the built-in list. See below. |
+| `--baseline <file>` | Compares the hits of the run with a baseline file made by `pingwright baseline save`, after the expectations. A key or tuple on one side only is drift and makes the exit code 1. A missing or invalid file exits 2 before the browser starts. See `pingwright baseline`. |
 | `--var <k=v>` | Overrides a variable the scenario declares under `vars`. A name the scenario does not declare exits 2. Can be repeated. |
 | `--json` | Prints a JSON summary on stdout instead of the text summary. |
 
@@ -204,6 +205,26 @@ The text summary is grouped by consent epoch label, then vendor, then event. Und
 
 Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missing, is not JSONL, or does not start with a `run` record exits 2 with a message that names the file. A run record with a newer schema version than Pingwright knows prints a warning and the diff goes on. A file whose last line is cut off (a crashed run) is read up to that line, and the diff prints a warning that names the file and the line.
 
+### `pingwright baseline save <run.jsonl> <baseline.json>`
+
+Writes the shape of one run to a small file you can commit, so a later run can be checked for drift in CI. It does not open a browser.
+
+| Option | Meaning |
+| --- | --- |
+| `--by-page` | Adds the page path to each key, as in `diff`. The path only: no query, no host. Do not use it on pages whose path holds a per-order token, such as a Shopify checkout, because the baseline would drift on every run. |
+
+The file holds `baselineSchemaVersion`, the `scenario` name, the `site` host (no scheme, port or path), `byPage` and a sorted list of keys. A key is the consent epoch label, the vendor and the event. Under each key are the tuples seen: the four consent states, the raw `gcs` and `gcd` values, the names of the IDs that are present, and a hit count. It holds no hit ID, time, URL, query, cookie or value. There is no `approve` command: to accept a change, save the baseline again and review the file diff in the pull request.
+
+Then check a new run against it:
+
+```bash
+pingwright run checkout.yml --site https://shop.example --baseline baselines/checkout.json
+```
+
+Drift is a key or tuple that is on one side only. A changed consent field or ID presence shows as one tuple removed and one added. A count change is listed and is not drift. The summary gets a `Baseline` block, and the `--json` summary gets a `baseline` field with `drift`, the counts of added, removed and count changes, `warnings` and the `changes` lines. Drift sets `ok` to false and the exit code to at least 1. A baseline from another scenario name or another site host prints a warning and the compare goes on. The run is shaped as the baseline was, so `--by-page` is the file's choice.
+
+`baseline` and `diff` answer different questions. `diff` pairs the hits of a key in order and reports each one. A baseline compares sets of tuples, so a reordering of hits is not drift and a new tuple inside a key is.
+
 ### `pingwright suite <dir> --site <url>`
 
 Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
@@ -284,8 +305,8 @@ Prints the version.
 | Code | Meaning |
 | --- | --- |
 | 0 | Every expectation and built-in check passed, or failed only as a `warn` check. |
-| 1 | At least one expectation or built-in check failed. |
-| 2 | Usage error, invalid scenario, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `pingwright install-browser`. |
+| 1 | At least one expectation or built-in check failed, or `--baseline` found drift. |
+| 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `pingwright install-browser`. |
 
 The JSONL file is still written when a step fails, up to the failing step.
 
