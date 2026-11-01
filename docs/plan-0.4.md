@@ -38,7 +38,7 @@ In `0.4.0-rc.1`:
 | --- | --- | --- | --- |
 | Handoff that ends itself, and `wait: { url }` | #515 | U02 | M |
 | Test payment step | #463 | U01 (rule), U05 (code) | S + L |
-| Country of the fake identity | #32 | U03 | S |
+| Country of the fake identity, optional fill, the phone warning | #32, #586, #583 | U03 | M |
 | Viewport, `--viewport WxH` only | #514 | U04 | S |
 | Baselines | #359 | V01 | M |
 | Server-side visibility, design only | #358 | V03 | S |
@@ -46,6 +46,8 @@ In `0.4.0-rc.1`:
 | WebKit probe | #361 | V06 | S |
 | Redirect hop | #180 | H07 | M |
 | Review minors | #488, #490, #495, #496, #498, #476, #506, #441, #493 | F01, H01 to H06 | S each |
+| Report reads a suite `--out` folder | #581 | H09 | S |
+| Identity evidence names the field | #582, #584 | H10 | S |
 | Rename to Tagreeve | #573 | N01 | M |
 | Release prep | none | R01 | S |
 
@@ -58,6 +60,7 @@ Not in `0.4.0-rc.1`:
 | #361, a WebKit profile | Not planned. The V06 probe (#564) showed that ITP does not apply in Playwright's WebKit, and #361 is closed. |
 | #360, several stores (V02) | Deferred to 0.5.0 by the maintainer on 2026-11-01. One store per run, in a shell loop, covers it for now. |
 | #359, `suite --baseline-dir` and a count tolerance | `run --baseline` first. Counts are reported, not checked. |
+| #585, a platform infrastructure list for `unknownDestination` | 0.5.0. Each host needs a source in the platform's own docs (AGENTS.md), which is more than rc.1 has room for. `allowUnknownDestination` covers it until then. |
 | #514, a `mobile` preset and a device list | Trimmed by the maintainer on 2026-11-01. rc.1 has `<W>x<H>` only. A mobile user agent alone does not change the client hints. |
 | #261, `unloadGap` changes (H08) | Deferred to 0.5.0 by the maintainer on 2026-11-01. It is a warning flag that never changes a verdict. |
 | #362, the MCP server (V04) | Dropped. Tagreeve is CLI only (AGENTS.md, #568). |
@@ -71,7 +74,7 @@ Not in `0.4.0-rc.1`:
 ```mermaid
 flowchart LR
   W1[Wave 1: F01 fixtures and changelog, U01 payment rule, H01 H03 H05 H06 tests, V05 release workflow, V06 WebKit probe] --> W2[Wave 2: U02 handoff until, V01 baselines, V03 server design, H02 marks, H04 manifest, H07 redirect hop]
-  W2 --> W3[Wave 3: U03 country]
+  W2 --> W3[Wave 3: U03 country and optional fill, H09 report path, H10 identity messages]
   W3 --> W4[Wave 4: U04 viewport]
   W4 --> W5[Wave 5: U05 test payment]
   W5 --> W6[Wave 6: N01 rename to Tagreeve]
@@ -88,7 +91,7 @@ Why this order:
 - **The scenario parser is one file.** `packages/expect/src/scenario.ts` changes in U02, U03, U04 and U05. They are in waves 2, 3, 4 and 5. `packages/recorder/src/steps.ts` changes in U02, U03 and U05.
 - **The CLI flags are three files.** `packages/cli/src/args.ts`, `run.ts` and `suite.ts` change in V01, U04 and U05. They are in waves 2, 4 and 5. V01 does not touch `suite.ts`.
 - **The recorder is one file.** `packages/recorder/src/recorder.ts` changes in H07, U04 and U05. They are in waves 2, 4 and 5.
-- **U03 alone in wave 3.** It waits for U02, because both change `packages/recorder/src/steps.ts`.
+- **Wave 3 after the 0.3.0 field test.** U03 waits for U02, because both change `packages/recorder/src/steps.ts`. H09 (the report loader) and H10 (messages in `packages/expect/src/evaluate.ts` and `identity-values.ts`) touch other files, so they run beside it. The three come from the 0.3.0 field notes of 2026-11-02 (#581 to #586).
 - **N01 alone, after U05.** The rename touches almost every file, so nothing else runs beside it. It comes after the last feature so no later PR adds the old name back.
 - **Cut on 2026-11-01.** V02 and H08 moved to 0.5.0, V04 was dropped (CLI only), and U04 lost the `mobile` preset. Their entries stay below, marked, so the reasoning is kept.
 - **R01 last.** It sets the version and writes the "Known in 0.4.0-rc.1" list from what is still open.
@@ -344,7 +347,7 @@ Acceptance: the unit test passes with the fix and fails without it, the chain sh
 
 ### Wave 3
 
-**U03 Country of the fake identity (#32).** Touches: `packages/core/src/identity.ts`, `packages/core/src/identity.test.ts`, `packages/recorder/src/steps.ts` (`scenarioIdentity` only), `packages/recorder/src/scenario-identity.test.ts`, `packages/expect/src/scenario.ts` (`FICTIONAL_PHONE` only), `packages/expect/src/scenario.test.ts`, `docs/cli.md` (the "Run identity" paragraph and its list of fictional ranges), `docs/design.md` (§13, the "Fake identities" paragraph), a new `e2e/identity-country.e2e.test.ts` and `e2e/scenarios/identity-country-*.yml`, `CHANGELOG.md` (the U03 marker).
+**U03 Country of the fake identity, optional fill and the phone warning (#32, #586, #583).** Touches: `packages/core/src/identity.ts`, `packages/core/src/identity.test.ts`, `packages/recorder/src/steps.ts` (`scenarioIdentity` only), `packages/recorder/src/scenario-identity.test.ts`, `packages/expect/src/scenario.ts` (`FICTIONAL_PHONE` only), `packages/expect/src/scenario.test.ts`, `docs/cli.md` (the "Run identity" paragraph and its list of fictional ranges), `docs/design.md` (§13, the "Fake identities" paragraph, and §4 the `Step` row), a new `e2e/identity-country.e2e.test.ts` and `e2e/scenarios/identity-country-*.yml`, `CHANGELOG.md` (the U03 marker). For the optional fill also: `packages/expect/src/scenario.ts` (the `fill` value form and `options.optionalTimeout`), `packages/recorder/src/steps.ts` (the `fill` step), `packages/recorder/src/steps.test.ts`, `packages/core/src/records.ts` (`Step.skippedFields`), `packages/cli/src/summary.ts`, `packages/cli/src/summary.test.ts`, `packages/cli/src/report/render.ts` and its test (the step line), `fixtures/site/public/checkout.html` and `fixtures/site/README.md` (a `?phone=off` form), `docs/cli.md` (the `fill` step), a new `e2e/optional-fill.e2e.test.ts` and its scenario.
 - `scenarioIdentity` passes `scenario.identity.country` to `createIdentity`. A two-letter value is upper-cased.
 - New formats, each with a comment that cites the regulator page, like the US and SE ones:
   - GB: Ofcom drama numbers, mobile `+44 7700 900000` to `900999`; Faker `en_GB` names, addresses and postcodes.
@@ -353,8 +356,23 @@ Acceptance: the unit test passes with the fix and fails without it, the chain sh
 - A country with no format keeps US-shaped data under its label, as today, and the run prints a warning: `identity.country DK has no local format; name, address, zip and phone are US-shaped`. NL, DK and NO are added only if the PR finds a regulator range for fictional numbers and cites it (concern 13).
 - Postcodes come from Faker's patterns for the locale. They can be real postcodes. A postcode alone is not personal data, and the identity is fake.
 
-Regression test: unit tests for GB and DE (phone in the cited range, postcode shape, seed stability) and the warning. `scenarioIdentity` with `country: SE` gives a `+4670174` phone. The e2e fills the `/checkout` form with `identity: { country: SE }` and asserts the run identity has a Swedish phone and zip. The leak test is the existing scanner: the run's own values are not flagged, and no other value appears.
-Acceptance: the e2e fails on main, where the phone starts with `+1`.
+- **Optional fill (#586).** A `fill` entry may be `{ value: <identity field or literal>, optional: true }`. If the field is not attached and visible within `options.optionalTimeout` (milliseconds, default 2000, from 100 to 30000), the step skips it and goes on. `Step.skippedFields` lists the selectors it skipped, never a value. A field that is present but cannot be filled (disabled, read-only, wrong type) still fails the step, as today. The text summary prints `SKIPPED FIELD <selector> (not present)` under the step, `--json` has the list, and the report shows it on the step line. Only `fill` gets the optional form in rc.1; `click` and `select` keep failing on a missing control.
+- **The phone warning (#583).** The identity and `fill` warnings say why a value looks real (for a phone: it is not in a fictional range for its country, and the mobile prefix is a real one) and name the fictional range to use for that country, from the formats above. There is no opt-out in rc.1: the warning never fails a run, and a better message is what the field test asked for first. *Flagged:* an explicit per-field opt-out can come later if the warning stays noisy.
+
+Regression test: unit tests for GB and DE (phone in the cited range, postcode shape, seed stability) and the warning. Unit tests for the optional form (parse, timeout bounds, a present-but-disabled field still fails, the summary line) and the new warning text. The optional-fill e2e fills `/checkout?phone=off` with an optional phone entry and asserts exit 0 and `Step.skippedFields`, and that the same scenario without `optional` fails on the missing field. `scenarioIdentity` with `country: SE` gives a `+4670174` phone. The e2e fills the `/checkout` form with `identity: { country: SE }` and asserts the run identity has a Swedish phone and zip. The leak test is the existing scanner: the run's own values are not flagged, and no other value appears.
+Acceptance: the country e2e fails on main, where the phone starts with `+1`. The optional-fill e2e fails on main, where the object form is a scenario error (exit 2).
+
+**H09 Report reads a suite `--out` folder (#581).** Touches: `packages/cli/src/report/suite.ts` (`loadSuite`), `packages/cli/src/report/suite.test.ts`, `packages/cli/src/report/index.ts` (where the path is resolved, if it is there), `docs/cli.md` (the `report` section), a new `e2e/report-out-folder.e2e.test.ts`, `CHANGELOG.md` (the H09 marker).
+- When the folder has no `suite.json`, `report` looks at its children. Exactly one `suite_*` child with a readable `suite.json`: use it, and say which on stderr. Several: the error lists them. None: today's error.
+- A `.jsonl` record and a suite folder work as today.
+Regression test: unit tests for one child, several children and none. The e2e runs `suite --out <tmp>` on `e2e/suites/cells` and then `report <tmp> --html`, and asserts exit 0 and the suite title in the HTML.
+Acceptance: the e2e fails on main ("has no readable suite.json").
+
+**H10 Identity evidence names the field (#582, #584).** Touches: `packages/expect/src/evaluate.ts` (`findForeignData`), `packages/expect/src/evaluate.test.ts`, `packages/expect/src/identity-values.ts`, `packages/expect/src/identity-values.test.ts`, `docs/cli.md` (the `possibleRealData` and `identity.hashesMatch` paragraphs), a new `e2e/identity-messages.e2e.test.ts` and its scenario, `CHANGELOG.md` (the H10 marker).
+- **#582.** `findForeignData` keeps where each value was found. For a value in a decoded hit parameter, the detail names the parameter path, for example `carries 1 hash value(s) that are not from the run identity, in user_data.country`. For a value in the URL or the body it says `in the URL` or `in the body`. Paths go through `guardFieldName`, so a value used as a key prints as `(other)`. Never the value.
+- **#584.** When a hit carries no identity field at all, `identity.hashesMatch` says `the hit carried no identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Pingwright`. A hit with fields that do not match keeps today's `Not matching: <field>` message.
+Regression test: unit tests for each place a value can be found, and for both `hashesMatch` messages. The e2e uses a data-tag fixture page with a hash that is not the run identity's (F01 pages) and asserts the `possibleRealData` detail names the parameter. The leak test asserts no value appears in either message.
+Acceptance: the e2e fails on main, where the detail has no field.
 
 **V02 Several stores in one suite (#360).** *Deferred to 0.5.0 on 2026-11-01. Not built in rc.1.* Touches: a new `packages/cli/src/stores.ts` and `stores.test.ts`, `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/suite.test.ts`, `packages/cli/src/report/suite.ts`, `packages/cli/src/report/suite.test.ts`, `docs/cli.md` (the `suite` section), a new `e2e/stores.e2e.test.ts`, `e2e/stores/two-stores.json`, `e2e/suites/stores/`, `CHANGELOG.md` (the V02 marker).
 - `pingwright suite <dir> --stores <stores.json>` instead of `--site`. Giving both is a usage error.

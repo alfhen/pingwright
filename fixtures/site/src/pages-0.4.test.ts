@@ -139,7 +139,7 @@ describe('README and CHANGELOG', () => {
     expect(head).toBeLessThan(changelog.indexOf('## 0.3.0'));
     const section = changelog.slice(head, changelog.indexOf('## 0.3.0'));
     const ids = [...section.matchAll(/^<!-- ([A-Z]\d{2}) -->$/gm)].map((m) => m[1]);
-    expect(ids).toEqual(['U02', 'U05', 'U04', 'U03', 'V01', 'V02', 'V04', 'V03', 'H07', 'H08', 'H02', 'H04', 'R01']);
+    expect(ids).toEqual(['U02', 'U05', 'U04', 'U03', 'V01', 'V02', 'V04', 'V03', 'H07', 'H08', 'H02', 'H04', 'H09', 'H10', 'R01']);
     expect(section).toMatch(/^## 0\.4\.0-rc\.1\n\n<!-- U02 -->\n\n<!-- U05 -->\n\n/);
   });
 });
