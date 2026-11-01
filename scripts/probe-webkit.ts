@@ -88,7 +88,9 @@ async function main() {
   out.playwright = (await import('playwright/package.json', { with: { type: 'json' } })).default.version;
   out.platform = `${process.platform} ${process.arch}`;
   const fresh = async () => {
-    const context = await browser.newContext();
+    const context = await browser.newContext(
+      name === 'chromium' ? { userAgent: `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${browser.version()} Safari/537.36` } : {},
+    );
     await stubOffMachine(context);
     return context;
   };
@@ -150,7 +152,8 @@ async function main() {
   const hostCookie = (await hostContext.cookies()).find((c) => c.name === 'pw_probe');
   out.cookieNonLoopbackHost = hostCookie ? { expiresInDays: days(hostCookie) } : 'not stored';
   const hostDays = hostCookie ? days(hostCookie) : null;
-  out.itpCapsScriptCookies = out.itpCapsScriptCookies || (hostDays !== null && hostDays <= ITP_CAP_DAYS);
+  out.itpCapsScriptCookies =
+    topDays === null && hostDays === null ? 'unknown (no cookie stored)' : out.itpCapsScriptCookies || (hostDays !== null && hostDays <= ITP_CAP_DAYS);
   await hostContext.close();
 
   await browser.close();
