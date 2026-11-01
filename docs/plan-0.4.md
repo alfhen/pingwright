@@ -10,13 +10,13 @@ The work starts after `0.3.0` is merged and released (`docs/plan-0.3.0.md`). Not
 | --- | --- | --- |
 | A checkout handoff ends by itself at the thank-you page. | #515 | A handoff ends only on Done or Enter. If the person presses too early, the purchase hits are cut off. |
 | A checkout can run in CI with a test card. | #463 | Every payment is a handoff, so the purchase path always needs a person. |
-| Mobile layouts and mobile tags can be tested. | #514 | Every run uses the default desktop viewport. |
+| Layouts at another screen size can be tested. | #514 | Every run uses the default desktop viewport. rc.1 adds `<W>x<H>` only; a `mobile` preset waits. |
 | A scenario can use a fake identity for its market. | #32 | The country is never passed to `createIdentity`, and only US and SE have local formats. |
 | CI can catch drift that no rule names. | #359 | Drift shows only when someone runs `diff` by hand. |
-| One suite runs against several storefronts. | #360 | Each store is a separate run, and `suite.json` `labels` are always empty. |
+| One suite runs against several storefronts. *(Deferred to 0.5.0.)* | #360 | Each store is a separate run, and `suite.json` `labels` are always empty. |
 | A reader knows what the server container sends on. | #358 | The browser never sees it, and the docs do not say what is observable. |
-| An agent reads runs without parsing JSONL. | #362 | There is no MCP server. |
-| Safari cookie behaviour. | #361 | Nobody has shown that Playwright's WebKit applies ITP. |
+| An agent reads runs without parsing JSONL. *(Dropped: CLI only, agents use `--json`.)* | #362 | There is no MCP server. |
+| Safari cookie behaviour. *(Answered by V06: Playwright's WebKit does not apply ITP. #361 is closed.)* | #361 | Nobody had shown that Playwright's WebKit applies ITP. |
 | A release can be checked from its tag. | #144 | No CI job builds or checks the tag, and the npm steps are not written down. |
 
 Carried over and found while checking the issues against the code:
@@ -24,7 +24,7 @@ Carried over and found while checking the issues against the code:
 | Finding | Issue | What is wrong |
 | --- | --- | --- |
 | A redirect response and its cross-origin hop are sometimes missing. | #180 | 4 of 30 runs in a live-mode probe. The cause is in the recorder's context setup and is not known. |
-| `unloadGap` warns although a hit was recorded, and misses the end of a run. | #261 | An event is skipped only when no hit carries its exact name. If another vendor sent that literal name and GA4 sent a different custom name, the warning is false. Closing the browser is not an unload point (`packages/recorder/src/flags.ts`, `buildUnloadGapFlags`). |
+| `unloadGap` warns although a hit was recorded, and misses the end of a run. *(Deferred to 0.5.0.)* | #261 | An event is skipped only when no hit carries its exact name. If another vendor sent that literal name and GA4 sent a different custom name, the warning is false. Closing the browser is not an unload point (`packages/recorder/src/flags.ts`, `buildUnloadGapFlags`). |
 | An early hit hides `mixed`. | #496 | `segmentOf` in `packages/cli/src/report/model.ts` returns `mixed` only when the worst mark is `full`. |
 | A bad `failed` field in `suite.json` throws a `TypeError`. | #506 | `isManifest` in `packages/cli/src/report/suite.ts` does not check `cell.failed`. |
 | Tests that pass for the wrong reason. | #488, #493, #495, #498, #441 | Each is a weak or missing assertion. |
@@ -86,9 +86,9 @@ Why this order:
 - **U01 in wave 1, U05 in wave 5.** U01 changes the rule in `AGENTS.md` and the design. It needs the maintainer's explicit OK before it merges (see "The payment rule"). U05 depends on U01 being merged. Writing U01 early gives the maintainer the most time to decide.
 - **U02 before U05.** The test payment flow ends with `wait: { url: "/thank-you-late" }`, which U02 adds. U02 also adds the shared URL and locator matcher.
 - **The scenario parser is one file.** `packages/expect/src/scenario.ts` changes in U02, U03, U04 and U05. They are in waves 2, 3, 4 and 5. `packages/recorder/src/steps.ts` changes in U02, U03 and U05.
-- **The CLI flags are three files.** `packages/cli/src/args.ts`, `run.ts` and `suite.ts` change in V01, V02, U04 and U05. They are in waves 2, 3, 4 and 5. V01 does not touch `suite.ts`, and V02 does not touch `run.ts`.
-- **The recorder is one file.** `packages/recorder/src/recorder.ts` changes in H07, H08, U04 and U05. They are in waves 2, 3, 4 and 5.
-- **U03 and V02 share wave 3.** V02 sets `identity.country` from the stores file. U03 makes that field choose the formats. They touch different files, so they share wave 3. V02's e2e checks only the recorded country, and U03's e2e checks the formats.
+- **The CLI flags are three files.** `packages/cli/src/args.ts`, `run.ts` and `suite.ts` change in V01, U04 and U05. They are in waves 2, 4 and 5. V01 does not touch `suite.ts`.
+- **The recorder is one file.** `packages/recorder/src/recorder.ts` changes in H07, U04 and U05. They are in waves 2, 4 and 5.
+- **U03 alone in wave 3.** It waits for U02, because both change `packages/recorder/src/steps.ts`.
 - **N01 alone, after U05.** The rename touches almost every file, so nothing else runs beside it. It comes after the last feature so no later PR adds the old name back.
 - **Cut on 2026-11-01.** V02 and H08 moved to 0.5.0, V04 was dropped (CLI only), and U04 lost the `mobile` preset. Their entries stay below, marked, so the reasoning is kept.
 - **R01 last.** It sets the version and writes the "Known in 0.4.0-rc.1" list from what is still open.
@@ -377,14 +377,14 @@ Acceptance: the e2e fails on main for both pages.
 
 ### Wave 4
 
-**U04 Viewport (#514).** *Trimmed on 2026-11-01: `<W>x<H>` only. No `mobile` preset and no change to `packages/recorder/src/user-agent.ts` or its test; drop those from the Touches line.* Touches: `packages/expect/src/scenario.ts`, `packages/expect/src/scenario.test.ts`, `packages/recorder/src/recorder.ts` (`newContext` and the run record), `packages/recorder/src/user-agent.ts`, `packages/recorder/src/user-agent.test.ts`, `packages/core/src/records.ts` (`Run.viewport`), `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/run.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/report/render.ts`, `packages/cli/src/report/render.test.ts`, `docs/cli.md` (the `run` options table, the scenario options table, the `suite` options row, the report header bullet), `docs/design.md` (§4 the `Run` row, §5.1 "Every profile"), a new `e2e/viewport.e2e.test.ts` and `e2e/scenarios/viewport-*.yml`, `CHANGELOG.md` (the U04 marker).
-- `options.viewport` in the scenario: `{ width, height }` or `mobile`. `--viewport <W>x<H>` or `--viewport mobile` on `run` and `suite`. The flag wins. Width and height are integers from 200 to 4000.
-- `mobile` is 390 by 844, `isMobile: true`, `hasTouch: true`, `deviceScaleFactor: 3`, and a mobile Chrome user agent from a new `chromeMobileUserAgent(version)`: `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<major>.0.0.0 Mobile Safari/537.36`. It never contains `HeadlessChrome`.
-- These are `browser.newContext` options. No browser flag and no CDP session.
-- `Run.viewport: { width, height, mobile }` is set when a viewport was asked for. Absent means the Playwright default.
-- The report header shows `Viewport: 390x844 (mobile)` when it is set.
+**U04 Viewport (#514).** *Trimmed on 2026-11-01: `<W>x<H>` only, no `mobile` preset.* Touches: `packages/expect/src/scenario.ts`, `packages/expect/src/scenario.test.ts`, `packages/recorder/src/recorder.ts` (`newContext` and the run record), `packages/core/src/records.ts` (`Run.viewport`), `packages/cli/src/args.ts`, `packages/cli/src/args.test.ts`, `packages/cli/src/run.ts`, `packages/cli/src/suite.ts`, `packages/cli/src/report/render.ts`, `packages/cli/src/report/render.test.ts`, `docs/cli.md` (the `run` options table, the scenario options table, the `suite` options row, the report header bullet), `docs/design.md` (§4 the `Run` row, §5.1 "Every profile"), a new `e2e/viewport.e2e.test.ts` and `e2e/scenarios/viewport-*.yml`, `CHANGELOG.md` (the U04 marker).
+- `options.viewport` in the scenario: `{ width, height }`. `--viewport <W>x<H>` on `run` and `suite`. The flag wins. Width and height are integers from 200 to 4000. Any other value, including `mobile`, is a scenario or argument error, exit 2.
+- It is a `browser.newContext` `viewport` option. No browser flag, no CDP session, and no change to the user agent.
+- `Run.viewport: { width, height }` is set when a viewport was asked for. Absent means the Playwright default.
+- The report header shows `Viewport: 390x844` when it is set.
+- The docs say that a narrow viewport does not make the browser report itself as a mobile device: the user agent and client hints stay desktop.
 
-Regression test: unit tests for parsing, for the mobile user agent (no `HeadlessChrome`, the browser's major version), and for the report line. The e2e runs `/viewport` with `--viewport mobile` and asserts the `layout_mobile` hit, `ua_mobile` in the dataLayer record, `Run.viewport`, and that the request's user agent header has `Mobile` and not `HeadlessChrome`. A desktop run gets `layout_desktop` and no `Run.viewport`. The PR also records what `navigator.userAgentData.mobile` and `platform` say on the mobile run, and the docs state it (concern 14).
+Regression test: unit tests for parsing (valid sizes, out of range, `mobile` rejected) and for the report line. The e2e runs `/viewport` with `--viewport 390x844` and asserts the `layout_mobile` hit (the F01 page's name for a width under 600) and `Run.viewport`, and that the request's user agent has no `HeadlessChrome` and no `Mobile`. A run without the flag gets the `layout_desktop` hit and no `Run.viewport`.
 Acceptance: the e2e fails on main (`--viewport` is unknown, exit 2) and when the context option is dropped (`layout_desktop`).
 
 ### Wave 5
@@ -414,20 +414,20 @@ Acceptance: the e2e fails when the marker check is removed (case 3), when the ho
 
 **N01 Rename Pingwright to Tagreeve (#573).** Runs alone. Before it starts, the maintainer has registered `tagreeve.dev`, verified it for GitHub Pages, and renamed the repository to `alfhen/tagreeve` (GitHub redirects the old URLs, including clone URLs). Touches: every file that names the tool, outside the allowlist below.
 - **Package and command.** The root package is `tagreeve`, with the bin `tagreeve`. A second bin, `pingwright`, runs the same CLI after one line on stderr: `pingwright is now tagreeve; this alias goes in 0.5.0`. The workspace packages are `@tagreeve/*` and stay private.
-- **Names in code.** The product name in output, the report and the docs is Tagreeve. Environment variables are `TAGREEVE_*` (the test seams and the version define). Test hosts are `collector.tagreeve.invalid`, `sgtm.tagreeve.invalid`, `selftest.tagreeve.invalid`, `x.tagreeve.invalid` and `shop.tagreeve.test`. The user config folder is `$XDG_CONFIG_HOME/tagreeve/`, else `~/.config/tagreeve/`. No reader of the old folder is needed: the only file in it (U05's allowlist) has not shipped.
+- **Names in code.** The product name in output, the report and the docs is Tagreeve. Environment variables are `TAGREEVE_*` (the test seams and the version define). Test hosts are `collector.tagreeve.invalid`, `sgtm.tagreeve.invalid`, `selftest.tagreeve.invalid`, `x.tagreeve.invalid` and `shop.tagreeve.test`. The `.test` host is an existing exception to the `.invalid` rule: `shop.pingwright.test` is the route-answered top page that looks public in `packages/recorder/test/e2e/collector-origin.e2e.test.ts` and `scripts/probe-webkit.ts`, and N01 keeps its suffix. The user config folder is `$XDG_CONFIG_HOME/tagreeve/`, else `~/.config/tagreeve/`. No reader of the old folder is needed: the only file in it (U05's allowlist) has not shipped.
 - **Records.** `Run.pingwrightVersion` keeps its name. Renaming the key would stop 0.2 and 0.3 readers and older records from reading. The report labels it `Tagreeve`. Design §4 says why the key keeps the old name. `recordSchemaVersion` stays 2.
 - **Docs site.** The site, its link checks and the CI deploy step use `tagreeve.dev`. The CI rule "pingwright.dev must not appear under packages/ or fixtures/" becomes the same rule for `tagreeve.dev`.
 - **Brand.** The wordmark in `brand/` is redrawn as `tagreeve` in Jost Medium. The pixel-frame mark stays.
 - **Allowlist for the old name.** `CHANGELOG.md` sections before 0.4.0-rc.1, `docs/plan-*.md` and `docs/proposal-*.md` (history), the `pingwrightVersion` key and the code that reads it, the `pingwright` alias bin and its notice, and the rename note in README and CHANGELOG.
-- **CHANGELOG.** A `### Pingwright is now Tagreeve` block at the top of `## 0.4.0-rc.1`, above `<!-- U02 -->`: install with `npm i -g tagreeve@next`, remove the old package with `npm uninstall -g pingwright`, the alias, and that records and scenarios need no change.
+- **CHANGELOG.** A `### Pingwright is now Tagreeve` block at the top of `## 0.4.0-rc.1`, above `<!-- U02 -->`: first `npm uninstall -g pingwright`, then `npm i -g tagreeve@next` (in this order: the old package owns the `pingwright` bin link, so installing first fails with EEXIST), the alias, and that records and scenarios need no change.
 Regression test: a new `scripts/no-old-name.test.ts` searches the tracked files for `pingwright`, case-insensitive, and fails on any hit outside the allowlist. A unit test runs the alias bin and checks the notice and that the arguments pass through.
-Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`, `pnpm docs:build` and `pnpm docs:test` pass. The new test fails on a copy of the tree with one `Pingwright` left in `packages/cli/src/summary.ts`. A packed tarball installs, and `tagreeve --version` and `pingwright --version` both print the version.
+Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`, `pnpm docs:build` and `pnpm docs:test` pass. The new test fails on a copy of the tree with one `Pingwright` left in `packages/cli/src/summary.ts`. A packed tarball installs, and `tagreeve --version` and `pingwright --version` both print the version. The PR also checks the upgrade path by hand in a temporary npm prefix: install `pingwright@0.3.0`, follow the CHANGELOG steps, and confirm both commands work. It says the result in the PR body.
 
 ### Wave 7
 
 **R01 `0.4.0-rc.1` prep.** Touches: `package.json`, `CHANGELOG.md`, `README.md`, `docs/cli.md` (read only, fixed where wrong), `docs/release.md` (only if V05 left a gap), `docs/design.md` (the header, §12 the CLI command list, §15 and a new §15.4), `docs/plan-0.4.md`, the docs text test if it pins the release-candidate version.
 - Version `0.4.0-rc.1`. The `packages/*/package.json` files stay at `0.0.0`.
-- CHANGELOG: removes leftover markers, adds `Install it with npm i -g tagreeve@next`, and writes `### Known in 0.4.0-rc.1` from what is still open: at least #256, the parts of #358 and #362 that are not built, #361 unless V06 closed it, #463 if U01 was not approved, any country without a format, and each `review-minor` issue the rc.1 reviews filed.
+- CHANGELOG: removes leftover markers, adds `Install it with npm i -g tagreeve@next`, and writes `### Known in 0.4.0-rc.1` from what is still open: at least #256, the parts of #358 that are not built, the items deferred to 0.5.0 (#360, #261), the `mobile` viewport preset (#514), any country without a format, and each `review-minor` issue the rc.1 reviews filed. #362 (CLI only) and #361 (closed) are not known issues.
 - README: the 0.4 sections need `npm i -g tagreeve@next` until 0.4.0.
 - Design: revision 9; §12 lists `baseline`, says the tool is CLI only, and drops the stale sentence "The MCP output schema is frozen before 0.2"; §15 moves 0.4 to built and moves the items in "Not in 0.4.0-rc.1" to 0.4.0 or later; §15.4 "Differences in 0.4".
 - Marks each entry in this plan as merged, with the PR numbers.
