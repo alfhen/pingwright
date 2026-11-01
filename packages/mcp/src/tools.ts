@@ -38,7 +38,12 @@ async function dirEntries(dir: string) {
 
 /** The ID in the first line of a record file, or null when that line is not a run record with a valid ID. */
 async function recordRunId(path: string): Promise<string | null> {
-  const handle = await open(path, 'r');
+  let handle;
+  try {
+    handle = await open(path, 'r');
+  } catch {
+    return null;
+  }
   try {
     const chunks: Buffer[] = [];
     const chunk = Buffer.alloc(8192);
