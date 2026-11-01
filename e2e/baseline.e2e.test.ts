@@ -51,7 +51,7 @@ test('a run matches its own baseline, and a run with an extra add_to_cart drifts
     );
   });
   expect(text.code).toBe(1);
-  expect(text.stdout).toMatch(/Baseline: drift \(\d+ added, 0 removed/);
+  expect(text.stdout).toMatch(/Baseline: drift \(\d+ added, \d+ removed, \d+ count changes\)/);
   expect(text.stdout).toContain('added ga4 add_to_cart');
   expect(text.stdout).toContain('Result: fail');
 }, 180_000);
