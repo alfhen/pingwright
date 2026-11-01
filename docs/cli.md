@@ -93,6 +93,8 @@ The warning covers numbers written as `+` and digits, and the common US shapes. 
 
 `identity.hashesMatch` reads hashed email and phone values from Meta, Pinterest and from the server container's data client (`sgtm`). On an `sgtm` hit it reads `user_data` (`email_address`, `phone_number`, `first_name`, `last_name`, `street`, `city`, `postal_code`, `country`, at the top level or under `address`) and shows each as the hit param `user_data.<field>`.
 
+When a hit carries no identity field at all, the message says so, and that matching done server side, for example by a conversions API, is not visible to Pingwright. A hit with fields that do not match keeps `Not matching: <field>`.
+
 `identity.hashesMatch` cannot be in the same entry as `body.has` or `body.only`. Use two entries.
 
 On an sgtm hit, every hashed user_data field that the hit sends must match the run identity, not only email and phone. On any other vendor's hit (Meta, Pinterest), only the hashed email and phone are checked. A field that the hit sends empty, or does not send, is skipped. A city, postal code or country sent as plain text is skipped, because Google's user data format allows that. If one field is wrong, the rule fails, and the message names the hit params that do not match and the fields that do, for example `Not matching: user_data.country. Matching: email, first name and last name.` A site can add a value that the scenario did not type, such as the country of its default market. Declare that value under `identity`, for example `identity: { country: SE }`, so that its hash matches.
@@ -114,7 +116,7 @@ During a `handoff` step, requests that are not tracking hits are stored without 
 
 Payments and log-ins are handoff steps on any host other than `localhost`, `127.0.0.1` or `::1`. Filling a card or password field on another host fails the run.
 
-A `host:` rule in `expect` matches the request's host with its port (`127.0.0.1:4173`) or its bare hostname (`127.0.0.1`). It is an exact, case-sensitive match on one of these forms. An IPv6 host may be written with or without brackets (`::1`, `[::1]`, `[::1]:4173`). `ids.hashes` matches a hit with any hashed ID present, and `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` read one hashed parameter. Any other name under `ids.hashes` is a scenario error. A `possibleRealData` failure lists the first five findings and a count of the rest.
+A `host:` rule in `expect` matches the request's host with its port (`127.0.0.1:4173`) or its bare hostname (`127.0.0.1`). It is an exact, case-sensitive match on one of these forms. An IPv6 host may be written with or without brackets (`::1`, `[::1]`, `[::1]:4173`). `ids.hashes` matches a hit with any hashed ID present, and `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` read one hashed parameter. Any other name under `ids.hashes` is a scenario error. A `possibleRealData` failure lists the first five findings and a count of the rest. Each finding names where the value was found: the hit parameter path (for example `user_data.country`), `the URL` or `the body`. A path segment that looks like a value prints as `(other)`. A finding never holds the value.
 
 ### Rules on payload fields
 

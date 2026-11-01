@@ -45,7 +45,7 @@ test('hashesMatch fails on a wrong hash in sgtm user_data, even when the email i
 test('hashesMatch fails on plain user_data and finds nothing without user_data', () => {
   expect(check({ email_address: identity.email }).message).toContain('unhashed');
   expect(check({ first_name: identity.firstName }).message).toContain('unhashed');
-  expect(check({}).message).toContain('carried no hashed email, phone, name or address value');
+  expect(check({}).message).toContain('the hit carried no identity fields (no hashed or plain email, phone, name or address); matching done server side');
 });
 
 test('a literal fill value can match a name or address hash, but never an email or phone', () => {
@@ -112,4 +112,42 @@ test('hashesMatch passes a decoded Meta hit with the identity hash and fails a w
   };
   expect(run(hashEmail(identity.email).hex).pass).toBe(true);
   expect(run(hashEmail('other@example.com').hex).pass).toBe(false);
+});
+
+function rawRequest(url: string, postData: string | null = null): Request {
+  return {
+    type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: postData ? 'POST' : 'GET', url,
+    resourceType: 'fetch', frameUrl: null, initiator: null, headers: {}, postData, outcome: 'stubbed',
+  };
+}
+
+test('possibleRealData names the hit parameter that carries a foreign hash', () => {
+  const { hit, req } = sgtmHit({ country: sha256('fr').hex });
+  const [leak] = findForeignData([req], [hit], identity);
+  expect(leak!.detail).toMatch(/carries 1 hash value\(s\) that are not from the run identity, in user_data\.country$/);
+  expect(leak!.detail).not.toContain(sha256('fr').hex);
+});
+
+test('possibleRealData says the URL or the body for a value no decoder read', () => {
+  const foreign = hashEmail('other@example.com').hex;
+  const inUrl = findForeignData([rawRequest(`https://tracker.example.com/p?x=${foreign}`)], [], identity);
+  expect(inUrl[0]!.detail).toMatch(/, in the URL$/);
+  const inBody = findForeignData([rawRequest('https://tracker.example.com/p', `a=1&x=${foreign}`)], [], identity);
+  expect(inBody[0]!.detail).toMatch(/, in the body$/);
+  expect(inUrl[0]!.detail + inBody[0]!.detail).not.toContain(foreign);
+});
+
+test('possibleRealData prints a value used as a key as (other)', () => {
+  const foreign = hashEmail('other@example.com').hex;
+  const { hit, req } = sgtmHit({});
+  const keyed = { ...hit, params: { [`user_data.${foreign}`]: sha256('x').hex } };
+  const details = findForeignData([req], [keyed], identity).map((l) => l.detail).join('\n');
+  expect(details).not.toContain(foreign);
+  expect(details).toContain('(other)');
+});
+
+test('hashesMatch keeps the Not matching message when the hit has fields', () => {
+  const r = check({ ...good, postal_code: sha256('00000').hex });
+  expect(r.message).toContain('Not matching: user_data.postal_code');
+  expect(r.message).not.toContain('carried no identity fields');
 });
