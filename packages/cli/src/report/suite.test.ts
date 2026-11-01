@@ -271,6 +271,23 @@ test('a directory with no manifest and a manifest that is not one exit 2', async
   }
 });
 
+test('a manifest whose cell failed field is malformed exits 2 with the manifest error', async () => {
+  const bad = await mkdtemp(join(tmpdir(), 'pw-suite-failed-'));
+  try {
+    const cases: unknown[] = [{ checks: 5 }, { rules: 1, checks: 5 }, { rules: -1, checks: [] }, { rules: 1, checks: [1] }, { rules: null, checks: [] }, 'x', null];
+    for (const failed of cases) {
+      await writeFile(join(bad, 'suite.json'), JSON.stringify({ ...manifest, cells: manifest.cells.map((c, i) => (i === 0 ? { ...c, failed } : c)) }));
+      const capture = io();
+      expect(await main(['report', bad, '--html', join(dir, 'a.html')], capture.io)).toBe(2);
+      expect(capture.err.join('')).toContain('not a suite manifest');
+    }
+    await writeFile(join(bad, 'suite.json'), JSON.stringify({ ...manifest, cells: manifest.cells.map((c, i) => (i === 0 ? { ...c, failed: { rules: 0, checks: ['a'] } } : c)) }));
+    expect(await main(['report', bad, '--html', join(dir, 'a.html')], io().io)).toBe(0);
+  } finally {
+    await rm(bad, { recursive: true, force: true });
+  }
+});
+
 test('a truncated record puts its line number on the page', () => {
   const cut = new Map(loaded);
   cut.set(recordKey('checkout', 'published'), { ...loaded.get(recordKey('checkout', 'published'))!, truncatedAtLine: 7 });
