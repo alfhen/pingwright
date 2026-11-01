@@ -255,12 +255,13 @@ Acceptance: `pnpm test` passes. The maintainer can push a throwaway tag on a for
 - The probe is a script run by hand, not part of `pnpm e2e`: `pnpm exec playwright install webkit` then `node scripts/probe-webkit.ts`. It starts `fixtures/site` and follows the checklist in `docs/plan-0.3.md` ("What WebKit would need"):
   - `webkit.launch()` with no flags. Does it start on macOS and on Linux?
   - `context.route` for the collector origin from `fetch`, `sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe and a cross-site iframe, 20 runs each.
+  - `navigator.userAgent` is Safari-like and has no automation marker.
   - autoconsent, unmodified, answers the fixture banner.
   - ITP: a script sets a cookie with a one-year expiry on the top site and in a cross-site frame. The probe reads `context.cookies()` and reports the stored expiry. A cap at 7 days or less means ITP applies.
 - The PR body has the result table. Design §5.1 and §14 state what was measured, on which WebKit and Playwright versions.
 - If ITP does not apply, the PR says #361 can close with that result. If it does, a WebKit profile becomes a new entry after rc.1.
 
-Acceptance: `pnpm lint` and `pnpm typecheck` pass, and the PR has the table from a real run on the maintainer's Mac. If WebKit does not start there, the table says so and gives the Linux result.
+Acceptance: `pnpm lint` and `pnpm typecheck` pass, and the PR has the table from a real run on the maintainer's Mac. If WebKit does not start there, the table says so and gives the Linux result. The maintainer runs the Linux probe, or CI does; the script takes the browser name as its one argument.
 
 ### Wave 2
 

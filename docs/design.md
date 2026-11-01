@@ -93,7 +93,7 @@ A `Hit` links to a `TagReport` only as a **probable** link: same `gtmUniqueEvent
 | --- | --- |
 | `chromium` (default) | Playwright's Chromium. |
 | `firefox` | Optional. |
-| `webkit` | Later, for Safari tracking-prevention behaviour. |
+| `webkit` | Not built. A probe (`scripts/probe-webkit.ts`) found no Safari tracking prevention in Playwright's WebKit (§14.1a). |
 
 Every profile:
 
@@ -391,7 +391,8 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 
 ## 14. Risks and open questions
 
-1. **Collector origin interception.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 for the sources listed in §9 (`collector-origin.e2e.test.ts`), once the sandboxed iframe has loaded. Open: requests sent during sandboxed `srcdoc` iframe load are usually not routed or seen, and reach the network; Firefox and WebKit are untested. There is no fallback yet: a local listener needs write authorization first (§9).
+1. **Collector origin interception.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 for the sources listed in §9 (`collector-origin.e2e.test.ts`), once the sandboxed iframe has loaded. Open: requests sent during sandboxed `srcdoc` iframe load are usually not routed or seen, and reach the network; Firefox is untested. WebKit routes the collector origin from the same sources (§14, WebKit probe). There is no fallback yet: a local listener needs write authorization first (§9).
+1a. **WebKit probe (#361).** Measured by hand with `node scripts/probe-webkit.ts` on macOS (darwin arm64), Playwright 1.64.1, WebKit 27.2, no launch flags, fixture site on loopback only. WebKit starts. The user agent is Safari-like and has no automation marker, though `navigator.webdriver` is `true`. `context.route` answered the collector origin, and `context.on('request')` saw it, in 20 of 20 runs each for `fetch`, `sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe and a sandboxed cross-site iframe. The repeating send in the `srcdoc` probe hides the early-load gap in §14.2, which was not measured on WebKit. Unmodified autoconsent detected and accepted the fixture banner (`pingwright-fixture`). **ITP does not apply:** a script cookie with a one-year expiry was stored with 365 days on `localhost` and on a routed `https://shop.pingwright.test/` page. A cookie set in a cross-site frame was not stored (third-party cookie block). So a WebKit profile would not show Safari's 7-day cap, and a lifetime report on it would be wrong. #361 can close with this result. Not measured: Linux (the plan leaves the Linux run to the maintainer or CI, run `node scripts/probe-webkit.ts` there), service workers and net log (not available on WebKit).
 2. **Early iframe requests can escape stub mode and capture.** A tracking hit fired while a sandboxed `srcdoc` iframe loads is usually not recorded and not stubbed (§9). P09 confirmed that `context.on('request')` does not see these requests either (§5.3), so the recorder cannot detect them from the network. With `--net-log` in live mode they are recorded from the net log with `captured: "netlog"`. Open in stub mode: block or rewrite `srcdoc` iframes, or detect them in the page.
    Unload-time sends are handled in the page in stub mode, with the limits in §5.3. A sandboxed frame's unload sends are captured only with `--net-log` in live mode; otherwise the run flags `unloadGap`.
 3. **Dedicated worker capture.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.2). The startup self-test still reports coverage per run.
