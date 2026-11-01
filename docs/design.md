@@ -306,7 +306,7 @@ A server container receives a hit from the browser and may send it on to vendors
 | Step | Visible | How |
 | --- | --- | --- |
 | Browser to server container | Yes | Recorded and decoded (`sgtm-data-client`, `stape-custom-loader`). |
-| Server container's answer | Yes, in `server` mode | Status and `Set-Cookie` names for hosts in `serverHosts`. |
+| Server container's answer | Yes, in `server` mode | Status and `Set-Cookie` names for hosts in `serverHosts`. Not for `pagehide` and `visibilitychange` sends, which the page answers (§15.3). |
 | Server container to vendors | No, not from the browser | Needs an endpoint the user runs (below). |
 | Server preview data | No | Only a signed-in person in the GTM UI sees it. |
 
@@ -325,7 +325,7 @@ The browser sees the first hop only. Two dotted paths can show the second, and t
 
 Pingwright reads either one only through the sink reader (§9). The sink reader is not built. Until it is, a run cannot say what the server container sent on, and the report must not imply it can.
 
-**Server preview.** `X-Gtm-Server-Preview` puts the traffic in the server container's preview. Only a signed-in person in the GTM UI sees the preview data. Pingwright cannot read it without the GTM API, which it never calls. The header value is a secret like `gtmAuth`. It must not appear in a record, a log line, an error message or test output. In 0.3 and 0.4 the recorder does not send the header (§15.2).
+**Server preview.** `X-Gtm-Server-Preview` puts the traffic in the server container's preview. Only a signed-in person in the GTM UI sees the preview data. Pingwright cannot read it without the GTM API, which it never calls. The header value is a secret like `gtmAuth`. It must not appear in a record, a log line, an error message or test output. In 0.3 and 0.4 the recorder does not send the header (§15.3).
 
 **`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports and the sink reader ingests them.
 
