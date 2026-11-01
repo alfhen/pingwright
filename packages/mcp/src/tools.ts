@@ -1,5 +1,5 @@
-import { lstat, readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { lstat, open, readdir, readFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { readRun, type Hit, type RunRecords } from '@pingwright/core';
 import { diffRuns, epochForHit } from '@pingwright/expect';
 
@@ -36,18 +36,38 @@ async function dirEntries(dir: string) {
   }
 }
 
+/** The ID in the first line of a record file, or null when that line is not a run record with a valid ID. */
+async function recordRunId(path: string): Promise<string | null> {
+  const handle = await open(path, 'r');
+  try {
+    const buffer = Buffer.alloc(4096);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const line = buffer.toString('utf8', 0, bytesRead).split('\n')[0]!;
+    const id = (JSON.parse(line) as { id?: unknown }).id;
+    return typeof id === 'string' && RUN_ID.test(id) ? id : null;
+  } catch {
+    return null;
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Run IDs with the file that holds each, newest first. Symbolic links are never followed. */
 async function indexRuns(runsDir: string): Promise<Map<string, string>> {
   const found = new Map<string, string>();
-  const scan = async (dir: string) => {
-    for (const entry of await dirEntries(dir)) {
-      const id = entry.name.slice(0, -'.jsonl'.length);
-      if (entry.isFile() && entry.name.endsWith('.jsonl') && RUN_ID.test(id)) found.set(id, join(dir, entry.name));
-    }
-  };
-  await scan(runsDir);
   for (const entry of await dirEntries(runsDir)) {
-    if (entry.isDirectory() && SUITE_ID.test(entry.name)) await scan(join(runsDir, entry.name));
+    const id = entry.name.slice(0, -'.jsonl'.length);
+    if (entry.isFile() && entry.name.endsWith('.jsonl') && RUN_ID.test(id)) found.set(id, join(runsDir, entry.name));
+  }
+  // Suite records are named <scenario>.<variant>.jsonl, so the run ID comes from the record itself.
+  for (const dir of await dirEntries(runsDir)) {
+    if (!dir.isDirectory() || !SUITE_ID.test(dir.name)) continue;
+    for (const entry of await dirEntries(join(runsDir, dir.name))) {
+      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
+      const path = join(runsDir, dir.name, entry.name);
+      const id = await recordRunId(path);
+      if (id) found.set(id, path);
+    }
   }
   return new Map([...found].sort(([a], [b]) => (a < b ? 1 : -1)));
 }
@@ -190,9 +210,15 @@ export async function diffRunsTool(runsDir: string, input: { a: string; b: strin
   };
 }
 
-function runIdOfRecord(record: unknown): string | null {
-  const id = typeof record === 'string' ? record.replace(/\.jsonl$/, '') : '';
-  return RUN_ID.test(id) ? id : null;
+async function runIdOfRecord(suiteDir: string, record: unknown): Promise<string | null> {
+  if (typeof record !== 'string' || record !== basename(record) || !record.endsWith('.jsonl')) return null;
+  const path = join(suiteDir, record);
+  try {
+    if (!(await lstat(path)).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return recordRunId(path);
 }
 
 export async function getSuite(runsDir: string, input: { suiteId: string }) {
@@ -213,7 +239,7 @@ export async function getSuite(runsDir: string, input: { suiteId: string }) {
     site: manifest.site,
     variants: manifest.variants,
     exitCode: manifest.exitCode,
-    cells: cells.map(({ record, ...cell }) => ({ ...cell, runId: runIdOfRecord(record) })),
+    cells: await Promise.all(cells.map(async ({ record, ...cell }) => ({ ...cell, runId: await runIdOfRecord(join(runsDir, id), record) }))),
     diffs: manifest.diffs,
   };
 }

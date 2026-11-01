@@ -1,0 +1,9 @@
+start: /meta-early?em=pw-fixture@example.com
+steps:
+  - wait: 1s
+  - visit: /products/fake-tee?em=pw-fixture@example.com
+  - wait: 1s
+expect:
+  must:
+    - { vendor: meta, event: PageView }
+options: { seed: 1, allowUnknownDestination: true }

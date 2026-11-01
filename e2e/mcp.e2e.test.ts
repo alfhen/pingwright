@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -10,7 +10,6 @@ import { root, runCli, scenario, site } from './cli-helpers.ts';
 const EMAIL = 'pw-fixture@example.com';
 const HASH = createHash('sha256').update(EMAIL).digest('hex');
 const COOKIE = 'pw-fixture-cookie-value';
-const SUITE = 'suite_00000000000000000000000001';
 
 class McpClient {
   private nextId = 1;
@@ -48,18 +47,19 @@ let child: ChildProcessWithoutNullStreams;
 let client: McpClient;
 let runId: string;
 let secondRunId: string;
+let suiteId: string;
 const texts: string[] = [];
 
 beforeAll(async () => {
   runsDir = await mkdtemp(join(root, 'test-results', 'mcp-'));
-  const play = () => runCli(['run', scenario('mcp-leak'), '--site', site.url, '--out', runsDir, '--json']);
+  const play = (name = 'mcp-leak') => runCli(['run', scenario(name), '--site', site.url, '--out', runsDir, '--json']);
   runId = (await play()).records!.run.id;
-  secondRunId = (await play()).records!.run.id;
-  await mkdir(join(runsDir, SUITE), { recursive: true });
-  await writeFile(
-    join(runsDir, SUITE, 'suite.json'),
-    JSON.stringify({ suiteSchemaVersion: 1, id: SUITE, startedAt: 1, site: 'http://localhost', variants: ['desktop'], cells: [], diffs: [], exitCode: 0 }),
-  );
+  secondRunId = (await play('mcp-leak-extra')).records!.run.id;
+  const suite = await runCli(['suite', join(root, 'e2e/suites/clean'), '--site', site.url, '--out', runsDir, '--json'], {
+    PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl,
+  });
+  expect(suite.code).toBe(0);
+  suiteId = (await readdir(runsDir)).find((name) => name.startsWith('suite_'))!;
 
   child = spawn(process.execPath, [join(root, 'dist/mcp.js'), '--runs', runsDir], { stdio: ['pipe', 'pipe', 'pipe'] });
   client = new McpClient(child);
@@ -98,7 +98,8 @@ test('lists the five tools', async () => {
 
 test('list_runs, get_summary and get_hits return the hits', async () => {
   const list = JSON.parse((await call('list_runs', {})).text) as { runs: { runId: string; siteHost: string }[] };
-  expect(list.runs.map((r) => r.runId).sort()).toEqual([runId, secondRunId].sort());
+  expect(list.runs.map((r) => r.runId)).toEqual(expect.arrayContaining([runId, secondRunId]));
+  expect(list.runs).toHaveLength(3);
   expect(list.runs[0]!.siteHost).toMatch(/^localhost:\d+$/);
 
   const summary = JSON.parse((await call('get_summary', { runId })).text) as { hits: Record<string, Record<string, number>>; flags: Record<string, number> };
@@ -110,11 +111,25 @@ test('list_runs, get_summary and get_hits return the hits', async () => {
   expect(hits.hits[0]!.vendor).toBe('meta');
 });
 
-test('diff_runs and get_suite answer', async () => {
-  const diff = JSON.parse((await call('diff_runs', { a: runId, b: secondRunId })).text) as { schemaVersion: number };
+test('diff_runs reports the hits that differ between two runs', async () => {
+  const diff = JSON.parse((await call('diff_runs', { a: runId, b: secondRunId })).text) as {
+    schemaVersion: number;
+    added: unknown[];
+    changed: unknown[];
+    removed: unknown[];
+  };
   expect(diff.schemaVersion).toBe(1);
-  const suite = JSON.parse((await call('get_suite', { suiteId: SUITE })).text) as { suiteId: string };
-  expect(suite.suiteId).toBe(SUITE);
+  expect(diff.added.length + diff.changed.length + diff.removed.length).toBeGreaterThan(0);
+});
+
+test('get_suite gives a run ID for a real suite cell, and get_summary reads it', async () => {
+  const suite = JSON.parse((await call('get_suite', { suiteId })).text) as { suiteId: string; cells: { runId: string | null }[] };
+  expect(suite.suiteId).toBe(suiteId);
+  expect(suite.cells.length).toBeGreaterThan(0);
+  const cellRunId = suite.cells[0]!.runId;
+  expect(cellRunId).toMatch(/^run_/);
+  const summary = JSON.parse((await call('get_summary', { runId: cellRunId })).text) as { runId: string };
+  expect(summary.runId).toBe(cellRunId);
 });
 
 test('refuses a path as an ID', async () => {

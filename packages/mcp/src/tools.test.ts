@@ -67,9 +67,9 @@ function records(runId: string, options: { extraHit?: boolean; failing?: boolean
   return out as PingwrightRecord[];
 }
 
-async function writeRun(dir: string, runId: string, options?: Parameters<typeof records>[1]) {
+async function writeRun(dir: string, runId: string, options?: Parameters<typeof records>[1], file = `${runId}.jsonl`) {
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, `${runId}.jsonl`), records(runId, options).map((r) => JSON.stringify(r) + '\n').join(''));
+  await writeFile(join(dir, file), records(runId, options).map((r) => JSON.stringify(r) + '\n').join(''));
 }
 
 let dir: string;
@@ -79,7 +79,8 @@ beforeAll(async () => {
   await writeRun(dir, RUN_A);
   await writeRun(dir, RUN_B, { extraHit: true, failing: true });
   const suiteDir = join(dir, SUITE);
-  await writeRun(suiteDir, RUN_C);
+  await writeRun(suiteDir, RUN_C, undefined, 'checkout.desktop.jsonl');
+  await symlink(join(dir, `${RUN_A}.jsonl`), join(suiteDir, 'linked.desktop.jsonl'));
   await writeFile(
     join(suiteDir, 'suite.json'),
     JSON.stringify({
@@ -88,7 +89,7 @@ beforeAll(async () => {
       startedAt: 5,
       site: 'https://shop.example.com',
       variants: ['desktop'],
-      cells: [{ scenario: 'checkout.yml', variant: 'desktop', labels: {}, status: 'pass', exitCode: 0, record: `${RUN_C}.jsonl` }],
+      cells: [{ scenario: 'checkout.yml', variant: 'desktop', labels: {}, status: 'pass', exitCode: 0, record: 'checkout.desktop.jsonl' }],
       diffs: [],
       exitCode: 0,
     }),
