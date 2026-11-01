@@ -191,6 +191,17 @@ test('an unknown state after an answer stays full, and early outranks full in a 
   expect(marksOf(both, 'meta')[0]).toBe('early');
 });
 
+test('an early hit does not hide granted and denied hits in the same segment', () => {
+  const model = buildReportModel(
+    records({
+      consentEpochs: [epoch('undecided', 0, state())],
+      hits: [hit('ga4', 500), hit('ga4', 510, {}, { analytics: 'granted', ads: 'granted' }), hit('ga4', 520, {}, { analytics: 'denied', ads: 'denied' })],
+    }),
+  );
+  expect(marksOf(model, 'ga4')).toEqual(['mixed']);
+  expect(model.rows[0]!.segments[0]!.label).toBe('granted and denied hits');
+});
+
 test('evidence from a cannot-evaluate result gives unchecked, not leak', () => {
   const h = hit('ga4', 100, { fieldsComplete: false }, { analytics: 'denied', ads: 'denied' });
   const cannot = result('mustNot: {"vendor":"ga4","in":"epoch(denied)"}', false, { evidence: [h.id], note: 'cannotEvaluateBody' });
@@ -199,9 +210,12 @@ test('evidence from a cannot-evaluate result gives unchecked, not leak', () => {
 });
 
 test('a hit flagged only through its identifier names is a leak from the deniedIdentifiers evidence', () => {
-  const h = hit('ga4', 100, { idFields: ['custom_id'] }, { analytics: 'denied', ads: 'denied' });
+  const h = hit('ga4', 100, { idFields: [], fields: ['custom_id'] }, { analytics: 'denied', ads: 'denied' });
   const failed = result('builtin: deniedIdentifiers', false, { evidence: [h.id] });
-  const model = buildReportModel(records({ consentEpochs: [epoch('denied', 0, DENIED)], hits: [h], results: [failed] }));
+  const epochs = [epoch('denied', 0, DENIED)];
+  const without = buildReportModel(records({ consentEpochs: epochs, hits: [h] }));
+  expect(marksOf(without, 'ga4')).toEqual(['ping']);
+  const model = buildReportModel(records({ consentEpochs: epochs, hits: [h], results: [failed] }));
   expect(marksOf(model, 'ga4')).toEqual(['leak']);
   expect(model.rows[0]!.segments[0]!.label).toBe('identifiers sent while denied');
 });

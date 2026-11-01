@@ -207,7 +207,7 @@ function segmentOf(verdicts: Verdict[]): Segment {
   const hits = verdicts.length;
   const has = (m: Mark) => verdicts.some((v) => v.mark === m);
   const mark = WORST_FIRST.find(has)!;
-  if (mark === 'full' && has('ping')) return { mark: 'mixed', label: 'granted and denied hits', hits };
+  if ((mark === 'full' || mark === 'early') && has('full') && has('ping')) return { mark: 'mixed', label: 'granted and denied hits', hits };
   const own = verdicts.filter((v) => v.mark === mark);
   let label = own.every((v) => v.label === own[0]!.label) ? own[0]!.label : '';
   if (mark === 'mixed') label = MIXED_HIT;

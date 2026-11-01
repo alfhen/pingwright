@@ -24,6 +24,8 @@
 
 <!-- H02 -->
 
+- **Report: a segment with an early hit, a granted hit and a denied hit shows `mixed`.** It showed `early` and hid the denied hit.
+
 <!-- H04 -->
 
 <!-- R01 -->
