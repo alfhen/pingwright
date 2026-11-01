@@ -384,14 +384,16 @@ Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`)
 
 | Tool | Returns |
 | --- | --- |
-| `run_scenario(file, options)` | Run ID and summary. `options` can hold a GTM override (§8.2), a server preview header, and an expected tag list. Overrides apply to this run only. |
-| `list_runs(filter)` | Runs with scenario, site, time, result |
-| `get_records(runId, type, filter)` | Hits, requests, responses, tag reports, dataLayer events, epochs or checkpoints |
-| `get_record(id)` | One record by ID, from any run |
-| `diff_runs(a, b)` | Per-vendor, per-event differences |
-| `handoff_status(runId)` | Whether a run waits for a person |
+| `list_runs(limit)` | Built. Runs with ID, scenario, site host, start time, variant and `ok` |
+| `get_summary(runId)` | Built. Hit counts, epochs, flag kinds with counts, results with severity. No messages, evidence or flag details |
+| `get_hits(runId, vendor, event, epoch)` | Built. Hits with ID, vendor, event, epoch, consent, identifier presence, field names and step label. No values |
+| `diff_runs(a, b)` | Built. Per-vendor, per-event differences, without page values |
+| `get_suite(suiteId)` | Built. The suite manifest |
+| `run_scenario(file, options)` | Planned. Run ID and summary. `options` can hold a GTM override (§8.2), a server preview header, and an expected tag list. Overrides apply to this run only. |
+| `get_record(id)` | Planned. One record by ID, from any run |
+| `handoff_status(runId)` | Planned. Whether a run waits for a person |
 
-Every result includes record IDs, the run ID and the step label. Errors say what was expected and what was found. The MCP output schema is frozen before 0.2.
+`pingwright-mcp --runs <dir>` serves the built tools over stdio. It reads only that directory, and tools take run and suite IDs that match `run_` or `suite_` and 26 ULID characters, never paths. No built tool returns `Request.url`, `Request.postData`, headers, `Hit.params`, `Hit.page`, `DataLayerEvent.args`, a result message or a flag detail (§13). The tools make the browser visit nothing, so they need no handoff or payment rule; the planned `run_scenario` does. Errors say what was expected and what was found. Tool results carry `schemaVersion`, and a breaking change bumps it.
 
 ## 13. Test identities, privacy and security
 
@@ -417,7 +419,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 **Other rules**
 
 - Playwright traces, HAR files and screenshots are off by default. When turned on, the report states that they are unfiltered.
-- MCP results go to the agent's model provider. With fake identities this is acceptable. Flagged `possibleRealData` values are replaced with a placeholder in MCP output.
+- MCP results go to the agent's model provider. With fake identities this is acceptable. The built MCP tools return names and counts only, so no recorded value reaches the provider (§12).
 - Pingwright never enters a password on a hosted site. Log-ins are handoff steps. Payments are handoff steps too, except the opt-in test payment, which types only a provider's documented test card after the three gates in §5.4 hold. Loopback hosts are exempt as before (§5.4).
 - Pingwright never takes a target address from incoming traffic.
 

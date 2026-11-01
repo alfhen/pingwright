@@ -15,7 +15,9 @@ Agent-first testing for tags and consent. Pingwright plays a visitor in a real b
 >
 > **In 0.3:** `body.has` and `body.only` rules on the field names of a hit; `cookie` rules; a `deniedIdentifiers` check that fails when an identifier goes out on a denied hit; `pingwright suite` runs a folder of scenarios against several GTM builds; `pingwright report` writes an HTML report of one run or a suite; a Done button in the handoff window; `click` and `wait` by role and name or from a list of selectors; a `select` step; the `server` network mode; record schema version 2. `deniedIdentifiers` fails by default, so a run that passed in 0.2 can exit 1. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **Not built yet:** MCP server, GTM tag-firing reporters, the server tag reporter, Shopify bridge, a full Microsoft UET decoder, Firefox and WebKit.
+> **In 0.4:** `pingwright-mcp`, a read-only MCP server over a runs folder.
+>
+> **Not built yet:** MCP tools that run scenarios, GTM tag-firing reporters, the server tag reporter, Shopify bridge, a full Microsoft UET decoder, Firefox and WebKit.
 
 ## Why
 
@@ -182,7 +184,7 @@ pingwright run scenario.yml --site https://staging.example.com --tracker-list tr
 
 ## For agents
 
-The MCP server is not built yet. It will let an agent run a scenario, query the records, read tag firing per event, and compare runs. Today an agent can call the CLI: `run --json`, `diff --json` and `suite --json` print structured results. Every record has a stable ID, and every result names the run and step.
+`pingwright-mcp --runs <dir>` serves read-only MCP tools over stdio: `list_runs`, `get_summary`, `get_hits`, `diff_runs` and `get_suite`. They read the runs folder and return names and counts, never a URL, a cookie value or an identity value. They cannot run a scenario. To run one, an agent calls the CLI: `run --json`, `diff --json` and `suite --json` print structured results. Every record has a stable ID, and every result names the run and step. See [docs/cli.md](docs/cli.md).
 
 Pingwright will not change GTM containers or sign in to Google. An agent that edits a workspace with a GTM API client (for example a GTM MCP server) passes the workspace preview values to Pingwright for one run with `--gtm-override`.
 
@@ -198,7 +200,7 @@ Pingwright will not change GTM containers or sign in to Google. An agent that ed
 | `cli` | `pingwright run`, `diff`, `suite`, `report`, `install-browser` | 0.3 |
 | `gtm` | Tag-firing reporter templates | not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
-| `mcp` | MCP server | not built yet |
+| `mcp` | Read-only MCP server (`pingwright-mcp`) | 0.4 |
 
 ## Related tools
 

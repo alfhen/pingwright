@@ -15,6 +15,7 @@
 <!-- V02 -->
 
 <!-- V04 -->
+- **New: `pingwright-mcp --runs <dir>`, a read-only MCP server.** Five tools read a runs folder and return names and counts only: `list_runs`, `get_summary`, `get_hits`, `diff_runs` and `get_suite`. It adds the dependencies `@modelcontextprotocol/server` and `zod`. (#362)
 
 <!-- V03 -->
 - Docs: design §8.5 says what is visible of a server container and what is not. `expectedTags` is stored and not evaluated. (#358)

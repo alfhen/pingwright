@@ -1,0 +1,13 @@
+{
+  "name": "@pingwright/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "@pingwright/core": "workspace:*",
+    "@pingwright/expect": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

@@ -271,6 +271,24 @@ pingwright report runs/suite_<id> --html suite-report.html
 
 `report` for a record from before schema version 2 shows `not recorded` where field names are missing.
 
+### `pingwright-mcp --runs <dir>`
+
+Serves MCP over stdio. It is read-only: it reads run records and suite manifests in `<dir>` and one level of `suite_*` folders below it, and nothing else. It starts no browser and makes no request. Tools take run IDs and suite IDs, never paths. An ID that does not match `run_` or `suite_` and 26 ULID characters is refused.
+
+| Tool | Returns |
+| --- | --- |
+| `list_runs` | Run ID, scenario name, site host, start time, variant and `ok`, newest first. Input: `limit`. |
+| `get_summary` | `pass`, `ok`, hit counts by vendor and event, consent epochs, flag kinds with counts, and each result as expectation, `pass` and severity. |
+| `get_hits` | Hits with ID, vendor, event, epoch label, consent state, which identifiers are present, parameter names and step label. Filters: `vendor`, `event`, `epoch`, `limit`. |
+| `diff_runs` | The `diff` result for two runs, without the page of each hit. |
+| `get_suite` | The suite manifest, with run IDs for the cells. |
+
+No tool returns a request URL, a request body, a header, a parameter value, a page URL, a `dataLayer` argument, a result message, evidence or a flag detail. Every result has `schemaVersion: 1`. Example client entry:
+
+```json
+{ "mcpServers": { "pingwright": { "command": "pingwright-mcp", "args": ["--runs", "runs"] } } }
+```
+
 ### `pingwright install-browser`
 
 Installs Chromium with the Playwright version Pingwright depends on.
