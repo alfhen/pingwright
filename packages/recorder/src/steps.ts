@@ -1,10 +1,11 @@
 import { createInterface } from 'node:readline/promises';
 import { createIdentity, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
-import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step } from '@pingwright/expect';
+import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step, type UrlMatcher } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
-import { HANDOFF_WAKE_EVENT, waitForHandoff } from './handoff-overlay.ts';
+import { conditionHolds, describeCondition, formatDuration, watchCondition } from './conditions.ts';
+import { HANDOFF_WAKE_EVENT, waitForHandoff, type HandoffEnd } from './handoff-overlay.ts';
 import { resolveLocator, timeoutMessage } from './locators.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
@@ -323,6 +324,15 @@ async function evaluateGuarded(page: Page, script: string): Promise<void> {
   if (scriptError) throw scriptError;
 }
 
+async function waitForUrl(recorder: Recorder, url: UrlMatcher, timeout: number): Promise<void> {
+  const condition = { url };
+  const deadline = Date.now() + timeout;
+  while (!(await conditionHolds(recorder.context, condition))) {
+    if (Date.now() >= deadline) throw new Error(`page did not reach ${describeCondition(condition)} within ${formatDuration(timeout)}`);
+    await recorder.wait(100);
+  }
+}
+
 async function waitForCart(recorder: Recorder, record: StepRecord, scenario: Scenario, options: PlayOptions): Promise<void> {
   const check = options.cartCheck ?? createCartCheck(scenario.options.cartRequest);
   const deadline = Date.now() + (options.cartTimeoutMs ?? 5000);
@@ -375,6 +385,7 @@ async function runStep(
       return;
     case 'wait':
       if (typeof step.value === 'number') await recorder.wait(step.value);
+      else if ('url' in step.value) await waitForUrl(recorder, step.value.url, timeout);
       else {
         const deadline = Date.now() + timeout;
         const target = await locate(page, recorder, step.value.selector, record, timeout);
@@ -394,11 +405,28 @@ async function runStep(
       const print = options.print ?? ((text: string) => process.stdout.write(`${text}\n`));
       print(`\nHandoff: ${step.value}\n${HANDOFF_REMINDER}\nRecording continues until you are done.`);
       recorder.setHandoff(true);
+      const watching = new AbortController();
+      let end: HandoffEnd;
       try {
-        await waitForHandoff({ text: step.value, gate: recorder.handoff, resolver: options.handoffResolver ?? stdinResolver, print, wake: () => wakeOverlay(recorder) });
+        end = await waitForHandoff({
+          text: step.value,
+          gate: recorder.handoff,
+          resolver: options.handoffResolver ?? stdinResolver,
+          print,
+          wake: () => wakeOverlay(recorder),
+          ...(step.until ? { until: watchCondition(recorder.context, step.until, watching.signal), settleMs: step.settle ?? 5000 } : {}),
+          ...(step.timeout === undefined ? {} : { timeoutMs: step.timeout }),
+        });
       } finally {
+        watching.abort();
         recorder.setHandoff(false);
       }
+      record.handoffEnd = end;
+      if (end === 'timeout') {
+        const limit = formatDuration(step.timeout!);
+        throw new Error(step.until ? `handoff did not reach ${describeCondition(step.until)} within ${limit}` : `handoff timed out after ${limit}`);
+      }
+      if (end === 'until' && step.until) print(`Handoff ended: reached ${describeCondition(step.until)}`);
       return;
     }
   }

@@ -212,3 +212,59 @@ test('unloadGapIgnore is a list of event names or globs', () => {
   expect(() => parseScenario('start: /\noptions: { unloadGapIgnore: consent_* }')).toThrow(/unloadGapIgnore/);
   expect(() => parseScenario("start: /\noptions: { unloadGapIgnore: [''] }")).toThrow(/unloadGapIgnore/);
 });
+
+test('a handoff string stays a string and has no until', () => {
+  const s = parseScenario('start: /\nsteps:\n  - handoff: Pay\n');
+  expect(s.steps[0]).toMatchObject({ kind: 'handoff', value: 'Pay' });
+  expect(s.steps[0]).not.toHaveProperty('until');
+});
+
+test('a handoff mapping takes until, settle and timeout', () => {
+  const s = parseScenario('start: /\nsteps:\n  - handoff: { text: Pay, until: { url: "/thank-you*" }, settle: 10s, timeout: 10m }\n');
+  expect(s.steps[0]).toMatchObject({ kind: 'handoff', value: 'Pay', until: { url: { glob: '/thank-you*' } }, settle: 10_000, timeout: 600_000 });
+});
+
+test('settle is 5 seconds by default when until is set', () => {
+  const s = parseScenario('start: /\nsteps:\n  - handoff: { text: Pay, until: { url: { matches: "^https://.*/ty$" } } }\n');
+  expect(s.steps[0]).toMatchObject({ until: { url: { matches: '^https://.*/ty$' } }, settle: 5000 });
+  expect(s.steps[0]).not.toHaveProperty('timeout');
+});
+
+test('until takes role, any and selector locators', () => {
+  const role = parseScenario('start: /\nsteps:\n  - handoff: { text: Pay, until: { role: heading, name: Thank you } }\n').steps[0];
+  expect(role).toMatchObject({ until: { locator: { role: 'heading', name: 'Thank you' } } });
+  const any = parseScenario('start: /\nsteps:\n  - handoff: { text: Pay, until: { any: ["#a", "#b"] } }\n').steps[0];
+  expect(any).toMatchObject({ until: { locator: { any: ['#a', '#b'] } } });
+  const selector = parseScenario('start: /\nsteps:\n  - handoff: { text: Pay, until: { selector: "#ok" } }\n').steps[0];
+  expect(selector).toMatchObject({ until: { locator: '#ok' } });
+});
+
+test('timeout works without until', () => {
+  const s = parseScenario('start: /\nsteps:\n  - handoff: { text: Pay, timeout: 90s }\n');
+  expect(s.steps[0]).toMatchObject({ timeout: 90_000 });
+  expect(s.steps[0]).not.toHaveProperty('until');
+});
+
+test('handoff mapping errors', () => {
+  const bad = (step: string) => errorOf(`start: /\nsteps:\n  - handoff: ${step}\n`);
+  expect(bad('{ until: { url: "/x" } }')).toContain('text: must be a non-empty string');
+  expect(bad('{ text: Pay, settle: 5s }')).toContain('settle: needs until');
+  expect(bad('{ text: Pay, until: { url: "/x" }, settle: soon }')).toContain('settle: must be a duration');
+  expect(bad('{ text: Pay, timeout: never }')).toContain('timeout: must be a duration');
+  expect(bad('{ text: Pay, wait: 1 }')).toContain('unknown key');
+  expect(bad('{ text: Pay, until: "/x" }')).toContain('until: must be a mapping');
+  expect(bad('{ text: Pay, until: { url: "/x", role: link } }')).toContain('url cannot be combined');
+  expect(bad('{ text: Pay, until: { url: "" } }')).toContain('until.url: must be a path glob');
+  expect(bad('{ text: Pay, until: { url: { matches: "(" } } }')).toContain('not a valid regular expression');
+  expect(bad('{ text: Pay, until: { url: { glob: "/x" } } }')).toContain('until.url: must be a path glob');
+  expect(bad('{ text: Pay, until: { selector: "" } }')).toContain('until.selector');
+  expect(bad('{ text: Pay, until: { role: Heading } }')).toContain('role');
+  expect(bad('{ text: Pay, until: {} }')).toContain('role');
+});
+
+test('wait takes a url as a glob or a regular expression', () => {
+  const s = parseScenario('start: /\nsteps:\n  - wait: { url: "/thank-you*" }\n  - wait: { url: { matches: "ty$" } }\n');
+  expect(s.steps.map((x) => (x.kind === 'wait' ? x.value : null))).toEqual([{ url: { glob: '/thank-you*' } }, { url: { matches: 'ty$' } }]);
+  expect(errorOf('start: /\nsteps:\n  - wait: { url: "/x", role: link }\n')).toContain('url cannot be combined');
+  expect(errorOf('start: /\nsteps:\n  - wait: { url: 3 }\n')).toContain('wait.url: must be a path glob');
+});

@@ -90,6 +90,8 @@ export interface Step {
   locator?: number;
   startedAt: number;
   endedAt: number | null;
+  /** What ended a `handoff` step. Absent on other steps and on older records. */
+  handoffEnd?: 'done' | 'enter' | 'until' | 'timeout';
   /** Why the step failed. Absent when it passed. */
   error?: string;
 }

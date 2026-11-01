@@ -47,17 +47,23 @@ export interface Rule {
 /** A selector string, a role and accessible name, or a list of selectors tried in order. */
 export type Locator = string | { role: string; name?: string; exact?: boolean } | { any: string[] };
 
+/** A URL pattern: a path glob matched against the path and query, or a regular expression matched against the whole URL. */
+export type UrlMatcher = { glob: string } | { matches: string };
+
+/** What a `handoff` `until` or a `wait` waits for. */
+export type Condition = { url: UrlMatcher } | { locator: Locator };
+
 export type StepBody =
   | { kind: 'visit'; value: string }
   | { kind: 'click'; value: Locator }
   | { kind: 'fill'; value: Record<string, string> }
   | { kind: 'select'; value: Record<string, string> }
   | { kind: 'consent'; value: 'accept' | 'reject' | 'none' | 'withdraw' }
-  | { kind: 'wait'; value: number | { selector: Locator } }
+  | { kind: 'wait'; value: number | { selector: Locator } | { url: UrlMatcher } }
   | { kind: 'addToCart'; value: string }
   | { kind: 'evaluate'; value: string }
   | { kind: 'checkpoint'; value: string }
-  | { kind: 'handoff'; value: string };
+  | { kind: 'handoff'; value: string; until?: Condition; settle?: number; timeout?: number };
 
 /** `label` is the written label, or the default: the checkpoint's own name, else the kind and the step's index. */
 export type Step = StepBody & { label: string; line: number };
@@ -275,35 +281,73 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       fail([...path, kind], 'must be a non-empty string');
       return undefined;
     };
-    const locator = (): Locator | undefined => {
-      if (typeof value === 'string' && value) return value;
-      if (!isMap(value)) {
-        fail([...path, kind], 'must be a non-empty selector or a mapping with role and name, or any');
+    const locator = (v: unknown = value, at: Path = [...path, kind]): Locator | undefined => {
+      if (typeof v === 'string' && v) return v;
+      if (!isMap(v)) {
+        fail(at, 'must be a non-empty selector or a mapping with role and name, or any');
         return undefined;
       }
-      const keys = Object.keys(value);
+      const keys = Object.keys(v);
       if (keys.includes('any')) {
-        const list = value.any;
-        if (keys.length > 1) fail([...path, kind], 'any cannot be combined with other keys');
+        const list = v.any;
+        if (keys.length > 1) fail(at, 'any cannot be combined with other keys');
         else if (!Array.isArray(list) || list.length === 0 || !list.every((x) => typeof x === 'string' && x !== '')) {
-          fail([...path, kind, 'any'], 'must be a non-empty list of selectors');
+          fail([...at, 'any'], 'must be a non-empty list of selectors');
         } else return { any: list as string[] };
         return undefined;
       }
       const unknown = keys.find((k) => !['role', 'name', 'exact'].includes(k));
-      if (unknown !== undefined) fail([...path, kind, unknown], 'unknown key, expected role, name, exact or any');
-      else if (typeof value.role !== 'string' || !/^[a-z]+$/.test(value.role)) fail([...path, kind, 'role'], 'must be a role name such as button or radio');
-      else if (value.name !== undefined && (typeof value.name !== 'string' || value.name === '')) fail([...path, kind, 'name'], 'must be a non-empty string');
-      else if (value.exact !== undefined && typeof value.exact !== 'boolean') fail([...path, kind, 'exact'], 'must be true or false');
-      else if (value.exact !== undefined && value.name === undefined) fail([...path, kind, 'exact'], 'needs a name');
+      if (unknown !== undefined) fail([...at, unknown], 'unknown key, expected role, name, exact or any');
+      else if (typeof v.role !== 'string' || !/^[a-z]+$/.test(v.role)) fail([...at, 'role'], 'must be a role name such as button or radio');
+      else if (v.name !== undefined && (typeof v.name !== 'string' || v.name === '')) fail([...at, 'name'], 'must be a non-empty string');
+      else if (v.exact !== undefined && typeof v.exact !== 'boolean') fail([...at, 'exact'], 'must be true or false');
+      else if (v.exact !== undefined && v.name === undefined) fail([...at, 'exact'], 'needs a name');
       else {
         return {
-          role: value.role,
-          ...(value.name !== undefined ? { name: value.name as string } : {}),
-          ...(value.exact !== undefined ? { exact: value.exact as boolean } : {}),
+          role: v.role,
+          ...(v.name !== undefined ? { name: v.name as string } : {}),
+          ...(v.exact !== undefined ? { exact: v.exact as boolean } : {}),
         };
       }
       return undefined;
+    };
+    const urlMatcher = (v: unknown, at: Path): UrlMatcher | undefined => {
+      if (typeof v === 'string' && v) return { glob: v };
+      if (isMap(v) && Object.keys(v).length === 1 && 'matches' in v) {
+        if (typeof v.matches !== 'string' || !v.matches) fail([...at, 'matches'], 'must be a non-empty regular expression');
+        else
+          try {
+            new RegExp(v.matches);
+            return { matches: v.matches };
+          } catch {
+            fail([...at, 'matches'], `"${v.matches}" is not a valid regular expression`);
+          }
+        return undefined;
+      }
+      fail(at, 'must be a path glob such as "/thank-you*" or a mapping with matches');
+      return undefined;
+    };
+    const condition = (v: unknown, at: Path): Condition | undefined => {
+      if (!isMap(v)) {
+        fail(at, 'must be a mapping with url, or a locator (role and name, any, or selector)');
+        return undefined;
+      }
+      if ('url' in v) {
+        if (Object.keys(v).length > 1) fail(at, 'url cannot be combined with other keys');
+        else {
+          const url = urlMatcher(v.url, [...at, 'url']);
+          if (url) return { url };
+        }
+        return undefined;
+      }
+      if ('selector' in v) {
+        if (Object.keys(v).length > 1) fail(at, 'selector cannot be combined with other keys');
+        else if (typeof v.selector !== 'string' || !v.selector) fail([...at, 'selector'], 'must be a non-empty selector');
+        else return { locator: v.selector };
+        return undefined;
+      }
+      const l = locator(v, at);
+      return l === undefined ? undefined : { locator: l };
     };
     switch (kind) {
       case 'visit': {
@@ -321,10 +365,42 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       }
       case 'addToCart':
       case 'evaluate':
-      case 'checkpoint':
-      case 'handoff': {
+      case 'checkpoint': {
         const v = str();
         if (v !== undefined) add({ kind, value: v });
+        return;
+      }
+      case 'handoff': {
+        if (!isMap(value)) {
+          const v = str();
+          if (v !== undefined) add({ kind, value: v });
+          return;
+        }
+        const at = [...path, kind];
+        const unknown = Object.keys(value).find((k) => !['text', 'until', 'settle', 'timeout'].includes(k));
+        if (unknown !== undefined) {
+          fail([...at, unknown], 'unknown key, expected text, until, settle or timeout');
+          return;
+        }
+        const errors = issues.length;
+        if (typeof value.text !== 'string' || !value.text) fail([...at, 'text'], 'must be a non-empty string');
+        const until = value.until === undefined ? undefined : condition(value.until, [...at, 'until']);
+        const duration = (key: 'settle' | 'timeout') => {
+          if (value[key] === undefined) return undefined;
+          const ms = parseDuration(value[key]);
+          if (ms === undefined) fail([...at, key], 'must be a duration such as 4s, 500ms or 10m');
+          return ms;
+        };
+        const settle = duration('settle');
+        const timeout = duration('timeout');
+        if (value.settle !== undefined && value.until === undefined) fail([...at, 'settle'], 'needs until');
+        if (issues.length > errors) return;
+        add({
+          kind,
+          value: value.text as string,
+          ...(until ? { until, settle: settle ?? 5000 } : {}),
+          ...(timeout !== undefined ? { timeout } : {}),
+        });
         return;
       }
       case 'select': {
@@ -367,7 +443,13 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         if (ms !== undefined) add({ kind, value: ms });
         else if (typeof value === 'string' && /^\s*\d/.test(value)) fail([...path, kind], `"${value}" is not a duration such as 4s, 500ms or 2m`);
         else if (typeof value === 'string' && value.trim()) add({ kind, value: { selector: value } });
-        else if (isMap(value)) {
+        else if (isMap(value) && 'url' in value) {
+          if (Object.keys(value).length > 1) fail([...path, kind], 'url cannot be combined with other keys');
+          else {
+            const url = urlMatcher(value.url, [...path, kind, 'url']);
+            if (url) add({ kind, value: { url } });
+          }
+        } else if (isMap(value)) {
           const v = locator();
           if (v !== undefined) add({ kind, value: { selector: v } });
         } else fail([...path, kind], 'must be a duration such as 4s, 500ms or 2m, a selector, or a locator mapping');
