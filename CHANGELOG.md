@@ -20,6 +20,7 @@
 - Docs: design §8.5 says what is visible of a server container and what is not. `expectedTags` is stored and not evaluated. (#358)
 
 <!-- H07 -->
+- Docs: design §5.3 now has the measured rate of the missed redirect hop and its cause. Playwright's request interception drops the hop, so it can still go unflagged in `stub` mode. It is not fixed. (#180)
 
 <!-- H08 -->
 
