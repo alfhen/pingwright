@@ -24,6 +24,8 @@
 
 <!-- H02 -->
 
+- **Report: a segment with an early hit, a granted hit and a denied hit shows `mixed`.** It showed `early` and hid the denied hit.
+
 <!-- H04 -->
 
 - **Fixed.** `pingwright report` on a suite with a malformed cell `failed` field now says it is not a suite manifest, instead of failing with a TypeError. (#506)
