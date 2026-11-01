@@ -1,4 +1,4 @@
-start: /meta-early
+start: /meta-early?em=pw-fixture@example.com
 steps:
   - wait: 1s
   - visit: /sgtm-data-tag
