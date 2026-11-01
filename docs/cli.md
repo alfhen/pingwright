@@ -278,7 +278,7 @@ Serves MCP over stdio. It is read-only: it reads run records and suite manifests
 | Tool | Returns |
 | --- | --- |
 | `list_runs` | Run ID, scenario name, site host, start time, variant and `ok`, newest first. Input: `limit`. |
-| `get_summary` | `pass`, `ok`, hit counts by vendor and event, consent epochs, flag kinds with counts, and each result as expectation, `pass` and severity. |
+| `get_summary` | `finished`, `failedStep` (the label of a step that failed, when one did), `pass` and `ok` (both null when the run did not finish), hit counts by vendor and event, consent epochs, flag kinds with counts, and each result as expectation, `pass` and severity. |
 | `get_hits` | Hits with ID, vendor, event, epoch label, consent state, which identifiers are present, parameter names and step label. Filters: `vendor`, `event`, `epoch`, `limit`. |
 | `diff_runs` | The `diff` result for two runs, without the page of each hit. |
 | `get_suite` | The suite manifest, with run IDs for the cells. |

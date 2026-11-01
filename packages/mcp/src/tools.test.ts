@@ -229,3 +229,53 @@ describe('ID refusal', () => {
     await expect(getSummary(dir, { runId: 'run_0000000000000000000000000S' })).rejects.toThrow(/No run/);
   });
 });
+
+describe('unfinished and large records', () => {
+  const RUN_D = 'run_00000000000000000000000004';
+  const RUN_E = 'run_00000000000000000000000005';
+  const SUITE_2 = 'suite_0000000000000000000000000C';
+  let other: string;
+
+  beforeAll(async () => {
+    other = await mkdtemp(join(tmpdir(), 'pw-mcp-'));
+    const lines = [
+      { type: 'run', id: RUN_D, recordSchemaVersion: 2, scenario: 'checkout.yml', site: 'https://shop.example.com', startedAt: 1 },
+      { type: 'step', id: 'stp_1', runId: RUN_D, index: 0, label: 'pay', startedAt: 1, endedAt: null, error: `boom ${EMAIL}` },
+    ];
+    await writeFile(join(other, `${RUN_D}.jsonl`), lines.map((l) => JSON.stringify(l) + '\n').join(''));
+    const suiteDir = join(other, SUITE_2);
+    await mkdir(suiteDir);
+    const big = { type: 'run', id: RUN_E, recordSchemaVersion: 2, scenario: 'a.yml', site: 'https://shop.example.com', startedAt: 2, expectedTags: Array.from({ length: 400 }, (_, i) => `https://example.com/gtm.js?id=GTM-PWTEST1&n=${i}`) };
+    expect(JSON.stringify(big).length).toBeGreaterThan(8192);
+    await writeFile(join(suiteDir, 'a.desktop.jsonl'), JSON.stringify(big) + '\n');
+    await writeFile(
+      join(suiteDir, 'suite.json'),
+      JSON.stringify({
+        suiteSchemaVersion: 1,
+        id: SUITE_2,
+        startedAt: 5,
+        site: 'https://shop.example.com',
+        variants: ['desktop'],
+        cells: [{ scenario: 'a.yml', variant: 'desktop', labels: {}, status: 'pass', exitCode: 0, record: 'a.desktop.jsonl' }],
+        diffs: [],
+        exitCode: 0,
+      }),
+    );
+  });
+
+  afterAll(async () => {
+    await rm(other, { recursive: true, force: true });
+  });
+
+  test('a run with a failed step and no results is not reported as passing', async () => {
+    const result = await getSummary(other, { runId: RUN_D });
+    expect(result).toMatchObject({ finished: false, failedStep: 'pay', pass: null, ok: null, results: [] });
+    noValues(result);
+    expect((await listRuns(other)).runs.find((r) => r.runId === RUN_D)?.ok).toBeNull();
+  });
+
+  test('a suite run whose first line is larger than one read is still found', async () => {
+    expect((await getSuite(other, { suiteId: SUITE_2 })).cells[0]!.runId).toBe(RUN_E);
+    expect((await listRuns(other)).runs.map((r) => r.runId)).toContain(RUN_E);
+  });
+});

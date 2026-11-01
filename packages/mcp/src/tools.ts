@@ -40,10 +40,18 @@ async function dirEntries(dir: string) {
 async function recordRunId(path: string): Promise<string | null> {
   const handle = await open(path, 'r');
   try {
-    const buffer = Buffer.alloc(4096);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    const line = buffer.toString('utf8', 0, bytesRead).split('\n')[0]!;
-    const id = (JSON.parse(line) as { id?: unknown }).id;
+    const chunks: Buffer[] = [];
+    const chunk = Buffer.alloc(8192);
+    let position = 0;
+    for (;;) {
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, position);
+      if (bytesRead === 0) break;
+      const newline = chunk.subarray(0, bytesRead).indexOf(0x0a);
+      chunks.push(Buffer.from(chunk.subarray(0, newline === -1 ? bytesRead : newline)));
+      if (newline !== -1) break;
+      position += bytesRead;
+    }
+    const id = (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { id?: unknown }).id;
     return typeof id === 'string' && RUN_ID.test(id) ? id : null;
   } catch {
     return null;
@@ -127,11 +135,15 @@ export async function getSummary(runsDir: string, input: { runId: string }) {
   }
   const flags: Record<string, number> = {};
   for (const flag of records.flags) flags[flag.kind] = (flags[flag.kind] ?? 0) + 1;
+  const failedStep = records.steps.find((s) => s.error !== undefined);
+  const finished = !failedStep && records.results.length > 0;
   return {
     schemaVersion: SCHEMA_VERSION,
     runId: records.run.id,
-    pass: records.results.every((r) => r.pass),
-    ok: records.results.every(passesGate),
+    finished,
+    ...(failedStep ? { failedStep: failedStep.label } : {}),
+    pass: finished ? records.results.every((r) => r.pass) : null,
+    ok: finished ? records.results.every(passesGate) : null,
     hits,
     epochs: records.consentEpochs.map((e) => ({ label: e.label, startT: e.startT, endT: e.endT })),
     flags,
