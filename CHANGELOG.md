@@ -26,6 +26,8 @@
 
 <!-- H04 -->
 
+- **Fixed.** `pingwright report` on a suite with a malformed cell `failed` field now says it is not a suite manifest, instead of failing with a TypeError. (#506)
+
 <!-- R01 -->
 
 ## 0.3.0

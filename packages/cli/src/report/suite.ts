@@ -118,6 +118,13 @@ export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords):
   };
 }
 
+function isFailedField(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== 'object' || value === null) return false;
+  const f = value as Record<string, unknown>;
+  return typeof f.rules === 'number' && Number.isFinite(f.rules) && f.rules >= 0 && Array.isArray(f.checks) && f.checks.every((x) => typeof x === 'string');
+}
+
 function isManifest(value: unknown): value is SuiteManifest {
   if (typeof value !== 'object' || value === null) return false;
   const m = value as Record<string, unknown>;
@@ -133,7 +140,7 @@ function isManifest(value: unknown): value is SuiteManifest {
     Array.isArray(m.cells) &&
     m.cells.every((c: unknown) => {
       const cell = c as Record<string, unknown> | null;
-      return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number';
+      return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number' && isFailedField(cell.failed);
     })
   );
 }
