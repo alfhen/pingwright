@@ -26,7 +26,7 @@ const terminal = (_text: string, signal: AbortSignal) => new Promise<void>((reso
 
 const LONG_TEXT = 'Pay the test order with the fake card on the checkout page, then wait here until the confirmation number shows up on screen';
 
-async function open(path: string, text: string, narrow = false, initScript?: string) {
+async function open(path: string, text: string, initScript?: string) {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url, headed: false, handoffOverlay: true });
   if (initScript) await recorder.context.addInitScript(initScript);
   const scenario = parseScenario(`start: ${path}\nsteps:\n  - handoff: ${JSON.stringify(text)}\n`);
@@ -36,7 +36,6 @@ async function open(path: string, text: string, narrow = false, initScript?: str
   const page = recorder.context.pages()[0]!;
   await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(path);
   await page.waitForLoadState('load');
-  if (narrow) await page.setViewportSize({ width: 390, height: 844 });
   return { recorder, page, played };
 }
 
@@ -69,7 +68,7 @@ test('a page that patches textContent, style and getRootNode never receives the 
 }, 60_000);
 
 test('a page that patches Function.prototype.call and Event.prototype.stopPropagation never sees the label or the closed root', async () => {
-  const run = await open('/handoff', 'Pay the test order', false, `(() => {
+  const run = await open('/handoff', 'Pay the test order', `(() => {
     const seen = { call: [], stop: [], str: [] };
     window.__pwSeen = seen;
     const NativeString = String;
@@ -116,6 +115,9 @@ test('a long handoff text keeps the pill inside a 390 px viewport with the Done 
   try {
     const wide = await pillBox(run.page);
     const buttonWidth = wide.width - PILL_PADDING_LEFT - PILL_GAP - LABEL_CAP - PILL_PADDING_RIGHT;
+    expect(wide.width).toBeLessThan(420);
+    expect(buttonWidth).toBeGreaterThan(40);
+    expect(buttonWidth).toBeLessThan(100);
     await run.page.setViewportSize({ width: 390, height: 844 });
     await expect.poll(async () => (await pillBox(run.page)).width, { timeout: 10_000 }).toBeLessThanOrEqual(358);
     const box = await pillBox(run.page);
