@@ -104,6 +104,7 @@ test('a page that patches Function.prototype.call and Event.prototype.stopPropag
   await run.recorder.close();
 }, 60_000);
 
+// Mirrors the pill styles in handoff-overlay.ts. Dropping only flex-shrink: 0 does not shrink the button in Chromium (min-width: auto); min-width: 0 does.
 const PILL_PADDING_LEFT = 12;
 const PILL_PADDING_RIGHT = 6;
 const PILL_GAP = 10;
