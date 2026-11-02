@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { MAX_POST_DATA, newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest } from './index.ts';
-import { bodyEntries, guardFieldName, multipartPartName, multipartParts, splitMultipart } from './fields.ts';
+import { bodyEntries, guardFieldName, looksLikeValueToken, multipartPartName, multipartParts, splitMultipart } from './fields.ts';
 import { identifierClass, identifierSignal } from './identifiers.ts';
 
 test('multipartParts splits a body into headers and bodies, and returns null without a boundary', () => {
@@ -228,4 +228,13 @@ test('splitMultipart keeps the preamble and the close delimiter out of the parts
   expect(split.preamble).toBe('pre\r\n\r\ntext\r\n');
   expect(split.epilogue).toContain('epi');
   expect(split.chunks.map((c) => c.raw).join('--B')).toBe(body);
+});
+
+test('looksLikeValueToken flags value shapes and ignores the character check', () => {
+  expect(looksLikeValueToken('a'.repeat(65))).toBe(true);
+  expect(looksLikeValueToken('0123456789abcdef0123456789abcdef')).toBe(true);
+  expect(looksLikeValueToken('1234567')).toBe(true);
+  expect(looksLikeValueToken('Z2NwLXVzLWVhc3QxOjAxSFBXVEVTVDAw')).toBe(true);
+  expect(looksLikeValueToken('about.html')).toBe(false);
+  expect(looksLikeValueToken('fake-tee')).toBe(false);
 });

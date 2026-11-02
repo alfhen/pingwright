@@ -33,6 +33,16 @@ test('a baseline holds the host only and no value, URL or ID', () => {
   for (const leak of ['pw-fixture', 'hit_', 'http://', '3000']) expect(text).not.toContain(leak);
 });
 
+test('a --by-page baseline holds no token from the page path', () => {
+  const token = 'Z2NwLXVzLWVhc3QxOjAxSFBXVEVTVDAwMDAwMDAx';
+  const run = makeRun(['page_view']);
+  run.hits[0]!.page = `http://localhost:3000/checkouts/cn/${token}`;
+  expect(JSON.stringify(run.hits)).toContain(token);
+  const text = JSON.stringify(buildBaseline(run, true));
+  expect(text).not.toContain(token);
+  expect(text).toContain('/checkouts/cn/*');
+});
+
 test('compareBaseline reports added keys as drift and counts as no drift', () => {
   const baseline = buildBaseline(makeRun(['page_view']), false);
   expect(compareBaseline(baseline, makeRun(['page_view'])).drift).toBe(false);
