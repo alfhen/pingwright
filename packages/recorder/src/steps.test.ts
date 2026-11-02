@@ -1,7 +1,7 @@
 import { createIdentity, type Request } from '@pingwright/core';
 import { parseScenario } from '@pingwright/expect';
-import { describe, expect, test } from 'vitest';
-import { isLoopbackHost, isSensitiveField } from './guard.ts';
+import { afterEach, describe, expect, test } from 'vitest';
+import { TEST_LOOPBACK_IS_HOSTED_ENV, isGuardExemptHost, isLoopbackHost, isSensitiveField } from './guard.ts';
 import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath } from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
@@ -17,6 +17,25 @@ test('only loopback hosts are loopback', () => {
   for (const host of ['example.com', 'localhost.example.com', '127.0.0.2', '10.0.0.1', '0.0.0.0', 'shop.localhost.com', '']) {
     expect(isLoopbackHost(host)).toBe(false);
   }
+});
+
+describe('the loopback-is-hosted test seam', () => {
+  afterEach(() => {
+    delete process.env[TEST_LOOPBACK_IS_HOSTED_ENV];
+  });
+
+  test('loopback hosts are exempt from the guards without the seam', () => {
+    expect(isGuardExemptHost('localhost')).toBe(true);
+    expect(isGuardExemptHost('example.com')).toBe(false);
+  });
+
+  test('with the seam only the value 1 turns loopback hosts into guarded ones, and no hosted host becomes exempt', () => {
+    process.env[TEST_LOOPBACK_IS_HOSTED_ENV] = 'true';
+    expect(isGuardExemptHost('localhost')).toBe(true);
+    process.env[TEST_LOOPBACK_IS_HOSTED_ENV] = '1';
+    for (const host of ['localhost', '127.0.0.1', '::1']) expect(isGuardExemptHost(host)).toBe(false);
+    expect(isGuardExemptHost('example.com')).toBe(false);
+  });
 });
 
 test('card and password fields are sensitive', () => {

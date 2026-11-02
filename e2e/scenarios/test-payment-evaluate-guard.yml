@@ -1,0 +1,4 @@
+start: /checkout/test-payment
+steps:
+  - evaluate: "document.querySelector(\"#card-number\").value = \"not-a-card\""
+options: { seed: 1, allowUnknownDestination: true }

@@ -19,6 +19,7 @@ export interface RunArgs {
   seed: number | undefined;
   headed: boolean;
   viewport?: Viewport;
+  allowTestPayment?: string;
   netLog: boolean;
   autoconsentRules: string[];
   gtmOverride: string | undefined;
@@ -65,6 +66,8 @@ export interface SuiteArgs {
   out: string;
   seed: number | undefined;
   withHandoff: boolean;
+  withTestPayment: boolean;
+  allowTestPayment?: string;
   viewport?: Viewport;
   autoconsentRules: string[];
   trackerList: string | undefined;
@@ -92,6 +95,8 @@ Options for suite:
   --site <url>               The site to test (required)
   --variant <name[=file]>    A GTM build to test (repeatable). "published" is the live container; name=file serves an override file. Default: published
   --with-handoff             Also run scenarios with handoff steps, last, headed
+  --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
+  --allow-test-payment <host> The host that may run test payments. It must equal the --site host and be in the test-payment-hosts.json allowlist
   --network, --out, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --json work as in run
 
 Options for run:
@@ -101,6 +106,7 @@ Options for run:
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
+  --allow-test-payment <host> Let a payment step type a provider's documented test card. The host must equal the --site host and be in the test-payment-hosts.json allowlist
   --net-log                  Capture collection requests no browser hook reports (unload sends, early sandboxed srcdoc sends) from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
@@ -122,6 +128,7 @@ Options:
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
+  --allow-test-payment <host> Let a payment step type a provider's documented test card. The host must equal the --site host and be in the test-payment-hosts.json allowlist
   --net-log                  Capture collection requests no browser hook reports (unload sends, early sandboxed srcdoc sends) from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
@@ -174,6 +181,8 @@ export function parseCli(argv: string[]): Command {
         baseline: { type: 'string' },
         variant: { type: 'string', multiple: true },
         'with-handoff': { type: 'boolean' },
+        'with-test-payment': { type: 'boolean' },
+        'allow-test-payment': { type: 'string' },
         var: { type: 'string', multiple: true },
         json: { type: 'boolean' },
         html: { type: 'string' },
@@ -252,6 +261,8 @@ export function parseCli(argv: string[]): Command {
       out: values.out ?? 'runs',
       seed,
       withHandoff: values['with-handoff'] ?? false,
+      withTestPayment: values['with-test-payment'] ?? false,
+      ...(values['allow-test-payment'] !== undefined && { allowTestPayment: values['allow-test-payment'] }),
       ...(viewport && { viewport }),
       autoconsentRules: values['autoconsent-rules'] ?? [],
       trackerList: values['tracker-list'],
@@ -259,7 +270,7 @@ export function parseCli(argv: string[]): Command {
       json: values.json ?? false,
     };
   }
-  for (const flag of ['variant', 'with-handoff'] as const) {
+  for (const flag of ['variant', 'with-handoff', 'with-test-payment'] as const) {
     if (values[flag] !== undefined) throw new UsageError(`--${flag} is not an option of run`);
   }
   return {
@@ -271,6 +282,7 @@ export function parseCli(argv: string[]): Command {
     seed,
     headed: values.headed ?? false,
     ...(viewport && { viewport }),
+    ...(values['allow-test-payment'] !== undefined && { allowTestPayment: values['allow-test-payment'] }),
     netLog: values['net-log'] ?? false,
     autoconsentRules: values['autoconsent-rules'] ?? [],
     gtmOverride: values['gtm-override'],

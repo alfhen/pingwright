@@ -80,6 +80,8 @@ export interface Run {
   variant?: string;
   /** The viewport that was asked for. Absent means the Playwright default. */
   viewport?: { width: number; height: number };
+  /** Set when `PINGWRIGHT_TEST_LOOPBACK_IS_HOSTED` made the `fill`, `select` and `evaluate` guards treat loopback hosts as hosted. */
+  testLoopbackHosted?: true;
 }
 
 export interface Step {
@@ -96,6 +98,8 @@ export interface Step {
   handoffEnd?: 'done' | 'enter' | 'until' | 'timeout';
   /** Selectors of `optional` fill entries whose field was not on the page. Never values. */
   skippedFields?: string[];
+  /** Set on a `payment` step once it typed a provider's documented test card. Never the values. */
+  payment?: { provider: string; mode: 'test' };
   /** Why the step failed. Absent when it passed. */
   error?: string;
 }

@@ -3,9 +3,10 @@ import { basename, extname, join } from 'node:path';
 import { readRun, ulid } from '@pingwright/core';
 import type { TrackerEntry } from '@pingwright/decoders';
 import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
-import { GtmOverrideError, hasHandoff, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput } from '@pingwright/recorder';
+import { GtmOverrideError, hasHandoff, hasPayment, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@pingwright/recorder';
 import type { Network, SuiteArgs } from './args.ts';
-import { executeRun, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, type Io, type RunOutcome, type RunSpec } from './run.ts';
+import { checkTestPaymentGates } from './test-payment-hosts.ts';
+import { executeRun, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';
 
 export type CellStatus = 'pass' | 'warn' | 'fail' | 'error' | 'skipped';
 
@@ -50,6 +51,7 @@ interface LoadedScenario {
   name: string;
   parsed: Scenario;
   handoff: boolean;
+  payment: boolean;
 }
 
 const SCENARIO_EXTENSIONS = new Set(['.yml', '.yaml']);
@@ -144,7 +146,7 @@ async function scan(dir: string, trackers: TrackerEntry[], io: Io): Promise<Load
     try {
       const parsed = parseScenario(await readFile(join(dir, file), 'utf8'), trackers.map((t) => t.vendor));
       for (const warning of parsed.warnings) io.stderr(`Warning: ${file}: ${warning}\n`);
-      loaded.push({ name, parsed, handoff: hasHandoff(parsed) });
+      loaded.push({ name, parsed, handoff: hasHandoff(parsed), payment: hasPayment(parsed) });
     } catch (error) {
       if (!(error instanceof ScenarioError)) throw error;
       problems.push(`${file} is not a valid scenario:\n${error.issues.map((i) => `    ${i}`).join('\n')}`);
@@ -236,6 +238,19 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   const overrides = await readOverrides(args, io);
   if (!overrides) return 2;
   warnTestGtmOrigin(io);
+  warnTestLoopbackHosted(io);
+
+  const testPayments = new Map<string, TestPayment>();
+  if (args.withTestPayment && args.allowTestPayment !== undefined) {
+    for (const s of scenarios.filter((x) => x.payment)) {
+      const gates = await checkTestPaymentGates(s.parsed, args.site, args.allowTestPayment);
+      if (!gates.ok) {
+        io.stderr(`${s.name}: ${gates.error}\n`);
+        return 2;
+      }
+      if (gates.testPayment) testPayments.set(s.name, gates.testPayment);
+    }
+  }
 
   const id = `suite_${ulid()}`;
   const dir = join(args.out, id);
@@ -250,6 +265,10 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     for (const variant of variants) {
       const cell = { scenario: s.name, variant, labels: {} };
       if (s.handoff && !args.withHandoff) {
+        cells.push({ ...cell, status: 'skipped', exitCode: 0 });
+        continue;
+      }
+      if (s.payment && !testPayments.has(s.name)) {
         cells.push({ ...cell, status: 'skipped', exitCode: 0 });
         continue;
       }
@@ -268,6 +287,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
           autoconsentRules: args.autoconsentRules,
           trackers,
           gtmOverride: overrides.get(variant),
+          ...(testPayments.has(s.name) && { testPayment: testPayments.get(s.name)! }),
           variant: { name: variant, fileStem: s.name },
         },
         io,

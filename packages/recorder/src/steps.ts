@@ -3,10 +3,11 @@ import { createIdentity, hasCountryFormat, type Identity, type Request, type Ste
 import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step, type UrlMatcher } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
-import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isLoopbackHost, isSensitiveField, type FieldAttributes } from './guard.ts';
+import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isGuardExemptHost, isSensitiveField, type FieldAttributes } from './guard.ts';
 import { conditionHolds, describeCondition, formatDuration, watchCondition } from './conditions.ts';
 import { HANDOFF_WAKE_EVENT, waitForHandoff, type HandoffEnd } from './handoff-overlay.ts';
 import { resolveLocator, timeoutMessage } from './locators.ts';
+import { runPayment, type TestPayment } from './payment.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
 export type ConsentAnswer = Extract<Step, { kind: 'consent' }>['value'];
@@ -83,6 +84,8 @@ export interface PlayOptions {
   cartCheck?: CartCheck;
   /** How long an `addToCart` step waits for the cart check to pass. Default 5000. */
   cartTimeoutMs?: number;
+  /** Set by the CLI once the allow flag and the allowlist file have passed. Without it a `payment` step fails before it types. */
+  testPayment?: TestPayment;
 }
 
 export class StepError extends Error {
@@ -114,6 +117,10 @@ const HANDOFF_REMINDER = 'Use test accounts and test cards only. Never enter rea
 
 export function hasHandoff(scenario: Scenario): boolean {
   return scenario.steps.some((s) => s.kind === 'handoff');
+}
+
+export function hasPayment(scenario: Scenario): boolean {
+  return scenario.steps.some((s) => s.kind === 'payment');
 }
 
 /** An identity field name gives the run's fake value; anything else is typed as written. */
@@ -176,7 +183,7 @@ async function inspectField(page: Page, selector: string, timeout: number): Prom
     { timeout },
   );
   const sensitive = inspected.fields.some(isSensitiveField);
-  if (sensitive && !isLoopbackHost(inspected.host)) {
+  if (sensitive && !isGuardExemptHost(inspected.host)) {
     throw new Error(`${selector} is a card or password field. ${HANDOFF_REQUIRED}`);
   }
   return { field, tag: inspected.tag, sensitive };
@@ -264,7 +271,7 @@ interface PageField extends FieldAttributes {
 }
 
 function hostedFrames(page: Page): Frame[] {
-  return page.frames().filter((frame) => !isLoopbackHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));
+  return page.frames().filter((frame) => !isGuardExemptHost(new URL(frame.url() || 'about:blank', 'http://invalid.invalid').hostname));
 }
 
 /** Remembers each field's value per element, so a field the script adds or moves is not compared with another one. */
@@ -418,6 +425,9 @@ async function runStep(
       return;
     case 'consent':
       await (options.consent ?? bannerConsentHandler)(step.value, { recorder, page, timeoutMs: scenario.options.consentTimeout });
+      return;
+    case 'payment':
+      await runPayment(page, recorder, step.value, identity, options.testPayment, record, timeout, new URL(recorder.site).hostname);
       return;
     case 'handoff': {
       const print = options.print ?? ((text: string) => process.stdout.write(`${text}\n`));

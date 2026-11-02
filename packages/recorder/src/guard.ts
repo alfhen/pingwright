@@ -5,6 +5,18 @@ export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.toLowerCase());
 }
 
+export const TEST_LOOPBACK_IS_HOSTED_ENV = 'PINGWRIGHT_TEST_LOOPBACK_IS_HOSTED';
+
+/** Test seam, read from the environment only. It never makes a hosted host count as loopback. */
+export function loopbackIsHostedForTests(): boolean {
+  return process.env[TEST_LOOPBACK_IS_HOSTED_ENV] === '1';
+}
+
+/** The host the `fill`, `select` and `evaluate` guards let through to card and password fields. */
+export function isGuardExemptHost(host: string): boolean {
+  return !loopbackIsHostedForTests() && isLoopbackHost(host);
+}
+
 export interface FieldAttributes {
   autocomplete: string | null;
   name: string | null;

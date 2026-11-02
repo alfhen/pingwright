@@ -332,6 +332,32 @@ test('options.optionalTimeout is from 100ms to 30s', () => {
   expect(() => parseScenario('start: /\noptions: { optionalTimeout: 31s }')).toThrow(/100ms to 30s/);
 });
 
+test('a payment step takes a provider and one of its documented test cards', () => {
+  const s = parseScenario('start: /\nsteps:\n  - payment: { provider: shopify-bogus, card: "1" }\n  - payment: { provider: shopify-test, card: "4242 4242 4242 4242" }\n  - payment: { provider: shopify-bogus, card: 2 }\n');
+  expect(s.steps.map((x) => x.value)).toEqual([
+    { provider: 'shopify-bogus', card: '1' },
+    { provider: 'shopify-test', card: '4242424242424242' },
+    { provider: 'shopify-bogus', card: '2' },
+  ]);
+});
+
+test.each([
+  ['{ provider: shopify-bogus, card: "4242424242424242" }', 'card: is not a documented test value of shopify-bogus'],
+  ['{ provider: shopify-test, card: "1" }', 'card: is not a documented test value of shopify-test'],
+  ['{ provider: stripe, card: "1" }', 'provider: must be one of shopify-bogus, shopify-test, fixture'],
+  ['{ card: "1" }', 'provider: must be one of'],
+  ['{ provider: shopify-bogus }', 'card: is not a documented test value'],
+  ['{ provider: shopify-bogus, card: "1", cvc: "999" }', 'unknown key, expected provider or card'],
+  ['shopify-bogus', 'must be a mapping with provider and card'],
+])('a payment step %s is a scenario error', (body, message) => {
+  expect(errorOf(`start: /\nsteps:\n  - payment: ${body}\n`)).toContain(message);
+});
+
+test('a payment error does not repeat the card value', () => {
+  const text = errorOf('start: /\nsteps:\n  - payment: { provider: shopify-test, card: "4000 0000 0000 9995" }\n');
+  expect(text).not.toMatch(/4000|9995/);
+});
+
 test('options.viewport is { width, height } from 200 to 4000', () => {
   expect(parseScenario('start: /\noptions: { viewport: { width: 390, height: 844 } }').options.viewport).toEqual({ width: 390, height: 844 });
   expect(parseScenario('start: /').options.viewport).toBeUndefined();

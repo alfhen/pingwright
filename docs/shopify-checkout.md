@@ -43,6 +43,35 @@ expect:
 
 The YAML above is parsed by a unit test but never run against a store.
 
+## Unattended: a test payment
+
+On a store in test mode, a `payment` step can replace the handoff, so the run needs no person. This is for a dev store or a store with the Bogus Gateway or Shopify Payments test mode on. Pingwright types only the provider's documented test card, and only after three checks: `--allow-test-payment <host>` names the `--site` host, the host is in `~/.config/pingwright/test-payment-hosts.json`, and the page shows the provider's test mode. See the Test payments paragraph in the [CLI reference](./cli.md).
+
+```yaml
+start: /products/example-product
+steps:
+  - consent: accept
+  - addToCart: "form[action$='/cart/add'] [type=submit]"
+  - visit: /checkout
+    label: checkout
+  - fill:
+      "#email": email
+      "input[name=firstName]": firstName
+      "input[name=lastName]": lastName
+      "input[name=address1]": address1
+      "input[name=city]": city
+      "input[name=postalCode]": zip
+      "select[name=countryCode]": SE
+  - payment: { provider: shopify-bogus, card: "1" }
+  - click: { role: button, name: "Pay now" }
+  - wait: { url: "/thank-you*" }
+expect:
+  must:
+    - { vendor: ga4, event: purchase, after: checkout }
+```
+
+Wallets (Shop Pay, Google Pay, PayPal), live payment methods and 3-D Secure challenges stay handoff steps. The delivery country is set explicitly, as above.
+
 ## Fixture variant
 
 `e2e/scenarios/checkout-pattern.yml` runs the same shape against the fixture shop on loopback, where `fill` and a click on `#pay` are allowed. It uses `/checkout?pattern=1`: the fixture keeps the typed email in `sessionStorage`, and after `#pay` the thank-you page sends Meta `Purchase` with `ud[em]` set to the SHA-256 of that email. `checkout-pattern-wrong-hash.yml` types another email, so the hash does not match the run identity and the run fails. Plain `/thank-you` is unchanged.

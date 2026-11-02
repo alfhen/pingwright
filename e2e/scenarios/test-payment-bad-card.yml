@@ -1,0 +1,4 @@
+start: /checkout/test-payment
+steps:
+  - payment: { provider: fixture, card: "4000000000000002" }
+options: { seed: 1, allowUnknownDestination: true }

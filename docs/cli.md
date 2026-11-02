@@ -40,6 +40,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | `--seed <n>` | Seed for the fake identity. Overrides `options.seed`. |
 | `--headed` | Show the browser window. Scenarios with a `handoff` step are always headed. |
 | `--viewport <W>x<H>` | Sets the browser viewport in CSS pixels, such as `390x844`. Each side is an integer from 200 to 4000. Anything else, including `mobile`, exits 2. Overrides `options.viewport`. It sets the window size only: the user agent and the client hints stay desktop, so a narrow viewport does not make the browser report itself as a mobile device. A site that checks the user agent or the hints still serves its desktop tags. The record has `Run.viewport` and the report header shows `Viewport`. |
+| `--allow-test-payment <host>` | Lets a `payment` step type a payment provider's documented test card. The host must equal the `--site` host and be in the allowlist file. See Test payments. |
 | `--net-log` | Launches Chromium with `--log-net-log` and records collection requests that no browser hook reports: sends from a frame while it unloads, and early sends from a sandboxed `srcdoc` iframe while it loads. They carry `captured: "netlog"` and no body. The initiator is `unload` when the request started after a navigation request (not the first page load or its redirects) and up to 1.5 s after its response, and `netlog` otherwise. An early `srcdoc` send on a later page can still be labelled `unload`. This is a guess from timing. Needs live network, from `--network live` or the scenario's `options.network: live`: the command refuses it in `stub` mode with exit code 2, because those requests would leave the machine. The log is written to a private temporary directory, not the output directory, and removed when the run ends, including on SIGINT and SIGTERM. Off by default. See design §5.3. |
 | `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
@@ -138,6 +139,22 @@ A handoff can end by itself. Write it as a mapping:
 During a `handoff` step, requests that are not tracking hits are stored without their body and query values (`redacted: handoff`), so passwords typed by the person are not kept. For those requests the query values of the frame URL and of the `Referer` and `Origin` headers are redacted too. Later requests that are not redacted keep the page URL as it is.
 
 Payments and log-ins are handoff steps on any host other than `localhost`, `127.0.0.1` or `::1`. Filling a card or password field on another host fails the run.
+
+**Test payments.** One opt-in exception: a `payment` step may type a payment provider's documented test card on a hosted store. Log-ins are never automated.
+
+```yaml
+- payment: { provider: shopify-bogus, card: "1" }
+- click: { role: button, name: "Pay now" }
+- wait: { url: "/thank-you*" }
+```
+
+The providers are `shopify-bogus` (cards `1`, `2`, `3`), `shopify-test` (the test card numbers in Shopify's docs) and `fixture` (Pingwright's own fixture shop, loopback sites only). Any other card value is a scenario error. Expiry and CVC are fixed values from the provider's docs. The name on the card is the run's fake name. These checks all pass before anything is typed, or the run exits 2 or the step fails:
+
+1. `--allow-test-payment <host>` names the exact `--site` host. A scenario with a `payment` step and no flag, or with a flag for another host, exits 2 before the browser starts.
+2. The host is in the user-level file `$XDG_CONFIG_HOME/pingwright/test-payment-hosts.json`, or `~/.config/pingwright/test-payment-hosts.json`. It is a JSON array of exact hosts. The file must not be writable by group or others. Otherwise the run exits 2 before the browser starts.
+3. At the step, the page is on the allowed host, the provider's test-mode marker is visible, and each card frame is served from the provider's card host. Otherwise the step fails with `test mode not detected` or `card frame not found`.
+
+The step has its own code path. `fill`, `select` and `evaluate` still refuse card fields on hosted pages. From the first key until the run ends, every request that is not a tracking hit is stored without its body and query values (`redacted: handoff`), including the card submit that the later Pay click sends. No card number, expiry or CVC goes into a record, a message, the summary or the report. The step record has `payment: { provider, mode: "test" }`. The text summary prints `TEST PAYMENT: <provider> on <host>`, and `--json` has `testPayment: { provider, host }`. The gates stop mistakes. They do not stop a person who sets all three on purpose.
 
 A `host:` rule in `expect` matches the request's host with its port (`127.0.0.1:4173`) or its bare hostname (`127.0.0.1`). It is an exact, case-sensitive match on one of these forms. An IPv6 host may be written with or without brackets (`::1`, `[::1]`, `[::1]:4173`). `ids.hashes` matches a hit with any hashed ID present, and `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` read one hashed parameter. Any other name under `ids.hashes` is a scenario error. A `possibleRealData` failure lists the first five findings and a count of the rest. Each finding names where the value was found: the hit parameter path (for example `user_data.country`), `the URL` or `the body`. A path segment that looks like a value prints as `(other)`. A finding never holds the value.
 
@@ -263,6 +280,8 @@ pingwright suite scenarios/ --site https://staging.example.com \
 | `--site <url>` | The site to test. Required. |
 | `--variant <name[=file]>` | A GTM build to test. Can be repeated. `published` means no override and takes no file. `name=file` serves an override file in the `--gtm-override` format. The name matches `^[a-z0-9][a-z0-9_-]*$`, and a name given twice exits 2. Default: `published`. |
 | `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
+| `--with-test-payment` | Also runs scenarios that have a `payment` step. It needs `--allow-test-payment <host>` too, as in `run`. Without both they are `SKIPPED`, which counts as a pass. With both, a failed gate exits 2 before any run. |
+| `--allow-test-payment <host>` | As in `run`. |
 | `--network`, `--out`, `--seed`, `--viewport`, `--var`, `--tracker-list`, `--autoconsent-rules`, `--json` | As in `run`. `--gtm-override`, `--headed` and `--net-log` are not options of `suite`. A `--var` that no scenario declares exits 2. |
 
 The runs go one after another, with one browser at a time. The variants of one scenario use the same seed, so they have the same fake identity. Output goes to `<out>/suite_<id>/`: one record per run, named `<scenario>.<variant>.jsonl` (each has `Run.variant` set), and the manifest `suite.json`. The manifest has the site origin, the variants, one cell per scenario and variant with its status, exit code and record file name, the failed rule count and the failed built-in check names on a failed or warned cell, and the diff counts. It holds no path, no query value, no override file path and no run message.
@@ -330,7 +349,7 @@ Prints the version.
 | --- | --- |
 | 0 | Every expectation and built-in check passed, or failed only as a `warn` check. |
 | 1 | At least one expectation or built-in check failed, or `--baseline` found drift. |
-| 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `pingwright install-browser`. |
+| 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, a `payment` step without `--allow-test-payment <host>` for the `--site` host or without that host in the allowlist file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `pingwright install-browser`. |
 
 The JSONL file is still written when a step fails, up to the failing step.
 

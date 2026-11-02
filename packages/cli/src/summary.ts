@@ -24,6 +24,8 @@ export interface Summary {
   /** Optional fill entries that were skipped because the field was not on the page. */
   skippedFields?: { step: string; selector: string }[];
   results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; note?: ResultNote; evidence: string[] }[];
+  /** Set when a payment step typed a provider's documented test card. Names only. */
+  testPayment?: { provider: string; host: string };
   /** Set when the run was compared with a baseline. */
   baseline?: BaselineSummary;
 }
@@ -49,7 +51,13 @@ function stateName(state: RunRecords['consentEpochs'][number]['state']): string 
   return known.every((v) => v === known[0]) ? known[0]! : 'mixed';
 }
 
+function testPaymentOf(records: RunRecords): Summary['testPayment'] {
+  const payment = (records.steps ?? []).find((s) => s.payment)?.payment;
+  return payment && { provider: payment.provider, host: new URL(records.run.site).hostname };
+}
+
 export function buildSummary(records: RunRecords, results: Result[], path: string): Summary {
+  const testPayment = testPaymentOf(records);
   return {
     runId: records.run.id,
     path,
@@ -58,6 +66,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     hits: countHits(records.hits),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
+    ...(testPayment && { testPayment }),
     skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
     results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, ...(r.note && { note: r.note }), evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
@@ -129,6 +138,7 @@ export function formatDuration(ms: number): string {
 
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
+  if (summary.testPayment) lines.push(`TEST PAYMENT: ${summary.testPayment.provider} on ${summary.testPayment.host}`);
   lines.push('Hits');
   const vendors = Object.entries(summary.hits);
   if (vendors.length === 0) lines.push('  none');
