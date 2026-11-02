@@ -974,7 +974,7 @@ function pathSegments(url: string): string[] {
   }
 }
 
-const BINARY_CONTENT_TYPE = /^(?:application\/(?:octet-stream|gzip|x-gzip|zip|zlib|x-protobuf|protobuf|grpc|msgpack|x-msgpack)|image\/|audio\/|video\/)/i;
+const BINARY_CONTENT_TYPE = /^(?:application\/(?:octet-stream|gzip|x-gzip|zip|zlib|x-protobuf|protobuf|grpc|msgpack|x-msgpack)|image\/(?!svg\+xml)[^;\s]+|audio\/[^;\s]+|video\/[^;\s]+)\s*(?:;|$)/i;
 const BINARY_SHARE = 0.1;
 const BINARY_MIN_LENGTH = 16;
 

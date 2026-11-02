@@ -197,6 +197,13 @@ test('possibleRealData skips a binary content-type and a non-identity content-en
   expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'Content-Encoding': 'br' })], [], identity)).toHaveLength(0);
 });
 
+test('possibleRealData still scans text subtypes that share a binary prefix', () => {
+  for (const type of ['application/grpc-web-text', 'application/grpc-web+json', 'image/svg+xml']) {
+    expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-type': type })], [], identity)).toHaveLength(1);
+  }
+  expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-type': 'image/png; x=1' })], [], identity)).toHaveLength(0);
+});
+
 test('possibleRealData still scans a plain body and the URL of a compressed request', () => {
   const plain = findForeignData([withHeaders('a=1&email=visitor@other-person.example', { 'content-type': 'text/plain' })], [], identity);
   expect(plain[0]!.detail).toMatch(/, in the body$/);
