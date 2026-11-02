@@ -9,13 +9,13 @@ const CARD = '4242424242424242';
 const CARD_SPACED = '4242 4242 4242 4242';
 const EMAIL = 'pw-fixture@example.com';
 const EMAIL_HASH = createHash('sha256').update(EMAIL).digest('hex');
-const SEAM = 'PINGWRIGHT_TEST_LOOPBACK_IS_HOSTED';
+const SEAM = 'TAGREEVE_TEST_LOOPBACK_IS_HOSTED';
 const HANDOFF_REQUIRED = 'Payments and log-ins must be handoff steps';
 
 async function config(hosts: unknown, mode = 0o600): Promise<Record<string, string>> {
   const root = await mkdtemp(join(tmpdir(), 'pw-e2e-xdg-'));
-  await mkdir(join(root, 'pingwright'));
-  const file = join(root, 'pingwright', 'test-payment-hosts.json');
+  await mkdir(join(root, 'tagreeve'));
+  const file = join(root, 'tagreeve', 'test-payment-hosts.json');
   await writeFile(file, JSON.stringify(hosts));
   await chmod(file, mode);
   return { XDG_CONFIG_HOME: root, [SEAM]: '1' };

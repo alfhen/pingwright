@@ -1,8 +1,8 @@
 {
-  "name": "@pingwright/decoders",
+  "name": "@tagreeve/decoders",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@pingwright/core": "workspace:*" }
+  "dependencies": { "@tagreeve/core": "workspace:*" }
 }

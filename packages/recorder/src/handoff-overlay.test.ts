@@ -238,7 +238,7 @@ function runOverlay() {
     pending,
     intervals,
     removed,
-    wake: () => listeners.get('pingwright-handoff-wake')!(),
+    wake: () => listeners.get('tagreeve-handoff-wake')!(),
     tick: () => [...intervals.values()].forEach((fn) => fn()),
   };
 }

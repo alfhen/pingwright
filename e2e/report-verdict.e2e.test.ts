@@ -64,7 +64,7 @@ test('the verdict names leaking vendors by their plain name', () => {
 test('timeline rows read Name (key) and the title says what was tested', () => {
   expect(html).toContain('<th scope="row">server container (sgtm)</th>');
   expect(html).toContain('<th scope="row">Google Analytics 4 (ga4)</th>');
-  const title = new RegExp(`<title>Pingwright suite: published on [^,<]+:\\d+, \\d{4}-\\d{2}-\\d{2}</title>`);
+  const title = new RegExp(`<title>Tagreeve suite: published on [^,<]+:\\d+, \\d{4}-\\d{2}-\\d{2}</title>`);
   expect(html).toMatch(title);
   expect(html).not.toMatch(/<h1>Suite /);
   expect(html).toMatch(/<dt>Suite<\/dt><dd>suite_/);

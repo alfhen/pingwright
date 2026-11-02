@@ -1,7 +1,7 @@
 (function () {
   var href = location.href;
   // Simple requests only: this opaque-origin frame cannot pass a CORS preflight.
-  fetch('https://collector.pingwright.invalid/report', {
+  fetch('https://collector.tagreeve.invalid/report', {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'content-type': 'text/plain' },

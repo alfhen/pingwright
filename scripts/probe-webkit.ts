@@ -5,7 +5,7 @@ import { chromium, webkit, type BrowserContext, type BrowserType } from 'playwri
 import { ConsentDriver } from '../packages/consent/src/index.ts';
 import { startFixtureSite } from '../fixtures/site/src/index.ts';
 
-const COLLECTOR = 'https://collector.pingwright.invalid';
+const COLLECTOR = 'https://collector.tagreeve.invalid';
 const RUNS = 20;
 const DAY = 86_400;
 const ITP_CAP_DAYS = 7;
@@ -144,11 +144,11 @@ async function main() {
   await itpContext.close();
 
   const hostContext = await fresh();
-  await hostContext.route('https://shop.pingwright.test/**', (route) =>
+  await hostContext.route('https://shop.tagreeve.test/**', (route) =>
     route.fulfill({ status: 200, contentType: 'text/html', body: html(`<script>${setCookie}</script>`) }),
   );
   const hostPage = await hostContext.newPage();
-  await hostPage.goto('https://shop.pingwright.test/');
+  await hostPage.goto('https://shop.tagreeve.test/');
   const hostCookie = (await hostContext.cookies()).find((c) => c.name === 'pw_probe');
   out.cookieNonLoopbackHost = hostCookie ? { expiresInDays: days(hostCookie) } : 'not stored';
   const hostDays = hostCookie ? days(hostCookie) : null;

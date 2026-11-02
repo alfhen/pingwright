@@ -9,7 +9,7 @@ import { RunWriter, readRun, runFilePath } from './store.ts';
 
 let dir: string;
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'pingwright-store-'));
+  dir = await mkdtemp(join(tmpdir(), 'tagreeve-store-'));
 });
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });

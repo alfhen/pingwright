@@ -4,7 +4,7 @@ import {
   nodeNow,
   pageNowExpression,
   type CaptureCoverage,
-} from '@pingwright/core';
+} from '@tagreeve/core';
 import type { BrowserContext } from 'playwright';
 import type { CollectorHandler } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
@@ -22,7 +22,7 @@ function selfTestPage(sources: Record<'page' | 'iframe' | 'dedicatedWorker', str
   const iframeScript = `addEventListener('load', () => setTimeout(() => { ${repeat(beacon(sources.iframe))} }, 100));`;
   // sendBeacon does not exist in workers.
   const workerScript = `const send = () => fetch('${COLLECTOR_ORIGIN}/report', { method: 'POST', mode: 'no-cors', body: JSON.stringify({ source: '${sources.dedicatedWorker}' }) }); send(); setInterval(send, ${RESEND_MS});`;
-  return `<!doctype html><meta charset="utf-8"><title>Pingwright self-test</title>
+  return `<!doctype html><meta charset="utf-8"><title>Tagreeve self-test</title>
 <script>
 ${repeat(beacon(sources.page))}
 new Worker(URL.createObjectURL(new Blob([${JSON.stringify(workerScript)}], { type: 'text/javascript' })));

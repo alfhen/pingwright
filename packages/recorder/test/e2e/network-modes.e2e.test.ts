@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { decodeRequest } from '@pingwright/decoders';
+import { decodeRequest } from '@tagreeve/decoders';
 import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts';
 
 let server: Server;
@@ -66,7 +66,7 @@ function page(path: string): string | undefined {
     case '/redirect-final':
       return `<script>fetch('/redirect-plain').then((r) => { fetch('/seen?' + encodeURIComponent(r.url + '|' + r.redirected)); });</script>`;
     case '/collector-get':
-      return `<script>new Image().src = 'https://collector.pingwright.invalid/pixel.gif?source=get-pixel';</script>`;
+      return `<script>new Image().src = 'https://collector.tagreeve.invalid/pixel.gif?source=get-pixel';</script>`;
     case '/frame-consent':
       return `<script>
         window.dataLayer = window.dataLayer || [];

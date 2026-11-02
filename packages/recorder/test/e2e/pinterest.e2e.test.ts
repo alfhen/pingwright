@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { evaluate, parseScenario } from '@pingwright/expect';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { evaluate, parseScenario } from '@tagreeve/expect';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { recordScenario } from '../../src/index.ts';
 

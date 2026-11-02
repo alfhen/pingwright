@@ -151,7 +151,7 @@ export function runHeader(h: ReportModel['header']): [string, string][] {
     ['Started', h.startedAt],
     ['Network mode', h.networkMode],
     ['Site host', h.host],
-    ['Pingwright', h.pingwrightVersion],
+    ['Tagreeve', h.pingwrightVersion],
     ['Record schema', String(h.schemaVersion)],
   ];
   if (h.viewport) header.splice(3, 0, ['Viewport', h.viewport]);
@@ -183,7 +183,7 @@ export function page(body: string, title: string): string {
 <body>
 <main>
 ${body}
-<p class="caveat">Names and counts only. A mark describes what Pingwright recorded. It is not a statement of legal compliance.</p>
+<p class="caveat">Names and counts only. A mark describes what Tagreeve recorded. It is not a statement of legal compliance.</p>
 </main>
 </body>
 </html>
@@ -193,7 +193,7 @@ ${body}
 const dayOf = (iso: string): string => iso.slice(0, 10);
 
 export function runTitle(h: ReportModel['header']): string {
-  return `Pingwright run: ${h.scenario}${h.host ? ` on ${h.host}` : ''}, ${dayOf(h.startedAt)}`;
+  return `Tagreeve run: ${h.scenario}${h.host ? ` on ${h.host}` : ''}, ${dayOf(h.startedAt)}`;
 }
 
 export function renderReport(model: ReportModel): string {

@@ -4,8 +4,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { newId, type Request, type Step } from '@pingwright/core';
-import { decodeRequest, trackerList } from '@pingwright/decoders';
+import { newId, type Request, type Step } from '@tagreeve/core';
+import { decodeRequest, trackerList } from '@tagreeve/decoders';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NavigationWindow, type NetLogRequest } from './netlog.ts';
 
 const constants = {
@@ -17,10 +17,10 @@ const constants = {
 const ev = (type: number, id: number, time: number, params?: Record<string, unknown>) => ({ type, time: String(time), source: { id }, params });
 
 const events = [
-  ev(1, 7, 500, { url: 'https://sgtm.pingwright.invalid/g/collect?v=2&en=add_to_cart', method: 'POST' }),
-  ev(2, 7, 501, { headers: ['Host: sgtm.pingwright.invalid', 'Content-Type: text/plain'] }),
+  ev(1, 7, 500, { url: 'https://sgtm.tagreeve.invalid/g/collect?v=2&en=add_to_cart', method: 'POST' }),
+  ev(2, 7, 501, { headers: ['Host: sgtm.tagreeve.invalid', 'Content-Type: text/plain'] }),
   ev(3, 7, 510, { headers: ['HTTP/1.1 200 OK', 'a: b'] }),
-  ev(1, 8, 600, { url: 'https://x.pingwright.invalid/p', method: 'GET' }),
+  ev(1, 8, 600, { url: 'https://x.tagreeve.invalid/p', method: 'GET' }),
   ev(4, 8, 601, { net_error: -105 }),
   ev(4, 9, 602, { net_error: -105 }),
 ];
@@ -31,17 +31,17 @@ test('reads URL, method, headers, status and network error per request', () => {
     {
       t: 1000500,
       method: 'POST',
-      url: 'https://sgtm.pingwright.invalid/g/collect?v=2&en=add_to_cart',
-      headers: { host: 'sgtm.pingwright.invalid', 'content-type': 'text/plain' },
+      url: 'https://sgtm.tagreeve.invalid/g/collect?v=2&en=add_to_cart',
+      headers: { host: 'sgtm.tagreeve.invalid', 'content-type': 'text/plain' },
       status: 200,
       failure: null,
     },
-    { t: 1000600, method: 'GET', url: 'https://x.pingwright.invalid/p', headers: {}, status: null, failure: 'net::ERR_NAME_NOT_RESOLVED' },
+    { t: 1000600, method: 'GET', url: 'https://x.tagreeve.invalid/p', headers: {}, status: null, failure: 'net::ERR_NAME_NOT_RESOLVED' },
   ]);
 });
 
 test('skips CORS preflights', () => {
-  const preflight = [ev(1, 20, 700, { url: 'https://sgtm.pingwright.invalid/g/collect', method: 'OPTIONS' }), ev(3, 20, 710, { headers: ['HTTP/1.1 204 No Content'] })];
+  const preflight = [ev(1, 20, 700, { url: 'https://sgtm.tagreeve.invalid/g/collect', method: 'OPTIONS' }), ev(3, 20, 710, { headers: ['HTTP/1.1 204 No Content'] })];
   expect(parseNetLog(JSON.stringify({ constants, events: preflight }))).toEqual([]);
 });
 

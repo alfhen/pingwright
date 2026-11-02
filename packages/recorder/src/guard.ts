@@ -5,7 +5,7 @@ export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.toLowerCase());
 }
 
-export const TEST_LOOPBACK_IS_HOSTED_ENV = 'PINGWRIGHT_TEST_LOOPBACK_IS_HOSTED';
+export const TEST_LOOPBACK_IS_HOSTED_ENV = 'TAGREEVE_TEST_LOOPBACK_IS_HOSTED';
 
 /** Test seam, read from the environment only. It never makes a hosted host count as loopback. */
 export function loopbackIsHostedForTests(): boolean {
@@ -37,7 +37,7 @@ export function isSensitiveField(field: FieldAttributes): boolean {
 
 export const HANDOFF_REQUIRED = 'Payments and log-ins must be handoff steps on any site that is not on this machine.';
 
-/** Page script that makes card and password fields refuse writes until `window.__pingwrightTrap.release()` runs. */
+/** Page script that makes card and password fields refuse writes until `window.__tagreeveTrap.release()` runs. */
 export const SENSITIVE_WRITE_TRAP = `(() => {
   const name = new RegExp(${JSON.stringify(SENSITIVE_NAME.source)}, 'i');
   const sensitive = (e) => {
@@ -81,5 +81,5 @@ export const SENSITIVE_WRITE_TRAP = `(() => {
     } });
     restores.push(() => Object.defineProperty(Attr.prototype, 'value', attrValue));
   }
-  window.__pingwrightTrap = { state, release: () => restores.forEach((r) => r()) };
+  window.__tagreeveTrap = { state, release: () => restores.forEach((r) => r()) };
 })()`;

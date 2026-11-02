@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { parseCollectorBody, parseCollectorRequest, routeCollector } from './collector.ts';
 
 test('a GET report is kept as an invalid report with its URL', () => {
-  const url = 'https://collector.pingwright.invalid/pixel.gif?source=x';
+  const url = 'https://collector.tagreeve.invalid/pixel.gif?source=x';
   expect(parseCollectorRequest('GET', url, null)).toEqual({
     parsed: { ok: false, error: 'GET request, reports must be POST' },
     body: url,
@@ -10,7 +10,7 @@ test('a GET report is kept as an invalid report with its URL', () => {
 });
 
 test('a POST report is parsed', () => {
-  expect(parseCollectorRequest('POST', 'https://collector.pingwright.invalid/r', '{"source":"a"}').parsed).toMatchObject({
+  expect(parseCollectorRequest('POST', 'https://collector.tagreeve.invalid/r', '{"source":"a"}').parsed).toMatchObject({
     ok: true,
     source: 'a',
   });
@@ -29,7 +29,7 @@ test.each([
   await routeHandler!({
     request: () => ({
       method: () => method,
-      url: () => 'https://collector.pingwright.invalid/r',
+      url: () => 'https://collector.tagreeve.invalid/r',
       postData: () => '{"source":"a"}',
       headers: () => ({}),
     }),

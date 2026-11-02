@@ -1,5 +1,5 @@
-export const UNLOAD_BINDING = '__pingwrightUnloadSend';
-export const UNLOAD_FLUSH = '__pingwrightFlushUnload';
+export const UNLOAD_BINDING = '__tagreeveUnloadSend';
+export const UNLOAD_FLUSH = '__tagreeveFlushUnload';
 
 export interface UnloadSendPayload {
   key: string;
@@ -23,7 +23,7 @@ export interface UnloadSendPayload {
  */
 export const unloadInitScript = `(() => {
   const binding = ${JSON.stringify(UNLOAD_BINDING)};
-  const STORE = '__pingwrightUnloadQueue';
+  const STORE = '__tagreeveUnloadQueue';
   let leaving = false;
   const isLeaving = () => leaving || document.visibilityState === 'hidden';
   addEventListener('pagehide', () => { leaving = true; }, true);
@@ -45,7 +45,7 @@ export const unloadInitScript = `(() => {
     if (typeof body === 'string') return { postData: body, headers: {} };
     if (body == null) return { postData: null, headers: {} };
     if (typeof FormData !== 'undefined' && body instanceof FormData) {
-      const boundary = '----pingwright' + Math.random().toString(36).slice(2);
+      const boundary = '----tagreeve' + Math.random().toString(36).slice(2);
       let text = '';
       for (const [name, value] of body) {
         const file = typeof value === 'string' ? null : value;

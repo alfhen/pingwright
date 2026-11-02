@@ -1,4 +1,4 @@
-import type { ConsentEpoch, ConsentState } from '@pingwright/core';
+import type { ConsentEpoch, ConsentState } from '@tagreeve/core';
 import { unknownConsent, type ConsentModeChange } from './consent-mode.ts';
 
 export type EpochLabel = ConsentEpoch['label'];

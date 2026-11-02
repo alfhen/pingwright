@@ -1,4 +1,4 @@
-import { newId, RunWriter, type ConsentState, type Hit, type PingwrightRecord, type RunRecords } from '@pingwright/core';
+import { newId, RunWriter, type ConsentState, type Hit, type TagreeveRecord, type RunRecords } from '@tagreeve/core';
 import { createHash } from 'node:crypto';
 import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -232,7 +232,7 @@ async function writeRecord(data: RunRecords, name: string): Promise<void> {
   const { run, truncatedAtLine, ...rest } = data;
   void run;
   void truncatedAtLine;
-  for (const record of Object.values(rest).flat() as PingwrightRecord[]) await writer.append(record);
+  for (const record of Object.values(rest).flat() as TagreeveRecord[]) await writer.append(record);
   await writer.close();
   const { rename } = await import('node:fs/promises');
   await rename(writer.path, join(dir, name));
@@ -263,7 +263,7 @@ test('a suite --out folder with one suite child reports that suite and says whic
     const capture = io();
     expect(await main(['report', parent, '--html', out], capture.io)).toBe(0);
     expect(capture.err.join('')).toContain(child);
-    expect(await readFile(out, 'utf8')).toContain('Pingwright suite: published vs workspace on shop.example.com');
+    expect(await readFile(out, 'utf8')).toContain('Tagreeve suite: published vs workspace on shop.example.com');
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
@@ -371,10 +371,10 @@ test('a failed cell with no record does not read as no leaks', () => {
 
 test('the suite title names the variants, host and date, and the run title the scenario', () => {
   const html = renderSuiteReport(buildSuiteModel(manifest, loaded));
-  const title = 'Pingwright suite: published vs workspace on shop.example.com, 2027-01-15';
+  const title = 'Tagreeve suite: published vs workspace on shop.example.com, 2027-01-15';
   expect(html).toContain(`<title>${title}</title>`);
   expect(html).toContain(`<h1>${title}</h1>`);
   const run = renderReport(buildReportModel(records('checkout <i>', 'published', ['page_view'])));
-  expect(run).toContain('<title>Pingwright run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</title>');
-  expect(run).toContain('<h1>Pingwright run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</h1>');
+  expect(run).toContain('<title>Tagreeve run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</title>');
+  expect(run).toContain('<h1>Tagreeve run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</h1>');
 });

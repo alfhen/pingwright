@@ -1,9 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import { readRun, ulid } from '@pingwright/core';
-import type { TrackerEntry } from '@pingwright/decoders';
-import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
-import { GtmOverrideError, hasHandoff, hasPayment, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@pingwright/recorder';
+import { readRun, ulid } from '@tagreeve/core';
+import type { TrackerEntry } from '@tagreeve/decoders';
+import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@tagreeve/expect';
+import { GtmOverrideError, hasHandoff, hasPayment, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
 import type { Network, SuiteArgs } from './args.ts';
 import { checkTestPaymentGates } from './test-payment-hosts.ts';
 import { executeRun, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';

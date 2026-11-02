@@ -1,4 +1,4 @@
-import { newId, type DataLayerEvent, type Hit, type Request, type Response } from '@pingwright/core';
+import { newId, type DataLayerEvent, type Hit, type Request, type Response } from '@tagreeve/core';
 import { describe, expect, test } from 'vitest';
 import { buildFlags, buildUnloadGapFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
 

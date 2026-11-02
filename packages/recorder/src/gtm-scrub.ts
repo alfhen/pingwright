@@ -1,4 +1,4 @@
-import type { RunRecords } from '@pingwright/core';
+import type { RunRecords } from '@tagreeve/core';
 
 export const REDACTED = '[redacted]';
 

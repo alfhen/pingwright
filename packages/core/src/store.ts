@@ -12,7 +12,7 @@ import type {
   Flag,
   Hit,
   InvalidReport,
-  PingwrightRecord,
+  TagreeveRecord,
   Request,
   Response,
   Result,
@@ -63,7 +63,7 @@ export class RunWriter {
     return writer;
   }
 
-  append(record: PingwrightRecord): Promise<void> {
+  append(record: TagreeveRecord): Promise<void> {
     if (this.closed) return Promise.reject(new Error('RunWriter is closed'));
     const line = JSON.stringify(record) + '\n';
     // Chained so lines never interleave; the caller still sees its own write's failure.
@@ -130,9 +130,9 @@ export async function readRun(path: string, options: ReadRunOptions = {}): Promi
     if (line.trim() === '') continue;
     // Only the last non-empty line may be cut off by a crash; a bad line followed by more records is corruption.
     if (badLine) throw new Error(`${path}:${badLine}: invalid JSON`);
-    let record: PingwrightRecord;
+    let record: TagreeveRecord;
     try {
-      record = JSON.parse(line) as PingwrightRecord;
+      record = JSON.parse(line) as TagreeveRecord;
     } catch {
       badLine = lineNo;
       continue;

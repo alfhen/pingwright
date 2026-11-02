@@ -1,4 +1,4 @@
-import { createIdentity, newId, type Flag, type Hit, type Request } from '@pingwright/core';
+import { createIdentity, newId, type Flag, type Hit, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { evaluate } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { readRun, type RunRecords } from '@pingwright/core';
-import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey } from '@pingwright/expect';
+import { readRun, type RunRecords } from '@tagreeve/core';
+import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey } from '@tagreeve/expect';
 import type { BaselineArgs } from './args.ts';
 import type { Io } from './run.ts';
 import type { BaselineSummary } from './summary.ts';
@@ -66,7 +66,7 @@ export function parseBaseline(text: string, label: string): BaselineFile {
   if (!isRecord(json) || json.baselineSchemaVersion === undefined) throw new BaselineError(`${label} is not a baseline file`);
   if (json.baselineSchemaVersion !== BASELINE_SCHEMA_VERSION) {
     const found = typeof json.baselineSchemaVersion === 'number' ? json.baselineSchemaVersion : '?';
-    throw new BaselineError(`${label} has baselineSchemaVersion ${found}, and this Pingwright reads ${BASELINE_SCHEMA_VERSION}`);
+    throw new BaselineError(`${label} has baselineSchemaVersion ${found}, and this Tagreeve reads ${BASELINE_SCHEMA_VERSION}`);
   }
   if (typeof json.scenario !== 'string' || typeof json.site !== 'string' || typeof json.byPage !== 'boolean' || !Array.isArray(json.keys) || !json.keys.every(validKey)) {
     throw new BaselineError(`${label} is not a valid baseline file`);

@@ -1,6 +1,6 @@
-import { FICTIONAL_PHONE_HINT } from '@pingwright/core';
-import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@pingwright/core';
-import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
+import { FICTIONAL_PHONE_HINT } from '@tagreeve/core';
+import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@tagreeve/core';
+import { trackerVendorKeys, vendorKeys } from '@tagreeve/decoders';
 import { LineCounter, parseDocument } from 'yaml';
 import { isHostPattern, isServerHostPattern, isSpecificServerHost } from './hosts.ts';
 import { PAYMENT_PROVIDERS, canonicalCard, findPaymentProvider } from './payment-providers.ts';

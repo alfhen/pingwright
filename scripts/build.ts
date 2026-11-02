@@ -8,15 +8,17 @@ const pkg = JSON.parse(readFileSync(path('package.json'), 'utf8')) as {
 
 const { build } = await import('esbuild');
 
-// The root package does not depend on @pingwright/*, so they are resolved from the sources.
+// The root package does not depend on @tagreeve/*, so they are resolved from the sources.
 const alias = Object.fromEntries(
-  readdirSync(path('packages')).map((name) => [`@pingwright/${name}`, path(`packages/${name}/src/index.ts`)]),
+  readdirSync(path('packages')).map((name) => [`@tagreeve/${name}`, path(`packages/${name}/src/index.ts`)]),
 );
 
 rmSync(path('dist'), { recursive: true, force: true });
 await build({
-  entryPoints: [path('packages/cli/src/bin.ts')],
-  outfile: path('dist/cli.js'),
+  entryPoints: { cli: path('packages/cli/src/bin.ts'), pingwright: path('packages/cli/src/alias-bin.ts') },
+  outdir: path('dist'),
+  splitting: true,
+  chunkNames: '[name]-[hash]',
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -27,4 +29,4 @@ await build({
 });
 mkdirSync(path('dist/rules'), { recursive: true });
 cpSync(path('packages/consent/rules/fixture-site.json'), path('dist/rules/fixture-site.json'));
-chmodSync(path('dist/cli.js'), 0o755);
+for (const file of ['cli.js', 'pingwright.js']) chmodSync(path(`dist/${file}`), 0o755);

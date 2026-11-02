@@ -4,7 +4,7 @@ import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { COLLECTOR_ORIGIN } from '../../src/index.ts';
 
-const SHOP_ORIGIN = 'https://shop.pingwright.test';
+const SHOP_ORIGIN = 'https://shop.tagreeve.test';
 
 function osToken(): string {
   switch (process.platform) {

@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseScenario } from '@pingwright/expect';
+import { parseScenario } from '@tagreeve/expect';
 import { expect, test } from 'vitest';
 import { checkTestPaymentGates, readTestPaymentHosts, testPaymentHostsPath } from './test-payment-hosts.ts';
 
@@ -12,8 +12,8 @@ const plain = parseScenario('start: /\nsteps:\n  - visit: /\n');
 async function configDir(content: string | undefined, mode = 0o600): Promise<NodeJS.ProcessEnv> {
   const root = await mkdtemp(join(tmpdir(), 'pw-tph-'));
   if (content !== undefined) {
-    await mkdir(join(root, 'pingwright'));
-    const file = join(root, 'pingwright', 'test-payment-hosts.json');
+    await mkdir(join(root, 'tagreeve'));
+    const file = join(root, 'tagreeve', 'test-payment-hosts.json');
     await writeFile(file, content);
     await chmod(file, mode);
   }
@@ -21,9 +21,9 @@ async function configDir(content: string | undefined, mode = 0o600): Promise<Nod
 }
 
 test('the file is under XDG_CONFIG_HOME, else ~/.config', () => {
-  expect(testPaymentHostsPath({ XDG_CONFIG_HOME: '/x/cfg' }, '/home/u')).toBe('/x/cfg/pingwright/test-payment-hosts.json');
-  expect(testPaymentHostsPath({}, '/home/u')).toBe('/home/u/.config/pingwright/test-payment-hosts.json');
-  expect(testPaymentHostsPath({ XDG_CONFIG_HOME: 'relative' }, '/home/u')).toBe('/home/u/.config/pingwright/test-payment-hosts.json');
+  expect(testPaymentHostsPath({ XDG_CONFIG_HOME: '/x/cfg' }, '/home/u')).toBe('/x/cfg/tagreeve/test-payment-hosts.json');
+  expect(testPaymentHostsPath({}, '/home/u')).toBe('/home/u/.config/tagreeve/test-payment-hosts.json');
+  expect(testPaymentHostsPath({ XDG_CONFIG_HOME: 'relative' }, '/home/u')).toBe('/home/u/.config/tagreeve/test-payment-hosts.json');
 });
 
 test('the allowlist reads exact hosts', async () => {

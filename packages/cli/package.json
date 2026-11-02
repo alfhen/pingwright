@@ -1,13 +1,13 @@
 {
-  "name": "@pingwright/cli",
+  "name": "@tagreeve/cli",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pingwright/core": "workspace:*",
-    "@pingwright/decoders": "workspace:*",
-    "@pingwright/expect": "workspace:*",
-    "@pingwright/recorder": "workspace:*"
+    "@tagreeve/core": "workspace:*",
+    "@tagreeve/decoders": "workspace:*",
+    "@tagreeve/expect": "workspace:*",
+    "@tagreeve/recorder": "workspace:*"
   }
 }

@@ -1,4 +1,4 @@
-import { newId, type Request } from '@pingwright/core';
+import { newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest, GA4_BODY_ONLY_IGNORE, matchesIgnoreList, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE } from './index.ts';
 

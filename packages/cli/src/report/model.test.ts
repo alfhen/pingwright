@@ -1,5 +1,5 @@
-import { newId, type ConsentEpoch, type ConsentState, type Hit, type Request, type Result, type RunRecords } from '@pingwright/core';
-import { decodeRequest } from '@pingwright/decoders';
+import { newId, type ConsentEpoch, type ConsentState, type Hit, type Request, type Result, type RunRecords } from '@tagreeve/core';
+import { decodeRequest } from '@tagreeve/decoders';
 import { describe, expect, test } from 'vitest';
 import { buildReportModel, type ReportModel } from './model.ts';
 

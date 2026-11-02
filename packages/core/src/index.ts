@@ -1,4 +1,4 @@
-export const name = '@pingwright/core';
+export const name = '@tagreeve/core';
 export * from './ids.ts';
 export * from './clock.ts';
 export * from './records.ts';

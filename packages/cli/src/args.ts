@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { parseViewportText, VIEWPORT_HINT, type Viewport } from '@pingwright/expect';
+import { parseViewportText, VIEWPORT_HINT, type Viewport } from '@tagreeve/expect';
 
 export class UsageError extends Error {
   constructor(message: string) {
@@ -81,15 +81,15 @@ const VARIANT_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
 
 export const USAGE = `Usage:
-  pingwright run <scenario.yml> --site <url> [options]
-  pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
-  pingwright baseline save <run.jsonl> <baseline.json> [--by-page]
-  pingwright report <run.jsonl | suite-dir> --html <out.html>
-  pingwright suite <dir> --site <url> [--variant published] [--variant name=override.json] [options]
-  pingwright install-browser
-  pingwright --version
+  tagreeve run <scenario.yml> --site <url> [options]
+  tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
+  tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
+  tagreeve report <run.jsonl | suite-dir> --html <out.html>
+  tagreeve suite <dir> --site <url> [--variant published] [--variant name=override.json] [options]
+  tagreeve install-browser
+  tagreeve --version
 
-Run "pingwright run --help" for the options of run.
+Run "tagreeve run --help" for the options of run.
 
 Options for suite:
   --site <url>               The site to test (required)
@@ -116,7 +116,7 @@ Options for run:
   --json                     Print a JSON summary on stdout
 `;
 
-export const RUN_USAGE = `Usage: pingwright run <scenario.yml> --site <url> [options]
+export const RUN_USAGE = `Usage: tagreeve run <scenario.yml> --site <url> [options]
 
 Plays the scenario in Chromium, records every request, checks the expectations
 and writes one JSONL record.
@@ -133,14 +133,14 @@ Options:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
-  --baseline <file>          Compare the hits with a baseline file made by "pingwright baseline save" and fail on drift
+  --baseline <file>          Compare the hits with a baseline file made by "tagreeve baseline save" and fail on drift
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
   -h, --help                 Show this help
 
 Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
 
-Scenario format: https://github.com/alfhen/pingwright/blob/main/docs/design.md#11-expectations
+Scenario format: https://github.com/alfhen/tagreeve/blob/main/docs/design.md#11-expectations
 `;
 
 export const NET_LOG_NEEDS_LIVE =

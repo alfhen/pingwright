@@ -1,4 +1,4 @@
-import { newId, RunWriter, type PingwrightRecord, type Result, type RunRecords } from '@pingwright/core';
+import { newId, RunWriter, type TagreeveRecord, type Result, type RunRecords } from '@tagreeve/core';
 import { createHash } from 'node:crypto';
 import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -227,7 +227,7 @@ test('report writes the file from a JSONL record', async () => {
   const writer = await RunWriter.create(dir, data.run);
   const { run, truncatedAtLine, ...rest } = data;
   void truncatedAtLine;
-  for (const record of Object.values(rest).flat() as PingwrightRecord[]) await writer.append(record);
+  for (const record of Object.values(rest).flat() as TagreeveRecord[]) await writer.append(record);
   await writer.close();
   const out = join(dir, 'nested', 'report.html');
   const capture = io();

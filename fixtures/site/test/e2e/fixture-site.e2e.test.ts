@@ -18,7 +18,7 @@ function chromeUserAgent(browserVersion: string, product = 'Chrome'): string {
   return `Mozilla/5.0 (${osToken()}) AppleWebKit/537.36 (KHTML, like Gecko) ${product}/${major}.0.0.0 Safari/537.36`;
 }
 
-const collectorOrigin = 'https://collector.pingwright.invalid';
+const collectorOrigin = 'https://collector.tagreeve.invalid';
 
 function isLoopback(url: URL): boolean {
   return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname);

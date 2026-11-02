@@ -1,14 +1,14 @@
 {
-  "name": "pingwright",
+  "name": "tagreeve",
   "version": "0.3.0",
   "description": "Agent-first testing for website tracking and consent.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alfhen/pingwright.git"
+    "url": "git+https://github.com/alfhen/tagreeve.git"
   },
   "bugs": {
-    "url": "https://github.com/alfhen/pingwright/issues"
+    "url": "https://github.com/alfhen/tagreeve/issues"
   },
   "type": "module",
   "engines": {
@@ -16,7 +16,8 @@
   },
   "packageManager": "pnpm@10.34.7",
   "bin": {
-    "pingwright": "dist/cli.js"
+    "tagreeve": "dist/cli.js",
+    "pingwright": "dist/pingwright.js"
   },
   "files": [
     "dist",

@@ -15,7 +15,7 @@ import {
   type HashForms,
   type Hit,
   type Identity,
-  type PingwrightRecord,
+  type TagreeveRecord,
   type Run,
   type Request,
   type Response,
@@ -24,8 +24,8 @@ import {
   type Severity,
   type Step,
   globToRegExp,
-} from '@pingwright/core';
-import { GA4_BODY_ONLY_IGNORE, guardFieldName, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@pingwright/decoders';
+} from '@tagreeve/core';
+import { GA4_BODY_ONLY_IGNORE, guardFieldName, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -43,7 +43,7 @@ const MAX_LISTED = 5;
 const MAX_NAMES = 12;
 const GOOGLE_VENDORS = new Set(['ga4', 'google-ads']);
 
-type Input = PingwrightRecord | EvalEpoch;
+type Input = TagreeveRecord | EvalEpoch;
 
 interface Context {
   hits: Hit[];
@@ -698,7 +698,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     return {
       pass: false,
       evidence: hits.map((h) => h.id),
-      message: `${several ? 'none of the hits carried any' : 'the hit carried no'} identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Pingwright.`,
+      message: `${several ? 'none of the hits carried any' : 'the hit carried no'} identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Tagreeve.`,
     };
   }
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };

@@ -1,15 +1,15 @@
 # Fixture site
 
-A fake shop for Pingwright tests. It is the private workspace package `@pingwright/fixture-site`. Nothing here is real: all IDs, names and card numbers are fake.
+A fake shop for Tagreeve tests. It is the private workspace package `@tagreeve/fixture-site`. Nothing here is real: all IDs, names and card numbers are fake.
 
 ```ts
-import { startFixtureSite } from '@pingwright/fixture-site';
+import { startFixtureSite } from '@tagreeve/fixture-site';
 const { url, sgtmUrl, thirdPartyUrl, close } = await startFixtureSite();
 ```
 
 For manual use, run `pnpm fixture` in the repo root. It prints the URLs.
 
-Opened in a normal browser, the shop sends live GA4, Google Ads, remarketing, Consent Mode and Meta `/tr` hits to Google and Meta, with fake IDs but real page URLs and client IDs. Block them first. The sandboxed pixel's POST to `https://collector.pingwright.invalid/` fails there, because only Pingwright or a `context.route` answers that origin.
+Opened in a normal browser, the shop sends live GA4, Google Ads, remarketing, Consent Mode and Meta `/tr` hits to Google and Meta, with fake IDs but real page URLs and client IDs. Block them first. The sandboxed pixel's POST to `https://collector.tagreeve.invalid/` fails there, because only Tagreeve or a `context.route` answers that origin.
 
 ## Servers
 
@@ -59,11 +59,11 @@ The choice is stored in the first-party cookie `pw_consent` (`accept` or `reject
 - `/thank-you`: GA4 `purchase` (`transaction_id` `fixture-order-0001`), Meta `Purchase`, Google Ads conversion `send_to` `AW-000000001/fake-label`.
 - Mock Stape loader, on every page, to `sgtmUrl`: `/pwstape?pk=<base64 of '/gtag/js?id=G-PWTEST0001'>` (script), `/pwstape?pk=<base64 of '/g/collect?v=2&tid=G-PWTEST0001&cid=...&en=page_view&dl=...'>`, and `/pwstape?pk=<base64 of '/data?v=2&tid=...&dtdc=<base64 JSON>'>`. The `dtdc` JSON has `page_location` and `page_hostname`.
 - Unknown destination: an image from every page to `thirdPartyUrl/unknown-pixel?x=1`.
-- Sandboxed iframe at `/web-pixels@0.0.0-fixture/sandbox/modern/` (the hash comes from the page's `?pixel=<hash>` query and defaults to `0.0.0-fixture`; the server answers any `/web-pixels@<hash>/sandbox/modern/` path, so a test can change the hash between two runs) (`sandbox="allow-scripts allow-forms"`): POSTs JSON `{source:'fixture-pixel', event:'page_viewed', href}` to `https://collector.pingwright.invalid/report`, and POSTs a GA4-style hit to `https://region1.google-analytics.com/g/collect` with `dl` set to its own sandbox URL. Both use `mode: 'no-cors'` and a simple content type, because an opaque-origin frame cannot pass a CORS preflight. The collector origin does not resolve, so a test must answer it with `context.route`.
+- Sandboxed iframe at `/web-pixels@0.0.0-fixture/sandbox/modern/` (the hash comes from the page's `?pixel=<hash>` query and defaults to `0.0.0-fixture`; the server answers any `/web-pixels@<hash>/sandbox/modern/` path, so a test can change the hash between two runs) (`sandbox="allow-scripts allow-forms"`): POSTs JSON `{source:'fixture-pixel', event:'page_viewed', href}` to `https://collector.tagreeve.invalid/report`, and POSTs a GA4-style hit to `https://region1.google-analytics.com/g/collect` with `dl` set to its own sandbox URL. Both use `mode: 'no-cors'` and a simple content type, because an opaque-origin frame cannot pass a CORS preflight. The collector origin does not resolve, so a test must answer it with `context.route`.
 
 ## Fake GTM containers
 
-A fourth server, `containerUrl` (`http://127.0.0.1:<p4>`), answers `/gtm.js?id=GTM-PWTEST1` with a small local script. It is not real GTM. Tests route `https://www.googletagmanager.com/gtm.js` to it with `context.route`. Nothing is hosted by Pingwright.
+A fourth server, `containerUrl` (`http://127.0.0.1:<p4>`), answers `/gtm.js?id=GTM-PWTEST1` with a small local script. It is not real GTM. Tests route `https://www.googletagmanager.com/gtm.js` to it with `context.route`. Nothing is hosted by Tagreeve.
 
 | Request | Answer |
 | --- | --- |
@@ -100,15 +100,15 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 ## Unload beacons page
 
-`/unload-beacons` has the banner and a sandboxed iframe (`sandbox="allow-scripts"`, `/web-pixels@0.0.0-fixture/sandbox/unload/`) that, like GA4 for a visitor who has not consented, holds an `add_to_cart` hit and flushes it in `pagehide`, as one `navigator.sendBeacon` and one `fetch` with `keepalive`, to `https://sgtm.pingwright.invalid/g/collect` (`ep.via=beacon` or `keepalive`, `gcs=G100`). The host does not resolve, so nothing leaves the machine even when stub mode does not catch the requests. `#add-to-cart` tells the frame to hold the hit. The page also loads `site.js`, so it has the usual banner, gtag and modern pixel. `/unload-beacons-bare` is the same page without `site.js`: no banner and no third-party tags, so live-mode tests send nothing off the machine.
+`/unload-beacons` has the banner and a sandboxed iframe (`sandbox="allow-scripts"`, `/web-pixels@0.0.0-fixture/sandbox/unload/`) that, like GA4 for a visitor who has not consented, holds an `add_to_cart` hit and flushes it in `pagehide`, as one `navigator.sendBeacon` and one `fetch` with `keepalive`, to `https://sgtm.tagreeve.invalid/g/collect` (`ep.via=beacon` or `keepalive`, `gcs=G100`). The host does not resolve, so nothing leaves the machine even when stub mode does not catch the requests. `#add-to-cart` tells the frame to hold the hit. The page also loads `site.js`, so it has the usual banner, gtag and modern pixel. `/unload-beacons-bare` is the same page without `site.js`: no banner and no third-party tags, so live-mode tests send nothing off the machine.
 
 ## Unload Request body page
 
-`/unload-request-body` has no banner and no tags. In `pagehide` it sends `fetch(new Request(url, { method: 'POST', body, keepalive: true }))` to `https://sgtm.pingwright.invalid/g/collect`. The body holds two GA4 events, `add_to_cart` and `view_item`, one per line.
+`/unload-request-body` has no banner and no tags. In `pagehide` it sends `fetch(new Request(url, { method: 'POST', body, keepalive: true }))` to `https://sgtm.tagreeve.invalid/g/collect`. The body holds two GA4 events, `add_to_cart` and `view_item`, one per line.
 
 ## Unload gap page
 
-`/unload-gap` has the banner and a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/gap/`). 1.8 s after it loads, the frame pushes `{event: 'consent_update'}` (no hit) and `{event: 'item_added'}`, and sends a `/data` hit named `item_added` to `https://sgtm.pingwright.invalid` at once. In `pagehide` it sends a GA4 `add_to_cart` with `sendBeacon`, which stub mode does not capture. The scenario should wait about 3 s before it navigates.
+`/unload-gap` has the banner and a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/gap/`). 1.8 s after it loads, the frame pushes `{event: 'consent_update'}` (no hit) and `{event: 'item_added'}`, and sends a `/data` hit named `item_added` to `https://sgtm.tagreeve.invalid` at once. In `pagehide` it sends a GA4 `add_to_cart` with `sendBeacon`, which stub mode does not capture. The scenario should wait about 3 s before it navigates.
 
 ## Pinterest page
 
@@ -182,4 +182,4 @@ For a stub-mode run, `/pwcookie` is a Stape loader request, so stub mode answers
 | `/checkout/test-payment` | `?marker=off` | A top page on `localhost` with a test-mode marker `#pw-test-mode`, a plain `#card-number` input on the top page, a card iframe from `paymentFrameUrl` (`/card-frame`, cross-origin) with `#cc-number`, `#cc-exp` and `#cc-csc` (`cc-*` autocomplete), and `#pay`. `#pay` asks the frame to post its card number to its own origin, then goes to `/thank-you-late`. `marker=off` leaves out `#pw-test-mode`. Loads neither banner nor tags. | None. |
 | `/viewport` | none | Pushes a dataLayer event `layout_mobile` when `innerWidth` is below 600, else `layout_desktop`, and sends a GA4 image hit with that event name. Pushes `ua_mobile: true` when the user agent contains `Mobile`. | None. |
 
-`/unload-gap` takes a `mode` switch that the gap frame reads. Without `mode` the page is as described above. `?mode=custom`: 1.8 s after load the frame pushes `custom_add`, sends a `/data` hit named `custom_add` and a GA4 `/g/collect` hit named `custom_add_ga` to `https://sgtm.pingwright.invalid`, and sends nothing in `pagehide`. `?mode=close`: the frame pushes `add_to_cart` and holds the hit until `pagehide`. The scenario does not navigate, so the hit goes out only when the page closes.
+`/unload-gap` takes a `mode` switch that the gap frame reads. Without `mode` the page is as described above. `?mode=custom`: 1.8 s after load the frame pushes `custom_add`, sends a `/data` hit named `custom_add` and a GA4 `/g/collect` hit named `custom_add_ga` to `https://sgtm.tagreeve.invalid`, and sends nothing in `pagehide`. `?mode=close`: the frame pushes `add_to_cart` and holds the hit until `pagehide`. The scenario does not navigate, so the hit goes out only when the page closes.

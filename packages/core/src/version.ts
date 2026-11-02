@@ -7,7 +7,7 @@ export function readVersion(): string {
     const file = fileURLToPath(new URL(rel, import.meta.url));
     if (!existsSync(file)) continue;
     const pkg = JSON.parse(readFileSync(file, 'utf8')) as { name?: string; version?: string };
-    if (pkg.name === 'pingwright' && pkg.version) return pkg.version;
+    if (pkg.name === 'tagreeve' && pkg.version) return pkg.version;
   }
-  throw new Error('Cannot find the pingwright package.json');
+  throw new Error('Cannot find the tagreeve package.json');
 }

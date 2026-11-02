@@ -1,5 +1,5 @@
-import type { Identity, Step as StepRecord } from '@pingwright/core';
-import { canonicalCard, findPaymentProvider, type PaymentProvider } from '@pingwright/expect';
+import type { Identity, Step as StepRecord } from '@tagreeve/core';
+import { canonicalCard, findPaymentProvider, type PaymentProvider } from '@tagreeve/expect';
 import type { Page } from 'playwright';
 import { isLoopbackHost } from './guard.ts';
 import type { Recorder } from './recorder.ts';

@@ -1,5 +1,5 @@
-import { createIdentity } from '@pingwright/core';
-import { parseScenario } from '@pingwright/expect';
+import { createIdentity } from '@tagreeve/core';
+import { parseScenario } from '@tagreeve/expect';
 import { expect, test } from 'vitest';
 import { scenarioIdentity } from './steps.ts';
 

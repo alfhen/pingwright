@@ -58,7 +58,7 @@ function runCli(name: string, extra: string[], env: Record<string, string>): Pro
   });
 }
 
-const testOrigin = () => ({ PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl });
+const testOrigin = () => ({ TAGREEVE_TEST_GTM_ORIGIN: site.containerUrl });
 const ga4 = (hits: Hit[], event: string) => hits.filter((h) => h.vendor === 'ga4' && h.event === event);
 const meta = (hits: Hit[], event: string) => hits.filter((h) => h.vendor === 'meta' && h.event === event);
 
@@ -72,7 +72,7 @@ test('without an override the published build runs, and the test origin is recor
   const { run, hits } = r.records!;
   expect(run.gtmOverride).toBeNull();
   expect(run.testGtmOrigin).toBe(site.containerUrl);
-  expect(r.stderr).toContain('PINGWRIGHT_TEST_GTM_ORIGIN');
+  expect(r.stderr).toContain('TAGREEVE_TEST_GTM_ORIGIN');
   expect(ga4(hits, 'container_event').length).toBeGreaterThan(0);
   expect(ga4(hits, 'workspace_only')).toEqual([]);
   expect(meta(hits, 'AddToCart').length).toBeGreaterThan(0);
@@ -156,9 +156,9 @@ test('a container with no version fails with the 404 message and still writes th
 
 test('a test origin that is not loopback is a hard error', async () => {
   for (const origin of ['http://127.0.0.1.example.com', 'https://127.0.0.1:4000', 'http://example.com']) {
-    const r = await runCli('gtm-direct', [], { PINGWRIGHT_TEST_GTM_ORIGIN: origin });
+    const r = await runCli('gtm-direct', [], { TAGREEVE_TEST_GTM_ORIGIN: origin });
     expect(r.code, origin).toBe(2);
-    expect(r.stderr).toContain('PINGWRIGHT_TEST_GTM_ORIGIN must be');
+    expect(r.stderr).toContain('TAGREEVE_TEST_GTM_ORIGIN must be');
     expect(r.path).toBeUndefined();
   }
 });

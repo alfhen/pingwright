@@ -1,8 +1,8 @@
 # Shopify checkout pattern
 
-A scenario shape for a Shopify store, from product page to purchase hits. It has eight steps. Payment is a `handoff`, because Pingwright never enters payment data on a hosted site (design §5.4). So this is a field-run pattern: a person must be at the machine.
+A scenario shape for a Shopify store, from product page to purchase hits. It has eight steps. Payment is a `handoff`, because Tagreeve never enters payment data on a hosted site (design §5.4). So this is a field-run pattern: a person must be at the machine.
 
-Use a test store or a store with test payments on, a test card and a test account. Pingwright's fake identity uses example.com and fictional phone numbers.
+Use a test store or a store with test payments on, a test card and a test account. Tagreeve's fake identity uses example.com and fictional phone numbers.
 
 1. Product: `start` on a product page.
 2. Add to cart: `addToCart` clicks the button and checks that the cart changed (a `/cart/add` request or an `add_to_cart` event).
@@ -45,7 +45,7 @@ The YAML above is parsed by a unit test but never run against a store.
 
 ## Unattended: a test payment
 
-On a store in test mode, a `payment` step can replace the handoff, so the run needs no person. This is for a dev store or a store with the Bogus Gateway or Shopify Payments test mode on. Pingwright types only the provider's documented test card, and only after three checks: `--allow-test-payment <host>` names the `--site` host, the host is in `~/.config/pingwright/test-payment-hosts.json`, and the page shows the provider's test mode. See the Test payments paragraph in the [CLI reference](./cli.md).
+On a store in test mode, a `payment` step can replace the handoff, so the run needs no person. This is for a dev store or a store with the Bogus Gateway or Shopify Payments test mode on. Tagreeve types only the provider's documented test card, and only after three checks: `--allow-test-payment <host>` names the `--site` host, the host is in `~/.config/tagreeve/test-payment-hosts.json`, and the page shows the provider's test mode. See the Test payments paragraph in the [CLI reference](./cli.md).
 
 ```yaml
 start: /products/example-product

@@ -2,7 +2,7 @@
   window.dataLayer = window.dataLayer || [];
   var mode = new URLSearchParams(location.search).get('mode');
   function hit(path, query) {
-    return 'https://sgtm.pingwright.invalid' + path + '?v=2&tid=G-PWTEST0001&cid=3333333333.4444444444&gcs=G100&' + query;
+    return 'https://sgtm.tagreeve.invalid' + path + '?v=2&tid=G-PWTEST0001&cid=3333333333.4444444444&gcs=G100&' + query;
   }
   function send(path, query) {
     fetch(hit(path, query), { method: 'POST', mode: 'no-cors', body: '{}' }).catch(function () {});

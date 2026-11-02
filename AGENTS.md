@@ -1,4 +1,4 @@
-# Working on Pingwright
+# Working on Tagreeve
 
 This file is for coding agents and the people who run them. It says how a change gets from an idea to `main`, and the rules every change follows.
 
@@ -9,8 +9,8 @@ The spec is [docs/design.md](docs/design.md). The current plan is the newest `do
 - **No real data.** Never put real personal data, real store data, real container IDs or secrets in the repo, an issue or a PR. Fixtures use fake identities and fake IDs only: GA4 `G-PWTEST0001`, Google Ads `AW-000000001`, Meta pixel `100000000000001`, GTM `GTM-PWTEST1` and `GTM-PWNOVER`.
 - **The `gtmAuth` value**, in any form, never appears in a record, a log line, an error message or test output.
 - **Payments and log-ins** are `handoff` steps for a person on any hosted site. Log-ins are never automated on a hosted site. One exception for payments: an opt-in `payment` step may type a payment provider's documented test card on a hosted store. It runs only when all three hold before anything is typed: the CLI flag `--allow-test-payment <host>` names the exact `--site` host, that host is in the user-level allowlist file, and the provider's test-mode marker is on the page. Only values from the provider table are typed. Loopback hosts (`localhost`, `127.0.0.1`, `::1`), such as the fixture site, may be automated through payment as before.
-- **No hosted service.** Pingwright never calls the GTM API. Each user runs their own sink.
-- **CLI only.** Pingwright is a command-line tool. There is no MCP server and no other agent interface: agents run the CLI and read its `--json` output. Agent-facing improvements go into the CLI. This changes only with the maintainer's say-so (#362).
+- **No hosted service.** Tagreeve never calls the GTM API. Each user runs their own sink.
+- **CLI only.** Tagreeve is a command-line tool. There is no MCP server and no other agent interface: agents run the CLI and read its `--json` output. Agent-facing improvements go into the CLI. This changes only with the maintainer's say-so (#362).
 - **Tests stay local.** E2E tests run only against `fixtures/site` in `stub` mode. The one exception is a `server` mode test whose pass-through host is the fixture's own loopback host. Never use a real store as an e2e target.
 - **Browser.** Use context-level hooks only (`context.route`, `context.on('request')`, `context.addInitScript`, `context.exposeBinding`). Send a normal Chrome user agent, never one containing `HeadlessChrome`. No browser flags in the default launch. `--net-log` (opt-in) adds Chromium's `--log-net-log`, and nothing else uses a CDP session or a flag. CDP auto-attach on every target was measured and does not see unload-time requests (design §5.3).
 - **Third-party code.** `@duckduckgo/autoconsent` (MPL-2.0) is an unmodified dependency. Never copy or patch its files. Tracker Radar, EasyPrivacy and Disconnect are not sources: never ship them or derive tracker entries from them. Tracker entries link to the vendor's own docs.
@@ -55,8 +55,8 @@ Open `review-minor` issues are fixed in batches between plan waves. Batches are 
 Releases are git tags with a built `dist/`, made on `main` by `scripts/release.sh <version>`. The script refuses to run unless HEAD is `origin/main`, the tree is clean and `package.json` has the same version. It makes a release commit that only the tag points at, and that is never merged to `main`. Push the tag, then check it installs:
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v<version>
-pingwright --version
+npm i -g --install-links github:alfhen/tagreeve#v<version>
+tagreeve --version
 ```
 
 Release candidates (`-rc.N`) are field-tested on a real store before the final release. That is a supervised run in `stub` mode, outside the e2e suite, with a person at every payment and log-in handoff. A field test of a test payment is supervised by a person too, on a store the maintainer put in the allowlist.

@@ -1,4 +1,4 @@
-import type { DiffResult } from '@pingwright/expect';
+import type { DiffResult } from '@tagreeve/expect';
 import { expect, test } from 'vitest';
 import { formatDiff } from './diff.ts';
 

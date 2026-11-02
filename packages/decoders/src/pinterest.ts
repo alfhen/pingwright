@@ -1,4 +1,4 @@
-import type { Hit, Request } from '@pingwright/core';
+import type { Hit, Request } from '@tagreeve/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
 import { jsonEntries, queryEntries, withFields, type FieldEntry } from './fields.ts';
 

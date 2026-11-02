@@ -1,4 +1,4 @@
-import { globToRegExp, type ConsentState, type ConsentValue } from '@pingwright/core';
+import { globToRegExp, type ConsentState, type ConsentValue } from '@tagreeve/core';
 
 export type IdentifierClass = 'analytics' | 'adsIdentity' | 'clientIdHash';
 

@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseScenario } from '@pingwright/expect';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { parseScenario } from '@tagreeve/expect';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { Page } from 'playwright';
 import { launchRecorder, playScenario, recordScenario, StepError, type Recorder } from '../../src/index.ts';
@@ -433,7 +433,7 @@ describe('handoff redaction', () => {
     const queue = (page: Page, tag: string) =>
       page.evaluate((t) => {
         const entry = { key: `key-${t}`, method: 'POST', url: `${location.origin}/api/${t}`, resourceType: 'ping', postData: `password=secret-${t}`, headers: {}, frameUrl: location.href, queuedAt: Date.now() };
-        sessionStorage.setItem('__pingwrightUnloadQueue', JSON.stringify([...JSON.parse(sessionStorage.getItem('__pingwrightUnloadQueue') ?? '[]'), entry]));
+        sessionStorage.setItem('__tagreeveUnloadQueue', JSON.stringify([...JSON.parse(sessionStorage.getItem('__tagreeveUnloadQueue') ?? '[]'), entry]));
       }, tag);
     const records = await playHandoff(
       (recorder) => queue(recorder.context.pages()[0]!, 'during'),

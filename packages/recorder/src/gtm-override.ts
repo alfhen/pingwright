@@ -1,10 +1,10 @@
-import type { GtmOverrideApplied, GtmOverrideTag, Request } from '@pingwright/core';
-import { unwrapStapeLoader } from '@pingwright/decoders';
-import { hostMatches } from '@pingwright/expect';
+import type { GtmOverrideApplied, GtmOverrideTag, Request } from '@tagreeve/core';
+import { unwrapStapeLoader } from '@tagreeve/decoders';
+import { hostMatches } from '@tagreeve/expect';
 import { getDomain } from 'tldts';
 
 export const GTM_ORIGIN = 'https://www.googletagmanager.com';
-export const TEST_GTM_ORIGIN_ENV = 'PINGWRIGHT_TEST_GTM_ORIGIN';
+export const TEST_GTM_ORIGIN_ENV = 'TAGREEVE_TEST_GTM_ORIGIN';
 
 const CONTAINER = /^GTM-[A-Z0-9]+$/;
 const AUTH = /^[A-Za-z0-9_-]+$/;

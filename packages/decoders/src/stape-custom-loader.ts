@@ -1,4 +1,4 @@
-import type { Hit, Request } from '@pingwright/core';
+import type { Hit, Request } from '@tagreeve/core';
 import { decodeBase64Text } from './base64.ts';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
 

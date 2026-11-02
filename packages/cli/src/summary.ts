@@ -1,4 +1,4 @@
-import type { Result, ResultNote, RunRecords, Severity } from '@pingwright/core';
+import type { Result, ResultNote, RunRecords, Severity } from '@tagreeve/core';
 import { NOTE_TEXT } from './report/model.ts';
 
 export interface BaselineSummary {

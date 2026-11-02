@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseScenario } from '@pingwright/expect';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { parseScenario } from '@tagreeve/expect';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import type { Page } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { HANDOFF_DONE_BINDING, HANDOFF_HOST_ID, launchRecorder, playScenario } from '../../src/index.ts';
@@ -79,7 +79,7 @@ test('the overlay makes no request and a page script cannot end the wait', async
     const done = (window as unknown as Record<string, (n?: unknown) => Promise<unknown>>)[name]!;
     await done();
     await done('guess');
-    const host = document.getElementById('pingwright-handoff')!;
+    const host = document.getElementById('tagreeve-handoff')!;
     host.click();
     host.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   }, HANDOFF_DONE_BINDING);
@@ -94,7 +94,7 @@ test('the overlay makes no request and a page script cannot end the wait', async
 test('hostile site CSS does not hide the pill or move it off screen', async () => {
   const run = await open('/handoff');
   await run.page.addStyleTag({
-    content: '#pingwright-handoff { display: none !important; left: -9999px !important; visibility: hidden !important; opacity: 0 !important }',
+    content: '#tagreeve-handoff { display: none !important; left: -9999px !important; visibility: hidden !important; opacity: 0 !important }',
   });
   const box = await pillBox(run.page);
   expect(box.x).toBeGreaterThanOrEqual(0);

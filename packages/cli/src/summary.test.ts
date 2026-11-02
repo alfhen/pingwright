@@ -1,4 +1,4 @@
-import type { Hit, Result, RunRecords } from '@pingwright/core';
+import type { Hit, Result, RunRecords } from '@tagreeve/core';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -100,7 +100,7 @@ test('main prints the version and exits 2 on a usage error', async () => {
   expect(readVersion()).toBe('0.3.0');
   out.length = 0;
   expect(await main(['run', '--help'], io)).toBe(0);
-  expect(out.join('')).toContain('Usage: pingwright run <scenario.yml>');
+  expect(out.join('')).toContain('Usage: tagreeve run <scenario.yml>');
   expect(out.join('')).not.toContain('install-browser');
   expect(await main(['run', 's.yml'], io)).toBe(2);
   expect(err.join('')).toContain('--site is required');

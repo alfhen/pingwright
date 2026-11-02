@@ -1,6 +1,6 @@
-import type { ConsentEpoch, ConsentState, Hit, Result, ResultNote, RunRecords } from '@pingwright/core';
-import { guardFieldName, identifierClass, identifierSignal } from '@pingwright/decoders';
-import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit } from '@pingwright/expect';
+import type { ConsentEpoch, ConsentState, Hit, Result, ResultNote, RunRecords } from '@tagreeve/core';
+import { guardFieldName, identifierClass, identifierSignal } from '@tagreeve/decoders';
+import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit } from '@tagreeve/expect';
 
 export type Mark = 'full' | 'ping' | 'nothing' | 'leak' | 'unchecked' | 'mixed' | 'early';
 export type EpochLabel = ConsentEpoch['label'];

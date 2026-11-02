@@ -1,6 +1,6 @@
-import { globToRegExp, newId, type DataLayerEvent, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request, type Response } from '@pingwright/core';
-import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@pingwright/decoders';
-import { findForeignData, hostMatches } from '@pingwright/expect';
+import { globToRegExp, newId, type DataLayerEvent, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request, type Response } from '@tagreeve/core';
+import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@tagreeve/decoders';
+import { findForeignData, hostMatches } from '@tagreeve/expect';
 import { getDomain } from 'tldts';
 import { isKnownVendorCollection } from './stub.ts';
 

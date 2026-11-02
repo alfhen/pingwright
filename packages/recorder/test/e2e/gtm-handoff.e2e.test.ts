@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { launchRecorder } from '../../src/index.ts';
 
@@ -23,7 +23,7 @@ afterAll(async () => {
 });
 
 test('a container page loaded during a handoff window still gets the workspace build', async () => {
-  process.env.PINGWRIGHT_TEST_GTM_ORIGIN = site.containerUrl;
+  process.env.TAGREEVE_TEST_GTM_ORIGIN = site.containerUrl;
   try {
     const recorder = await launchRecorder({
       networkMode: 'stub',
@@ -39,6 +39,6 @@ test('a container page loaded during a handoff window still gets the workspace b
     expect(records.run.gtmOverride?.applied.map((a) => a.status)).toEqual([200]);
     expect(records.hits.some((h) => h.vendor === 'ga4' && h.event === 'workspace_only')).toBe(true);
   } finally {
-    delete process.env.PINGWRIGHT_TEST_GTM_ORIGIN;
+    delete process.env.TAGREEVE_TEST_GTM_ORIGIN;
   }
 }, 60_000);

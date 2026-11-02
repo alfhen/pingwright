@@ -1,9 +1,9 @@
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readRun, type Hit, type Request, type RunRecords } from '@pingwright/core';
-import { isCollectionEndpoint, isSandboxPageUrl } from '@pingwright/decoders';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { readRun, type Hit, type Request, type RunRecords } from '@tagreeve/core';
+import { isCollectionEndpoint, isSandboxPageUrl } from '@tagreeve/decoders';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { launchRecorder, recordVisit, type RunResult } from '../../src/index.ts';
 
@@ -105,7 +105,7 @@ describe('stub mode on the fixture site', () => {
   test('the fixture pixel report is recorded and nothing is invalid', () => {
     expect(records.collectorReports.map((r) => r.source)).toContain('fixture-pixel');
     expect(records.invalidReports).toEqual([]);
-    expect(records.requests.filter((r) => r.url.includes('collector.pingwright.invalid'))).toEqual([]);
+    expect(records.requests.filter((r) => r.url.includes('collector.tagreeve.invalid'))).toEqual([]);
   });
 
   test('capture coverage lists page, iframe and worker', () => {
@@ -164,7 +164,7 @@ test('a site report with a selftest: source is stored, because the self-test pre
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   const page = await recorder.visit(`${site.url}/`);
   await page.evaluate(() =>
-    navigator.sendBeacon('https://collector.pingwright.invalid/report', JSON.stringify({ source: 'selftest:page' })),
+    navigator.sendBeacon('https://collector.tagreeve.invalid/report', JSON.stringify({ source: 'selftest:page' })),
   );
   await recorder.wait(500);
   const { records: late } = await recorder.close();

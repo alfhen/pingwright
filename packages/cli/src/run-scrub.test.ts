@@ -6,15 +6,15 @@ import type { RunArgs } from './args.ts';
 
 const auth = 'pwfake-auth-0001';
 
-vi.mock('@pingwright/expect', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@pingwright/expect')>()),
+vi.mock('@tagreeve/expect', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tagreeve/expect')>()),
   evaluate: () => [
     { type: 'result', id: 'rsl_1', runId: 'run_1', expectation: `must ga4 ${auth}`, pass: false, evidence: [`https://x.example.com/?gtm_auth=${auth}`], message: `saw ${auth}` },
   ],
 }));
 
-vi.mock('@pingwright/recorder', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@pingwright/recorder')>();
+vi.mock('@tagreeve/recorder', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tagreeve/recorder')>();
   return {
     ...actual,
     recordScenario: async (options: { outDir: string }) => {

@@ -2,11 +2,25 @@
 
 ## 0.4.0-rc.1
 
+### Pingwright is now Tagreeve
+
+The tool, the npm package, the command, the repository and the docs site have a new name. To move over:
+
+1. `npm uninstall -g pingwright`
+2. `npm i -g tagreeve@next`
+
+Do the steps in this order. The old package owns the `pingwright` command link, so installing first fails with EEXIST.
+
+- The command is `tagreeve`. The old name `pingwright` still runs the same CLI. It prints `pingwright is now tagreeve; this alias goes in 0.5.0` on stderr, and stdout and the exit code are the same.
+- The docs are at https://tagreeve.dev and the code at https://github.com/alfhen/tagreeve. GitHub redirects the old repository links.
+- Environment variables start with `TAGREEVE_`. The user config folder is `$XDG_CONFIG_HOME/tagreeve/`, else `~/.config/tagreeve/`.
+- Records and scenarios need no change. Records keep the key `pingwrightVersion`, so older records still read, and the report labels it `Tagreeve`.
+
 - A `handoff` step can end by itself: `until` (a URL or an element), `settle` and `timeout`. The step record says what ended it in `handoffEnd`. `wait` takes `{ url }` too. (#515)
 
 <!-- U05 -->
 
-- New `payment` step: types a payment provider's documented test card (`shopify-bogus`, `shopify-test`) on a hosted store. It is opt-in with three checks: `--allow-test-payment <host>` equal to the `--site` host, the host in `~/.config/pingwright/test-payment-hosts.json`, and the provider's test mode on the page. Log-ins stay handoff steps, and `fill`, `select` and `evaluate` still refuse card fields. From the first key until the run ends, non-tracking requests are redacted. The summary prints `TEST PAYMENT`. `suite` runs these scenarios only with `--with-test-payment` and `--allow-test-payment`. (#463, #529)
+- New `payment` step: types a payment provider's documented test card (`shopify-bogus`, `shopify-test`) on a hosted store. It is opt-in with three checks: `--allow-test-payment <host>` equal to the `--site` host, the host in `~/.config/tagreeve/test-payment-hosts.json`, and the provider's test mode on the page. Log-ins stay handoff steps, and `fill`, `select` and `evaluate` still refuse card fields. From the first key until the run ends, non-tracking requests are redacted. The summary prints `TEST PAYMENT`. `suite` runs these scenarios only with `--with-test-payment` and `--allow-test-payment`. (#463, #529)
 
 <!-- U04 -->
 
@@ -19,7 +33,7 @@
 - The real-phone warning says why the number looks real and names the fictional range for the country. German drama numbers get no warning. (#583)
 
 <!-- V01 -->
-- `pingwright baseline save` keeps the shape of a run as names and counts, and `run --baseline` fails with exit 1 when a key or tuple appears or disappears. A missing or invalid baseline exits 2. (#359)
+- `tagreeve baseline save` keeps the shape of a run as names and counts, and `run --baseline` fails with exit 1 when a key or tuple appears or disappears. A missing or invalid baseline exits 2. (#359)
 
 <!-- V02 -->
 
@@ -39,16 +53,16 @@
 
 <!-- H04 -->
 
-- **Fixed.** `pingwright report` on a suite with a malformed cell `failed` field now says it is not a suite manifest, instead of failing with a TypeError. (#506)
+- **Fixed.** `tagreeve report` on a suite with a malformed cell `failed` field now says it is not a suite manifest, instead of failing with a TypeError. (#506)
 
 <!-- H09 -->
 
-- **Fixed.** `pingwright report` accepts the `--out` folder of `suite`. It uses the one `suite_*` folder inside and says which on stderr. With several, the error lists them. (#581)
+- **Fixed.** `tagreeve report` accepts the `--out` folder of `suite`. It uses the one `suite_*` folder inside and says which on stderr. With several, the error lists them. (#581)
 
 <!-- H10 -->
 
 - `possibleRealData` now names where the foreign value was found: the hit parameter path, `the URL` or `the body`. It never prints the value. (#582)
-- `identity.hashesMatch` says when the hit carried no identity fields at all, and that server side matching is not visible to Pingwright. A hit with fields that do not match keeps `Not matching: <field>`. (#584)
+- `identity.hashesMatch` says when the hit carried no identity fields at all, and that server side matching is not visible to Tagreeve. A hit with fields that do not match keeps `Not matching: <field>`. (#584)
 
 <!-- R01 -->
 

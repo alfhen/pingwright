@@ -1,4 +1,4 @@
-import type { ConsentState, ConsentValue, DataLayerEvent } from '@pingwright/core';
+import type { ConsentState, ConsentValue, DataLayerEvent } from '@tagreeve/core';
 
 /**
  * A recorded dataLayer event, or any object with its `t` and `args`. Consent commands look like

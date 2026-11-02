@@ -1,4 +1,4 @@
-import { createIdentity, hashEmail, newId, type Request } from '@pingwright/core';
+import { createIdentity, hashEmail, newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { buildFlags } from './flags.ts';
 import { REDACTED, Scrubber } from './gtm-scrub.ts';

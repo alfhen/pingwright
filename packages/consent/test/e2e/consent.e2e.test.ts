@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { answerBanner, buildEpochs, consentModeChanges, installConsent, type ConsentPush } from '../../src/index.ts';
 
 function chromeUserAgent(browserVersion: string, product = 'Chrome'): string {
@@ -53,7 +53,7 @@ async function newContext(product = 'Chrome'): Promise<BrowserContext> {
     }
     return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
   });
-  await context.route('https://collector.pingwright.invalid/**', (route) =>
+  await context.route('https://collector.tagreeve.invalid/**', (route) =>
     route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }),
   );
   await context.addInitScript(recordPushes);
@@ -74,7 +74,7 @@ test('accept detects the fixture banner and accepts', async () => {
   const page = await context.newPage();
   await page.goto(site.url);
   const result = await answerBanner(page, 'accept', { timeoutMs: 10_000 });
-  expect(result).toMatchObject({ detected: true, shown: true, cmp: 'pingwright-fixture', action: 'accept', result: 'ok' });
+  expect(result).toMatchObject({ detected: true, shown: true, cmp: 'tagreeve-fixture', action: 'accept', result: 'ok' });
   expect(await storedChoice(context)).toBe('accept');
   expect(await page.locator('#pw-consent-banner').isVisible()).toBe(false);
   await context.close();
@@ -178,7 +178,7 @@ test('a rule with an eval step detects and acts', async () => {
   const page = await context.newPage();
   await page.goto(site.url);
   const result = await answerBanner(page, 'reject');
-  expect(result).toMatchObject({ detected: true, shown: true, cmp: 'pingwright-eval-test', result: 'ok' });
+  expect(result).toMatchObject({ detected: true, shown: true, cmp: 'tagreeve-eval-test', result: 'ok' });
   expect(await storedChoice(context)).toBe('reject');
   await context.close();
 });

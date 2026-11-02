@@ -39,5 +39,5 @@ test('report reads the --out folder of a suite run', async () => {
   const report = await node(['report', out, '--html', page]);
   expect(report.code, report.stderr).toBe(0);
   expect(report.stderr).toContain('suite_');
-  expect(await readFile(page, 'utf8')).toContain('Pingwright suite:');
+  expect(await readFile(page, 'utf8')).toContain('Tagreeve suite:');
 }, 300_000);

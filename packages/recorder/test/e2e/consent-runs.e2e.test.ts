@@ -1,11 +1,11 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { epochForHit, parseScenario, placeHitsInEpochs } from '@pingwright/expect';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { epochForHit, parseScenario, placeHitsInEpochs } from '@tagreeve/expect';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import type { BannerResult } from '@pingwright/consent';
-import type { ConsentValue } from '@pingwright/core';
+import type { BannerResult } from '@tagreeve/consent';
+import type { ConsentValue } from '@tagreeve/core';
 import { bannerConsentHandler, recordScenario, StepError, type ConsentHandler } from '../../src/index.ts';
 
 let site: FixtureSite;
