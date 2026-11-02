@@ -361,6 +361,17 @@ test('a move across two answers, a changed total, or a hit that did not stay is 
   expect(diffShapes([shapeKey('undecided', [t])], [shapeKey('granted', [t])], { epochOrder: ['undecided', 'granted', 'undecided'] }).drift).toBe(true);
 });
 
+test('a hit that stayed and changed consent is drift, not a move', () => {
+  const denied = tuple(1, { consent: { analytics: 'denied', gcs: 'G100' } });
+  const granted = tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } });
+  const mixed = tuple(1, { consent: { analytics: 'mixed', gcs: 'G101' } });
+  const a = [shapeKey('undecided', [{ ...denied, count: 2 }]), shapeKey('granted', [granted])];
+  const b = [shapeKey('undecided', [mixed]), shapeKey('granted', [{ ...mixed, count: 2 }])];
+  expect(mixed.ids).toEqual(denied.ids);
+  expect(mixed.consent).not.toEqual(denied.consent);
+  expect(diffShapes(a, b, order)).toMatchObject({ drift: true, moved: [] });
+});
+
 test('a moved hit that gains or loses an ID name is drift', () => {
   const plain = tuple(1);
   const granted = tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } });
