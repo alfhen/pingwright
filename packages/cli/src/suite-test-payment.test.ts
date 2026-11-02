@@ -110,24 +110,61 @@ test('a failed gate with --with-test-payment exits 2 before any run', async () =
   expect(c.err()).toContain('must name the --site host');
 });
 
-test('executeRun adds the declaration hint after "test mode not detected"', async () => {
-  const parsed = parseScenario(PAYMENT);
-  const spec = (): RunSpec =>
-    ({ parsed, scenarioName: 'a-card', network: 'stub', site: 'https://shop.example.com', out: '/nowhere', autoconsentRules: [], trackers: [], testPayment: { host: 'shop.example.com' } }) as unknown as RunSpec;
-  const lines = async () => {
-    const err: string[] = [];
-    const outcome = await executeRun(spec(), { stdout: () => undefined, stderr: (t) => void err.push(t) });
-    expect(outcome.code).toBe(2);
-    return err.join('').split('\n');
-  };
-  const hint = (await lines()).find((l) => l.startsWith('Declare it in'));
-  expect(hint).toContain('test-payment-hosts.json');
-  expect(hint).toContain('{ "host": "shop.example.com", "testMode": "fixture" }');
+const SEAM = 'TAGREEVE_TEST_LOOPBACK_IS_HOSTED';
 
-  recordFailure = 'step "payment-1": test mode not detected (the page is not on the allowed test payment host)';
-  expect((await lines()).some((l) => l.startsWith('Declare it in'))).toBe(false);
-  recordFailure = 'step "payment-1": card frame not found (number)';
-  expect((await lines()).some((l) => l.startsWith('Declare it in'))).toBe(false);
+function scenarioWith(...steps: [provider: string, card: string][]): string {
+  const lines = steps.map(([provider, card]) => `  - payment: { provider: ${provider}, card: "${card}" }\n`).join('');
+  return `start: /\nsteps:\n${lines}expect:\n  must: []\n  mustNot: []\n`;
+}
+
+const FIXTURE: [string, string] = ['fixture', '4242424242424242'];
+const TEST: [string, string] = ['shopify-test', '4242424242424242'];
+const BOGUS: [string, string] = ['shopify-bogus', '1'];
+
+async function hintFor(steps: [string, string][], host: string, failure: string, seam = false): Promise<string | undefined> {
+  const parsed = parseScenario(scenarioWith(...steps));
+  const spec = { parsed, scenarioName: 'a-card', network: 'stub', site: `https://${host}`, out: '/nowhere', autoconsentRules: [], trackers: [], testPayment: { host } } as unknown as RunSpec;
+  const before = process.env[SEAM];
+  if (seam) process.env[SEAM] = '1';
+  else delete process.env[SEAM];
+  recordFailure = failure;
+  try {
+    const err: string[] = [];
+    expect((await executeRun(spec, { stdout: () => undefined, stderr: (t) => void err.push(t) })).code).toBe(2);
+    return err.join('').split('\n').find((l) => l.startsWith('Declare it in'));
+  } finally {
+    if (before === undefined) delete process.env[SEAM];
+    else process.env[SEAM] = before;
+  }
+}
+
+test('executeRun adds the declaration hint after "test mode not detected"', async () => {
+  const hint = await hintFor([TEST], 'shop.example.com', 'step "payment-1": test mode not detected');
+  expect(hint).toContain('test-payment-hosts.json');
+  expect(hint).toContain('{ "host": "shop.example.com", "testMode": "shopify-test" }');
+
+  expect(await hintFor([TEST], 'shop.example.com', 'step "payment-1": test mode not detected (the page is not on the allowed test payment host)')).toBeUndefined();
+  expect(await hintFor([TEST], 'shop.example.com', 'step "payment-1": card frame not found (number)')).toBeUndefined();
+});
+
+test('the hint names the provider of the payment step that failed', async () => {
+  const hint = await hintFor([BOGUS, TEST], 'shop.example.com', 'step "payment-2": test mode not detected');
+  expect(hint).toContain('"testMode": "shopify-test"');
+  expect(hint).not.toContain('shopify-bogus');
+});
+
+test('the hint lists each provider when the step cannot be identified', async () => {
+  const hint = await hintFor([BOGUS, TEST], 'shop.example.com', 'test mode not detected');
+  expect(hint).toContain('"testMode": "shopify-bogus"');
+  expect(hint).toContain('"testMode": "shopify-test"');
+});
+
+test('no hint for an entry the allowlist file refuses', async () => {
+  const failure = 'step "payment-1": test mode not detected';
+  expect(await hintFor([FIXTURE], 'shop.example.com', failure)).toBeUndefined();
+  expect(await hintFor([FIXTURE], 'localhost', failure)).toBeUndefined();
+  expect(await hintFor([TEST], 'localhost', failure, true)).toBeUndefined();
+  expect(await hintFor([FIXTURE], 'localhost', failure, true)).toContain('{ "host": "localhost", "testMode": "fixture" }');
 });
 
 test('a declared host reaches the run as a declared provider', async () => {
