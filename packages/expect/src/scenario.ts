@@ -107,17 +107,17 @@ export interface ScenarioOptions {
   cartRequest?: string;
   /** dataLayer event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
-  /** Extra field names or `*` globs that `deniedIdentifiers` treats as analytics identifiers, matched against `Hit.fields`. */
+  /** Extra field names or `*` globs that `deniedIdentifiers` and `earlyIdentifiers` treat as analytics identifiers, matched against `Hit.fields`. */
   identifierFields?: string[];
   /** Hosts or `*.domain` wildcards that `server` mode passes through to the network. Every other collection request stays stubbed. */
   serverHosts?: string[];
   /** Browser viewport in CSS pixels. `--viewport` overrides it. */
   viewport?: Viewport;
-  /** Severity per built-in check. A check that is not listed is `fail`. */
+  /** Severity per built-in check. A check that is not listed is `fail`, except `earlyIdentifiers`, which is `warn`. */
   builtins?: Partial<Record<BuiltinName, Severity>>;
 }
 
-export const BUILTIN_NAMES = ['unknownDestination', 'sandboxPageUrl', 'possibleRealData', 'deniedIdentifiers'] as const;
+export const BUILTIN_NAMES = ['unknownDestination', 'sandboxPageUrl', 'possibleRealData', 'deniedIdentifiers', 'earlyIdentifiers'] as const;
 export type BuiltinName = (typeof BUILTIN_NAMES)[number];
 export const SEVERITIES = ['fail', 'warn'] as const;
 

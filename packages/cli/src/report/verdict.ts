@@ -1,4 +1,4 @@
-import { IDENTIFIER_LEAK, type ReportModel } from './model.ts';
+import { IDENTIFIER_EARLY, IDENTIFIER_LEAK, type ReportModel } from './model.ts';
 import { byVendorName, vendorName } from './names.ts';
 
 export interface Findings {
@@ -22,7 +22,7 @@ export function addFindings(into: Findings, model: ReportModel): void {
   for (const row of model.rows) {
     row.segments.forEach((segment, i) => {
       if (segment.mark !== 'leak') return;
-      const target = segment.label === IDENTIFIER_LEAK ? into.identifiers : into.hits;
+      const target = segment.label === IDENTIFIER_LEAK || segment.label === IDENTIFIER_EARLY ? into.identifiers : into.hits;
       const label = model.columns[i]!.label;
       const vendors = target.get(label) ?? new Set<string>();
       vendors.add(row.vendor);
@@ -66,7 +66,7 @@ export function findingsSentence(f: Findings, inRuns = false): string {
   for (const [label, vendors] of [...f.hits].sort(([a], [b]) => a.localeCompare(b))) parts.push(`${list(vendors)} ${vendors.size === 1 ? 'sends' : 'send'} hits in the ${label} state`);
   for (const [label, vendors] of [...f.identifiers].sort(([a], [b]) => a.localeCompare(b))) parts.push(`identifiers go out to ${list(vendors)} in the ${label} state`);
   const named = f.identifiers.size > 0;
-  const shown = (checks: Map<string, number>) => new Map([...checks].filter(([name]) => !(named && name === 'deniedIdentifiers')));
+  const shown = (checks: Map<string, number>) => new Map([...checks].filter(([name]) => !(named && (name === 'deniedIdentifiers' || name === 'earlyIdentifiers'))));
   if (parts.length === 0 && f.unchecked === 0) parts.push('no leaks');
   if (f.failed > 0) parts.push(`${plural(f.failed, 'rule')} failed`);
   parts.push(...checkParts(shown(f.failedChecks), 'failed', inRuns));

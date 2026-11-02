@@ -161,10 +161,11 @@ function expectationView(result: Result): ExpectationView {
 
 const RULE_LEAK = 'named by a failed consent-scoped rule';
 export const IDENTIFIER_LEAK = 'identifiers sent while denied';
+export const IDENTIFIER_EARLY = 'identifiers sent before an answer';
 
 /**
  * Hit IDs that a result names as leaks, with the label that says why: the evidence of a failed `mustNot`
- * scoped to a denied or withdrawn state, and of a `deniedIdentifiers` check that did not pass, at any severity.
+ * scoped to a denied or withdrawn state, and of a `deniedIdentifiers` or `earlyIdentifiers` check that did not pass, at any severity.
  * The record keeps no scenario options, so the evidence is the only way to see hits flagged through `identifierFields`.
  */
 function namedLeaks(results: readonly Result[]): Map<string, string> {
@@ -173,12 +174,16 @@ function namedLeaks(results: readonly Result[]): Map<string, string> {
     if (result.pass || result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded') continue;
     let label: string;
     if (result.expectation === 'builtin: deniedIdentifiers') label = IDENTIFIER_LEAK;
+    else if (result.expectation === 'builtin: earlyIdentifiers') label = IDENTIFIER_EARLY;
     else {
       const parsed = parseEntry(result);
       if (parsed?.kind !== 'mustNot' || !consentScoped(parsed.entry)) continue;
       label = RULE_LEAK;
     }
-    for (const id of result.evidence) if (named.get(id) !== IDENTIFIER_LEAK) named.set(id, label);
+    for (const id of result.evidence) {
+      const have = named.get(id);
+      if (have !== IDENTIFIER_LEAK && !(have === IDENTIFIER_EARLY && label === RULE_LEAK)) named.set(id, label);
+    }
   }
   return named;
 }
@@ -212,6 +217,7 @@ function segmentOf(verdicts: Verdict[]): Segment {
   if ((mark === 'full' || mark === 'early') && has('full') && has('ping')) return { mark: 'mixed', label: 'granted and denied hits', hits };
   const own = verdicts.filter((v) => v.mark === mark);
   let label = own.every((v) => v.label === own[0]!.label) ? own[0]!.label : '';
+  if (!label && own.every((v) => v.label === IDENTIFIER_LEAK || v.label === IDENTIFIER_EARLY)) label = IDENTIFIER_LEAK;
   if (mark === 'mixed') label = MIXED_HIT;
   return { mark, label, hits };
 }

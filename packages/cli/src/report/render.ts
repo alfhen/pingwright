@@ -25,7 +25,7 @@ const LEGEND: Record<Mark, string> = {
   early: 'hit sent before the person answered, with no consent default set',
   ping: 'hit sent while denied, no identifiers recorded',
   nothing: 'no hit',
-  leak: 'identifier names sent while their signal was denied, or named by a failed consent-scoped mustNot',
+  leak: 'identifier names sent while their signal was denied or before any answer, or named by a failed consent-scoped mustNot',
   unchecked: 'denied, but the body was not fully recorded, or identifier names whose consent signal is unknown, so the hit cannot be called clean',
   mixed: 'some signals denied, or granted and denied hits in one segment',
 };

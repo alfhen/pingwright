@@ -725,6 +725,9 @@ function countByHost(flags: readonly Flag[], ctx: Context): string {
   return [...counts].map(([host, n]) => `${host} x${n}`).join(', ');
 }
 
+/** Built-in checks whose default is not `fail`. */
+const DEFAULT_SEVERITY: Partial<Record<BuiltinName, Severity>> = { earlyIdentifiers: 'warn' };
+
 function builtInChecks(
   records: readonly Input[],
   scenario: Scenario,
@@ -732,7 +735,7 @@ function builtInChecks(
   addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) => void,
 ) {
   const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote) =>
-    addResult(`builtin: ${name}`, pass, evidence, message, scenario.options.builtins?.[name] ?? 'fail', note);
+    addResult(`builtin: ${name}`, pass, evidence, message, scenario.options.builtins?.[name] ?? DEFAULT_SEVERITY[name] ?? 'fail', note);
   const flags = records.filter((r) => r.type === 'flag');
 
   const unknown = flags.filter((f) => f.kind === 'unknownDestination');
@@ -763,6 +766,7 @@ function builtInChecks(
   );
 
   deniedIdentifiersCheck(scenario, ctx, add);
+  earlyIdentifiersCheck(scenario, ctx, add);
 
   const real = flags.filter((f) => f.kind === 'possibleRealData');
   // Flags from the recorder come from the raw records. Scanning again only adds requests the recorder did not flag.
@@ -793,6 +797,12 @@ function builtInChecks(
 
 const DENIABLE = ['analytics', 'ads', 'adUserData'] as const;
 
+function identifierClasses(idFields: readonly string[], fields: readonly string[], extra: readonly RegExp[]): Map<string, IdentifierClass> {
+  const classes = new Map<string, IdentifierClass>(idFields.map((n) => [n, identifierClass(n)]));
+  for (const n of fields) if (!classes.has(n) && extra.some((re) => re.test(n))) classes.set(n, 'analytics');
+  return classes;
+}
+
 function deniedIdentifiersCheck(
   scenario: Scenario,
   ctx: Context,
@@ -809,8 +819,7 @@ function deniedIdentifiersCheck(
       unreadable.push(hit);
       continue;
     }
-    const classes = new Map<string, IdentifierClass>(hit.idFields.map((n) => [n, identifierClass(n)]));
-    for (const n of hit.fields) if (!classes.has(n) && extra.some((re) => re.test(n))) classes.set(n, 'analytics');
+    const classes = identifierClasses(hit.idFields, hit.fields, extra);
     let flagged = false;
     for (const [name, cls] of classes) {
       const signal = identifierSignal(cls, state);
@@ -847,6 +856,63 @@ function deniedIdentifiersCheck(
     );
   } else {
     add('deniedIdentifiers', true, [], 'Expected no identifiers on hits sent while consent is denied, found none.');
+  }
+}
+
+/** Hits before the first consent answer. Each field belongs to one check: a denied signal is left to `deniedIdentifiers`, so a hit with one denied and one unknown field is in both results. */
+function earlyIdentifiersCheck(
+  scenario: Scenario,
+  ctx: Context,
+  add: (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote) => void,
+) {
+  const extra = (scenario.options.identifierFields ?? []).map(globToRegExp);
+  const early: Hit[] = [];
+  const unreadable: Hit[] = [];
+  const found = new Map<string, Set<string>>();
+  for (const hit of ctx.hits) {
+    if (!isBeforeConsent(hit, ctx)) continue;
+    if (!hit.idFields || !hit.fields) {
+      unreadable.push(hit);
+      continue;
+    }
+    const state = effectiveConsent(hit, ctx);
+    let flagged = false;
+    for (const [name, cls] of identifierClasses(hit.idFields, hit.fields, extra)) {
+      const signal = identifierSignal(cls, state);
+      if (signal.value !== 'unknown') continue;
+      flagged = true;
+      const key = `${hit.vendor}\0${signal.field}`;
+      found.set(key, (found.get(key) ?? new Set()).add(name));
+    }
+    if (flagged) early.push(hit);
+    else if (hit.fieldsComplete === false) unreadable.push(hit);
+  }
+  const hitsWord = (n: number) => `hit${n === 1 ? '' : 's'}`;
+  if (early.length > 0) {
+    const groups = [...found].map(([key, names]) => {
+      const [vendor, signal] = key.split('\0');
+      return `${vendor} ${listNames([...names].sort())} (${signal} unknown)`;
+    });
+    const shown = groups.slice(0, MAX_LISTED).join(', ');
+    const more = groups.length > MAX_LISTED ? `, and ${groups.length - MAX_LISTED} more` : '';
+    const cut = unreadable.length > 0 ? ` ${unreadable.length} more ${hitsWord(unreadable.length)} could not be read.` : '';
+    add(
+      'earlyIdentifiers',
+      false,
+      early.map((h) => h.id),
+      `${early.length} ${hitsWord(early.length)} ${early.length === 1 ? 'carries' : 'carry'} identifiers before the consent answer: ${shown}${more}.${cut}`,
+    );
+  } else if (unreadable.length > 0) {
+    const notRecorded = unreadable.some((h) => !h.idFields || !h.fields);
+    add(
+      'earlyIdentifiers',
+      false,
+      unreadable.map((h) => h.id),
+      `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} ${hitsWord(unreadable.length)} sent before the consent answer.`,
+      notRecorded ? 'fieldsNotRecorded' : 'cannotEvaluateBody',
+    );
+  } else {
+    add('earlyIdentifiers', true, [], 'Expected no identifiers on hits sent before the consent answer, found none.');
   }
 }
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { ExpectationView, ReportModel } from './model.ts';
-import { IDENTIFIER_LEAK } from './model.ts';
+import { IDENTIFIER_EARLY, IDENTIFIER_LEAK } from './model.ts';
 import { addFindings, emptyFindings, findingsSentence, runVerdict } from './verdict.ts';
 
 const rule = (status: ExpectationView['status'], kind = 'mustNot'): ExpectationView => ({ status, kind, text: `${kind}: vendor: ga4`, note: undefined, evidence: [], evidenceCount: 0 });
@@ -74,4 +74,11 @@ test('deniedIdentifiers is named once, failed or warned', () => {
   expect(sentence([model([check('WARN', 'deniedIdentifiers'), check('WARN', 'sandboxPageUrl')], leaks)], true)).toBe(
     'identifiers go out to Google Analytics 4 and Meta in the denied state; built-in check sandboxPageUrl warned in 1 run',
   );
+});
+
+test('early identifiers go into the identifier sentence for the undecided state, and the check is not named again', () => {
+  const m = model([check('WARN', 'earlyIdentifiers')], [{ vendor: 'meta', label: IDENTIFIER_EARLY }]);
+  m.columns = [{ label: 'undecided', index: 0 }];
+  expect(sentence([m], true)).toBe('identifiers go out to Meta in the undecided state');
+  expect(sentence([model([check('WARN', 'earlyIdentifiers')])], true)).toBe('no leaks; built-in check earlyIdentifiers warned in 1 run');
 });

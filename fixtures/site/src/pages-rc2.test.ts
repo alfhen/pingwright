@@ -72,6 +72,17 @@ describe('/meta-early', () => {
   });
 });
 
+describe('/meta-early-ids', () => {
+  test('sends ud[em] by default and fbp for ids=fbp, with no Consent Mode default', async () => {
+    const html = await page('/meta-early-ids');
+    expect(html).toContain('facebook.com/tr/?id=100000000000001');
+    expect(html).toContain('ud[em]=c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6');
+    expect(html).toContain("ids === 'fbp'");
+    expect(html).not.toContain('banner.js');
+    expect(html).not.toMatch(/consent['"]\s*,\s*['"]default/);
+  });
+});
+
 describe('/handoff-patched', () => {
   test('patches the accessors before any other script and records what they receive', async () => {
     const html = await page('/handoff-patched');
