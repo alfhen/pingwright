@@ -25,7 +25,7 @@ import {
   type Step,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, guardFieldName, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -1046,11 +1046,19 @@ const BINARY_MIN_LENGTH = 16;
 
 // The recorder keeps bodies as UTF-8 decoded text, so most high bytes of a compressed body are U+FFFD. The byte check runs whatever the
 // content-type says, because beacons often send compressed bytes as text/plain.
-function isBinaryBody(headers: Record<string, string>, body: string): boolean {
+function headersSayBinary(headers: Record<string, string>): boolean {
   const header = (name: string) => Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1]?.trim().toLowerCase() ?? '';
   const encoding = header('content-encoding');
   if (encoding !== '' && encoding !== 'identity') return true;
-  if (BINARY_CONTENT_TYPE.test(header('content-type'))) return true;
+  return BINARY_CONTENT_TYPE.test(header('content-type'));
+}
+
+function isBinaryBody(headers: Record<string, string>, body: string): boolean {
+  if (headersSayBinary(headers)) return true;
+  return isBinaryText(body);
+}
+
+function isBinaryText(body: string): boolean {
   if (body.length < BINARY_MIN_LENGTH) return false;
   let binary = 0;
   for (let i = 0; i < body.length; i++) {
@@ -1058,6 +1066,97 @@ function isBinaryBody(headers: Record<string, string>, body: string): boolean {
     if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7f && c <= 0x9f)) binary++;
   }
   return binary / body.length >= BINARY_SHARE;
+}
+
+interface ScanText {
+  text: string;
+  where: string;
+  /** Marks a text named by a raw body path. A hit parameter path names the same value better. */
+  leaf?: true;
+}
+
+// A leaf is scanned as `name=value` so a key that holds an email is found.
+function leafTexts(text: string): ScanText[] {
+  const out: ScanText[] = [];
+  const isJson = /^\s*[{[]/.test(text);
+  if (!isJson) {
+    // Raw substrings, so the scan decodes `+` and `%XX` the same way as in the base text.
+    for (const segment of text.split('&')) {
+      const eq = segment.indexOf('=');
+      if (eq < 0 || eq === segment.length - 1) continue;
+      const rawName = segment.slice(0, eq).replace(/\[\]|%5B%5D/gi, '');
+      const [decoded] = new URLSearchParams(segment).keys();
+      out.push({ text: `${rawName}${segment.slice(eq)}`, where: guardFieldName(decoded ?? ''), leaf: true });
+    }
+    return out;
+  }
+  const { entries, parsed } = bodyEntries({ postData: text });
+  if (parsed) {
+    // The ID-key exemptions look at the key right before the value, so a JSON path is cut to its last segment.
+    for (const { name, value } of entries) {
+      const path = name.split('.');
+      path[path.length - 1] = path[path.length - 1]!.replace(/\[\]/g, '');
+      const where = guardFieldName(name);
+      if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where, leaf: true });
+      out.push({ text: `${path[path.length - 1]}=${value}`, where, leaf: true });
+    }
+  }
+  return out;
+}
+
+// Headers, preamble, epilogue and text parts stay in the text, so nothing a whole-body scan finds is lost.
+// A body that is not binary as a whole keeps every part, whatever a part's headers say, as a whole-body scan reads it.
+function withoutBinaryParts(split: MultipartBody, wholeIsBinary: boolean): string {
+  const cut = (part: { headers: Record<string, string>; body: string }) => wholeIsBinary && isBinaryBody(part.headers, part.body);
+  return split.chunks
+    .map(({ raw, part }) => (part && cut(part) ? raw.slice(0, part.bodyStart) : raw))
+    .join(`--${split.boundary}`);
+}
+
+// A body that is not binary as a whole stays whole, as a whole-body scan reads it. Otherwise only its binary lines are cut.
+function withoutBinaryLines(body: string): string {
+  if (!isBinaryText(body)) return body;
+  return body.split(/(?<=\n)/).filter((line) => !isBinaryText(line.replace(/\r?\n$/, ''))).join('');
+}
+
+// The base text is the whole body minus binary pieces. Each part or line also gets leaf texts, so a value reports with its path.
+function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
+  if (body === '' || headersSayBinary(headers)) return [];
+  const split = splitMultipart(body, headers);
+  if (split?.parts.length) {
+    const named = split.parts.flatMap((part) => {
+      const name = multipartPartName(part);
+      if (isBinaryBody(part.headers, part.body)) return [];
+      return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name), leaf: true as const }];
+    });
+    return [{ text: withoutBinaryParts(split, isBinaryText(body)), where: 'the body' }, ...named];
+  }
+  const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
+  if (!isJson && /[\r\n]/.test(body.trim())) {
+    const lines = body.split(/\r?\n/).filter((line) => line.trim() !== '' && !isBinaryText(line));
+    return [{ text: withoutBinaryLines(body), where: 'the body' }, ...lines.flatMap(leafTexts)];
+  }
+  return isBinaryText(body) ? [] : [{ text: body, where: 'the body' }, ...leafTexts(body)];
+}
+
+// The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
+// merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost.
+function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>): void {
+  const best = (f: { where: Map<string, number> }) => Math.min(...f.where.values());
+  const valueOf = (key: string, kind: string) => key.slice(kind.length + 1);
+  const fields = [...found].filter(([, f]) => best(f) < 2);
+  for (const [key, f] of [...found]) {
+    if (best(f) < 2) continue;
+    const value = valueOf(key, f.kind);
+    const twin = fields.find(([k, other]) => {
+      if (other.kind !== f.kind) return false;
+      const v = valueOf(k, other.kind);
+      return v.includes(value) || value.includes(v);
+    });
+    if (!twin) continue;
+    for (const [w, tier] of f.where) twin[1].where.set(w, Math.min(tier, twin[1].where.get(w) ?? tier));
+    found.delete(key);
+  }
 }
 
 export interface ForeignData {
@@ -1069,7 +1168,7 @@ export interface ForeignData {
 
 /** Finds email, phone and hash values in requests and hits that are not the identity's own. Takes raw records. */
 export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[], identity: Identity): ForeignData[] {
-  const byRequest = new Map<string, { texts: { text: string; where: string }[]; hitIds: string[]; stepId: string | null }>();
+  const byRequest = new Map<string, { texts: ScanText[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
     let entry = byRequest.get(key);
     if (!entry) byRequest.set(key, (entry = { texts: [], hitIds: [], stepId }));
@@ -1082,7 +1181,7 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
     const texts = slot(request.id, request.stepId).texts;
     for (const text of [url, ...pathSegments(url)]) texts.push({ text, where: 'the URL' });
-    if (!isBinaryBody(request.headers, persisted.postData)) texts.push({ text: persisted.postData, where: 'the body' });
+    texts.push(...bodyTexts(request.headers, persisted.postData));
   }
   for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);
@@ -1094,21 +1193,23 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
   );
   const out: ForeignData[] = [];
   for (const [requestId, entry] of byRequest) {
-    const found = new Map<string, { kind: string; where: Set<string> }>();
-    for (const { text, where } of entry.texts) {
+    const found = new Map<string, { kind: string; where: Map<string, number> }>();
+    for (const { text, where, leaf } of entry.texts) {
+      const tier = where === 'the URL' || where === 'the body' ? 2 : leaf ? 1 : 0;
       for (const m of scan(text, identity, { stableHashes })) {
         const key = `${m.kind}:${m.value}`;
-        const seen = found.get(key) ?? { kind: m.kind, where: new Set<string>() };
-        seen.where.add(where);
+        const seen = found.get(key) ?? { kind: m.kind, where: new Map<string, number>() };
+        seen.where.set(where, Math.min(tier, seen.where.get(where) ?? tier));
         found.set(key, seen);
       }
     }
     if (found.size === 0) continue;
+    mergeEdgeReadings(found);
     const kinds = [...new Set([...found.values()].map((f) => f.kind))].join(', ');
     const places = new Set<string>();
     for (const { where } of found.values()) {
-      const named = [...where].filter((w) => w !== 'the URL' && w !== 'the body');
-      for (const w of named.length ? named : where) places.add(w);
+      const best = Math.min(...where.values());
+      for (const [w, tier] of where) if (tier === best) places.add(w);
     }
     const shown = [...places].sort();
     const in_ = shown.length > 5 ? `${shown.slice(0, 5).join(', ')} and ${shown.length - 5} more` : shown.join(', ');

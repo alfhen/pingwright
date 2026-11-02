@@ -383,6 +383,50 @@ function ownValues(identity: Identity) {
   return { email, phoneDigits, nationalDigits: format.nationalDigits(phoneDigits), hashes, extraEmails, extraPhones };
 }
 
+interface Candidate {
+  kind: LeakKind;
+  value: string;
+  /** An alternate reading of the same match, such as a plus-address with its tag. */
+  alternate?: string;
+  variant: string;
+  index: number;
+}
+
+/** Every email, phone and SHA-256 candidate in the text and its decoded variants, whoever owns it. */
+function* candidates(text: string): Generator<Candidate> {
+  for (const variant of variants(text)) {
+    // Escaped text is matched through its decoded variant, so adjacent escapes never join a local part.
+    if (!hasUrlEscapes(variant)) {
+      for (const raw of variant.match(EMAIL) ?? []) {
+        // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
+        const m = raw.slice(raw.lastIndexOf('+') + 1);
+        if (!m.includes('@') || FILE_EXTENSION.test(m)) continue;
+        // One '+' is either a form-encoded space or a plus-address tag, so both readings are reported.
+        const both = raw !== m && raw.indexOf('+') === raw.lastIndexOf('+') && !raw.startsWith('+');
+        yield { kind: 'email', value: m, alternate: both ? raw : undefined, variant, index: 0 };
+      }
+    }
+    for (const m of variant.match(PHONE) ?? []) {
+      const digits = m.replace(/\D/g, '');
+      if (digits.length < 8 || digits.length > 15) continue;
+      // In the form-encoded "+cc+nn+nn" shape the first group is a country code, which has 1 to 3 digits.
+      if (/^\+\d+\+/.test(m) && !/^\+\d{1,3}\+/.test(m)) continue;
+      yield { kind: 'phone', value: m, variant, index: 0 };
+    }
+    // The decoded variant carries the same hex, with its key readable.
+    if (!hasUrlEscapes(variant)) {
+      for (const m of variant.matchAll(HASH)) yield { kind: 'hash', value: m[0].toLowerCase(), variant, index: m.index };
+    }
+  }
+}
+
+/** The kinds of value an email, phone or hash detector finds in text, whoever owns the value. */
+export function valueKinds(text: string): Set<LeakKind> {
+  const kinds = new Set<LeakKind>();
+  for (const c of candidates(text)) kinds.add(c.kind);
+  return kinds;
+}
+
 /** Finds emails, phone numbers and SHA-256 hex strings in text that do not belong to the identity. */
 export function scan(text: string, identity: Identity, options: { stableHashes?: ReadonlySet<string> } = {}): LeakMatch[] {
   const own = ownValues(identity);
@@ -391,28 +435,20 @@ export function scan(text: string, identity: Identity, options: { stableHashes?:
     const key = `${kind}:${value}`;
     if (!found.has(key)) found.set(key, { kind, value });
   };
+  for (const c of candidates(text)) {
+    if (c.kind === 'email') {
+      if (normalizeEmail(c.value).includes(own.email) || own.extraEmails.includes(normalizeEmail(c.value))) continue;
+      add('email', c.value);
+      if (c.alternate) add('email', c.alternate);
+    } else if (c.kind === 'phone') {
+      const digits = c.value.replace(/\D/g, '');
+      if (!digits.includes(own.phoneDigits) && !digits.includes(own.nationalDigits) && !own.extraPhones.includes(digits)) add('phone', c.value);
+    } else if (!own.hashes.has(c.value) && !options.stableHashes?.has(c.value) && !isNonPersonalKey(c.variant, c.index)) {
+      add('hash', c.value);
+    }
+  }
+  // Keyed digests are matched per variant after the candidates, which only changes the order of the result.
   for (const variant of variants(text)) {
-    // Escaped text is matched through its decoded variant, so adjacent escapes never join a local part.
-    for (const raw of hasUrlEscapes(variant) ? [] : (variant.match(EMAIL) ?? [])) {
-      // A '+' may be a form-encoded space ("Order+for+a@b.com"), so only the part after the last one counts.
-      const m = raw.slice(raw.lastIndexOf('+') + 1);
-      if (!m.includes('@') || FILE_EXTENSION.test(m) || normalizeEmail(m).includes(own.email) || own.extraEmails.includes(normalizeEmail(m))) continue;
-      add('email', m);
-      // One '+' is either a form-encoded space or a plus-address tag, so both readings are reported.
-      if (raw !== m && raw.indexOf('+') === raw.lastIndexOf('+') && !raw.startsWith('+')) add('email', raw);
-    }
-    for (const m of variant.match(PHONE) ?? []) {
-      const digits = m.replace(/\D/g, '');
-      if (digits.length < 8 || digits.length > 15) continue;
-      // In the form-encoded "+cc+nn+nn" shape the first group is a country code, which has 1 to 3 digits.
-      if (/^\+\d+\+/.test(m) && !/^\+\d{1,3}\+/.test(m)) continue;
-      if (!digits.includes(own.phoneDigits) && !digits.includes(own.nationalDigits) && !own.extraPhones.includes(digits)) add('phone', m);
-    }
-    // The decoded variant carries the same hex, with its key readable.
-    for (const m of hasUrlEscapes(variant) ? [] : variant.matchAll(HASH)) {
-      const hash = m[0].toLowerCase();
-      if (!own.hashes.has(hash) && !options.stableHashes?.has(hash) && !isNonPersonalKey(variant, m.index)) add('hash', hash);
-    }
     // Escaped text is matched through its decoded variant, so a percent-encoded '=' never splits a digest.
     for (const token of hasUrlEscapes(variant) ? [] : keyedDigests(variant)) {
       if (!own.hashes.has(token.replace(/=+$/, ''))) add('hash', token);

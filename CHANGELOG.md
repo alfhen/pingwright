@@ -7,7 +7,7 @@
 
 - A host in the test payment allowlist can declare its test mode: `{ "host": "shop.example.com", "testMode": "shopify-test" }`. A declared host needs no marker on the page. Without a declaration, the marker must now sit inside the card form. The record, the `TEST PAYMENT` line and `--json` say whether the test mode was declared or seen on the page. A failed `payment` step now leaves `Step.payment` unset until the first key is typed, and `test mode not detected` shows the declaration to write (#611, #603, #604, #633).
 
-<!-- E01 -->
+- `possibleRealData` now names the path of a value in a JSON or form body, for example `in customerHashed.country`, and no longer says `in the body` for it. A multipart body is split into parts, and its text fields are scanned and named. When the body is binary as a whole, its binary parts are skipped and its text parts are still scanned. A multi-line body is checked line by line, so one compressed line no longer hides a text line. (#610, #620, #622, #623)
 
 ### Fixed
 - `run --baseline` compares scenario names without `.yml` or `.yaml`, so a baseline saved from `checkout` matches a run of `checkout.yml`. (#612)

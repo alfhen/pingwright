@@ -108,6 +108,8 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/compressed-beacon` has no banner and no tags. On load it posts 400 high bytes as `text/plain` to `https://replay.tagreeve.invalid/collect`. The bytes start with the gzip magic and hold the email-shaped value `visitor@other-person.example`.
 
+`/body-paths` has no banner and no tags. On load it sends two POST requests to `https://replay.tagreeve.invalid/collect`. One is a JSON body with a SHA-256 value under `customerHashed.country`. The other is `multipart/form-data` with a text field `contact` that holds `visitor@other-person.example` and a binary file part.
+
 ## Unload gap page
 
 `/unload-gap` has the banner and a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/gap/`). 1.8 s after it loads, the frame pushes `{event: 'consent_update'}` (no hit) and `{event: 'item_added'}`, and sends a `/data` hit named `item_added` to `https://sgtm.tagreeve.invalid` at once. In `pagehide` it sends a GA4 `add_to_cart` with `sendBeacon`, which stub mode does not capture. The scenario should wait about 3 s before it navigates.

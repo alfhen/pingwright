@@ -26,3 +26,17 @@ test('possibleRealData skips a compressed beacon body whose bytes spell an email
   const foreign = await run('identity-messages');
   expect(foreign.failed).toContain('builtin: possibleRealData');
 }, 120_000);
+
+test('possibleRealData names the JSON path and the multipart field, and never the value', async () => {
+  const r = await run('identity-json-body');
+  const posts = r.records!.requests.filter((q) => q.url.startsWith('https://replay.tagreeve.invalid/collect'));
+  expect(posts.some((q) => q.postData?.includes('"customerHashed":{"country":"959a45d4'))).toBe(true);
+  expect(posts.some((q) => q.postData?.includes('visitor@other-person.example'))).toBe(true);
+  const details = r.records!.flags.filter((f) => f.kind === 'possibleRealData').map((f) => f.detail);
+  expect(details.some((d) => /carries 1 hash value\(s\) .*, in customerHashed\.country$/.test(d))).toBe(true);
+  expect(details.some((d) => /carries 1 email value\(s\) .*, in contact$/.test(d))).toBe(true);
+  expect(details.join('\n')).not.toContain('in the body');
+  const output = details.join('\n') + r.stdout + r.stderr;
+  expect(output).not.toMatch(HEX);
+  expect(output).not.toContain('visitor@other-person.example');
+}, 120_000);
