@@ -305,3 +305,23 @@ test('possibleRealData skips a nested repeat-only ID of a JSON body sent in two 
   const send = () => withHeaders(body, { 'content-type': 'application/json' });
   expect(findForeignData([{ ...send(), id: newId('request') }, { ...send(), id: newId('request') }], [], identity)).toHaveLength(0);
 });
+
+test.each([
+  ['a form key with brackets', 'a=1&cd[555.123.4567]=1'],
+  ['a form key of dotted digits', '555.123.4567=1'],
+  ['a plain-text body read as a form', 'note 555.123.4567=yes'],
+])('possibleRealData does not print a phone number split in %s', (_name, body) => {
+  expect(body).toContain('555');
+  const leaks = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(leaks.length).toBeGreaterThan(0);
+  const detail = leaks.map((l) => l.detail).join('\n');
+  for (const group of ['555', '123', '4567']) expect(detail).not.toContain(group);
+});
+
+test('possibleRealData does not print a multipart part named with a phone number', () => {
+  const body = ['--b', 'Content-Disposition: form-data; name="555.123.4567"', '', 'x', '--b--', ''].join('\r\n');
+  const leaks = findForeignData([withHeaders(body, { 'content-type': 'multipart/form-data; boundary=b' })], [], identity);
+  expect(leaks.length).toBeGreaterThan(0);
+  const detail = leaks.map((l) => l.detail).join('\n');
+  for (const group of ['555', '123', '4567']) expect(detail).not.toContain(group);
+});

@@ -200,3 +200,10 @@ test('identifier classes and signals', () => {
   expect(identifierSignal('analytics', state)).toEqual({ field: 'analytics', value: 'granted' });
   expect(identifierSignal('adsIdentity', { ...state, adUserData: 'granted' })).toEqual({ field: 'adUserData', value: 'granted' });
 });
+
+test('a number split across dots or brackets stores (other)', () => {
+  expect(guardFieldName('cd[555.123.4567]')).toBe('(other)');
+  expect(guardFieldName('555.123.4567')).toBe('(other)');
+  expect(guardFieldName('x.555.123.4567')).toBe('(other)');
+  expect(guardFieldName('note 555.123.4567')).toBe('(other)');
+});

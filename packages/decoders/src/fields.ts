@@ -32,10 +32,10 @@ function looksLikeValue(segment: string): boolean {
  */
 export function guardFieldName(name: string): string {
   if (name.includes('@')) return OTHER_NAME;
-  return name
-    .split('.')
-    .map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment))
-    .join('.');
+  const kept = name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment));
+  // A number split on dots or brackets has a short digit run in every segment.
+  const digits = kept.filter((segment) => segment !== OTHER_NAME).join('').replace(/\D/g, '');
+  return LONG_DIGITS.test(digits) ? OTHER_NAME : kept.join('.');
 }
 
 export function queryEntries(params: Iterable<[string, string]>): FieldEntry[] {
