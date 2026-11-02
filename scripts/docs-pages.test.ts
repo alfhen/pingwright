@@ -1,28 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { sidebarPages, unlistedPages } from '../.vitepress/page-guard.ts';
+import { builtPageSources, sidebarPages, unlistedPages } from '../site/src/lib/page-guard.ts';
 
-const rewrites = { 'docs/index.md': 'index.md', 'README.md': 'readme.md' };
 const sidebar = [
-  { text: 'Home', link: '/' },
-  { text: 'Guides', items: [{ text: 'First run', link: '/docs/guide/first-run' }] },
-  { text: 'Reference', items: [{ text: 'README', link: '/readme' }, { text: 'CLI', link: '/docs/cli' }] },
-  { text: 'Elsewhere', link: 'https://example.com/' },
+  { label: 'guides', items: [{ label: 'First run', link: '/docs/guide/first-run' }] },
+  { label: 'reference', items: [{ label: 'README', link: '/readme' }, { label: 'CLI', link: '/docs/cli' }] },
+  { label: 'Elsewhere', link: 'https://example.com/' },
 ];
 
 describe('sidebarPages', () => {
   it('maps sidebar links back to source pages', () => {
-    expect(sidebarPages(sidebar, rewrites)).toEqual(['docs/index.md', 'docs/guide/first-run.md', 'README.md', 'docs/cli.md']);
+    expect(sidebarPages(sidebar)).toEqual(['docs/guide/first-run.md', 'README.md', 'docs/cli.md']);
+  });
+});
+
+describe('builtPageSources', () => {
+  it('maps the paths Astro built back to source pages, without the home and 404 pages', () => {
+    expect(builtPageSources(['', '404', 'readme', 'docs/cli', '/docs/guide/first-run/'])).toEqual(['README.md', 'docs/cli.md', 'docs/guide/first-run.md']);
   });
 });
 
 describe('unlistedPages', () => {
-  const published = sidebarPages(sidebar, rewrites);
+  const published = sidebarPages(sidebar);
 
   it('accepts the pages the sidebar links to', () => {
     expect(unlistedPages(['README.md', 'docs/cli.md'], published)).toEqual([]);
   });
 
   it('reports a page the sidebar does not link to', () => {
-    expect(unlistedPages(['README.md', 'docs/notes.md', 'runs/x/report.md'], published)).toEqual(['docs/notes.md', 'runs/x/report.md']);
+    expect(unlistedPages(['README.md', 'docs/notes.md', 'docs/zz-unlisted.md'], published)).toEqual(['docs/notes.md', 'docs/zz-unlisted.md']);
   });
 });

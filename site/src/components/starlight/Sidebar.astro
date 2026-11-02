@@ -1,0 +1,14 @@
+---
+import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter';
+import Search from 'virtual:starlight/components/Search';
+import SidebarSublist from '@astrojs/starlight/components/SidebarSublist.astro';
+
+const { sidebar } = Astro.locals.starlightRoute;
+---
+
+{/* No SidebarPersister: it keeps state in sessionStorage, and the site stores only the theme and the intro flag. */}
+<Search />
+<SidebarSublist sublist={sidebar} />
+<div class="md:sl-hidden">
+  <MobileMenuFooter />
+</div>

@@ -1,0 +1,25 @@
+---
+/* On narrow docs pages this button replaces the header's ☰ and opens Starlight's sidebar, which holds every page. */
+---
+
+<button
+  popovertarget="starlight__sidebar"
+  aria-label="Menu"
+  class="sl-menu-button md:sl-hidden print:hidden cursor-pointer rounded-md border border-rule bg-void px-2.5 py-[5px] font-mono text-sm font-medium text-fg"
+>
+  <span class="open-menu" aria-hidden="true">☰</span><span class="close-menu" aria-hidden="true">✕</span>
+</button>
+
+<style>
+  button {
+    position: fixed;
+    top: 12px;
+    inset-inline-end: 16px;
+    z-index: var(--sl-z-index-navbar);
+  }
+
+  button:has(~ :popover-open) .open-menu,
+  button:not(:has(~ :popover-open)) .close-menu {
+    display: none;
+  }
+</style>

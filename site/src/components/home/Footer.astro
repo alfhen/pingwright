@@ -1,0 +1,16 @@
+<footer class="border-t border-rule">
+  <div class="mx-auto flex max-w-[1280px] flex-wrap justify-between gap-4 px-7 pt-[22px] pb-[72px] font-mono text-xs font-medium text-dim">
+    <span>tagreeve · MIT · runs on infrastructure you control</span>
+    <button
+      type="button"
+      data-replay-intro
+      class="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-dim underline underline-offset-[3px]"
+    >replay the 5-minute ticket</button>
+  </div>
+</footer>
+
+<script>
+  for (const button of document.querySelectorAll('[data-replay-intro]')) {
+    button.addEventListener('click', () => window.dispatchEvent(new Event('tagreeve:replay-intro')));
+  }
+</script>

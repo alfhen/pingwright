@@ -1,0 +1,259 @@
+/* Starlight theme. No Tailwind preflight here: Starlight brings its own reset. */
+/* Tailwind's utilities must beat Starlight's layers, so Starlight comes first in the layer order. */
+@layer starlight, theme, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source('../');
+@import './tokens.css';
+@import './shared.css';
+
+:root,
+:root[data-theme='light'] {
+  --sl-color-white: var(--ink);
+  --sl-color-gray-1: var(--ink);
+  --sl-color-gray-2: var(--ink);
+  --sl-color-gray-3: var(--muted);
+  --sl-color-gray-4: var(--muted);
+  --sl-color-gray-5: var(--line);
+  --sl-color-gray-6: var(--bg2);
+  --sl-color-gray-7: var(--bg2);
+  --sl-color-black: var(--bg);
+  --sl-color-accent-low: var(--mintdim);
+  --sl-color-accent: var(--mint);
+  --sl-color-accent-high: var(--mint);
+  --sl-color-text: var(--ink);
+  --sl-color-text-accent: var(--mint);
+  --sl-color-text-invert: var(--onmint);
+  --sl-color-bg: var(--bg);
+  --sl-color-bg-nav: var(--bg);
+  --sl-color-bg-sidebar: var(--bg);
+  --sl-color-bg-inline-code: var(--bg2);
+  --sl-color-bg-accent: var(--mint);
+  --sl-color-hairline-light: var(--line);
+  --sl-color-hairline: var(--line);
+  --sl-color-hairline-shade: var(--line);
+
+  --sl-font: 'Geist';
+  --sl-font-mono: 'Geist Mono';
+  --sl-nav-height: 56px;
+  --sl-sidebar-width: calc(230px + 2 * var(--sl-sidebar-pad-x));
+  --sl-content-width: 860px;
+  --sl-text-h1: clamp(36px, 6vw, 52px);
+  --sl-text-h2: 28px;
+  --sl-text-h3: 20px;
+  --sl-text-h4: 17px;
+  --sl-line-height: 1.65;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+.page > .header {
+  padding-block: 0;
+  padding-inline-start: 0;
+}
+
+@media (min-width: 50rem) {
+  .page > .header {
+    padding-inline-end: 0;
+  }
+}
+
+/* Below Starlight's breakpoint its sidebar menu takes over from the header's ☰. */
+@media (max-width: 49.99rem) {
+  [data-has-sidebar] .site-header [data-menu-toggle] {
+    display: none;
+  }
+
+  [data-has-sidebar] .site-header [data-theme-toggle] {
+    margin-inline-start: auto;
+  }
+}
+
+/* Sidebar: search, then the groups as small mono labels and the pages as pills. */
+.sidebar-content {
+  padding-top: 32px;
+  gap: 22px;
+  font-size: 14px;
+}
+
+.sidebar-content ul.top-level > li + li {
+  margin-top: 18px;
+}
+
+.sidebar-content summary {
+  padding: 4px 10px;
+}
+
+.sidebar-content summary .large {
+  font: 500 11px var(--font-mono);
+  color: var(--muted);
+}
+
+.sidebar-content summary .caret {
+  display: none;
+}
+
+.sidebar-content ul ul li {
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.sidebar-content summary,
+.sidebar-content ul ul a {
+  cursor: pointer;
+}
+
+.sidebar-content ul ul a {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sidebar-content ul ul a:hover {
+  color: var(--ink);
+}
+
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover {
+  background: var(--mintdim);
+  color: var(--mint);
+  font-weight: 500;
+}
+
+/* Article */
+.sl-markdown-content {
+  font-size: 16px;
+}
+
+.content-panel h1,
+.sl-markdown-content :is(h2, h3, h4) {
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.content-panel h1 {
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.sl-markdown-content a {
+  color: var(--mint);
+  text-underline-offset: 3px;
+}
+
+.sl-markdown-content :not(pre) > code {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+.sl-markdown-content blockquote {
+  border-inline-start: 2px solid var(--mint);
+  padding: 4px 0 4px 16px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.sl-markdown-content .starlight-aside {
+  border-inline-start: 2px solid var(--mint);
+  background: var(--panel);
+}
+
+.pagination-links a {
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+/* On the site, the README's <picture> becomes these two images; see the themed-pictures plugin. */
+.sl-markdown-content img.theme-dark,
+[data-theme='dark'] .sl-markdown-content img.theme-light {
+  display: none;
+}
+
+[data-theme='dark'] .sl-markdown-content img.theme-dark {
+  display: inline;
+}
+
+.docs-version {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.get-started-prompt {
+  margin: 20px 0 24px;
+}
+
+.get-started-copy {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--mint);
+  color: var(--onmint);
+  font: 600 14px var(--font-sans);
+  cursor: pointer;
+}
+
+.get-started-status {
+  margin-left: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.get-started-details {
+  margin-top: 12px;
+}
+
+.get-started-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font: 500 12px var(--font-mono);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sl-markdown-content .get-started-text {
+  margin: 8px 0 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font: 12px/1.65 var(--font-mono);
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.mermaid-diagram {
+  margin: 20px 0 8px;
+}
+
+.mermaid-svg {
+  display: flex;
+  justify-content: safe center;
+  overflow-x: auto;
+}
+
+.mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-svg p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sl-markdown-content .mermaid-source {
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.mermaid-error {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
