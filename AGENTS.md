@@ -21,7 +21,7 @@ The spec is [docs/design.md](docs/design.md). The current plan is the newest `do
 - Node 22.18 or newer. pnpm 10.34.7 through corepack (`COREPACK_ENABLE_DOWNLOAD_PROMPT=0`).
 - Playwright 1.64.1 exactly. `@duckduckgo/autoconsent` 16.51.0 exactly.
 - New dependencies get an exact version that is at least two weeks old.
-- Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`.
+- Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`. For the docs site (`site/`, built with Astro and Starlight): `pnpm docs:build`, `pnpm docs:test`, and `pnpm docs:preview` to look at it.
 - Browsers can fail to launch inside an agent's command sandbox. Run browser commands outside it.
 
 ## Writing
