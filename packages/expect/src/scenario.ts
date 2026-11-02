@@ -720,13 +720,14 @@ const DIAL_CODE_COUNTRY: [string, string][] = [['49', 'DE'], ['46', 'SE'], ['44'
 
 function phoneWarning(value: string, declaredCountry: string | undefined): string {
   const digits = value.replace(/\D/g, '');
-  const fromDialCode = value.trim().startsWith('+') ? DIAL_CODE_COUNTRY.find(([code]) => digits.startsWith(code))?.[1] : undefined;
-  const country = fromDialCode ?? declaredCountry?.toUpperCase() ?? 'US';
+  const international = value.trim().startsWith('+');
+  const fromDialCode = international ? DIAL_CODE_COUNTRY.find(([code]) => digits.startsWith(code))?.[1] : undefined;
+  const country = fromDialCode ?? (international ? undefined : (declaredCountry?.toUpperCase() ?? 'US'));
   const reasons = ['it is not in a fictional range'];
-  if (REAL_MOBILE_PREFIX[country]?.test(digits)) reasons.push('its mobile prefix is a real one');
-  const hint = FICTIONAL_PHONE_HINT[country];
+  if (country && REAL_MOBILE_PREFIX[country]?.test(digits)) reasons.push('its mobile prefix is a real one');
+  const hint = country && FICTIONAL_PHONE_HINT[country];
   const range = hint ? `use ${hint}` : 'no fictional range is known for it';
-  return `looks like a real phone (${reasons.join(' and ')} for ${country}); ${range}`;
+  return `looks like a real phone (${reasons.join(' and ')}${country ? ` for ${country}` : ''}); ${range}`;
 }
 
 function realDataWarning(value: string, country: string | undefined): string | undefined {

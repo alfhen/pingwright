@@ -293,6 +293,15 @@ test('a country with no format says no fictional range is known', () => {
   expect(s.warnings[0]).toContain('no fictional range is known');
 });
 
+test('a + number with an unknown dial code is not given the declared or US range', () => {
+  for (const country of ['GB', 'US']) {
+    const w = parseScenario(`start: /\nidentity:\n  country: ${country}\n  phone: "+33612345678"\n`).warnings[0];
+    expect(w).toContain('no fictional range is known');
+    expect(w).not.toContain('555');
+    expect(w).not.toContain('7700');
+  }
+});
+
 test('BNetzA mobile drama numbers get no warning', () => {
   for (const phone of ['+491713920000', '+4917604069042']) {
     expect(parseScenario(`start: /\nidentity:\n  phone: "${phone}"\n`).warnings).toEqual([]);
