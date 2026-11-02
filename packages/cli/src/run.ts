@@ -147,10 +147,9 @@ function markerNotDetected(message: string): boolean {
   return /test mode not detected(?! \()/.test(message);
 }
 
-function declarationHint(spec: RunSpec, message: string): string | undefined {
+function declarationHint(spec: RunSpec, label: string | undefined): string | undefined {
   if (!spec.testPayment) return undefined;
   const payments = spec.parsed.steps.flatMap((s) => (s.kind === 'payment' ? [s] : []));
-  const label = /^step "([^"]*)"/.exec(message)?.[1];
   const failed = label === undefined ? undefined : payments.find((s) => s.label === label);
   const providers = failed ? [failed.value.provider] : [...new Set(payments.map((s) => s.value.provider))];
   const host = spec.testPayment.host;
@@ -201,7 +200,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
     const message = error instanceof Error ? error.message : String(error);
     if (MISSING_BROWSER.test(message)) return failed('Chromium is not installed. Run `tagreeve install-browser`.\n');
     let text = `Run failed: ${error instanceof GtmOverrideFailure ? `GTM override: ${message}` : message}\n`;
-    const declareHint = spec.testPayment && markerNotDetected(message) && declarationHint(spec, message);
+    const declareHint = spec.testPayment && markerNotDetected(message) && declarationHint(spec, error instanceof StepError ? error.label : undefined);
     if (declareHint) text += `${declareHint}\n`;
     const written = (error instanceof StepError || error instanceof GtmOverrideFailure) && error.run ? error.run.path : undefined;
     if (written) {

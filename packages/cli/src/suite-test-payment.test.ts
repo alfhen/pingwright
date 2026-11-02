@@ -7,14 +7,18 @@ import type { SuiteArgs } from './args.ts';
 import type { RunOutcome, RunSpec } from './run.ts';
 import { suiteCommand } from './suite.ts';
 
-let recordFailure = 'step "payment-1": test mode not detected';
+type Failure = string | [label: string, message: string];
+let recordFailure: Failure = ['payment-1', 'test mode not detected'];
 
-vi.mock('@tagreeve/recorder', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tagreeve/recorder')>()),
-  recordScenario: async () => {
-    throw new Error(recordFailure);
-  },
-}));
+vi.mock('@tagreeve/recorder', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@tagreeve/recorder')>();
+  return {
+    ...original,
+    recordScenario: async () => {
+      throw typeof recordFailure === 'string' ? new Error(recordFailure) : new original.StepError(...recordFailure);
+    },
+  };
+});
 
 const { executeRun } = await import('./run.ts');
 
@@ -121,7 +125,7 @@ const FIXTURE: [string, string] = ['fixture', '4242424242424242'];
 const TEST: [string, string] = ['shopify-test', '4242424242424242'];
 const BOGUS: [string, string] = ['shopify-bogus', '1'];
 
-async function hintFor(steps: [string, string][], host: string, failure: string, seam = false): Promise<string | undefined> {
+async function hintFor(steps: [string, string][], host: string, failure: Failure, seam = false): Promise<string | undefined> {
   const parsed = parseScenario(scenarioWith(...steps));
   const spec = { parsed, scenarioName: 'a-card', network: 'stub', site: `https://${host}`, out: '/nowhere', autoconsentRules: [], trackers: [], testPayment: { host } } as unknown as RunSpec;
   const before = process.env[SEAM];
@@ -139,16 +143,16 @@ async function hintFor(steps: [string, string][], host: string, failure: string,
 }
 
 test('executeRun adds the declaration hint after "test mode not detected"', async () => {
-  const hint = await hintFor([TEST], 'shop.example.com', 'step "payment-1": test mode not detected');
+  const hint = await hintFor([TEST], 'shop.example.com', ['payment-1', 'test mode not detected']);
   expect(hint).toContain('test-payment-hosts.json');
   expect(hint).toContain('{ "host": "shop.example.com", "testMode": "shopify-test" }');
 
-  expect(await hintFor([TEST], 'shop.example.com', 'step "payment-1": test mode not detected (the page is not on the allowed test payment host)')).toBeUndefined();
-  expect(await hintFor([TEST], 'shop.example.com', 'step "payment-1": card frame not found (number)')).toBeUndefined();
+  expect(await hintFor([TEST], 'shop.example.com', ['payment-1', 'test mode not detected (the page is not on the allowed test payment host)'])).toBeUndefined();
+  expect(await hintFor([TEST], 'shop.example.com', ['payment-1', 'card frame not found (number)'])).toBeUndefined();
 });
 
 test('the hint names the provider of the payment step that failed', async () => {
-  const hint = await hintFor([BOGUS, TEST], 'shop.example.com', 'step "payment-2": test mode not detected');
+  const hint = await hintFor([BOGUS, TEST], 'shop.example.com', ['payment-2', 'test mode not detected']);
   expect(hint).toContain('"testMode": "shopify-test"');
   expect(hint).not.toContain('shopify-bogus');
 });
@@ -160,7 +164,7 @@ test('the hint lists each provider when the step cannot be identified', async ()
 });
 
 test('no hint for an entry the allowlist file refuses', async () => {
-  const failure = 'step "payment-1": test mode not detected';
+  const failure: Failure = ['payment-1', 'test mode not detected'];
   expect(await hintFor([FIXTURE], 'shop.example.com', failure)).toBeUndefined();
   expect(await hintFor([FIXTURE], 'localhost', failure)).toBeUndefined();
   expect(await hintFor([TEST], 'localhost', failure, true)).toBeUndefined();
