@@ -202,9 +202,27 @@ function contains(big: Map<string, number>, small: Map<string, number>): boolean
   return true;
 }
 
+/** The tuples of `k` that `other` does not account for, counted per ID set. Consent fields are dropped. */
+function surplusByIds(k: ShapeKey | undefined, other: ShapeKey | undefined): Map<string, number> {
+  const out = new Map<string, number>();
+  const rest = tupleCounts(other);
+  for (const t of k?.tuples ?? []) {
+    const id = tupleId(t);
+    const used = Math.min(rest.get(id) ?? 0, t.count);
+    rest.set(id, (rest.get(id) ?? 0) - used);
+    const extra = t.count - used;
+    if (extra > 0) out.set(JSON.stringify(t.ids), (out.get(JSON.stringify(t.ids)) ?? 0) + extra);
+  }
+  return out;
+}
+
+function sameCounts(x: Map<string, number>, y: Map<string, number>): boolean {
+  return x.size === y.size && contains(x, y) && contains(y, x);
+}
+
 /**
  * One group (vendor, event, page) moved when its total is the same, exactly two epochs differ, they are
- * neighbours in the run's order, and every hit that stayed matches. Any other change is drift.
+ * neighbours in the run's order, and every hit that stayed matches. The hits that moved may differ in consent fields, not in IDs. Any other change is drift.
  */
 function findMove(epochs: Map<string, { a?: ShapeKey; b?: ShapeKey }>, order: string[]): { from: string; to: string; count: number } | undefined {
   const changed = [...epochs].filter(([, e]) => total(e.a) !== total(e.b));
@@ -219,6 +237,7 @@ function findMove(epochs: Map<string, { a?: ShapeKey; b?: ShapeKey }>, order: st
   if (order.filter((l) => l === from[0] || l === to[0]).length !== 2) return undefined;
   if (!contains(tupleCounts(from[1].a), tupleCounts(from[1].b))) return undefined;
   if (!contains(tupleCounts(to[1].b), tupleCounts(to[1].a))) return undefined;
+  if (!sameCounts(surplusByIds(from[1].a, from[1].b), surplusByIds(to[1].b, to[1].a))) return undefined;
   return { from: from[0], to: to[0], count: Math.abs(d1) };
 }
 
