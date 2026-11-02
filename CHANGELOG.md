@@ -11,7 +11,7 @@
 
 <!-- B01 -->
 
-<!-- C01 -->
+A usage error now prints the message and one line, `Run tagreeve <command> --help for the options.`, not the full help text. `--help` still prints it.
 
 <!-- B02 -->
 

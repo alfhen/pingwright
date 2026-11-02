@@ -2,10 +2,19 @@ import { parseArgs } from 'node:util';
 import { parseViewportText, VIEWPORT_HINT, type Viewport } from '@tagreeve/expect';
 
 export class UsageError extends Error {
-  constructor(message: string) {
+  command: string | undefined;
+
+  constructor(message: string, command?: string) {
     super(message);
     this.name = 'UsageError';
+    this.command = command;
   }
+}
+
+const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser'];
+
+export function usageHint(command: string | undefined): string {
+  return `Run tagreeve ${command ? `${command} ` : ''}--help for the options.`;
 }
 
 export type Network = 'stub' | 'server' | 'live';
@@ -162,6 +171,15 @@ function parseVariants(entries: string[]): VariantArg[] {
 }
 
 export function parseCli(argv: string[]): Command {
+  try {
+    return parseCommand(argv);
+  } catch (error) {
+    if (error instanceof UsageError && error.command === undefined) error.command = argv.find((arg) => COMMANDS.includes(arg));
+    throw error;
+  }
+}
+
+function parseCommand(argv: string[]): Command {
   let parsed;
   try {
     parsed = parseArgs({

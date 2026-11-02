@@ -1,4 +1,4 @@
-import { parseCli, RUN_USAGE, UsageError, USAGE } from './args.ts';
+import { parseCli, RUN_USAGE, UsageError, USAGE, usageHint } from './args.ts';
 import { baselineCommand } from './baseline.ts';
 import { diffCommand } from './diff.ts';
 import { installBrowser } from './install-browser.ts';
@@ -37,7 +37,7 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         return await runCommand(command, io);
     }
   } catch (error) {
-    if (error instanceof UsageError) io.stderr(`${error.message}\n\n${USAGE}`);
+    if (error instanceof UsageError) io.stderr(`${error.message}\n${usageHint(error.command)}\n`);
     else io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
