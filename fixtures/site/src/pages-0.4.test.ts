@@ -91,6 +91,38 @@ describe('/checkout/test-payment', () => {
     expect(site.cardSubmits.slice(before)).toEqual(['4242424242424242']);
   });
 
+  test.each(['dup-first', 'dup-second'])('/checkout/test-payment-%s has a hidden duplicate beside the real frame and the marker in the same parent', async (name) => {
+    const html = await page(`/checkout/test-payment-${name}`);
+    const container = html.slice(html.indexOf('<div id="card-container">'), html.indexOf('</div>'));
+    expect(container.match(/<iframe id="card-frame"/g)).toHaveLength(2);
+    expect(container).toContain('class="duplicate" title="Card details" style="display:none"');
+    expect(container).toContain('id="pw-test-mode"');
+    expect(container).not.toContain('loading="lazy"');
+    expect(html.indexOf('class="duplicate"') < html.indexOf('class="real"')).toBe(name === 'dup-first');
+  });
+
+  test('the extra-input variant frames a card frame with a hidden second #cc-number', async () => {
+    expect(await page('/checkout/test-payment-dup-input')).toContain('/card-frame-extra-input');
+    const html = await (await fetch(`${site.paymentFrameUrl}/card-frame-extra-input`)).text();
+    expect(html.match(/id="cc-number"/g)).toHaveLength(2);
+    expect(html).toContain('id="cc-number" style="display:none"');
+  });
+
+  test.each([
+    ['inside', true],
+    ['outside', false],
+  ])('/checkout/test-payment-split-%s has one frame per field and the marker %s the card container', async (name, inside) => {
+    const html = await page(`/checkout/test-payment-split-${name}`);
+    for (const id of ['card-frame-number', 'card-frame-exp', 'card-frame-csc']) expect(html).toContain(`<iframe id="${id}"`);
+    const container = html.slice(html.indexOf('<div id="card-container">'), html.indexOf('<button id="pay"'));
+    expect(container.includes('id="pw-test-mode"')).toBe(inside);
+    for (const id of ['number', 'exp', 'csc']) {
+      const res = await fetch(`${site.paymentFrameUrl}/card-frame-${id}`);
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain(`id="cc-${id}"`);
+    }
+  });
+
   test('the card server answers nothing else', async () => {
     expect((await fetch(`${site.paymentFrameUrl}/`)).status).toBe(404);
     expect((await fetch(`${site.paymentFrameUrl}/card-submit`)).status).toBe(404);
