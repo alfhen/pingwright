@@ -6,10 +6,10 @@ const HEX = /[0-9a-f]{64}/;
 test('possibleRealData names the hit parameter that carries a foreign hash, and never the value', async () => {
   const r = await run('identity-messages');
   const flag = r.records!.flags.find((f) => f.kind === 'possibleRealData');
-  expect(flag?.detail).toMatch(/carries 1 hash value\(s\) that are not from the run identity, in postal_code, user_data\.postal_code$/);
+  expect(flag?.detail).toMatch(/carries 1 hash value\(s\) that are not from the run identity, in user_data\.postal_code$/);
   const builtin = r.records!.results.find((x) => x.expectation === 'builtin: possibleRealData');
   expect(builtin?.pass).toBe(false);
-  expect(builtin?.message).toContain('in postal_code, user_data.postal_code');
+  expect(builtin?.message).toContain('in user_data.postal_code');
   const rule = r.records!.results.find((x) => x.expectation.includes('hashesMatch'));
   expect(rule?.message).toContain('Not matching: user_data.postal_code');
   const messages = [flag?.detail, builtin?.message, rule?.message].join('\n');

@@ -5,6 +5,7 @@ import {
   hashPhone,
   isLibraryLoadPath,
   scan,
+  valueKinds,
   sha256,
   newId,
   type ConsentEpoch,
@@ -25,7 +26,7 @@ import {
   type Step,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, bodyEntries, guardFieldName, multipartChunks, multipartPartName, multipartParts, parseMultipartChunk, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartPart, bodyEntries, guardFieldName, multipartChunks, multipartPartName, parseMultipartChunk, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -1005,6 +1006,14 @@ function isBinaryText(body: string): boolean {
 interface ScanText {
   text: string;
   where: string;
+  /** Marks a text named by a raw body path. A hit parameter path names the same value better. */
+  leaf?: true;
+}
+
+// A finding is named by the text that was scanned, so a name that holds a value once its brackets are gone prints as (other).
+function leafName(name: string): string {
+  const kinds = valueKinds(name.replace(/\[\]/g, ''));
+  return kinds.has('email') || kinds.has('phone') ? '(other)' : guardFieldName(name);
 }
 
 // A leaf is scanned as `name=value` so a key that holds an email is found.
@@ -1015,10 +1024,11 @@ function leafTexts(text: string): ScanText[] {
     const isJson = /^\s*[{[]/.test(text);
     // The ID-key exemptions look at the key right before the value, so a JSON path is cut to its last segment.
     for (const { name, value } of entries) {
-      const path = isJson ? name.replace(/\[\]/g, '').split('.') : [name];
-      const where = guardFieldName(name);
-      if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where });
-      out.push({ text: `${path[path.length - 1]}=${value}`, where });
+      const path = isJson ? name.split('.') : [name];
+      path[path.length - 1] = path[path.length - 1]!.replace(/\[\]/g, '');
+      const where = leafName(name);
+      if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where, leaf: true });
+      out.push({ text: `${path[path.length - 1]}=${value}`, where, leaf: true });
     }
   }
   return out;
@@ -1027,9 +1037,10 @@ function leafTexts(text: string): ScanText[] {
 // Headers, preamble, epilogue and text parts stay in the text, so nothing a whole-body scan finds is lost.
 function withoutBinaryParts(headers: Record<string, string>, body: string): string {
   const split = multipartChunks(body, headers);
-  if (!split) return body;
+  if (!split || split.chunks.length < 2) return body;
   return split.chunks
-    .map((raw) => {
+    .map((raw, i) => {
+      if (i === 0 || raw.startsWith('--')) return raw;
       const part = parseMultipartChunk(raw);
       return part && isBinaryBody(part.headers, part.body) ? raw.slice(0, part.bodyStart) : raw;
     })
@@ -1042,15 +1053,25 @@ function withoutBinaryLines(body: string): string {
   return body.split(/(?<=\n)/).filter((line) => !isBinaryText(line.replace(/\r?\n$/, ''))).join('');
 }
 
+// The preamble, the close delimiter with its epilogue, and a body with no boundary line are not parts.
+function realParts(headers: Record<string, string>, body: string): MultipartPart[] {
+  const split = multipartChunks(body, headers);
+  if (!split || split.chunks.length < 2) return [];
+  return split.chunks.slice(1).filter((raw) => !raw.startsWith('--')).flatMap((raw) => {
+    const part = parseMultipartChunk(raw);
+    return part ? [{ headers: part.headers, body: part.body }] : [];
+  });
+}
+
 // The base text is the whole body minus binary pieces. Each part or line also gets leaf texts, so a value reports with its path.
 function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   if (body === '' || headersSayBinary(headers)) return [];
-  const parts = multipartParts(body, headers);
-  if (parts?.length) {
+  const parts = realParts(headers, body);
+  if (parts.length) {
     const named = parts.flatMap((part) => {
       const name = multipartPartName(part);
       if (isBinaryBody(part.headers, part.body)) return [];
-      return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name) }];
+      return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: leafName(name), leaf: true as const }];
     });
     return [{ text: withoutBinaryParts(headers, body), where: 'the body' }, ...named];
   }
@@ -1071,7 +1092,7 @@ export interface ForeignData {
 
 /** Finds email, phone and hash values in requests and hits that are not the identity's own. Takes raw records. */
 export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[], identity: Identity): ForeignData[] {
-  const byRequest = new Map<string, { texts: { text: string; where: string }[]; hitIds: string[]; stepId: string | null }>();
+  const byRequest = new Map<string, { texts: ScanText[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
     let entry = byRequest.get(key);
     if (!entry) byRequest.set(key, (entry = { texts: [], hitIds: [], stepId }));
@@ -1096,12 +1117,13 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
   );
   const out: ForeignData[] = [];
   for (const [requestId, entry] of byRequest) {
-    const found = new Map<string, { kind: string; where: Set<string> }>();
-    for (const { text, where } of entry.texts) {
+    const found = new Map<string, { kind: string; where: Map<string, number> }>();
+    for (const { text, where, leaf } of entry.texts) {
+      const tier = where === 'the URL' || where === 'the body' ? 2 : leaf ? 1 : 0;
       for (const m of scan(text, identity, { stableHashes })) {
         const key = `${m.kind}:${m.value}`;
-        const seen = found.get(key) ?? { kind: m.kind, where: new Set<string>() };
-        seen.where.add(where);
+        const seen = found.get(key) ?? { kind: m.kind, where: new Map<string, number>() };
+        seen.where.set(where, Math.min(tier, seen.where.get(where) ?? tier));
         found.set(key, seen);
       }
     }
@@ -1109,8 +1131,8 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     const kinds = [...new Set([...found.values()].map((f) => f.kind))].join(', ');
     const places = new Set<string>();
     for (const { where } of found.values()) {
-      const named = [...where].filter((w) => w !== 'the URL' && w !== 'the body');
-      for (const w of named.length ? named : where) places.add(w);
+      const best = Math.min(...where.values());
+      for (const [w, tier] of where) if (tier === best) places.add(w);
     }
     const shown = [...places].sort();
     const in_ = shown.length > 5 ? `${shown.slice(0, 5).join(', ')} and ${shown.length - 5} more` : shown.join(', ');
