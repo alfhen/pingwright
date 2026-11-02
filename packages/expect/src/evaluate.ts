@@ -25,7 +25,7 @@ import {
   type Step,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, guardFieldName, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, bodyEntries, guardFieldName, multipartPartName, multipartParts, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -980,11 +980,19 @@ const BINARY_MIN_LENGTH = 16;
 
 // The recorder keeps bodies as UTF-8 decoded text, so most high bytes of a compressed body are U+FFFD. The byte check runs whatever the
 // content-type says, because beacons often send compressed bytes as text/plain.
-function isBinaryBody(headers: Record<string, string>, body: string): boolean {
+function headersSayBinary(headers: Record<string, string>): boolean {
   const header = (name: string) => Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1]?.trim().toLowerCase() ?? '';
   const encoding = header('content-encoding');
   if (encoding !== '' && encoding !== 'identity') return true;
-  if (BINARY_CONTENT_TYPE.test(header('content-type'))) return true;
+  return BINARY_CONTENT_TYPE.test(header('content-type'));
+}
+
+function isBinaryBody(headers: Record<string, string>, body: string): boolean {
+  if (headersSayBinary(headers)) return true;
+  return isBinaryText(body);
+}
+
+function isBinaryText(body: string): boolean {
   if (body.length < BINARY_MIN_LENGTH) return false;
   let binary = 0;
   for (let i = 0; i < body.length; i++) {
@@ -992,6 +1000,38 @@ function isBinaryBody(headers: Record<string, string>, body: string): boolean {
     if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7f && c <= 0x9f)) binary++;
   }
   return binary / body.length >= BINARY_SHARE;
+}
+
+interface ScanText {
+  text: string;
+  where: string;
+}
+
+// A leaf is scanned as `name=value` so a key that holds an email is found. The whole text is scanned too, so a name with no value is not lost.
+function textPieces(text: string): ScanText[] {
+  if (isBinaryText(text)) return [];
+  const out: ScanText[] = [{ text, where: 'the body' }];
+  const { entries, parsed } = bodyEntries({ postData: text });
+  if (parsed) for (const { name, value } of entries) out.push({ text: `${name}=${value}`, where: guardFieldName(name) });
+  return out;
+}
+
+// Each multipart part and each line of a body that is not JSON or a form is judged on its own, so a compressed part or line does not hide a text one.
+function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
+  if (body === '' || headersSayBinary(headers)) return [];
+  const parts = multipartParts(body, headers);
+  if (parts?.length) {
+    return parts.flatMap((part) => {
+      if (isBinaryBody(part.headers, part.body)) return [];
+      const name = multipartPartName(part);
+      return name === undefined ? textPieces(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name) }];
+    });
+  }
+  const { entries, parsed } = bodyEntries({ postData: body });
+  if (!(parsed && entries.length > 0) && /[\r\n]/.test(body.trim())) {
+    return body.split(/\r?\n/).filter((line) => line.trim() !== '').flatMap(textPieces);
+  }
+  return textPieces(body);
 }
 
 export interface ForeignData {
@@ -1016,7 +1056,7 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
     const texts = slot(request.id, request.stepId).texts;
     for (const text of [url, ...pathSegments(url)]) texts.push({ text, where: 'the URL' });
-    if (!isBinaryBody(request.headers, persisted.postData)) texts.push({ text: persisted.postData, where: 'the body' });
+    texts.push(...bodyTexts(request.headers, persisted.postData));
   }
   for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);

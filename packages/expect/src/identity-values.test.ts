@@ -134,8 +134,10 @@ test('possibleRealData says the URL or the body for a value no decoder read', ()
   const inUrl = findForeignData([rawRequest(`https://tracker.example.com/p?x=${foreign}`)], [], identity);
   expect(inUrl[0]!.detail).toMatch(/, in the URL$/);
   const inBody = findForeignData([rawRequest('https://tracker.example.com/p', `a=1&x=${foreign}`)], [], identity);
-  expect(inBody[0]!.detail).toMatch(/, in the body$/);
-  expect(inUrl[0]!.detail + inBody[0]!.detail).not.toContain(foreign);
+  expect(inBody[0]!.detail).toMatch(/, in x$/);
+  const plainText = findForeignData([rawRequest('https://tracker.example.com/p', foreign)], [], identity);
+  expect(plainText[0]!.detail).toMatch(/, in the body$/);
+  expect(inUrl[0]!.detail + inBody[0]!.detail + plainText[0]!.detail).not.toContain(foreign);
 });
 
 test('possibleRealData prints a value used as a key as (other)', () => {
@@ -206,8 +208,70 @@ test('possibleRealData still scans text subtypes that share a binary prefix', ()
 
 test('possibleRealData still scans a plain body and the URL of a compressed request', () => {
   const plain = findForeignData([withHeaders('a=1&email=visitor@other-person.example', { 'content-type': 'text/plain' })], [], identity);
-  expect(plain[0]!.detail).toMatch(/, in the body$/);
+  expect(plain[0]!.detail).toMatch(/, in email$/);
   expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-encoding': 'identity' })], [], identity)).toHaveLength(1);
   const compressed = { ...rawRequest('https://replay.tagreeve.invalid/collect?e=visitor@other-person.example', asRecorded(randomBytes)), headers: { 'content-encoding': 'gzip' } };
   expect(findForeignData([compressed], [], identity)[0]!.detail).toMatch(/, in the URL$/);
+});
+
+const FOREIGN_HASH = hashEmail('other@example.com').hex;
+const MULTIPART = { 'content-type': 'multipart/form-data; boundary=XB' };
+const part = (name: string, body: string, extra = '') => `--XB\r\nContent-Disposition: form-data; name="${name}"${extra}\r\n\r\n${body}\r\n`;
+const detailsOf = (request: Request) => findForeignData([request], [], identity).map((l) => l.detail);
+
+test('possibleRealData names the JSON path of a foreign hash', () => {
+  const body = JSON.stringify({ event: 'view', customerHashed: { country: FOREIGN_HASH } });
+  expect(body).toContain(FOREIGN_HASH);
+  const [detail] = detailsOf(withHeaders(body, { 'content-type': 'application/json' }));
+  expect(detail).toMatch(/in customerHashed\.country$/);
+  expect(detail).not.toContain(FOREIGN_HASH);
+});
+
+test('possibleRealData prints a value-like path segment of a JSON body as (other)', () => {
+  const body = JSON.stringify({ [FOREIGN_HASH]: { country: 'x' }, ok: { v: FOREIGN_HASH } });
+  expect(body).toContain(FOREIGN_HASH);
+  const details = detailsOf(rawRequest(REPLAY, body)).join('\n');
+  expect(details).toMatch(/in \(other\)\.country, ok\.v$/);
+  expect(details).not.toContain(FOREIGN_HASH);
+});
+
+test('possibleRealData names the key of a form body and finds a key that is the email', () => {
+  const form = `a=1&hashed_country=${FOREIGN_HASH}`;
+  expect(form).toContain(FOREIGN_HASH);
+  expect(detailsOf(rawRequest(REPLAY, form))[0]).toMatch(/in hashed_country$/);
+  const [detail] = detailsOf(rawRequest(REPLAY, `${EMAIL}=1`));
+  expect(detail).toMatch(/carries 1 email value/);
+  expect(detail).not.toContain(EMAIL);
+});
+
+test('possibleRealData scans a name-only form body and a plain-text body as one text', () => {
+  expect(new URLSearchParams(EMAIL).get(EMAIL)).toBe('');
+  expect(detailsOf(rawRequest(REPLAY, EMAIL))[0]).toMatch(/in the body$/);
+  expect(detailsOf(withHeaders(`note ${EMAIL}`, { 'content-type': 'text/plain' }))[0]).toMatch(/in the body$/);
+});
+
+test('possibleRealData skips the binary part of a multipart body and scans its text field', () => {
+  const binary = asRecorded(randomBytes);
+  expect(binary).toContain(EMAIL);
+  const filePart = part('file', binary, '; filename="a.bin"\r\nContent-Type: application/octet-stream');
+  const body = filePart + part('contact', EMAIL) + '--XB--\r\n';
+  expect(body).toContain(EMAIL);
+  const details = detailsOf(withHeaders(body, MULTIPART));
+  expect(details).toHaveLength(1);
+  expect(details[0]).toMatch(/in contact$/);
+  expect(detailsOf(withHeaders(filePart + '--XB--\r\n', MULTIPART))).toHaveLength(0);
+});
+
+test('possibleRealData scans a JSON header line and skips a compressed line after it', () => {
+  const binary = asRecorded(gzipSync(randomBytes));
+  const header = JSON.stringify({ contact: EMAIL });
+  expect(header).toContain(EMAIL);
+  expect(detailsOf(rawRequest(REPLAY, `${header}\n${binary}`))).toHaveLength(1);
+  expect(detailsOf(rawRequest(REPLAY, `{"a":1}\n${binary}`))).toHaveLength(0);
+});
+
+test('possibleRealData skips a text body padded with many control characters', () => {
+  const body = `a=${EMAIL}${'\u0001'.repeat(40)}`;
+  expect(body).toContain(EMAIL);
+  expect(detailsOf(rawRequest(REPLAY, body))).toHaveLength(0);
 });

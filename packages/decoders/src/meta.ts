@@ -1,6 +1,6 @@
 import type { Hit, Request } from '@tagreeve/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
-import { bodyComplete, queryEntries, withFields } from './fields.ts';
+import { bodyComplete, multipartPartName, multipartParts, queryEntries, withFields } from './fields.ts';
 
 const META_HOSTS = new Set(['facebook.com', 'www.facebook.com']);
 
@@ -13,24 +13,16 @@ function isMetaTr(req: Request): boolean {
   }
 }
 
-function multipartFields(body: string, boundary: string): [string, string][] {
-  const fields: [string, string][] = [];
-  for (const part of body.split(`--${boundary}`)) {
-    const split = /\r?\n\r?\n/.exec(part);
-    if (!split) continue;
-    const name = /content-disposition:[^\r\n]*?\bname="([^"]*)"/i.exec(part.slice(0, split.index))?.[1];
-    if (name === undefined) continue;
-    fields.push([name, part.slice(split.index + split[0].length).replace(/\r?\n$/, '')]);
-  }
-  return fields;
-}
-
 function bodyFields(req: Request): Iterable<[string, string]> {
   const body = req.postData ?? '';
-  const contentType = Object.entries(req.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? '';
-  const m = /multipart\/form-data;.*?boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
-  const boundary = m?.[1] ?? m?.[2];
-  return boundary ? multipartFields(body, boundary) : new URLSearchParams(body);
+  const parts = multipartParts(body, req.headers);
+  if (!parts) return new URLSearchParams(body);
+  const fields: [string, string][] = [];
+  for (const part of parts) {
+    const name = multipartPartName(part);
+    if (name !== undefined) fields.push([name, part.body]);
+  }
+  return fields;
 }
 
 function allParams(req: Request): URLSearchParams {

@@ -75,6 +75,37 @@ export function bodyEntries(req: Pick<Request, 'postData'>): BodyEntries {
   return { entries: queryEntries(new URLSearchParams(text)), parsed: true };
 }
 
+export interface MultipartPart {
+  /** Header names are lower case. */
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** The parts of a multipart/form-data body, or null when the headers name no boundary. Parts with no blank line after their headers are dropped. */
+export function multipartParts(body: string, headers: Record<string, string>): MultipartPart[] | null {
+  const contentType = Object.entries(headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? '';
+  const m = /multipart\/form-data;.*?boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
+  const boundary = m?.[1] ?? m?.[2];
+  if (!boundary) return null;
+  const parts: MultipartPart[] = [];
+  for (const raw of body.split(`--${boundary}`)) {
+    const split = /\r?\n\r?\n/.exec(raw);
+    if (!split) continue;
+    const partHeaders: Record<string, string> = {};
+    for (const line of raw.slice(0, split.index).split(/\r?\n/)) {
+      const colon = line.indexOf(':');
+      if (colon > 0) partHeaders[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
+    }
+    parts.push({ headers: partHeaders, body: raw.slice(split.index + split[0].length).replace(/\r?\n$/, '') });
+  }
+  return parts;
+}
+
+/** The field name in a part's content-disposition, if it has one. */
+export function multipartPartName(part: MultipartPart): string | undefined {
+  return /\bname="([^"]*)"/i.exec(part.headers['content-disposition'] ?? '')?.[1];
+}
+
 /** False when the recorder holds only part of the body, or none of a body the request must have had. */
 export function bodyComplete(req: Pick<Request, 'method' | 'postData' | 'captured'>): boolean {
   if (req.postData === null) return !(req.captured === 'netlog' && BODY_METHODS.has(req.method.toUpperCase()));

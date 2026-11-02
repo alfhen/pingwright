@@ -2,8 +2,18 @@ import { createHash } from 'node:crypto';
 import { MAX_POST_DATA, newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest } from './index.ts';
-import { guardFieldName } from './fields.ts';
+import { guardFieldName, multipartPartName, multipartParts } from './fields.ts';
 import { identifierClass, identifierSignal } from './identifiers.ts';
+
+test('multipartParts splits a body into headers and bodies, and returns null without a boundary', () => {
+  const body = '--B\r\nContent-Disposition: form-data; name="a"\r\n\r\none\r\n--B\r\nContent-Disposition: form-data; name="f"; filename="x.bin"\r\nContent-Type: image/png\r\n\r\ntwo\r\n--B--\r\n';
+  const parts = multipartParts(body, { 'Content-Type': 'multipart/form-data; boundary=B' });
+  expect(parts).toHaveLength(2);
+  expect(parts![0]).toEqual({ headers: { 'content-disposition': 'form-data; name="a"' }, body: 'one' });
+  expect(parts![1]!.headers['content-type']).toBe('image/png');
+  expect(multipartPartName(parts![1]!)).toBe('f');
+  expect(multipartParts(body, { 'content-type': 'text/plain' })).toBeNull();
+});
 
 function req(url: string, over: Partial<Request> = {}): Request {
   return {

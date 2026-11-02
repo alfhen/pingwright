@@ -7,7 +7,7 @@
 
 <!-- P01 -->
 
-<!-- E01 -->
+- `possibleRealData` now names the path of a value in a JSON or form body, for example `in customerHashed.country`, and no longer says `in the body` for it. A multipart body is split into parts: a binary part is skipped, and the text fields are scanned and named. A multi-line body is checked line by line, so one compressed line no longer hides a text line. (#610, #620, #622, #623)
 
 <!-- B01 -->
 
