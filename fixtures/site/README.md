@@ -106,7 +106,7 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/unload-request-body` has no banner and no tags. In `pagehide` it sends `fetch(new Request(url, { method: 'POST', body, keepalive: true }))` to `https://sgtm.tagreeve.invalid/g/collect`. The body holds two GA4 events, `add_to_cart` and `view_item`, one per line.
 
-`/compressed-beacon` has no banner and no tags. On load it posts 400 high bytes as `text/plain` to `https://replay.example.com/collect`. The bytes start with the gzip magic and hold the email-shaped value `visitor@other-person.example`.
+`/compressed-beacon` has no banner and no tags. On load it posts 400 high bytes as `text/plain` to `https://replay.tagreeve.invalid/collect`. The bytes start with the gzip magic and hold the email-shaped value `visitor@other-person.example`.
 
 ## Unload gap page
 
