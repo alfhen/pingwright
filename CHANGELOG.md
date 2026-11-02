@@ -1,9 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.4.0-rc.2
 
 ### Fixed
 - `possibleRealData` no longer scans compressed or binary request bodies, such as a session-replay beacon. Bytes in them can look like an email by chance. The URL is still scanned, and a text body is scanned as before. (#614)
+
+<!-- P01 -->
+
+<!-- E01 -->
+
+<!-- B01 -->
+
+<!-- C01 -->
+
+<!-- B02 -->
+
+<!-- E02 -->
 
 ## 0.4.0-rc.1
 
