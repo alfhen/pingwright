@@ -1,6 +1,6 @@
 import type { Identity, Step as StepRecord } from '@tagreeve/core';
 import { canonicalCard, findPaymentProvider, type PaymentProvider } from '@tagreeve/expect';
-import type { Page } from 'playwright';
+import type { ElementHandle, Page } from 'playwright';
 import { isLoopbackHost } from './guard.ts';
 import type { Recorder } from './recorder.ts';
 
@@ -51,6 +51,8 @@ const MARKER_TIMEOUT_MS = 5000;
 export interface TestPayment {
   /** The `--allow-test-payment` host. */
   host: string;
+  /** Provider ids the user declared to be in test mode on this host. A declared provider skips the page marker. */
+  declaredProviders?: readonly string[];
 }
 
 export function normalizeHost(host: string): string {
@@ -75,18 +77,38 @@ function hostOf(url: string): string {
   }
 }
 
-/** The frame element exists and its document is served from the provider's card host. */
-async function cardFrameServed(page: Page, field: CardField, cardHost: string, deadline: number): Promise<boolean> {
+/** The frame element, once it exists and its document is served from the provider's card host. */
+async function cardFrameServed(page: Page, field: CardField, cardHost: string, deadline: number): Promise<ElementHandle | undefined> {
   for (;;) {
     try {
       const element = await page.locator(field.frame).first().elementHandle({ timeout: Math.max(1, deadline - Date.now()) });
       const frame = await element?.contentFrame();
-      if (frame && hostOf(frame.url()) === cardHost) return true;
+      if (element && frame && hostOf(frame.url()) === cardHost) return element;
     } catch {
-      return false;
+      return undefined;
     }
-    if (Date.now() >= deadline) return false;
+    if (Date.now() >= deadline) return undefined;
     await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+/**
+ * The marker must sit inside the nearest element that holds every card frame, so merchant copy elsewhere on the page cannot pass.
+ * The container starts at the first frame's parent: a frame's own document is not page text.
+ */
+async function markerInCardContainer(frames: ElementHandle[], marker: string, timeout: number): Promise<boolean> {
+  try {
+    const container = await frames[0]!.evaluateHandle((first, all) => {
+      let node: Element | null = first.parentElement;
+      while (node && !all.every((f) => node!.contains(f))) node = node.parentElement;
+      return node;
+    }, frames);
+    const element = container.asElement();
+    if (!element) return false;
+    await element.waitForSelector(marker, { state: 'visible', timeout });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -122,23 +144,23 @@ export async function runPayment(
   if (hostOf(page.url()) !== allowed || normalizeHost(siteHost) !== allowed) {
     throw new Error('test mode not detected (the page is not on the allowed test payment host)');
   }
+  const declared = testPayment.declaredProviders?.includes(provider.id) === true;
   const wait = Math.min(timeout, MARKER_TIMEOUT_MS);
-  try {
-    await page.locator(runtime.marker).first().waitFor({ state: 'visible', timeout: wait });
-  } catch {
-    throw new Error('test mode not detected');
-  }
   const deadline = Date.now() + wait;
+  const frames: ElementHandle[] = [];
   for (const field of runtime.fields) {
-    if (!(await cardFrameServed(page, field, runtime.cardHost, deadline))) throw new Error(`card frame not found (${field.kind})`);
+    const frame = await cardFrameServed(page, field, runtime.cardHost, deadline);
+    if (!frame) throw new Error(`card frame not found (${field.kind})`);
+    frames.push(frame);
   }
-  record.payment = { provider: provider.id, mode: 'test' };
+  if (!declared && !(await markerInCardContainer(frames, runtime.marker, wait))) throw new Error('test mode not detected');
   recorder.holdRedaction();
-  for (const field of runtime.fields) {
+  for (const [index, field] of runtime.fields.entries()) {
     try {
       await page.frameLocator(field.frame).locator(field.input).fill(valueOf(field.kind, provider, card, identity), { timeout });
     } catch {
       throw new Error(`card field ${field.kind} could not be filled`);
     }
+    if (index === 0) record.payment = { provider: provider.id, mode: 'test', testMode: declared ? 'declared' : 'marker' };
   }
 }

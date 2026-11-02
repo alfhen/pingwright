@@ -67,7 +67,7 @@ A scenario can fill forms, for example at checkout. Tagreeve never uses a real p
 
 Because Tagreeve knows what it typed, it can check what the site sends. Many sites turn an email address into a hash before they send it. A hash is a fixed code made from the address. The same address always gives the same hash. Tagreeve can compute the hash of the fake email address, so it can tell if the site sent another value. If the record file holds an email address or phone number that is not the fake one, Tagreeve reports it as possible real data.
 
-Tagreeve never automates a log-in on a site on the internet. A payment there is a handoff step too: a person does it in a visible window while Tagreeve keeps recording. The one exception is an opt-in `payment` step that types a payment provider's documented test card. It runs only when you name the host on the command line, list the host in a file in your own config folder, and the page shows the provider's test mode. See the Test payments paragraph in the [CLI reference](../cli.md).
+Tagreeve never automates a log-in on a site on the internet. A payment there is a handoff step too: a person does it in a visible window while Tagreeve keeps recording. The one exception is an opt-in `payment` step that types a payment provider's documented test card. It runs only when you name the host on the command line, list the host in a file in your own config folder, and the provider is in test mode. You declare that for the host in the same file, or the page shows the provider's test mode inside the card form. See the Test payments paragraph in the [CLI reference](../cli.md).
 
 ## Go deeper
 

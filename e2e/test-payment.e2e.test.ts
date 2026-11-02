@@ -34,8 +34,8 @@ test('all gates pass: the card is typed into the frame, recorded by name only an
   expect(r.failed.filter((f) => f !== SANDBOX)).toEqual([]);
   expect(site.cardSubmits).toEqual([CARD]);
   const step = r.records!.steps.find((s) => s.payment);
-  expect(step?.payment).toEqual({ provider: 'fixture', mode: 'test' });
-  expect(JSON.parse(r.stdout).testPayment).toEqual({ provider: 'fixture', host: 'localhost' });
+  expect(step?.payment).toEqual({ provider: 'fixture', mode: 'test', testMode: 'marker' });
+  expect(JSON.parse(r.stdout).testPayment).toEqual({ provider: 'fixture', host: 'localhost', testMode: 'marker' });
   expect(r.records!.run.testLoopbackHosted).toBe(true);
   expect(r.stderr).toContain(`${SEAM} is set`);
 
@@ -69,7 +69,7 @@ test('the text summary prints the TEST PAYMENT line and no card value', async ()
   const env = await config(['localhost']);
   const r = await runCli(['run', scenario('test-payment'), '--site', site.url, '--out', outDir, ...allow('localhost')], env);
   expect(r.code, r.stderr).toBe(0);
-  expect(r.stdout).toContain('TEST PAYMENT: fixture on localhost');
+  expect(r.stdout).toContain('TEST PAYMENT: fixture on localhost (test mode on page)');
   expect(r.stdout + r.stderr).not.toMatch(/4242|12\/40/);
 }, 120_000);
 
@@ -97,6 +97,7 @@ test('without the test-mode marker the step fails and nothing is typed', async (
   const r = await run('test-payment-marker-off', allow('localhost'), await config(['localhost']));
   expect(r.code).toBe(2);
   expect(r.stderr).toContain('test mode not detected');
+  expect(r.stderr).toContain('Declare it in');
   expect(site.cardSubmits).toEqual([]);
 }, 120_000);
 

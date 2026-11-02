@@ -244,14 +244,27 @@ test('a test payment prints one line with the provider and host, and carries nam
     hits: [],
     consentEpochs: [],
     flags: [],
-    steps: [{ label: 'start' }, { label: 'payment-1', payment: { provider: 'shopify-bogus', mode: 'test' } }],
+    steps: [{ label: 'start' }, { label: 'payment-1', payment: { provider: 'shopify-bogus', mode: 'test', testMode: 'marker' } }],
   } as unknown as RunRecords;
   const summary = buildSummary(records, [result(true)], 'p');
-  expect(summary.testPayment).toEqual({ provider: 'shopify-bogus', host: 'shop.example.com' });
+  expect(summary.testPayment).toEqual({ provider: 'shopify-bogus', host: 'shop.example.com', testMode: 'marker' });
   const text = formatSummary(summary);
-  expect(text.split('\n')[0]).toBe('TEST PAYMENT: shopify-bogus on shop.example.com');
+  expect(text.split('\n')[0]).toBe('TEST PAYMENT: shopify-bogus on shop.example.com (test mode on page)');
   expect(JSON.stringify(summary)).not.toMatch(/token|12\/40|"1"/);
   const without = buildSummary({ ...records, steps: [{ label: 'start' }] } as unknown as RunRecords, [result(true)], 'p');
   expect(without).not.toHaveProperty('testPayment');
   expect(formatSummary(without)).not.toContain('TEST PAYMENT');
+});
+
+test('a declared test payment says so in the summary line and the JSON object', () => {
+  const records = {
+    run: { id: 'run_1', site: 'https://shop.example.com/checkout' },
+    hits: [],
+    consentEpochs: [],
+    flags: [],
+    steps: [{ label: 'payment-1', payment: { provider: 'shopify-test', mode: 'test', testMode: 'declared' } }],
+  } as unknown as RunRecords;
+  const summary = buildSummary(records, [result(true)], 'p');
+  expect(summary.testPayment).toEqual({ provider: 'shopify-test', host: 'shop.example.com', testMode: 'declared' });
+  expect(formatSummary(summary).split('\n')[0]).toBe('TEST PAYMENT: shopify-test on shop.example.com (test mode declared)');
 });

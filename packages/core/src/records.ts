@@ -98,8 +98,8 @@ export interface Step {
   handoffEnd?: 'done' | 'enter' | 'until' | 'timeout';
   /** Selectors of `optional` fill entries whose field was not on the page. Never values. */
   skippedFields?: string[];
-  /** Set on a `payment` step once it typed a provider's documented test card. Never the values. */
-  payment?: { provider: string; mode: 'test' };
+  /** Set on a `payment` step once its first key is typed. `testMode` says whether the user declared the host or the page showed the marker. Never the values. */
+  payment?: { provider: string; mode: 'test'; testMode?: 'declared' | 'marker' };
   /** Why the step failed. Absent when it passed. */
   error?: string;
 }

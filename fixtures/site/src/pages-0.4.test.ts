@@ -63,6 +63,13 @@ describe('/checkout/test-payment', () => {
     expect(html).toContain('id="pay"');
   });
 
+  test('the marker sits inside the payment form, with the card iframe', async () => {
+    const html = await page('/checkout/test-payment');
+    const form = html.slice(html.indexOf('<form id="payment-form">'), html.indexOf('</form>'));
+    expect(form).toContain('id="pw-test-mode"');
+    expect(form).toContain('id="card-frame"');
+  });
+
   test('?marker=off leaves out #pw-test-mode', async () => {
     const html = await page('/checkout/test-payment?marker=off');
     expect(html).not.toContain('pw-test-mode');
