@@ -121,8 +121,12 @@ function shopHandler(config: string) {
     } else if (path === containerScriptPixelPath) {
       await sendFile(res, 'container-frame-script.html');
     } else if (path === '/checkout/test-payment') {
-      const marker = new URL(req.url ?? '/', 'http://localhost').searchParams.get('marker') === 'off' ? '' : testModeMarker;
-      await sendFile(res, page!, (html) => html.replace('<!--pw-marker-->', marker));
+      const mode = new URL(req.url ?? '/', 'http://localhost').searchParams.get('marker');
+      await sendFile(res, page!, (html) =>
+        mode === 'outside'
+          ? html.replace('<!--pw-marker-->', '').replace('<!--pw-marker-outside-->', testModeMarker)
+          : html.replace('<!--pw-marker-->', mode === 'off' ? '' : testModeMarker),
+      );
     } else if (page) {
       await sendFile(res, page);
     } else if (/^\/assets\/app-[0-9a-f]{64}\.js$/.test(path)) {

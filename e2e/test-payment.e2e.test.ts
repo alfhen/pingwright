@@ -101,6 +101,14 @@ test('without the test-mode marker the step fails and nothing is typed', async (
   expect(site.cardSubmits).toEqual([]);
 }, 120_000);
 
+test('a marker outside the card container does not pass and nothing is typed', async () => {
+  const r = await run('test-payment-marker-outside', allow('localhost'), await config(['localhost']));
+  expect(r.code).toBe(2);
+  expect(r.stderr).toContain('test mode not detected');
+  expect(r.stderr).toContain('Declare it in');
+  expect(site.cardSubmits).toEqual([]);
+}, 120_000);
+
 test('a card value outside the provider table is a scenario error that does not repeat it', async () => {
   const r = await run('test-payment-bad-card', allow('localhost'), await config(['localhost']));
   expect(r.code).toBe(2);
