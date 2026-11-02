@@ -425,3 +425,38 @@ test.each(['xxxxxxxxxxxx[]555-123-4567', '555-123-4567[]xxxxxxxxxxxx'])('possibl
     expect(details).not.toMatch(/\d{3}-\d{3}/);
   }
 });
+
+const paddedBody = (junk: string) => `${EMAIL}${junk}`.padEnd(40, ' ');
+const bodyScanned = (text: string) => findForeignData([rawRequest(REPLAY, text)], [], identity).length;
+
+test('possibleRealData skips a body at 10% binary characters and keeps one just under', () => {
+  expect(bodyScanned(paddedBody('���'))).toBe(1);
+  expect(bodyScanned(paddedBody('����'))).toBe(0);
+  expect(bodyScanned(paddedBody('\u0001\u0001\u0001'))).toBe(1);
+  expect(bodyScanned(paddedBody('\u0001\u0001\u0001\u0001'))).toBe(0);
+  expect(bodyScanned(paddedBody('\t\n\r\t\t\t\t\t'))).toBe(1);
+});
+
+test('possibleRealData counts C1 characters and 0x7f as binary', () => {
+  expect(bodyScanned(paddedBody('\u0085\u0085\u0085'))).toBe(1);
+  expect(bodyScanned(paddedBody('\u0085\u009f\u0085\u009f'))).toBe(0);
+  expect(bodyScanned(paddedBody('\u007f\u007f\u007f\u007f'))).toBe(0);
+  expect(bodyScanned(paddedBody(' ÿ ÿ '))).toBe(1);
+});
+
+test('a form segment with an empty field name is placed in the body', () => {
+  const only = findForeignData([rawRequest(REPLAY, `=${EMAIL}`)], [], identity);
+  expect(only.length).toBeGreaterThan(0);
+  for (const flag of only) expect(flag.detail).toMatch(/in the body$/);
+  const mixed = findForeignData([rawRequest(REPLAY, `a=1&=${EMAIL}`)], [], identity);
+  expect(mixed.length).toBeGreaterThan(0);
+  for (const flag of mixed) expect(flag.detail).not.toMatch(/in $/);
+});
+
+test('hashesMatch says only plain address fields are not checked, not that the hit had no fields', () => {
+  const r = check({ city: 'Berlin' });
+  expect(r.pass).toBe(false);
+  expect(r.message).not.toContain('carried no identity fields');
+  expect(r.message).toContain('only plain city');
+  expect(check({ city: 'Berlin', country: 'DE' }).message).toContain('only plain city and country');
+});

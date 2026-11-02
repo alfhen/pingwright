@@ -193,6 +193,21 @@ const utf8Lenient = new TextDecoder('utf-8');
 const EDGE = 4;
 const MIN_BYTES_FOR_EDGES = 12;
 
+/**
+ * The share of UTF-16 units that are U+FFFD, C0 controls other than tab, LF and CR, or 0x7f. With `countC1` the C1 range
+ * 0x80-0x9f counts too. Callers pick their own threshold.
+ */
+export function binaryShare(text: string, countC1 = false): number {
+  if (text.length === 0) return 0;
+  const top = countC1 ? 0x9f : 0x7f;
+  let binary = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7f && c <= top)) binary++;
+  }
+  return binary / text.length;
+}
+
 // Random bytes seldom decode to mostly valid text, so this keeps ULIDs and hashes out. Junk glued to either
 // end of a payload decodes to a few stray bytes there, so the first and last few characters are not counted.
 function tryBase64Decode(token: string): string | undefined {
@@ -201,12 +216,7 @@ function tryBase64Decode(token: string): string | undefined {
   const text = utf8Lenient.decode(bytes);
   const inner = bytes.length >= MIN_BYTES_FOR_EDGES ? [...text].slice(EDGE, -EDGE) : [...text];
   if (inner.length < 4) return undefined;
-  let control = 0;
-  for (const ch of inner) {
-    const c = ch.codePointAt(0)!;
-    if ((c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) || c === 0x7f || c === 0xfffd) control++;
-  }
-  return control / inner.length <= 0.05 ? text : undefined;
+  return binaryShare(inner.join('')) <= 0.05 ? text : undefined;
 }
 
 function hasUrlEscapes(text: string): boolean {

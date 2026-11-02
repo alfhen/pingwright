@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  binaryShare,
   findStableHashes,
   hasCountryFormat,
   createIdentity,
@@ -622,5 +623,40 @@ describe('country formats', () => {
       const i = createIdentity(3, { country });
       expect(scan(`ph=${i.phone}&n=0${i.phone.slice(3)}`, i)).toEqual([]);
     }
+  });
+});
+
+describe('binaryShare', () => {
+  it('counts U+FFFD, C0 controls except tab, LF and CR, and 0x7f', () => {
+    expect(binaryShare('')).toBe(0);
+    expect(binaryShare('ab\t\n\r')).toBe(0);
+    expect(binaryShare('a\u0001\u007f�')).toBe(0.75);
+  });
+
+  it('counts C1 characters only when asked', () => {
+    expect(binaryShare('a\u0085\u009fb')).toBe(0);
+    expect(binaryShare('a\u0085\u009fb', true)).toBe(0.5);
+    expect(binaryShare('a ÿb', true)).toBe(0);
+  });
+});
+
+describe('base64 decode threshold', () => {
+  const email = 'visitor@other-person.example';
+  const found = (text: string) => scan(`k=${b64(text)}`, id).some((m) => m.kind === 'email' && m.value === email);
+  const inner = (junk: string) => `${junk}${email}`.padStart(40, ' ');
+
+  it('accepts 5% junk and rejects just over it', () => {
+    expect(found(`AAA ${inner('\u0001\u0001')} AAA`)).toBe(true);
+    expect(found(`AAA ${inner('\u0001\u0001\u0001')} AAA`)).toBe(false);
+    expect(found(`AAA ${inner('\u007f\u0002')} AAA`)).toBe(true);
+    expect(found(`AAA ${inner('\u007f\u0002\u0003')} AAA`)).toBe(false);
+  });
+
+  it('does not count C1 characters', () => {
+    expect(found(`AAA ${inner('\u0085'.repeat(8))} AAA`)).toBe(true);
+  });
+
+  it('ignores junk in the first and last four characters', () => {
+    expect(found(`\u0001\u0001\u0001\u0001${inner('')}\u0001\u0001\u0001\u0001`)).toBe(true);
   });
 });

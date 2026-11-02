@@ -24,6 +24,10 @@ A usage error now prints the message and one line, `Run tagreeve <command> --hel
 
 <!-- D01 -->
 
+### Fixed
+- `identity.hashesMatch` no longer says a hit carried no identity fields when it carried only plain city, postal code or country. It now says the hit carried only plain fields that are not checked. (#595)
+- A form field with an empty name, such as `=value`, is placed in `the body` in a `possibleRealData` finding, not in a blank place. (#672)
+
 <!-- E02 -->
 
 ## 0.4.0-rc.1
