@@ -981,6 +981,30 @@ export interface ForeignData {
   evidence: string[];
 }
 
+// A compressed or binary body is not text. Its bytes, decoded as characters, can spell an email
+// or a phone by chance (a session-replay vendor's `/collect` body is the reported case). The
+// headers the recorder keeps say so; when a record has none, the share of control bytes does.
+const BINARY_TYPE = /^(?:image|audio|video|font)\/|^application\/(?:octet-stream|pdf|zip|gzip|x-protobuf|wasm)/;
+const TEXTUAL_TYPE = /^text\/|(?:json|xml|javascript|graphql|x-www-form-urlencoded)/;
+function headerValue(headers: Record<string, string>, name: string): string {
+  for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === name) return value.toLowerCase();
+  return '';
+}
+function isTextBody(postData: string, headers: Record<string, string>): boolean {
+  const encoding = headerValue(headers, 'content-encoding');
+  if (encoding && encoding !== 'identity') return false;
+  const type = headerValue(headers, 'content-type');
+  if (TEXTUAL_TYPE.test(type)) return true;
+  if (BINARY_TYPE.test(type)) return false;
+  let control = 0;
+  for (let i = 0; i < postData.length; i++) {
+    const c = postData.charCodeAt(i);
+    if (c === 9 || c === 10 || c === 13) continue;
+    if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) control++;
+  }
+  return postData.length === 0 || control / postData.length <= 0.05;
+}
+
 /** Finds email, phone and hash values in requests and hits that are not the identity's own. Takes raw records. */
 export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[], identity: Identity): ForeignData[] {
   const byRequest = new Map<string, { texts: { text: string; where: string }[]; hitIds: string[]; stepId: string | null }>();
@@ -996,7 +1020,7 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
     const texts = slot(request.id, request.stepId).texts;
     for (const text of [url, ...pathSegments(url)]) texts.push({ text, where: 'the URL' });
-    texts.push({ text: persisted.postData, where: 'the body' });
+    if (persisted.postData && isTextBody(persisted.postData, request.headers)) texts.push({ text: persisted.postData, where: 'the body' });
   }
   for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);

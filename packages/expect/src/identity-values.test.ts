@@ -114,10 +114,10 @@ test('hashesMatch passes a decoded Meta hit with the identity hash and fails a w
   expect(run(hashEmail('other@example.com').hex).pass).toBe(false);
 });
 
-function rawRequest(url: string, postData: string | null = null): Request {
+function rawRequest(url: string, postData: string | null = null, headers: Record<string, string> = {}): Request {
   return {
     type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: postData ? 'POST' : 'GET', url,
-    resourceType: 'fetch', frameUrl: null, initiator: null, headers: {}, postData, outcome: 'stubbed',
+    resourceType: 'fetch', frameUrl: null, initiator: null, headers, postData, outcome: 'stubbed',
   };
 }
 
@@ -135,6 +135,14 @@ test('possibleRealData says the URL or the body for a value no decoder read', ()
   const inBody = findForeignData([rawRequest('https://tracker.example.com/p', `a=1&x=${foreign}`)], [], identity);
   expect(inBody[0]!.detail).toMatch(/, in the body$/);
   expect(inUrl[0]!.detail + inBody[0]!.detail).not.toContain(foreign);
+});
+
+test('possibleRealData does not scan a compressed or binary body as text', () => {
+  const body = `\x1f\x8b\x08\x00\x00\x00\x00\x00${'x'.repeat(8)}other@example.com`;
+  expect(findForeignData([rawRequest('https://e.clarity.ms/collect', body, { 'content-encoding': 'gzip' })], [], identity)).toHaveLength(0);
+  expect(findForeignData([rawRequest('https://e.clarity.ms/collect', body)], [], identity)).toHaveLength(0);
+  const plain = findForeignData([rawRequest('https://tracker.example.com/p', 'a=1&x=other@example.com')], [], identity);
+  expect(plain[0]!.detail).toMatch(/, in the body$/);
 });
 
 test('possibleRealData prints a value used as a key as (other)', () => {
