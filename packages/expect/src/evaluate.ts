@@ -1039,9 +1039,12 @@ function leafTexts(text: string): ScanText[] {
 }
 
 // Headers, preamble, epilogue and text parts stay in the text, so nothing a whole-body scan finds is lost.
-function withoutBinaryParts(split: MultipartBody): string {
+// A body that is not binary as a whole keeps a part unless its own headers say binary, as a whole-body scan reads it.
+function withoutBinaryParts(split: MultipartBody, wholeIsBinary: boolean): string {
+  const cut = (part: { headers: Record<string, string>; body: string }) =>
+    headersSayBinary(part.headers) || (wholeIsBinary && isBinaryText(part.body));
   return split.chunks
-    .map(({ raw, part }) => (part && isBinaryBody(part.headers, part.body) ? raw.slice(0, part.bodyStart) : raw))
+    .map(({ raw, part }) => (part && cut(part) ? raw.slice(0, part.bodyStart) : raw))
     .join(`--${split.boundary}`);
 }
 
@@ -1061,7 +1064,7 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
       if (isBinaryBody(part.headers, part.body)) return [];
       return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name), leaf: true as const }];
     });
-    return [{ text: withoutBinaryParts(split), where: 'the body' }, ...named];
+    return [{ text: withoutBinaryParts(split, isBinaryText(body)), where: 'the body' }, ...named];
   }
   const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
   if (!isJson && /[\r\n]/.test(body.trim())) {

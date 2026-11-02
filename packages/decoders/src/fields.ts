@@ -38,7 +38,7 @@ export function guardFieldName(name: string): string {
     const kinds = valueKinds(reading);
     if (kinds.has('email') || kinds.has('phone')) return OTHER_NAME;
   }
-  return name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment)).join('.');
+  return name.split('.').map((segment) => (looksLikeValue(segment.replace(/\[\]/g, '')) ? OTHER_NAME : segment)).join('.');
 }
 
 export function queryEntries(params: Iterable<[string, string]>): FieldEntry[] {

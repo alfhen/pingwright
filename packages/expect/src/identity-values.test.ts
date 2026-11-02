@@ -262,6 +262,24 @@ test('possibleRealData skips the binary part of a multipart body and scans its t
   expect(detailsOf(withHeaders(filePart + '--XB--\r\n', MULTIPART))).toHaveLength(0);
 });
 
+test('possibleRealData scans a short text part with a few control characters when the whole body is text', () => {
+  const noisy = `${EMAIL}\u0001\u0001\u0001\u0001`;
+  const body = part('a', 'x'.repeat(400)) + part('f', noisy) + '--XB--\r\n';
+  expect(detailsOf(withHeaders(body, MULTIPART))).toHaveLength(1);
+});
+
+test('possibleRealData prints a value-like key next to [] as (other)', () => {
+  const hex = 'e1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6';
+  const digest = 'AbCdEfGhIjKlMnOpQrStUv12';
+  const json = JSON.stringify({ [hex]: [EMAIL], [digest]: [EMAIL] });
+  const form = `${hex}[]=${EMAIL}&${digest}[]=${EMAIL}`;
+  for (const request of [rawRequest(REPLAY, json), rawRequest(REPLAY, form)]) {
+    const text = detailsOf(request).join('\n');
+    expect(text).not.toContain(hex);
+    expect(text).not.toContain(digest);
+  }
+});
+
 test('possibleRealData scans a JSON header line and skips a compressed line after it', () => {
   const binary = asRecorded(gzipSync(randomBytes));
   const header = JSON.stringify({ contact: EMAIL });
