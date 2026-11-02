@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { buildSummary, countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
+import { applyBaseline, buildSummary, countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
 import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
@@ -267,4 +267,16 @@ test('a declared test payment says so in the summary line and the JSON object', 
   const summary = buildSummary(records, [result(true)], 'p');
   expect(summary.testPayment).toEqual({ provider: 'shopify-test', host: 'shop.example.com', testMode: 'declared' });
   expect(formatSummary(summary).split('\n')[0]).toBe('TEST PAYMENT: shopify-test on shop.example.com (test mode declared)');
+});
+
+const noDrift = { drift: false, added: 0, removed: 0, countChanges: 0, warnings: [], changes: [] };
+
+test('baseline drift sets pass and ok to false, and no drift leaves them', () => {
+  const drifted = { ...base };
+  applyBaseline(drifted, { ...noDrift, drift: true, added: 1 });
+  expect(drifted).toMatchObject({ pass: false, ok: false });
+  expect(drifted.baseline?.drift).toBe(true);
+  const same = { ...base };
+  applyBaseline(same, noDrift);
+  expect(same).toMatchObject({ pass: true, ok: true });
 });

@@ -17,7 +17,7 @@
 
 A usage error now prints the message and one line, `Run tagreeve <command> --help for the options.`, not the full help text. `--help` still prints it.
 
-<!-- B02 -->
+- Baseline drift sets `pass` to false in the `--json` summary, as well as `ok`. (#590)
 
 <!-- D01 -->
 

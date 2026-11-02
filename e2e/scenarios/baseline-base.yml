@@ -1,5 +1,6 @@
 start: /products/fake-tee?em=pw-fixture@example.com
 steps:
+  - wait: 2s
   - consent: accept
   - wait: 10s
 expect:

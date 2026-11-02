@@ -14,9 +14,9 @@ export interface BaselineSummary {
 export interface Summary {
   runId: string;
   path: string;
-  /** Every result passed, warnings included. */
+  /** Every result passed, warnings included, and the run shows no baseline drift. */
   pass: boolean;
-  /** No result failed at `fail` severity. The exit code is 0 exactly when this is true. */
+  /** No result failed at `fail` severity and the run shows no baseline drift. The exit code is 0 exactly when this is true. */
   ok: boolean;
   hits: Record<string, Record<string, number>>;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
@@ -70,6 +70,14 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
     results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, ...(r.note && { note: r.note }), evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
+}
+
+export function applyBaseline(summary: Summary, baseline: BaselineSummary): void {
+  summary.baseline = baseline;
+  if (baseline.drift) {
+    summary.pass = false;
+    summary.ok = false;
+  }
 }
 
 function passesGate(r: { pass: boolean; severity?: Severity }): boolean {

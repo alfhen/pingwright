@@ -1,0 +1,11 @@
+start: /shared-hashes?leak=email
+steps:
+  - wait: 4s
+  - consent: accept
+  - visit: /set-cookie-already
+  - wait: 2s
+  - checkpoint: after
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true, builtins: { possibleRealData: warn, sandboxPageUrl: warn } }
