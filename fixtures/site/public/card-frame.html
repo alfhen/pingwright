@@ -11,7 +11,10 @@
 <script>
 window.addEventListener('message', function (e) {
   if (e.data !== 'pw-pay') return;
-  fetch('/card-submit', { method: 'POST', body: document.getElementById('cc-number').value }).then(function () {
+  var extra = document.getElementById('cc-exp').value + '|' + document.getElementById('cc-csc').value;
+  fetch('/card-extra', { method: 'POST', body: extra }).then(function () {
+    return fetch('/card-submit', { method: 'POST', body: document.getElementById('cc-number').value });
+  }).then(function () {
     parent.postMessage('pw-card-submitted', '*');
   });
 });

@@ -1,10 +1,14 @@
-import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, expect, test } from 'vitest';
 import { run, runCli, scenario, site, outDir, SANDBOX } from './cli-helpers.ts';
 
 const CARD = '4242424242424242';
+const CARD_SPACED = '4242 4242 4242 4242';
+const EMAIL = 'pw-fixture@example.com';
+const EMAIL_HASH = createHash('sha256').update(EMAIL).digest('hex');
 const SEAM = 'PINGWRIGHT_TEST_LOOPBACK_IS_HOSTED';
 const HANDOFF_REQUIRED = 'Payments and log-ins must be handoff steps';
 
@@ -39,9 +43,26 @@ test('all gates pass: the card is typed into the frame, recorded by name only an
   expect(submit).toHaveLength(1);
   expect(submit[0]).toMatchObject({ redacted: 'handoff', postData: '[redacted]' });
 
-  const seen = JSON.stringify({ steps: r.records!.steps, requests: r.records!.requests, summary: r.stdout, stderr: r.stderr });
-  expect(seen).not.toContain(CARD);
-  expect(seen).not.toContain('12/40');
+  expect(site.cardExtras).toEqual(['12/40|123']);
+
+  const summary = JSON.parse(r.stdout) as { path: string };
+  const raw = await readFile(summary.path, 'utf8');
+  const reportPath = join(outDir, 'test-payment-report.html');
+  const report = await runCli(['report', summary.path, '--html', reportPath]);
+  expect(report.code, report.stderr).toBe(0);
+  const html = await readFile(reportPath, 'utf8');
+  const messages = JSON.stringify(r.records!.steps.map((s) => [s.label, s.error, s.payment]));
+  const outputs = [raw, html, r.stdout, r.stderr, report.stdout, report.stderr];
+
+  for (const text of outputs) {
+    for (const value of [CARD, CARD_SPACED, '12/40']) expect(text).not.toContain(value);
+    expect(text).not.toMatch(/"123"|cc-csc[^\n]{0,40}123/);
+  }
+  const added = JSON.stringify([step?.payment, JSON.parse(r.stdout).testPayment]);
+  for (const text of [added, messages, r.stderr]) {
+    expect(text).not.toContain(EMAIL);
+    expect(text).not.toContain(EMAIL_HASH);
+  }
 }, 120_000);
 
 test('the text summary prints the TEST PAYMENT line and no card value', async () => {
