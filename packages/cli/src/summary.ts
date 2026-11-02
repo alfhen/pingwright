@@ -25,7 +25,7 @@ export interface Summary {
   skippedFields?: { step: string; selector: string }[];
   results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; note?: ResultNote; evidence: string[] }[];
   /** Set when a payment step typed a provider's documented test card. Names only. */
-  testPayment?: { provider: string; host: string };
+  testPayment?: { provider: string; host: string; testMode: 'declared' | 'marker' };
   /** Set when the run was compared with a baseline. */
   baseline?: BaselineSummary;
 }
@@ -53,7 +53,7 @@ function stateName(state: RunRecords['consentEpochs'][number]['state']): string 
 
 function testPaymentOf(records: RunRecords): Summary['testPayment'] {
   const payment = (records.steps ?? []).find((s) => s.payment)?.payment;
-  return payment && { provider: payment.provider, host: new URL(records.run.site).hostname };
+  return payment && { provider: payment.provider, host: new URL(records.run.site).hostname, testMode: payment.testMode ?? 'marker' };
 }
 
 export function buildSummary(records: RunRecords, results: Result[], path: string): Summary {
@@ -138,7 +138,10 @@ export function formatDuration(ms: number): string {
 
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
-  if (summary.testPayment) lines.push(`TEST PAYMENT: ${summary.testPayment.provider} on ${summary.testPayment.host}`);
+  if (summary.testPayment) {
+    const { provider, host, testMode } = summary.testPayment;
+    lines.push(`TEST PAYMENT: ${provider} on ${host} (test mode ${testMode === 'declared' ? 'declared' : 'on page'})`);
+  }
   lines.push('Hits');
   const vendors = Object.entries(summary.hits);
   if (vendors.length === 0) lines.push('  none');

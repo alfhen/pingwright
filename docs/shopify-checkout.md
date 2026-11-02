@@ -45,7 +45,7 @@ The YAML above is parsed by a unit test but never run against a store.
 
 ## Unattended: a test payment
 
-On a store in test mode, a `payment` step can replace the handoff, so the run needs no person. This is for a dev store or a store with the Bogus Gateway or Shopify Payments test mode on. Tagreeve types only the provider's documented test card, and only after three checks: `--allow-test-payment <host>` names the `--site` host, the host is in `~/.config/tagreeve/test-payment-hosts.json`, and the page shows the provider's test mode. See the Test payments paragraph in the [CLI reference](./cli.md).
+On a store in test mode, a `payment` step can replace the handoff, so the run needs no person. This is for a dev store or a store with the Bogus Gateway or Shopify Payments test mode on. Tagreeve types only the provider's documented test card, and only after three checks: `--allow-test-payment <host>` names the `--site` host, the host is in `~/.config/tagreeve/test-payment-hosts.json`, and the store is in test mode. You say that in the file with `{ "host": "<host>", "testMode": "shopify-bogus" }` (or `shopify-test`). Without that, the page must show the provider's test mode inside the card form. See the Test payments paragraph in the [CLI reference](./cli.md).
 
 ```yaml
 start: /products/example-product

@@ -1,0 +1,8 @@
+start: /checkout/test-payment?marker=off
+identity: { email: pw-fixture@example.com }
+steps:
+  - payment: { provider: fixture, card: "4242424242424242" }
+  - click: "#pay"
+  - wait: { url: "/thank-you-late" }
+  - wait: 3s
+options: { seed: 1, allowUnknownDestination: true }

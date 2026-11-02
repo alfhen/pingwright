@@ -1,0 +1,5 @@
+start: /checkout/test-payment?marker=outside
+steps:
+  - payment: { provider: fixture, card: "4242424242424242" }
+  - click: "#pay"
+options: { seed: 1, allowUnknownDestination: true }

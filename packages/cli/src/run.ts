@@ -20,7 +20,7 @@ import {
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
 import { buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
-import { checkTestPaymentGates } from './test-payment-hosts.ts';
+import { checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
 
 export interface Io {
   stdout: (text: string) => void;
@@ -143,6 +143,16 @@ async function labelRecord(path: string, variant: NonNullable<RunSpec['variant']
   return target;
 }
 
+function markerNotDetected(message: string): boolean {
+  return /test mode not detected(?! \()/.test(message);
+}
+
+function declarationHint(spec: RunSpec): string | undefined {
+  const step = spec.parsed.steps.find((s) => s.kind === 'payment');
+  if (!spec.testPayment || step?.kind !== 'payment') return undefined;
+  return `Declare it in ${testPaymentHostsPath()} with { "host": "${spec.testPayment.host}", "testMode": "${step.value.provider}" } if this store is in test mode.`;
+}
+
 export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> {
   const { parsed, gtmOverride, variant } = spec;
   let io = rawIo;
@@ -185,6 +195,8 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
     const message = error instanceof Error ? error.message : String(error);
     if (MISSING_BROWSER.test(message)) return failed('Chromium is not installed. Run `tagreeve install-browser`.\n');
     let text = `Run failed: ${error instanceof GtmOverrideFailure ? `GTM override: ${message}` : message}\n`;
+    const declareHint = spec.testPayment && markerNotDetected(message) && declarationHint(spec);
+    if (declareHint) text += `${declareHint}\n`;
     const written = (error instanceof StepError || error instanceof GtmOverrideFailure) && error.run ? error.run.path : undefined;
     if (written) {
       const kept = variant ? await labelRecord(written, variant, spec.out) : written;

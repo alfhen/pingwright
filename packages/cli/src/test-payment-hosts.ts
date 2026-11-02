@@ -2,7 +2,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { Scenario } from '@tagreeve/expect';
-import { normalizeHost, providerBlockedOnSite, type TestPayment } from '@tagreeve/recorder';
+import { findPaymentProvider } from '@tagreeve/expect';
+import { isLoopbackHost, loopbackIsHostedForTests, normalizeHost, providerBlockedOnSite, type TestPayment } from '@tagreeve/recorder';
 
 const FILE_NAME = 'test-payment-hosts.json';
 
@@ -12,8 +13,34 @@ export function testPaymentHostsPath(env: NodeJS.ProcessEnv = process.env, home:
   return join(base, 'tagreeve', FILE_NAME);
 }
 
-/** The exact hosts in the user-level allowlist. Throws a message that names the file, never its other content. */
-export async function readTestPaymentHosts(path: string): Promise<string[]> {
+export interface AllowlistEntry {
+  host: string;
+  /** A provider id the user declares to be in test mode on this host. */
+  testMode?: string;
+}
+
+function entryError(path: string, index: number, reason: string): Error {
+  return new Error(`${path}: entry ${index} ${reason}.`);
+}
+
+function parseEntry(path: string, entry: unknown, index: number, loopbackHosted: boolean): AllowlistEntry {
+  if (typeof entry === 'string') return { host: normalizeHost(entry) };
+  const keys = entry && typeof entry === 'object' && !Array.isArray(entry) ? Object.keys(entry) : [];
+  const { host, testMode } = (entry ?? {}) as Record<string, unknown>;
+  if (typeof host !== 'string' || typeof testMode !== 'string' || keys.length !== 2) {
+    throw entryError(path, index, 'must be a host name or an object with only "host" and "testMode"');
+  }
+  const normalized = normalizeHost(host);
+  if (!findPaymentProvider(testMode)) throw entryError(path, index, 'names a testMode that is not a payment provider');
+  const testOnly = testMode === 'fixture' && isLoopbackHost(normalized) && loopbackHosted;
+  if (!testOnly && (testMode === 'fixture' || isLoopbackHost(normalized))) {
+    throw entryError(path, index, 'declares a loopback host or the fixture provider, which only tests may do');
+  }
+  return { host: normalized, testMode };
+}
+
+/** The entries of the user-level allowlist. Throws a message that names the file and an entry index, never other content. */
+export async function readTestPaymentHosts(path: string, loopbackHosted: boolean = loopbackIsHostedForTests()): Promise<AllowlistEntry[]> {
   let mode: number;
   try {
     mode = (await stat(path)).mode;
@@ -30,8 +57,8 @@ export async function readTestPaymentHosts(path: string): Promise<string[]> {
   } catch {
     throw new Error(`${path} is not valid JSON.`);
   }
-  if (!Array.isArray(json) || !json.every((h) => typeof h === 'string')) throw new Error(`${path} must be a JSON array of host names.`);
-  return json.map(normalizeHost);
+  if (!Array.isArray(json)) throw new Error(`${path} must be a JSON array of host names or { "host", "testMode" } objects.`);
+  return json.map((entry, index) => parseEntry(path, entry, index, loopbackHosted));
 }
 
 export type TestPaymentGates = { ok: true; testPayment?: TestPayment } | { ok: false; error: string };
@@ -59,14 +86,16 @@ export async function checkTestPaymentGates(
   if (normalizeHost(allow) !== siteHost) {
     return { ok: false, error: `--allow-test-payment must name the --site host (${siteHost}).` };
   }
-  let hosts: string[];
+  let entries: AllowlistEntry[];
   try {
-    hosts = await readTestPaymentHosts(testPaymentHostsPath(env));
+    entries = await readTestPaymentHosts(testPaymentHostsPath(env));
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-  if (!hosts.includes(siteHost)) {
+  const own = entries.filter((e) => e.host === siteHost);
+  if (own.length === 0) {
     return { ok: false, error: `${siteHost} is not in ${testPaymentHostsPath(env)}.` };
   }
-  return { ok: true, testPayment: { host: siteHost } };
+  const declaredProviders = own.flatMap((e) => (e.testMode ? [e.testMode] : []));
+  return { ok: true, testPayment: { host: siteHost, ...(declaredProviders.length && { declaredProviders }) } };
 }
