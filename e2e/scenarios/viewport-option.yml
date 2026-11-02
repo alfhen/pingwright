@@ -1,0 +1,7 @@
+start: /viewport
+steps:
+  - wait: 1s
+expect:
+  must:
+    - { vendor: ga4, event: layout_mobile }
+options: { seed: 1, allowUnknownDestination: true, viewport: { width: 390, height: 844 } }

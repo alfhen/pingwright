@@ -331,3 +331,11 @@ test('options.optionalTimeout is from 100ms to 30s', () => {
   expect(() => parseScenario('start: /\noptions: { optionalTimeout: 50ms }')).toThrow(/100ms to 30s/);
   expect(() => parseScenario('start: /\noptions: { optionalTimeout: 31s }')).toThrow(/100ms to 30s/);
 });
+
+test('options.viewport is { width, height } from 200 to 4000', () => {
+  expect(parseScenario('start: /\noptions: { viewport: { width: 390, height: 844 } }').options.viewport).toEqual({ width: 390, height: 844 });
+  expect(parseScenario('start: /').options.viewport).toBeUndefined();
+  for (const bad of ['mobile', '"390x844"', '{ width: 390 }', '{ width: 199, height: 844 }', '{ width: 390, height: 4001 }', '{ width: 390.5, height: 844 }', '{ width: "390", height: 844 }', '{ width: 390, height: 844, mobile: true }']) {
+    expect(() => parseScenario(`start: /\noptions: { viewport: ${bad} }`), bad).toThrow(/options\.viewport/);
+  }
+});

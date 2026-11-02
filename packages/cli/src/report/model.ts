@@ -50,6 +50,7 @@ export interface ReportModel {
     runId: string;
     startedAt: string;
     networkMode: string;
+    viewport?: string;
     host: string;
     pingwrightVersion: string;
     schemaVersion: number;
@@ -298,6 +299,7 @@ export function buildReportModel(records: RunRecords): ReportModel {
       runId: run.id,
       startedAt: new Date(run.startedAt).toISOString(),
       networkMode: run.networkMode,
+      ...(run.viewport && { viewport: `${run.viewport.width}x${run.viewport.height}` }),
       host: hostOf(run.site) ?? '',
       pingwrightVersion: run.pingwrightVersion,
       schemaVersion: version,
