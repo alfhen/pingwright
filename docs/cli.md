@@ -396,7 +396,7 @@ options:
 
 The `earlyIdentifiers` check warns when a hit sent before the first consent answer carries an identifier field and the consent signal for that field's class is unknown. This is the case on a page with no Consent Mode default, where a tag can send a hashed email before the visitor sees the banner. It uses the same field classes, signals and ignored names as [deniedIdentifiers](#deniedidentifiers), and it reads field names only.
 
-A hit is never reported by both checks. A denied signal belongs to `deniedIdentifiers`. A granted signal, and any hit after an answer, is not flagged. A hit with only `cid`, `fbp`, `fbc` or `gclid` is not flagged.
+A field is never reported by both checks. A field whose signal is denied belongs to `deniedIdentifiers`, so a hit with one denied and one unknown identifier is in both results. A granted signal, and any hit after an answer, is not flagged. A hit with only `cid`, `fbp`, `fbc` or `gclid` is not flagged.
 
 The default severity is `warn`, so the exit code does not change. The result reads `1 hit carries identifiers before the consent answer: meta em, ph (ads unknown)`. The signal is `ads` when `adUserData` is unknown. The evidence is the hit IDs. A hit before the answer with no recorded field names or a body that was cut reports `cannot evaluate`, like `deniedIdentifiers`. To make the check fail a run, set it to `fail`:
 

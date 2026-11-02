@@ -859,7 +859,7 @@ function deniedIdentifiersCheck(
   }
 }
 
-/** Hits before the first consent answer. A denied signal is left to `deniedIdentifiers`, so no hit is reported by both. */
+/** Hits before the first consent answer. Each field belongs to one check: a denied signal is left to `deniedIdentifiers`, so a hit with one denied and one unknown field is in both results. */
 function earlyIdentifiersCheck(
   scenario: Scenario,
   ctx: Context,
