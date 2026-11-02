@@ -2,7 +2,8 @@
 
 ## 0.5.0-rc.1
 
-<!-- A01 -->
+- Removed the old command alias. Use `tagreeve`. (#546)
+- The release workflow test is stricter: it checks job permissions, publish lines, `github.token` and docker pushes. (#546)
 
 <!-- U01 -->
 

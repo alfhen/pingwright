@@ -16,8 +16,7 @@
   },
   "packageManager": "pnpm@10.34.7",
   "bin": {
-    "tagreeve": "dist/cli.js",
-    "pingwright": "dist/pingwright.js"
+    "tagreeve": "dist/cli.js"
   },
   "files": [
     "dist",
