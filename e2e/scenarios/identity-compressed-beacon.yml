@@ -1,0 +1,6 @@
+start: /compressed-beacon
+steps:
+  - wait: 2s
+expect:
+  must: []
+options: { seed: 1, allowUnknownDestination: true }

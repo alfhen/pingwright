@@ -106,6 +106,8 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/unload-request-body` has no banner and no tags. In `pagehide` it sends `fetch(new Request(url, { method: 'POST', body, keepalive: true }))` to `https://sgtm.tagreeve.invalid/g/collect`. The body holds two GA4 events, `add_to_cart` and `view_item`, one per line.
 
+`/compressed-beacon` has no banner and no tags. On load it posts 400 high bytes as `text/plain` to `https://replay.example.com/collect`. The bytes start with the gzip magic and hold the email-shaped value `visitor@other-person.example`.
+
 ## Unload gap page
 
 `/unload-gap` has the banner and a sandboxed iframe (`/web-pixels@0.0.0-fixture/sandbox/gap/`). 1.8 s after it loads, the frame pushes `{event: 'consent_update'}` (no hit) and `{event: 'item_added'}`, and sends a `/data` hit named `item_added` to `https://sgtm.tagreeve.invalid` at once. In `pagehide` it sends a GA4 `add_to_cart` with `sendBeacon`, which stub mode does not capture. The scenario should wait about 3 s before it navigates.
