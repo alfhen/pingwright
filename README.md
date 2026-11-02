@@ -5,11 +5,11 @@
   </picture>
 </h1>
 
-> **Pingwright is now Tagreeve.** The command `pingwright` still works until 0.5.0. Versions up to `0.3.0` are on npm as `pingwright`, and `tagreeve` starts at 0.4.0-rc.1. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
+> **Pingwright is now Tagreeve.** The command `pingwright` still works until 0.5.0. Versions up to 0.3.0 are on npm as `pingwright`, and `tagreeve` starts at 0.4.0-rc.1. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
 
 Agent-first testing for tags and consent. Tagreeve plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 
-> **Status: 0.3 (`0.3.0`).** Tagreeve plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `tagreeve suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. The rest of this README describes where Tagreeve is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
+> **Status: 0.4 (`0.4.0-rc.1`).** Tagreeve plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `tagreeve suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. 0.4 adds handoffs that end by themselves, an opt-in test payment step, baselines, a viewport option and fake identities by country. The rest of this README describes where Tagreeve is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
 > **In 0.1:** `tagreeve run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
@@ -17,7 +17,9 @@ Agent-first testing for tags and consent. Tagreeve plays a visitor in a real bro
 >
 > **In 0.3:** `body.has` and `body.only` rules on the field names of a hit; `cookie` rules; a `deniedIdentifiers` check that fails when an identifier goes out on a denied hit; `tagreeve suite` runs a folder of scenarios against several GTM builds; `tagreeve report` writes an HTML report of one run or a suite; a Done button in the handoff window; `click` and `wait` by role and name or from a list of selectors; a `select` step; the `server` network mode; record schema version 2. `deniedIdentifiers` fails by default, so a run that passed in 0.2 can exit 1. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **Not built yet:** MCP server, GTM tag-firing reporters, the server tag reporter, Shopify bridge, a full Microsoft UET decoder, Firefox and WebKit.
+> **In 0.4.0-rc.1** (install with `npm i -g tagreeve@next` until 0.4.0): a `handoff` step can end at a URL or an element (`until`, `settle`, `timeout`); a `payment` step types a provider's test card on a store you allow, with three opt-in checks; `tagreeve baseline save` and `run --baseline` catch drift in the shape of a run; `--viewport <W>x<H>`; `identity.country` picks the format of the fake identity (US, SE, GB, DE); optional `fill` entries; a `possibleRedirectHop` flag; and the rename to Tagreeve. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.4.0-rc.1".
+>
+> **Not built yet:** the server tag reporter, several stores in one suite, a Shopify bridge, a full Microsoft UET decoder, a `mobile` viewport preset, Firefox and WebKit. There is no MCP server: Tagreeve is a CLI, and agents read `--json`.
 
 ## Why
 
