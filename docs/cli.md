@@ -7,7 +7,7 @@ npm i -g tagreeve@next
 tagreeve install-browser
 ```
 
-`npm i -g tagreeve@next` installs the newest 0.4 release candidate. The current release is `0.4.0-rc.2`. The first Tagreeve release was 0.4.0-rc.1. Versions up to 0.3.0 were published under the old name, as the README explains. Tagreeve needs Node 22.18 or later.
+`npm i -g tagreeve@next` installs the newest 0.4 release candidate. The current release is `0.4.0-rc.3`. The first Tagreeve release was 0.4.0-rc.1. Versions up to 0.3.0 were published under the old name, as the README explains. Tagreeve needs Node 22.18 or later.
 
 You can also install a release from its git tag:
 
@@ -152,7 +152,7 @@ The providers are `shopify-bogus` (cards `1`, `2`, `3`), `shopify-test` (the tes
 
 1. `--allow-test-payment <host>` names the exact `--site` host. A scenario with a `payment` step and no flag, or with a flag for another host, exits 2 before the browser starts.
 2. The host is in the user-level file `$XDG_CONFIG_HOME/tagreeve/test-payment-hosts.json`, or `~/.config/tagreeve/test-payment-hosts.json`. It is a JSON array. Each entry is an exact host, or an object `{ "host": "shop.example.com", "testMode": "shopify-test" }` that declares the store to be in test mode for that provider. The file may mix both. A declaration applies to that host and that provider only. An unknown provider id, a loopback host or the `fixture` provider in a declaration is an error that names the file and the entry number. The file must not be writable by group or others. Otherwise the run exits 2 before the browser starts.
-3. At the step, the page is on the allowed host and each card frame is served from the provider's card host. Then, with no declaration for the host and the provider, the provider's test-mode marker must be visible inside the nearest element that holds every card frame. Text elsewhere on the page does not count. Otherwise the step fails with `test mode not detected` or `card frame not found (<field>): <reason>`, where the reason is `not found`, `not visible` or `served from another host`. After `test mode not detected` the error adds a line that shows the declaration to write in the allowlist file.
+3. At the step, the page is on the allowed host and each card frame is served from the provider's card host. Then, with no declaration for the host and the provider, the provider's test-mode marker must be visible inside the nearest element that holds every card frame. Text elsewhere on the page does not count. Otherwise the step fails with `test mode not detected` or `card frame not found (<field>): <reason>`, where the reason is `not found`, `not visible` or `served from another host`. After `test mode not detected` the error adds a line that shows the declaration to write in the allowlist file. The line names the provider of the step that failed, and appears only when the allowlist file would accept that entry.
 
 The step types into the first matching card iframe that is visible and served from the card host, and into the one visible input in that frame. It checks the frame's host again right before each fill. If a field has several visible inputs at the step deadline, the step does not guess: it fails with `card field <field> could not be filled: 2 visible inputs match`. Any other fill error keeps its first line as the reason, with every typed value removed.
 

@@ -2,9 +2,36 @@
 
 ## 0.4.0-rc.3
 
+Release candidate. Install it with `npm i -g tagreeve@next`.
+
+### Changes
 - The `payment` step now types into the exact card iframe that it checked. It skips hidden duplicate frames and frames served from another host, and uses the one visible input in the frame. If several visible inputs match, it fails with the count instead of guessing. A fill error now keeps its reason: `card field number could not be filled: <reason>`, with typed values removed. `card frame not found` also says why. This targets the Shopify Payments failure in the rc.2 field test; it is not confirmed on a real store. (#682, #648)
 
 - The declaration hint after `test mode not detected` names the provider of the `payment` step that failed. It appears only when the allowlist file would accept the entry, so it no longer suggests the `fixture` provider on a hosted host or a loopback host without the test seam. The declared-payment e2e now checks that a run prints no email, email hash or cookie value. (#646, #647, #649)
+
+### Known in 0.4.0-rc.3
+
+Issues still open that you can meet:
+
+- The Shopify payment runtime is not yet checked on a real checkout. The card input selector (`input`, narrowed to the visible inputs in the verified frame), the expiry format (`12/40` against a masked "MM / YY" field) and the root cause of the rc.2 failure (#682) are still not confirmed. A supervised field test runs it with a declared host. If a value does not match, the step fails closed and the error now says why.
+- `earlyIdentifiers` is `warn` by default. The field test decides whether it becomes `fail` for 0.4.0.
+- The `--json` summary flags (`unknownDestination`, `firstPartySubdomain`, `stubBypass`, `possibleRedirectHop`) carry the full request URL, including query values. Do not share the summary from a page that sends an identifier in a query (#679).
+- The verdict can hide a failed `deniedIdentifiers` when only early identifiers are named (#663).
+- A text part of a multipart body that is typed as binary is reported `in the body`, not by its field name (#669).
+- A mistyped option before the command loses the command name in the usage hint (#657), and the hint can name the wrong command (#644). Most per-command `--help` prints the general usage (#641). The unknown-option line is very long (#640).
+- The possible-real-data check merges two different emails or two different phones when one contains the other, so the count and the place are wrong (#667). A number prefix in a JSON path can be flagged as a phone (#668). The binary-share check counts UTF-16 units, not code points (#673).
+- Playwright's request interception sometimes misses a redirect hop (#180). The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
+- With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload` (#256).
+- `unloadGap` compares dataLayer event names to hit names literally (#261).
+- `--viewport` takes `<W>x<H>` only. A `mobile` preset is planned for 0.5.0 (#514).
+- The leak check misses a URL-encoded email (#565).
+- Platform infrastructure hosts fill the `unknownDestination` list (#585).
+- A gap frame is requested twice when `mode` is given (#552).
+- `identity.country` has local formats for US, SE, GB and DE. Other countries keep US-shaped data and the run warns.
+- No test covers a suite child without `suite.json` beside a valid one (#593). The cookie already-set e2e leak check skips the report (#543).
+- Server-to-vendor traffic is not visible to Tagreeve (#358), and several stores in one suite (#360) is planned. Both are deferred to 0.5.0.
+
+Other open `review-minor` issues are test gaps, wording, or edge cases with no effect on a normal run. They carry the `review-minor` label.
 
 ## 0.4.0-rc.2
 
