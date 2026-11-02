@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0-rc.3
+
+<!-- P02 -->
+
+<!-- P03 -->
+
 ## 0.4.0-rc.2
 
 Release candidate. Install it with `npm i -g tagreeve@next`.
