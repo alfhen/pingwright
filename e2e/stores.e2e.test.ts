@@ -86,9 +86,10 @@ test('two scenarios on two stores and two variants make eight cells labelled wit
   for (const scenario of ['first', 'second']) {
     for (const store of ['a', 'b']) {
       const cells = manifest.cells.filter((c) => c.scenario === scenario && c.labels.store === store);
+      const status = scenario === 'first' ? 'warn' : 'pass';
       expect(cells.map((c) => [c.variant, c.status, c.record])).toEqual([
-        ['published', 'pass', `${scenario}.${store}.published.jsonl`],
-        ['workspace', 'pass', `${scenario}.${store}.workspace.jsonl`],
+        ['published', status, `${scenario}.${store}.published.jsonl`],
+        ['workspace', status, `${scenario}.${store}.workspace.jsonl`],
       ]);
     }
   }
@@ -118,22 +119,28 @@ test('the table and the report have one row per scenario and store', () => {
   expect(table).toMatch(/^scenario\s+store\s+published\s+workspace\s+diff \(published -> workspace\)$/m);
   for (const scenario of ['first', 'second']) {
     for (const store of ['a', 'b']) {
-      expect(table).toMatch(new RegExp(`^${scenario}\\s+${store}\\s+PASS\\s+PASS\\s`, 'm'));
-      expect(html).toContain(`<tr><th scope="row">${scenario}</th><td>${store}</td><td>PASS</td><td>PASS</td></tr>`);
+      const verdict = scenario === 'first' ? 'WARN[^<\\n]*?' : 'PASS';
+      expect(table).toMatch(new RegExp(`^${scenario}\\s+${store}\\s+${verdict}\\s{2,}${verdict}\\s{2,}`, 'm'));
+      expect(html).toMatch(new RegExp(`<tr><th scope="row">${scenario}</th><td>${store}</td><td>${verdict}</td><td>${verdict}</td></tr>`));
     }
   }
-  expect(html).toContain('<h3>first on b, workspace: PASS</h3>');
+  expect(html).toMatch(/<h3>first on b, workspace: WARN/);
   expect(html).toContain('<li><strong>a, published:</strong>');
   expect(html).toContain('<li><strong>b, workspace:</strong>');
 });
 
-test('the manifest and the report hold no email, hash or path', async () => {
+test('the manifest, the report and the table hold no email, hash, cookie value or path', async () => {
   const email = (await readRun(join(suiteDir, 'first.a.published.jsonl'))).run.identity!.email;
   const hash = createHash('sha256').update(email).digest('hex');
+  const encoded = encodeURIComponent(email);
+  const cookieValue = 'pwfake-0001';
   const records = (await Promise.all((await readdir(suiteDir)).filter((f) => f.endsWith('.jsonl')).map((f) => readFile(join(suiteDir, f), 'utf8')))).join('\n');
   expect(records, 'positive control: the records carry the email').toContain(email);
+  expect(records, 'positive control: the records carry the email hash').toContain(hash);
+  expect(records, 'positive control: the records carry the URL-encoded email').toContain(encoded);
+  expect(records, 'positive control: the records carry the cookie value').toContain(cookieValue);
   for (const text of [manifestText, html, table]) {
-    for (const secret of [email, hash, '/container/direct']) expect(text).not.toContain(secret);
+    for (const secret of [email, hash, encoded, cookieValue, '/container/direct']) expect(text).not.toContain(secret);
   }
 });
 

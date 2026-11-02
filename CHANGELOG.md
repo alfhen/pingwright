@@ -10,7 +10,6 @@
 
 <!-- M01 -->
 
-### Several stores in one suite
 - `tagreeve suite <dir> --stores <stores.json>` runs each scenario against several stores. Cells carry `labels.store`, records are named `<scenario>.<store>.<variant>.jsonl`, and diffs compare variants within a store. `suite.json` is now version 2 and adds `stores` and `SuiteDiff.store`. `report` reads version 1 and 2. A payment scenario runs only for the store that `--allow-test-payment` names. (#360)
 
 <!-- P01 -->
