@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Anton&display=swap" rel="stylesheet"><style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+[data-theme]{--bg:#090B0B;--bg2:#0F1312;--panel:#121716;--ink:#E8EEEC;--muted:#8A9794;--line:#1F2826;--mint:oklch(0.82 0.12 175);--mintdim:oklch(0.82 0.12 175 / .14);--fail:oklch(0.72 0.16 25);--faildim:oklch(0.72 0.16 25 / .14);--warn:oklch(0.84 0.13 85);--onmint:#06201C}
+[data-theme="light"]{--bg:#F5F7F6;--bg2:#ECF0EE;--panel:#FFFFFF;--ink:#0E1715;--muted:#56625F;--line:#DCE3E0;--mint:oklch(0.52 0.1 178);--mintdim:oklch(0.52 0.1 178 / .1);--fail:oklch(0.55 0.19 27);--faildim:oklch(0.55 0.19 27 / .1);--warn:oklch(0.6 0.13 75);--onmint:#FFFFFF}
+a{color:var(--mint);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
+@keyframes hitIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@keyframes blink{50%{opacity:0}}
+@keyframes ping{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.4);opacity:0}}
+@keyframes toastIn{from{transform:translateY(14px) scale(.9) rotate(var(--r,0deg));opacity:0}to{transform:rotate(var(--r,0deg));opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes wastedIn{0%{opacity:0;transform:scale(1.5);letter-spacing:.2em}60%{opacity:1}100%{opacity:1;transform:scale(1);letter-spacing:.04em}}
+@keyframes bandIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes slowZoom{from{transform:scale(1)}to{transform:scale(1.08) rotate(-1deg)}}
+@keyframes siteIn{0%{transform:translateY(100vh) scale(.92);opacity:.6}100%{transform:none;opacity:1}}
+@keyframes pulseBtn{0%,100%{box-shadow:0 0 0 0 oklch(0.82 0.12 175 / .5)}50%{box-shadow:0 0 0 6px oklch(0.82 0.12 175 / 0)}}
+@keyframes askIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes shake{0%,100%{transform:translate(0,0)}25%{transform:translate(-3px,2px)}50%{transform:translate(3px,-2px)}75%{transform:translate(-2px,-3px)}}
+</style></helmet>
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;transition:background .3s,color .3s">
+
+<sc-if value="{{ introOn }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="D · First-visit intro" style="position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:100;overflow:hidden;background:#0B0E12;transition:transform 1.1s cubic-bezier(.65,0,.35,1),opacity 1.1s ease-in,border-radius .7s,box-shadow .7s;transform:{{ introTransform }};opacity:{{ introOpacity }};border-radius:{{ introRadius }};box-shadow:{{ introShadow }}">
+  <div style="position:absolute;inset:0;transition:filter 1.2s;filter:{{ messFilter }};animation:{{ zoomAnim }};transform-origin:60% 40%;background:radial-gradient(90% 70% at 10% 10%,oklch(0.72 0.12 250) 0%,transparent 60%),radial-gradient(80% 70% at 90% 20%,oklch(0.7 0.13 320) 0%,transparent 60%),radial-gradient(90% 80% at 60% 100%,oklch(0.62 0.13 200) 0%,transparent 65%),#3B4A7A;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">
+    
+    <div style="position:absolute;left:0;right:0;top:0;height:28px;background:rgba(255,255,255,.22);backdrop-filter:blur(30px) saturate(180%);color:#fff;display:flex;align-items:center;gap:20px;padding:0 16px;font-size:13px;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,.15)">
+      <span style="width:12px;height:12px;border-radius:50%;background:#fff;display:inline-block"></span>
+      <b style="font-weight:700">{{ activeApp }}</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:6px">✉ <b style="background:#FF3B30;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;line-height:16px;text-shadow:none">{{ unread }}</b></span>
+      <span style="width:22px;height:11px;border:1px solid rgba(255,255,255,.9);border-radius:3px;position:relative;display:inline-block"><span style="position:absolute;left:1px;top:1px;bottom:1px;width:{{ battery }};background:#fff;border-radius:1px"></span></span>
+      <span style="font-variant-numeric:tabular-nums">{{ deskClock }}</span>
+      <button onClick="{{ skipIntro }}" style="font:600 12px -apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;background:rgba(255,255,255,.28);color:#fff;border:0;border-radius:999px;padding:3px 10px;cursor:pointer">Skip intro →</button>
+    </div>
+
+    <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;display:flex;gap:8px;align-items:flex-end;padding:7px 9px;border-radius:22px;background:rgba(255,255,255,.22);backdrop-filter:blur(30px) saturate(180%);border:.5px solid rgba(255,255,255,.4);box-shadow:0 10px 30px rgba(0,0,0,.2)">
+      <span style="width:46px;height:46px;border-radius:12px;background:linear-gradient(#8FD3FF,#2D8CFF)"></span>
+      <span style="display:flex;flex-direction:column;align-items:center;gap:3px"><span style="width:46px;height:46px;border-radius:12px;background:linear-gradient(#6EC1FF,#1A6BE0);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px">✉</span><span style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.9)"></span></span>
+      <span style="display:flex;flex-direction:column;align-items:center;gap:3px"><span style="width:46px;height:46px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center"><span style="width:28px;height:28px;border-radius:50%;border:6px solid #4A90E2;box-sizing:border-box;box-shadow:inset 0 0 0 3px #fff"></span></span><span style="width:4px;height:4px;border-radius:50%;background:{{ browserDot }}"></span></span>
+      <span style="width:46px;height:46px;border-radius:12px;background:linear-gradient(#5AD167,#22A13A)"></span>
+      <span style="width:46px;height:46px;border-radius:12px;background:linear-gradient(#FFD54F,#F5A623)"></span>
+      <span style="width:1px;height:40px;background:rgba(255,255,255,.4);margin:0 2px"></span>
+      <span style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.35)"></span>
+    </div>
+
+    <div style="position:absolute;left:5%;top:48px;bottom:84px;width:min(1000px,82%);background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 0 0 .5px rgba(0,0,0,.25),0 30px 70px -10px rgba(0,0,0,.45);display:flex;color:#1d1d1f;transition:transform .6s,filter .6s;transform:{{ mailTransform }};filter:{{ mailFilter }}">
+      <div style="width:190px;flex:none;padding:8px;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;inset:8px;border-radius:12px;background:rgba(210,225,245,.55);border:.5px solid rgba(255,255,255,.6)"></div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:2px;padding:10px 0;font-size:13px">
+          <div style="display:flex;gap:8px;padding:2px 12px 14px"><span style="width:12px;height:12px;border-radius:50%;background:#ff736a"></span><span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span><span style="width:12px;height:12px;border-radius:50%;background:#19c332"></span></div>
+          <span style="padding:4px 14px;font-size:11px;font-weight:700;color:rgba(0,0,0,.45)">Favourites</span>
+          <span style="margin:0 8px;padding:5px 8px;border-radius:7px;background:rgba(0,0,0,.08);font-weight:600;display:flex;justify-content:space-between">Inbox <span style="color:rgba(0,0,0,.5);font-weight:500">{{ unread }}</span></span>
+          <span style="margin:0 8px;padding:5px 8px;color:rgba(0,0,0,.75)">Flagged</span><span style="margin:0 8px;padding:5px 8px;color:rgba(0,0,0,.75)">Sent</span><span style="margin:0 8px;padding:5px 8px;color:rgba(0,0,0,.75)">Drafts</span><span style="margin:0 8px;padding:5px 8px;color:rgba(0,0,0,.75)">Archive</span>
+        </div>
+      </div>
+      <div style="width:290px;flex:none;border-right:1px solid #EBEBEB;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:16px 16px 10px;display:flex;flex-direction:column;gap:2px"><b style="font-size:17px">Inbox</b><span style="font-size:11.5px;color:#8a8a8e">{{ unread }} unread</span></div>
+        <sc-for list="{{ mailList }}" as="ml" hint-placeholder-count="5">
+          <div style="margin:0 8px;padding:10px 10px;border-radius:9px;display:flex;flex-direction:column;gap:2px;background:{{ ml.bg }};color:{{ ml.fg }};animation:{{ ml.anim }}">
+            <div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:{{ ml.weight }};display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:{{ ml.dot }}"></span>{{ ml.from }}</span><span style="font-size:11.5px;opacity:.6">{{ ml.time }}</span></div>
+            <div style="font-size:12.5px;font-weight:{{ ml.weight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ml.subject }}</div>
+            <div style="font-size:12px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ml.preview }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0">
+        <div style="flex:1;min-height:0;overflow:auto;padding:26px 30px;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Quick favour? Meta numbers + consent</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;padding-bottom:12px;border-bottom:1px solid #EFEFEF"><span style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;background:linear-gradient(#9AA4B2,#6B7584)">MH</span><div style="display:flex;flex-direction:column"><b>Mads Holm</b><span style="color:#8a8a8e">To: You · Cc: Sofie Lund</span></div><span style="margin-left:auto;color:#8a8a8e;font-size:12px">16:47</span></div>
+          <div style="font-size:15px;line-height:1.6;color:#1d1d1f;display:flex;flex-direction:column;gap:12px;max-width:560px">
+            <span>Hey,</span>
+            <span>Sorry to bother you. Meta numbers fell off a cliff after Tuesday's publish, and Sofie says we've had complaints that Meta fires before people answer the cookie banner.</span>
+            <span>Could you take a quick look in the tag manager? <b>Should only take 5 minutes.</b></span>
+            <span>Thanks!<br>Mads</span>
+          </div>
+        </div>
+        <sc-if value="{{ isAsk }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 30px;border-top:1px solid #EFEFEF;background:#FAFAFA;animation:askIn .5s .6s both">
+            <button onClick="{{ startMess }}" style="font:600 14px -apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;background:#007AFF;color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;box-shadow:0 0 0 4px rgba(0,122,255,.2)">↩ Reply: "Sure, I'll take a look"</button>
+            <button onClick="{{ skipIntro }}" style="font:500 14px -apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;background:#fff;color:#1d1d1f;border:.5px solid rgba(0,0,0,.2);border-radius:8px;padding:9px 14px;cursor:pointer">Not my job (skip)</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <sc-if value="{{ isMessStage }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;left:8%;top:62px;right:3%;bottom:76px;border-radius:12px;overflow:hidden;box-shadow:0 0 0 .5px rgba(0,0,0,.4),0 40px 90px -20px rgba(0,0,0,.6);display:flex;flex-direction:column;background:#35363a;animation:askIn .45s cubic-bezier(.2,.8,.2,1) both">
+        <div style="animation:{{ shakeAnim }};display:flex;flex-direction:column;flex:1;min-height:0;position:relative">
+        <div style="height:42px;flex:none;background:#202124;display:flex;align-items:flex-end;padding-right:8px">
+          <div style="display:flex;gap:8px;padding:0 14px;align-self:center"><span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span><span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span><span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span></div>
+          <sc-for list="{{ chromeTabs }}" as="ct" hint-placeholder-count="5">
+            <div style="height:34px;padding:0 12px;display:flex;align-items:center;gap:8px;border-radius:8px 8px 0 0;min-width:0;max-width:210px;flex:1;font:12px -apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;background:{{ ct.bg }};color:{{ ct.fg }}">
+              <span style="width:14px;height:14px;border-radius:{{ ct.radius }};background:{{ ct.icon }};flex:none"></span>
+              <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ct.title }}</span><span style="opacity:.6">×</span>
+            </div>
+          </sc-for>
+          <span style="color:#9aa0a6;font-size:18px;padding:0 10px 6px">+</span>
+        </div>
+        <div style="height:38px;flex:none;background:#35363a;display:flex;align-items:center;gap:6px;padding:0 10px;color:#9aa0a6;font:14px -apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">
+          <span>←</span><span>→</span><span>↻</span>
+          <div style="flex:1;height:28px;border-radius:14px;background:#282a2d;display:flex;align-items:center;gap:8px;padding:0 14px;margin:0 6px;color:#e8eaed;font-size:13px;white-space:nowrap;overflow:hidden"><span style="font-size:11px;color:#9aa0a6">🔒︎</span>tagmangler.example.com<span style="color:#9aa0a6">/accounts/600213/containers/11872/workspaces/47/tags</span></div>
+          <span style="width:22px;height:22px;border-radius:50%;background:#8AB4F8;color:#202124;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">Y</span>
+        </div>
+        <div style="flex:1;min-height:0;background:#fff;display:flex;flex-direction:column;font-family:Arial,Helvetica,sans-serif;color:#202124;position:relative">
+          <div style="height:56px;flex:none;display:flex;align-items:center;gap:18px;padding:0 18px;border-bottom:1px solid #DADCE0">
+            <span style="display:flex;align-items:center;gap:10px;font-size:18px;color:#3c4043"><span style="width:22px;height:22px;transform:rotate(45deg);border-radius:4px;background:#5F6B7A;display:inline-block"></span>TagMangler</span>
+            <span style="display:flex;flex-direction:column;font-size:11px;color:#5f6368;padding-left:14px;border-left:1px solid #DADCE0">All accounts › Northwind Retail ApS<b style="font-size:14px;color:#202124;font-weight:500">www.northwind.dk ▾</b></span>
+            <span style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;font-size:11px;color:#5f6368">Workspace changes: <b style="color:#C5221F;font-size:14px">213</b></span>
+            <button onClick="{{ openPreview }}" style="font:500 14px Arial,sans-serif;background:#fff;color:#5F6B7A;border:1px solid #DADCE0;border-radius:4px;padding:8px 16px;cursor:pointer">Preview</button>
+            <button style="font:500 14px Arial,sans-serif;background:#5F6B7A;color:#fff;border:0;border-radius:4px;padding:9px 18px">Submit</button>
+          </div>
+          <div style="background:#FEF7E0;border-bottom:1px solid #F9E6A6;padding:7px 18px;font-size:12px;color:#5C4A00;flex:none;display:flex;gap:10px">⚠ Your preview session expired. Some features have moved. <u>Learn more</u><span style="margin-left:auto;color:#5f6368">Time on this "5 minute" ticket: <b style="color:#C5221F">{{ timeSpent }}</b></span></div>
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="width:200px;flex:none;padding:12px 0;display:flex;flex-direction:column;gap:2px;font-size:14px;color:#3c4043;border-right:1px solid #DADCE0">
+              <span style="padding:4px 18px 10px;font-size:11px;color:#5f6368">CURRENT WORKSPACE<br><b style="font-size:13px;color:#202124;font-weight:500">Default Workspace (47) ▾</b></span>
+              <span style="padding:8px 18px">Overview</span>
+              <span style="padding:8px 18px;background:#EDEFF2;color:#202124;font-weight:bold;border-radius:0 18px 18px 0;margin-right:10px">Tags</span>
+              <span style="padding:8px 18px">Triggers</span><span style="padding:8px 18px">Variables</span><span style="padding:8px 18px">Folders</span><span style="padding:8px 18px">Templates</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;min-width:0;padding:14px 18px;gap:10px;background:#F8F9FA">
+              <div style="display:flex;align-items:center;justify-content:space-between"><b style="font-size:16px;font-weight:500">Tags</b><span style="font-size:13px;color:#5f6368">🔍︎ Search · 147 tags</span></div>
+              <div style="flex:1;min-height:0;background:#fff;border:1px solid #DADCE0;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
+                <div style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr) minmax(0,1.6fr) 90px;padding:10px 14px;border-bottom:1px solid #DADCE0;font-size:12px;color:#5f6368;font-weight:bold"><span>Name ↑</span><span>Type</span><span>Firing Triggers</span><span>Last Edited</span></div>
+                <div style="flex:1;overflow:hidden">
+                  <sc-for list="{{ mTags }}" as="t" hint-placeholder-count="14">
+                    <div onClick="{{ t.select }}" style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr) minmax(0,1.6fr) 90px;padding:8px 14px;border-bottom:1px solid #F1F3F4;cursor:pointer;font-size:13px;background:{{ t.bg }}">
+                      <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#3B5B8C">{{ t.name }}</span><span style="color:#5f6368">{{ t.type }}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5f6368">{{ t.trig }}</span><span style="color:#80868b">{{ t.ago }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div style="width:260px;flex:none;border-left:1px solid #DADCE0;padding:16px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+              <div style="font-size:15px;color:#3B5B8C">{{ mSel.name }}</div>
+              <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:12px"><span style="color:#5f6368">Fires on</span><span>{{ mSel.trig }}</span><span style="color:#5f6368">Consent</span><span style="color:#C5221F">{{ mSel.consent }}</span></div>
+              <div style="font-size:12px;color:#5f6368;font-style:italic">{{ mSel.note }}</div>
+            </div>
+          </div>
+          <sc-if value="{{ previewOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;background:rgba(32,33,36,.4);display:flex;align-items:center;justify-content:center">
+              <div style="width:380px;background:#fff;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.3);padding:22px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center;gap:12px;font-size:16px"><span style="width:18px;height:18px;border:3px solid #E8EAED;border-top-color:#5F6B7A;border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span>Connecting to preview…</div>
+                <div style="color:#5f6368;line-height:1.5;font-size:13px">Attempt {{ previewAttempt }} of ∞. Check third-party cookies, the extension, the account you're signed in with, and the phase of the moon.</div>
+                <div style="display:flex;justify-content:flex-end;gap:8px"><button onClick="{{ closePreview }}" style="font:500 14px Arial,sans-serif;background:#fff;color:#5F6B7A;border:0;padding:8px 12px;cursor:pointer">Cancel</button><button onClick="{{ retryPreview }}" style="font:500 14px Arial,sans-serif;background:#5F6B7A;color:#fff;border:0;border-radius:4px;padding:8px 14px;cursor:pointer">Try again</button></div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-for list="{{ mToasts }}" as="m" hint-placeholder-count="0">
+      <div style="position:absolute;z-index:4;left:{{ m.x }};top:{{ m.y }};--r:{{ m.r }};width:330px;animation:toastIn .3s cubic-bezier(.2,.8,.2,1) both;background:rgba(246,246,248,.86);backdrop-filter:blur(30px) saturate(180%);color:#1d1d1f;border-radius:18px;padding:12px 13px;box-shadow:0 14px 34px -8px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.06);display:flex;gap:10px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;pointer-events:none">
+        <span style="width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;background:{{ m.color }}">{{ m.initial }}</span>
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><div style="font-size:12px;display:flex;justify-content:space-between;gap:8px"><span><b>{{ m.who }}</b> <span style="color:#888">· {{ m.role }}</span></span><span style="color:#999">{{ m.channel }}</span></div><div style="font-size:13px;line-height:1.35">{{ m.text }}</div></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ isWasted }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.05),rgba(0,0,0,.65));pointer-events:none"></div>
+    <div style="position:absolute;left:0;right:0;top:50%;height:170px;margin-top:-85px;background:linear-gradient(transparent,rgba(0,0,0,.72) 25%,rgba(0,0,0,.72) 75%,transparent);animation:bandIn .5s .2s cubic-bezier(.2,.8,.2,1) both;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+      <div style="font-family:Anton,Impact,sans-serif;font-size:clamp(72px,11vw,150px);line-height:1;color:oklch(0.62 0.22 25);text-shadow:3px 3px 0 #000,-1px -1px 0 #000,0 0 40px rgba(0,0,0,.6);animation:wastedIn 1.1s .35s cubic-bezier(.2,.8,.2,1) both">wasted</div>
+      <div style="font:500 14px 'Geist Mono',monospace;color:#E8EEEC;animation:askIn .5s 1.3s both;text-align:center">{{ wastedLine }}</div>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<div style="animation:{{ siteAnim }};transform-origin:50% 30%">
+<header style="position:sticky;top:0;z-index:30;background:var(--bg);border-bottom:1px solid var(--line)">
+  <div style="max-width:1280px;margin:0 auto;padding:0 28px;height:56px;display:flex;align-items:center;gap:26px">
+    <a href="#" onClick="{{ goHome }}" style="display:flex;align-items:center;gap:9px;color:var(--ink);text-decoration:none">
+      <span style="width:20px;height:20px;position:relative;display:inline-block">
+        <span style="position:absolute;left:0;top:0;width:6px;height:6px;border-left:2px solid var(--ink);border-top:2px solid var(--ink)"></span><span style="position:absolute;right:0;top:0;width:6px;height:6px;border-right:2px solid var(--ink);border-top:2px solid var(--ink)"></span><span style="position:absolute;left:0;bottom:0;width:6px;height:6px;border-left:2px solid var(--ink);border-bottom:2px solid var(--ink)"></span><span style="position:absolute;right:0;bottom:0;width:6px;height:6px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink)"></span><span style="position:absolute;left:9px;top:5px;width:6px;height:6px;background:var(--mint)"></span>
+      </span>
+      <span style="font:600 16px 'Geist Mono',monospace;letter-spacing:-0.02em">tagreeve</span>
+    </a>
+    <nav style="display:{{ navDisplay }};gap:20px;font-size:14px;color:var(--muted);flex:1">
+      <a href="#" onClick="{{ goDocs }}" style="color:var(--muted)">Docs</a><a href="#" onClick="{{ goDocs }}" style="color:var(--muted)">CLI reference</a><a href="#" onClick="{{ goSystem }}" style="color:var(--muted)">Design system</a>
+    </nav>
+    <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}"><button onClick="{{ toggleMenu }}" aria-label="Menu" style="margin-left:auto;font:500 14px 'Geist Mono',monospace;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer">{{ menuIcon }}</button></sc-if>
+    <button onClick="{{ toggleTheme }}" style="font:500 12px 'Geist Mono',monospace;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:6px 9px;cursor:pointer">{{ themeLabel }}</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <a href="https://github.com/alfhen/tagreeve" style="font:500 13px 'Geist Mono',monospace;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 10px">github ↗</a>
+      <a href="https://github.com/alfhen/tagreeve/stargazers" style="font:500 13px 'Geist Mono',monospace;color:var(--mint)">(★ star us)</a>
+    </div>
+  </div>
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <nav style="display:flex;flex-direction:column;border-top:1px solid var(--line);padding:6px 28px 14px;font-size:16px;animation:hitIn .2s both">
+      <a href="#" onClick="{{ goDocsM }}" style="color:var(--ink);padding:10px 0;border-bottom:1px solid var(--line)">Docs</a>
+      <a href="#" onClick="{{ goDocsM }}" style="color:var(--ink);padding:10px 0;border-bottom:1px solid var(--line)">CLI reference</a>
+      <a href="#" onClick="{{ goSystemM }}" style="color:var(--ink);padding:10px 0">Design system</a>
+    </nav>
+  </sc-if>
+</header>
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<main data-screen-label="D · Home">
+  <section style="max-width:1280px;margin:0 auto;padding:40px 28px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px">
+    <span style="font:500 12px 'Geist Mono',monospace;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 12px;display:flex;gap:8px;align-items:center"><span style="width:6px;height:6px;border-radius:50%;background:var(--mint)"></span>0.4 release candidate · Chromium · MIT</span>
+    <sc-if value="{{ hlStory }}" hint-placeholder-val="{{ true }}"><h1 style="margin:0;font-size:clamp(40px,5.4vw,76px);line-height:.95;letter-spacing:-0.05em;font-weight:600;max-width:1000px;text-wrap:balance">"Should only take 5 minutes." <span style="color:var(--mint)">Now it does.</span></h1></sc-if>
+    <sc-if value="{{ hlHits }}" hint-placeholder-val="{{ false }}"><h1 style="margin:0;font-size:clamp(40px,5.4vw,76px);line-height:.95;letter-spacing:-0.05em;font-weight:600;max-width:1000px;text-wrap:balance">Every hit your site sends. <span style="color:var(--muted)">Before and after</span> <span style="color:var(--mint)">consent.</span></h1></sc-if>
+    <sc-if value="{{ hlSheriff }}" hint-placeholder-val="{{ false }}"><h1 style="margin:0;font-size:clamp(40px,5.4vw,76px);line-height:.95;letter-spacing:-0.05em;font-weight:600;max-width:1000px;text-wrap:balance">A new sheriff for <span style="color:var(--mint)">your tags.</span></h1></sc-if>
+    <p style="margin:0;font-size:19px;line-height:1.5;color:var(--muted);max-width:640px;text-wrap:pretty">Tagreeve plays a visitor in a real browser, catches every tracking request, decodes it and checks it against your rules. Ask an agent Mads's question below, and watch it answer in under a minute.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button onClick="{{ copyPrompt }}" style="font:600 15px Geist,sans-serif;background:var(--mint);color:var(--onmint);border:0;border-radius:8px;padding:13px 18px;cursor:pointer">{{ copyLabel }}</button>
+      <button onClick="{{ copyNpm }}" style="font:500 14px 'Geist Mono',monospace;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px 16px;cursor:pointer">{{ npmLabel }}</button>
+    </div>
+    <button onClick="{{ togglePrompt }}" style="font:500 12px 'Geist Mono',monospace;background:transparent;border:0;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:0">{{ promptToggleLabel }}</button>
+    <sc-if value="{{ showPrompt }}" hint-placeholder-val="{{ false }}">
+      <pre style="margin:0;max-width:760px;width:100%;box-sizing:border-box;text-align:left;background:#060807;color:#D9E2DF;border:1px solid var(--line);border-radius:12px;padding:16px 18px;font:12px/1.65 'Geist Mono',monospace;white-space:pre-wrap;max-height:300px;overflow:auto;animation:hitIn .25s both">{{ promptText }}</pre>
+    </sc-if>
+  </section>
+
+  <section style="max-width:1280px;margin:0 auto;padding:12px 28px 0">
+    <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel);box-shadow:0 50px 100px -50px rgba(0,0,0,.6)">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--bg2);flex-wrap:wrap">
+        <span style="font:500 12px 'Geist Mono',monospace;color:var(--muted)">agent tests a visitor who</span>
+        <div style="display:flex;gap:4px;padding:3px;border-radius:8px;background:var(--bg);border:1px solid var(--line)">
+          <sc-for list="{{ scenarios }}" as="sc" hint-placeholder-count="3">
+            <button onClick="{{ sc.pick }}" style="font:500 12px 'Geist Mono',monospace;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;background:{{ sc.bg }};color:{{ sc.fg }}">{{ sc.label }}</button>
+          </sc-for>
+        </div>
+        <span style="margin-left:auto;font:500 12px 'Geist Mono',monospace;color:var(--muted)">{{ clock }}</span>
+        <button onClick="{{ replay }}" style="font:500 12px 'Geist Mono',monospace;background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 9px;cursor:pointer">↺ replay</button>
+      </div>
+      <div style="position:relative;display:grid;grid-template-columns:{{ demoCols }};height:{{ demoH }}">
+        <sc-if value="{{ showThanks }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:14px;left:calc(35% + 14px);z-index:4;width:min(300px,calc(31.7% - 28px));min-width:220px;background:rgba(246,246,248,.94);backdrop-filter:blur(30px) saturate(180%);color:#1d1d1f;border-radius:16px;padding:12px 13px;box-shadow:0 14px 34px -8px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.06);display:flex;gap:10px;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;animation:toastIn .35s cubic-bezier(.2,.8,.2,1) both">
+            <span style="width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;background:#2F6FD6">M</span>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><div style="font-size:12px;display:flex;justify-content:space-between;gap:8px"><span><b>Mads</b> <span style="color:#888">· Performance</span></span><span style="color:#999">now</span></div><div style="font-size:13px;line-height:1.35">Wait, that took a minute?? Sending it to Sofie. Thank you!</div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ idle }}" hint-placeholder-val="{{ true }}">
+          <div style="position:absolute;inset:0;z-index:5;background:rgba(6,8,7,.55);backdrop-filter:blur(2px);display:flex;justify-content:center;align-items:flex-start;padding:36px 20px">
+            <div style="width:min(620px,100%);background:#0C0D0E;border:1px solid oklch(0.82 0.12 175);border-radius:12px;box-shadow:0 0 0 4px oklch(0.82 0.12 175 / .15),0 30px 60px -20px rgba(0,0,0,.7);padding:16px 18px;display:flex;flex-direction:column;gap:12px;font-family:'Geist Mono',monospace;color:#E6E6E2;animation:askIn .5s cubic-bezier(.2,.8,.2,1) both">
+              <span style="font-size:11px;color:#8A9794">~/northwind — your coding agent</span>
+              <div style="display:flex;gap:10px;font-size:14px;line-height:1.55"><span style="color:#9A9DA2">&gt;</span><span style="flex:1">{{ userPrompt }}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <span style="font-size:11.5px;color:#8A9794">Mads's question. The agent will run Tagreeve to answer it.</span>
+                <button onClick="{{ ask }}" style="font:600 14px Geist,sans-serif;background:oklch(0.82 0.12 175);color:#06201C;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;animation:pulseBtn 1.8s ease-in-out infinite">Ask the agent ⏎</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+        <div style="background:#0C0D0E;color:#D6D6D2;font:11.5px/1.6 'Geist Mono',monospace;border-right:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;min-height:0;height:{{ termH }}">
+          <div style="height:28px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;background:#18191B;border-bottom:1px solid #232528;font-size:11px;color:#7C7F84">
+            <span style="width:9px;height:9px;border-radius:50%;background:#3A3C40"></span><span style="width:9px;height:9px;border-radius:50%;background:#3A3C40"></span><span style="width:9px;height:9px;border-radius:50%;background:#3A3C40"></span>
+            <span style="flex:1;text-align:center">~/northwind — agent</span>
+          </div>
+          <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;position:relative">
+            <div style="position:absolute;left:0;right:0;top:0;height:36px;background:linear-gradient(#0C0D0E,transparent);z-index:1"></div>
+            <div style="padding:12px 14px 6px;display:flex;flex-direction:column;gap:12px;flex:none">
+              <div style="border:1px solid #3A3C40;border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;color:#9A9DA2">
+                <span style="color:#E6E6E2">Coding agent</span><span>cwd: ~/northwind</span><span>tools: Bash, Read, Edit</span>
+              </div>
+              <sc-if value="{{ showUserMsg }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:8px;color:#9A9DA2;animation:hitIn .2s both"><span>&gt;</span><span style="white-space:pre-wrap">{{ userPrompt }}</span></div>
+              </sc-if>
+              <sc-if value="{{ showPlan }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:8px;animation:hitIn .25s both"><span style="color:#E6E6E2">●</span><span style="white-space:pre-wrap;color:#E6E6E2;font-family:Geist,sans-serif;font-size:13px;line-height:1.5">{{ planText }}</span></div>
+              </sc-if>
+              <sc-if value="{{ showTool }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:1px;animation:hitIn .25s both">
+                  <div style="display:flex;gap:8px"><span style="color:{{ toolDot }}">●</span><span style="white-space:pre-wrap;word-break:break-all"><b style="font-weight:600;color:#E6E6E2">Bash</b><span style="color:#9A9DA2">(tagreeve run tagreeve/{{ scFile }} --site https://staging.northwind.dk)</span></span></div>
+                  <sc-for list="{{ toolOut }}" as="o" hint-placeholder-count="1">
+                    <div style="display:flex;gap:6px;padding-left:4px"><span style="color:#5C5F64;width:12px;flex:none">{{ o.glyph }}</span><span style="white-space:pre-wrap;word-break:break-word;color:{{ o.color }}">{{ o.text }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ showReply }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:8px;animation:hitIn .25s both"><span style="color:#E6E6E2">●</span>
+                  <div style="display:flex;flex-direction:column;gap:8px;font-family:Geist,sans-serif;font-size:13px;line-height:1.5;color:#E6E6E2">
+                    <sc-for list="{{ reply }}" as="p" hint-placeholder-count="0"><span style="white-space:pre-wrap">{{ p.text }}</span></sc-for>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ showSend }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:1px;animation:hitIn .25s both">
+                  <div style="display:flex;gap:8px"><span style="color:#E6E6E2">●</span><span style="font-family:Geist,sans-serif;font-size:13px;color:#E6E6E2">Want me to reply to Mads with this? <span style="color:#6C6F74;font-family:'Geist Mono',monospace;font-size:11.5px">(y/n)</span> <span style="color:oklch(0.82 0.12 175);font-family:'Geist Mono',monospace">{{ sendAnswer }}</span></span></div>
+                  <sc-if value="{{ showSent }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:6px;padding-left:4px;animation:hitIn .25s both"><span style="color:#5C5F64;width:12px">⎿</span><span style="color:oklch(0.82 0.12 175)">✓ Sent to Mads · cc Sofie (Legal) · evidence attached</span></div></sc-if>
+                </div>
+              </sc-if>
+              <sc-if value="{{ working }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:8px;color:#C9A86A"><span>{{ spinGlyph }}</span><span>{{ spinWord }}… <span style="color:#6C6F74">({{ spinSecs }}s · esc to interrupt)</span></span></div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="flex:none;padding:6px 14px 10px">
+            <div style="border:1px solid {{ inputBorder }};border-radius:6px;padding:7px 10px;display:flex;gap:8px;align-items:flex-start;color:#E6E6E2;min-height:20px;transition:border-color .3s,box-shadow .3s;box-shadow:{{ inputGlow }}"><span style="color:#9A9DA2">&gt;</span><span style="white-space:pre-wrap;flex:1">{{ inputText }}<sc-if value="{{ inputCursor }}" hint-placeholder-val="{{ true }}"><span style="display:inline-block;width:7px;height:13px;background:#D6D6D2;vertical-align:-2px;animation:blink 1s steps(1) infinite"></span></sc-if></span>
+              
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 2px 0;font-size:10.5px;color:#6C6F74"><span>? for shortcuts</span><span>{{ footerHint }}</span></div>
+          </div>
+        </div>
+        <div style="padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:10px;background:var(--bg2);height:{{ browserH }};box-sizing:border-box">
+          <div style="display:flex;align-items:center;gap:8px;font:500 11px 'Geist Mono',monospace;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:var(--line)"></span><span style="flex:1;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ url }}</span></div>
+          <div style="position:relative;flex:1;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:10px;opacity:{{ pageOpacity }};transition:opacity .4s">
+            <div style="display:flex;justify-content:space-between"><span style="width:70px;height:10px;border-radius:3px;background:var(--line)"></span><span style="width:90px;height:10px;border-radius:3px;background:var(--line)"></span></div>
+            <div style="height:150px;border-radius:8px;background:repeating-linear-gradient(135deg,var(--bg2) 0 8px,var(--panel) 8px 16px);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font:11px 'Geist Mono',monospace;color:var(--muted)">product shot</div>
+            <span style="width:60%;height:12px;border-radius:3px;background:var(--line)"></span>
+            <span style="width:35%;height:10px;border-radius:3px;background:var(--line)"></span>
+            <span style="width:110px;height:30px;border-radius:6px;background:var(--line)"></span>
+            <div style="position:absolute;left:12px;right:12px;bottom:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:9px;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .45s cubic-bezier(.6,0,.2,1),opacity .45s;transform:{{ bannerTransform }};opacity:{{ bannerOpacity }}">
+              <span style="font-size:13px;font-weight:600">We use cookies</span>
+              <span style="font-size:11.5px;color:var(--muted);line-height:1.4">For analytics and ads. You can change this later.</span>
+              <div style="display:flex;gap:6px">
+                <span style="flex:1;text-align:center;font-size:12px;padding:7px;border-radius:6px;border:1px solid var(--line);background:{{ rejectBg }};color:{{ rejectFg }};transition:background .2s">Reject</span>
+                <span style="flex:1;text-align:center;font-size:12px;padding:7px;border-radius:6px;border:1px solid var(--line);background:{{ acceptBg }};color:{{ acceptFg }};transition:background .2s">Accept</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font:500 11px 'Geist Mono',monospace;color:var(--muted)"><span>chromium · stub mode</span><span style="display:flex;align-items:center;gap:6px">epoch <b style="color:{{ epochColor }};font-weight:600">{{ epoch }}</b></span></div>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:10px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;font:500 11px 'Geist Mono',monospace;color:var(--muted)"><span>CAPTURED HITS</span><span>{{ hitCount }}</span></div>
+          <sc-if value="{{ idle }}" hint-placeholder-val="{{ true }}"><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;padding:0 12px"><span>Hits will land here as the visitor browses.</span></div></sc-if>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <sc-for list="{{ hits }}" as="h" hint-placeholder-count="0">
+              <div style="animation:hitIn .3s cubic-bezier(.2,.8,.2,1) both;display:grid;grid-template-columns:36px auto minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;row-gap:3px;align-items:center;padding:8px 10px;border-radius:8px;border:1px solid {{ h.border }};background:{{ h.bg }};font:12px 'Geist Mono',monospace">
+                <span style="color:var(--muted)">{{ h.t }}</span>
+                <span style="font-weight:600">{{ h.vendor }}</span>
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ h.event }}</span>
+                <span style="grid-column:2 / 4;justify-self:start;white-space:nowrap;font-size:10.5px;padding:1px 6px;border-radius:4px;background:{{ h.tagBg }};color:{{ h.tagFg }}">{{ h.tag }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showVerdict }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:auto;animation:hitIn .4s both;border-radius:10px;padding:14px;background:{{ verdictBg }};border:1px solid {{ verdictBorder }};display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:22px;letter-spacing:-0.03em;color:{{ verdictColor }}">{{ verdictTitle }}</b><span style="font:500 12px 'Geist Mono',monospace;color:var(--muted);white-space:nowrap;flex:none">{{ verdictExit }}</span></div>
+              <span style="font-size:13.5px;line-height:1.45;color:var(--ink)">{{ verdictBody }}</span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1280px;margin:0 auto;padding:110px 28px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:44px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <span style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">// for people, CI and agents</span>
+      <h2 style="margin:0;font-size:48px;line-height:1;letter-spacing:-0.045em;font-weight:600;text-wrap:balance">Test before you publish. Diff after.</h2>
+      <p style="margin:0;font-size:17px;line-height:1.55;color:var(--muted);text-wrap:pretty">Run a scenario against your live container and an unpublished GTM workspace, then compare per consent epoch, vendor and event. Run a whole folder in CI.</p>
+      <div style="display:flex;flex-direction:column;gap:2px;margin-top:6px">
+        <sc-for list="{{ cmds }}" as="c" hint-placeholder-count="3">
+          <button onClick="{{ c.pick }}" style="text-align:left;display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:10px;border:1px solid {{ c.border }};background:{{ c.bg }};color:var(--ink);cursor:pointer;font-family:Geist,sans-serif">
+            <span style="font:600 14px 'Geist Mono',monospace">{{ c.name }}</span><span style="font-size:14px;color:var(--muted)">{{ c.desc }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="background:#060807;color:#D9E2DF;border:1px solid var(--line);border-radius:14px;padding:20px 22px;font:13px/1.7 'Geist Mono',monospace;white-space:pre;overflow:auto;min-height:380px"><sc-for list="{{ cmdLines }}" as="l" hint-placeholder-count="8"><div style="color:{{ l.color }}">{{ l.text }}</div></sc-for></div>
+  </section>
+
+  <section style="max-width:1280px;margin:0 auto;padding:60px 28px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden">
+      <div style="background:var(--panel);padding:26px;display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'Geist Mono',monospace;color:var(--muted)">decoded</span><div style="display:flex;flex-wrap:wrap;gap:6px;font:500 13px 'Geist Mono',monospace"><span style="padding:5px 9px;border-radius:6px;background:var(--mintdim);color:var(--mint)">ga4</span><span style="padding:5px 9px;border-radius:6px;background:var(--mintdim);color:var(--mint)">google-ads</span><span style="padding:5px 9px;border-radius:6px;background:var(--mintdim);color:var(--mint)">meta</span><span style="padding:5px 9px;border-radius:6px;background:var(--mintdim);color:var(--mint)">pinterest</span><span style="padding:5px 9px;border-radius:6px;background:var(--mintdim);color:var(--mint)">sgtm</span></div></div>
+      <div style="background:var(--panel);padding:26px;display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'Geist Mono',monospace;color:var(--muted)">stubbed &amp; recorded</span><div style="display:flex;flex-wrap:wrap;gap:6px;font:500 13px 'Geist Mono',monospace"><span style="padding:5px 9px;border-radius:6px;border:1px solid var(--line)">linkedin</span><span style="padding:5px 9px;border-radius:6px;border:1px solid var(--line)">microsoft-uet</span><span style="padding:5px 9px;border-radius:6px;border:1px solid var(--line)">reddit</span><span style="padding:5px 9px;border-radius:6px;border:1px dashed var(--line);color:var(--muted)">+ --tracker-list</span></div></div>
+      <div style="background:var(--panel);padding:26px;display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'Geist Mono',monospace;color:var(--muted)">on the way</span><span style="font-size:14px;line-height:1.5;color:var(--muted)">Tag-firing reports, Firefox and WebKit, a mobile viewport preset, a Shopify bridge.</span></div>
+    </div>
+  </section>
+
+  <section data-screen-label="D · Safe by default" style="max-width:1280px;margin:0 auto;padding:70px 28px 20px;display:flex;flex-direction:column;gap:22px">
+    <div style="display:flex;flex-direction:column;gap:12px;max-width:720px">
+      <span style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">// safe by default</span>
+      <h2 style="margin:0;font-size:48px;line-height:1;letter-spacing:-0.045em;font-weight:600;text-wrap:balance">Point it at production. Nothing leaks.</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden">
+      <sc-for list="{{ safety }}" as="sf" hint-placeholder-count="4">
+        <div style="background:var(--panel);padding:24px;display:flex;flex-direction:column;gap:8px"><span style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">{{ sf.code }}</span><b style="font-size:18px;letter-spacing:-0.02em;font-weight:600">{{ sf.title }}</b><span style="font-size:14px;line-height:1.5;color:var(--muted)">{{ sf.body }}</span></div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section data-screen-label="D · Why the name" style="max-width:1280px;margin:0 auto;padding:70px 28px 60px">
+    <div style="border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr))">
+      <div style="padding:44px;display:flex;flex-direction:column;gap:16px;background:var(--panel)">
+        <span style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">// why "tagreeve"</span>
+        <h2 style="margin:0;font-size:48px;line-height:1;letter-spacing:-0.045em;font-weight:600;text-wrap:balance">There's a new sheriff in tag town.</h2>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:var(--muted);text-wrap:pretty">In Anglo-Saxon England, a <b style="color:var(--ink);font-weight:600">reeve</b> was the official who kept order for the king. The reeve of a whole county was the <b style="color:var(--ink);font-weight:600">shire reeve</b>. Say it fast for a few hundred years and you get <b style="color:var(--ink);font-weight:600">sheriff</b>.</p>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:var(--muted);text-wrap:pretty">Tagreeve does the same job for your tags. It walks the beat as a visitor, writes down every hit, and when a pixel fires before consent, it doesn't argue. It brings evidence.</p>
+      </div>
+      <div style="padding:44px;display:flex;flex-direction:column;justify-content:center;gap:0;background:var(--bg2);border-left:1px solid var(--line);font-family:'Geist Mono',monospace">
+        <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;align-items:baseline;padding:16px 0;border-bottom:1px dashed var(--line)">
+          <span style="font-size:12px;color:var(--muted)">Old English</span>
+          <span style="font-size:clamp(22px,2.4vw,30px);letter-spacing:-0.02em;color:var(--muted)">scīr + gerēfa</span>
+        </div>
+        <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;align-items:baseline;padding:16px 0;border-bottom:1px dashed var(--line)">
+          <span style="font-size:12px;color:var(--muted)">Middle English</span>
+          <span style="font-size:clamp(22px,2.4vw,30px);letter-spacing:-0.02em;color:var(--muted)">shire reeve</span>
+        </div>
+        <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;align-items:baseline;padding:16px 0;border-bottom:1px dashed var(--line)">
+          <span style="font-size:12px;color:var(--muted)">Today</span>
+          <span style="font-size:clamp(22px,2.4vw,30px);letter-spacing:-0.02em">sheriff</span>
+        </div>
+        <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;align-items:baseline;padding:20px 0 4px">
+          <span style="font-size:12px;color:var(--mint)">Your stack</span>
+          <span style="font-size:clamp(30px,3.4vw,44px);letter-spacing:-0.04em;font-weight:600">tag<span style="color:var(--mint)">reeve</span></span>
+        </div>
+        <span style="font-family:Geist,sans-serif;font-size:13px;color:var(--muted);padding-top:6px">Pronounced like "tag reeve". Formerly Pingwright.</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1280px;margin:0 auto;padding:0 28px 80px;display:flex;flex-direction:column;align-items:center;gap:16px;overflow:hidden">
+    <div style="font:clamp(6px,1.25vw,15px)/1.05 'Geist Mono',monospace;color:var(--muted)">
+      <sc-for list="{{ bannerBig }}" as="r" hint-placeholder-count="5"><div style="white-space:pre"><span>{{ r.m1 }}</span><span style="color:var(--mint)">{{ r.mpx }}</span><span>{{ r.m2 }}</span><span style="color:var(--ink)">{{ r.w1 }}</span><span style="color:var(--mint)">{{ r.w2 }}</span></div></sc-for>
+    </div>
+    <span style="font:500 12px 'Geist Mono',monospace;color:var(--muted)">the new tag sheriff in town</span>
+  </section>
+
+  <footer style="border-top:1px solid var(--line)"><div style="max-width:1280px;margin:0 auto;padding:22px 28px 72px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font:500 12px 'Geist Mono',monospace;color:var(--muted)"><span>tagreeve · MIT · runs on infrastructure you control</span><button onClick="{{ replayIntro }}" style="font:inherit;background:transparent;border:0;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:0">replay the 5-minute ticket</button></div></footer>
+</main>
+</sc-if>
+
+<sc-if value="{{ isDocs }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="D · Docs" style="max-width:1280px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px">
+  <aside style="padding:32px 0;display:flex;flex-direction:column;gap:22px;font-size:14px;position:sticky;top:56px;align-self:start">
+    <span style="font:12px 'Geist Mono',monospace;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between">/ search <span>⌘K</span></span>
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="font:500 11px 'Geist Mono',monospace;color:var(--muted);padding:4px 10px">guides</span><span style="padding:6px 10px;color:var(--muted)">What Tagreeve checks</span><span style="padding:6px 10px;color:var(--muted)">Your first run</span><span style="padding:6px 10px;border-radius:6px;background:var(--mintdim);color:var(--mint);font-weight:500">Reading a run's results</span></div>
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="font:500 11px 'Geist Mono',monospace;color:var(--muted);padding:4px 10px">reference</span><span style="padding:6px 10px;color:var(--muted)">tagreeve run</span><span style="padding:6px 10px;color:var(--muted)">tagreeve diff</span><span style="padding:6px 10px;color:var(--muted)">tagreeve suite</span><span style="padding:6px 10px;color:var(--muted)">Scenario format</span><span style="padding:6px 10px;color:var(--muted)">Built-in checks</span></div>
+  </aside>
+  <article style="padding:40px 0 110px;max-width:860px;display:flex;flex-direction:column;gap:18px;font-size:16px;line-height:1.65">
+    <span style="font:500 12px 'Geist Mono',monospace;color:var(--muted)">docs/guide/reading-results</span>
+    <h1 style="margin:0;font-size:52px;line-height:1;letter-spacing:-0.045em;font-weight:600">Reading a run's results</h1>
+    <p style="margin:0;font-size:19px;color:var(--muted)">A run gives you a text summary and a record file. Hover a line of the summary to see what it means.</p>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel)">
+      <span style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">// using an agent?</span>
+      <span style="flex:1;min-width:240px;font-size:14px;color:var(--muted)">Your agent can read the same summary, or <code style="font-family:'Geist Mono',monospace;color:var(--ink)">--json</code>. Ask it to explain each failure with its evidence IDs.</span>
+      <button onClick="{{ copyPrompt }}" style="font:600 13px Geist,sans-serif;background:var(--mint);color:var(--onmint);border:0;border-radius:8px;padding:8px 12px;cursor:pointer">{{ copyLabel }}</button>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+      <div style="background:#060807;color:#D9E2DF;font:12.5px/1.75 'Geist Mono',monospace;padding:16px 0">
+        <sc-for list="{{ annot }}" as="a" hint-placeholder-count="10">
+          <div onMouseEnter="{{ a.hover }}" style="white-space:pre;padding:0 16px;cursor:default;background:{{ a.bg }};color:{{ a.color }}">{{ a.text }}</div>
+        </sc-for>
+      </div>
+      <div style="background:var(--panel);padding:20px;display:flex;flex-direction:column;gap:8px">
+        <span style="font:500 11px 'Geist Mono',monospace;color:var(--mint)">{{ annotTitle }}</span>
+        <span style="font-size:15px;line-height:1.55">{{ annotBody }}</span>
+      </div>
+    </div>
+    <h2 style="margin:22px 0 0;font-size:28px;letter-spacing:-0.03em;font-weight:600">Consent epochs</h2>
+    <p style="margin:0">An epoch is a period with one consent state. A scenario that rejects the banner has two epochs. Tagreeve puts each hit in the epoch where it was sent.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;font:12.5px 'Geist Mono',monospace">
+      <div style="padding:14px;background:var(--bg2);display:flex;flex-direction:column;gap:6px"><b style="font-weight:600">epoch 1 · undecided</b><span style="color:var(--muted)">hits sent while no answer was given</span></div>
+      <div style="padding:14px;background:var(--faildim);display:flex;flex-direction:column;gap:6px;border-left:1px solid var(--line)"><b style="font-weight:600;color:var(--fail)">epoch 2 · denied</b><span style="color:var(--muted)">hits sent after the visitor rejected</span></div>
+    </div>
+    <div style="border-left:2px solid var(--mint);padding:4px 0 4px 16px;color:var(--muted);font-size:15px">A Google hit is the exception: Tagreeve reads the consent values the hit carries, not the epoch.</div>
+    <h2 style="margin:22px 0 0;font-size:28px;letter-spacing:-0.03em;font-weight:600">Find the evidence</h2>
+    <div style="background:#060807;color:#D9E2DF;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font:13px/1.7 'Geist Mono',monospace;white-space:pre;overflow:auto"><span style="color:#6E7B78">$</span> grep hit_01M66G9M2S992B5DF1MZ15ZQ08 runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl</div>
+  <p style="margin:0">Search the record file for an ID to see the whole line. Programs can read the file, or the output of <code style="font-family:'Geist Mono',monospace;color:var(--ink)">tagreeve run --json</code>.</p>
+    <h2 style="margin:22px 0 0;font-size:28px;letter-spacing:-0.03em;font-weight:600">Built-in checks</h2>
+    <p style="margin:0">Built-in checks run on every run. You do not write them.</p>
+    <div style="display:flex;flex-direction:column;border-top:1px solid var(--line)">
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">unknownDestination</code><span style="color:var(--muted)">Fails if a request went to a host that is not your site and that Tagreeve does not know. Allow a host with <code style="font-family:'Geist Mono',monospace;color:var(--ink)">options.allowUnknownDestination</code>.</span></div>
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">sandboxPageUrl</code><span style="color:var(--muted)">Fails if a vendor received the address of a sandboxed iframe as the page address. Shopify custom pixels run in such an iframe.</span></div>
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">deniedIdentifiers</code><span style="color:var(--muted)">Fails if a hit carries an identifier, such as a user ID or a hashed email, while the matching consent signal is denied.</span></div>
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">earlyIdentifiers</code><span style="color:var(--muted)">Warns if a hit sent before the first consent answer carries an identifier and its consent signal is unknown.</span></div>
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">possibleRealData</code><span style="color:var(--muted)">Fails if the record holds an email, phone number or hash that does not belong to the fake identity.</span></div>
+    </div>
+    <p style="margin:0;font-size:15px;color:var(--muted)"><code style="font-family:'Geist Mono',monospace;color:var(--ink)">options.builtins</code> sets a check to <code style="font-family:'Geist Mono',monospace;color:var(--ink)">warn</code>. The summary then shows WARN for it and the exit code stays 0.</p>
+    <h2 style="margin:22px 0 0;font-size:28px;letter-spacing:-0.03em;font-weight:600">Compare two runs</h2>
+    <p style="margin:0"><code style="font-family:'Geist Mono',monospace;color:var(--ink)">tagreeve diff</code> compares two record files of the same scenario. It does not open a browser. Use it to see what a change did, for example a new version of your tag manager container.</p>
+    <div style="background:#060807;color:#D9E2DF;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font:13px/1.7 'Geist Mono',monospace;white-space:pre;overflow:auto"><span style="color:#6E7B78">$</span> tagreeve diff runs/a/run_A.jsonl runs/b/run_B.jsonl
+Epoch undecided
+  ga4
+    page_view
+      added (step "wait-2"): hit_01M66F9D0J8K09EP6VRBY9AYEE
+      count 2 -&gt; 3 (pairing by order)</div>
+    <div style="display:flex;flex-direction:column;border-top:1px solid var(--line)">
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">Epoch / vendor / event</code><span style="color:var(--muted)">The group. Hits are grouped by epoch, vendor and event.</span></div>
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">step "wait-2"</code><span style="color:var(--muted)">The step that was running when the hit arrived: the wait step at position 2.</span></div>
+      <div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px"><code style="font:13px 'Geist Mono',monospace;color:var(--mint)">count 2 -&gt; 3</code><span style="color:var(--muted)">Run A had two hits in this group, run B three. With different counts the pairing may be wrong, so check by hand.</span></div>
+    </div>
+    <div style="border-left:2px solid var(--mint);padding:4px 0 4px 16px;color:var(--muted);font-size:15px">The diff exits 0 even when the runs differ. The exit code of each run tells you whether its expectations passed.</div>
+    <div style="display:flex;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid var(--line);font-size:14px"><a href="#">← Your first run</a><a href="#">CLI reference →</a></div>
+  </article>
+</main>
+</sc-if>
+
+<sc-if value="{{ isSystem }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="D · Design system" style="max-width:1280px;margin:0 auto;padding:48px 28px 110px;display:flex;flex-direction:column;gap:56px">
+  <div style="display:flex;flex-direction:column;gap:12px;max-width:780px">
+    <span style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">// proposal D · "phosphor + the 5-minute ticket"</span>
+    <h1 style="margin:0;font-size:60px;line-height:.95;letter-spacing:-0.05em;font-weight:600">Two worlds, one rule.</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:var(--muted)">The site is dark, calm and precise: Tagreeve's world. The intro is the other world: bright, noisy, generic office software. The rule is that the two never mix. Tagreeve's mint never appears in the intro, and the intro's toasts only come back once, when Mads says thank you. Mono for anything a machine prints, Geist for anything a person says.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+    <sc-for list="{{ swatches }}" as="c" hint-placeholder-count="7">
+      <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)"><div style="height:84px;background:{{ c.v }}"></div><div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px;font:12px 'Geist Mono',monospace"><b style="font-family:Geist,sans-serif;font-size:14px">{{ c.name }}</b><span style="color:var(--muted)">{{ c.hex }}</span></div></div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:40px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font:500 11px 'Geist Mono',monospace;color:var(--muted)">type · geist + geist mono</span>
+      <div style="font-size:80px;font-weight:600;letter-spacing:-0.05em;line-height:.95">Display 80</div>
+      <div style="font-size:48px;font-weight:600;letter-spacing:-0.045em;line-height:1">Heading 48</div>
+      <div style="font-size:17px;line-height:1.55;color:var(--muted)">Body 17 / 1.55, muted for support copy.</div>
+      <div style="font:500 12px 'Geist Mono',monospace;color:var(--mint)">// eyebrow, comment-style</div>
+      <div style="font:13px 'Geist Mono',monospace">FAIL mustNot: {"vendor":"meta","before":"consent"}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <span style="font:500 11px 'Geist Mono',monospace;color:var(--muted)">components</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button style="font:600 15px Geist,sans-serif;background:var(--mint);color:var(--onmint);border:0;border-radius:8px;padding:13px 18px">Primary</button><button style="font:500 14px 'Geist Mono',monospace;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px 16px">$ secondary</button></div>
+      <div style="display:grid;grid-template-columns:46px 92px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font:12px 'Geist Mono',monospace"><span style="color:var(--muted)">1.2s</span><b style="font-weight:600">ga4</b><span>page_view</span><span style="font-size:10.5px;padding:2px 6px;border-radius:4px;background:var(--mintdim);color:var(--mint)">ok</span></div>
+      <div style="display:grid;grid-template-columns:46px 92px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;border:1px solid var(--fail);background:var(--faildim);font:12px 'Geist Mono',monospace"><span style="color:var(--muted)">1.4s</span><b style="font-weight:600">meta</b><span>PageView</span><span style="font-size:10.5px;padding:2px 6px;border-radius:4px;background:var(--fail);color:var(--bg)">before consent</span></div>
+      <span style="font-size:13px;color:var(--muted)">Hit row: the atom of the whole site. Same component in the demo, docs and the HTML report.</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:40px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font:500 11px 'Geist Mono',monospace;color:var(--muted)">agent session · the hero's voice</span>
+      <div style="background:#0C0D0E;color:#D6D6D2;border:1px solid var(--line);border-radius:10px;padding:14px;font:11.5px/1.6 'Geist Mono',monospace;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:8px;color:#9A9DA2"><span>&gt;</span><span>Can you check staging.northwind.dk?</span></div>
+        <div style="display:flex;flex-direction:column;gap:1px"><div style="display:flex;gap:8px"><span style="color:oklch(0.72 0.16 25)">●</span><span><b style="font-weight:600;color:#E6E6E2">Bash</b><span style="color:#9A9DA2">(tagreeve run tagreeve/reject.yml …)</span></span></div><div style="display:flex;gap:6px;padding-left:4px"><span style="color:#5C5F64;width:12px">⎿</span><span style="color:oklch(0.72 0.16 25)">Result: fail (2 of 5)</span></div></div>
+        <div style="display:flex;gap:8px"><span>●</span><span style="font-family:Geist,sans-serif;font-size:13px;color:#E6E6E2">Found it. Two problems on staging…</span></div>
+        <div style="display:flex;gap:8px;color:#C9A86A"><span>✻</span><span>Running tagreeve… <span style="color:#6C6F74">(4s · esc to interrupt)</span></span></div>
+      </div>
+      <span style="font-size:13px;color:var(--muted)">Generic agent conventions only: ● for a step, ⎿ for tool output, an amber working line. No vendor branding.</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font:500 11px 'Geist Mono',monospace;color:var(--muted)">the other world · intro only</span>
+      <div style="background:linear-gradient(135deg,oklch(0.72 0.12 250),oklch(0.7 0.13 320));border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <div style="background:rgba(246,246,248,.94);color:#1d1d1f;border-radius:16px;padding:12px 13px;box-shadow:0 14px 34px -8px rgba(0,0,0,.35);display:flex;gap:10px;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif"><span style="width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;background:#7A5AF8">S</span><div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:12px"><b>Sofie</b> <span style="color:#888">· Legal</span></div><div style="font-size:13px;line-height:1.35">Toast: colleague pressure. Only appears in the intro, and once at the end of the demo.</div></div></div>
+        <div style="background:#fff;border-radius:10px;padding:10px 12px;font:13px Arial,sans-serif;color:#202124;display:flex;justify-content:space-between;align-items:center"><span style="color:#3B5B8C">Meta CAPI v2 (copy) (copy)</span><span style="color:#5f6368;font-size:12px">2 days</span></div>
+      </div>
+      <span style="font-size:13px;color:var(--muted)">System fonts, Arial and borrowed blues on purpose. It should feel like someone else's software.</span>
+    </div>
+  </div>
+  <pre style="margin:0;background:#060807;color:#D9E2DF;border:1px solid var(--line);border-radius:12px;padding:20px 22px;font:13px/1.65 'Geist Mono',monospace;overflow:auto">@import "tailwindcss";
+@custom-variant light (&amp;:where([data-theme=light], [data-theme=light] *));
+@theme {
+  --font-sans: "Geist", ui-sans-serif;  --font-mono: "Geist Mono", ui-monospace;
+  --color-void: #090B0B;  --color-panel: #121716;  --color-rule: #1F2826;
+  --color-fg: #E8EEEC;    --color-dim: #8A9794;
+  --color-mint: oklch(0.82 0.12 175);
+  --color-fail: oklch(0.72 0.16 25);
+  --color-warn: oklch(0.84 0.13 85);
+}
+/* intro-only, never used on the site */
+@theme { --color-office-blue: #2F6FD6; --color-office-alert: #C5221F; }</pre>
+</main>
+</sc-if>
+
+</div>
+
+<div style="position:fixed;left:16px;bottom:16px;z-index:40;display:flex;gap:4px;padding:4px;border-radius:10px;background:#16181B;font:500 12px 'Geist Mono',monospace;box-shadow:0 8px 24px rgba(0,0,0,.3);border:1px solid #2A2D30">
+  <span style="color:#9C9EA2;padding:6px 8px">D</span>
+  <button onClick="{{ replayIntro }}" style="font:inherit;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;background:transparent;color:#69D6C2">▶ Intro</button>
+  <button onClick="{{ goHome }}" style="font:inherit;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;background:{{ tabHome }};color:#fff">Home</button>
+  <button onClick="{{ goDocs }}" style="font:inherit;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;background:{{ tabDocs }};color:#fff">Docs</button>
+  <button onClick="{{ goSystem }}" style="font:inherit;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;background:{{ tabSystem }};color:#fff">System</button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;headline&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;story&quot;,&quot;hits&quot;,&quot;sheriff&quot;],&quot;default&quot;:&quot;story&quot;,&quot;tsType&quot;:&quot;'story' | 'hits' | 'sheriff'&quot;,&quot;section&quot;:&quot;Hero&quot;}}">
+const PROMPT = `Set up Tagreeve to test the tracking and the cookie consent on my website.
+
+Tagreeve is a command-line tool. It opens my site in a real browser, acts as a visitor, records every tracking request and checks the requests against rules that I write. The docs are at https://tagreeve.dev.
+
+1. Install it with \`npm i -g tagreeve@next\`, then run \`tagreeve install-browser\`. Check that \`tagreeve --version\` works.
+2. Read https://tagreeve.dev/docs/guide/first-run and https://tagreeve.dev/docs/cli before you write a scenario. Use \`tagreeve run --help\` for the flags. Do not guess flags or step names.
+3. Ask me for the address of my site and the tracking tools it uses, for example GA4, Google Ads, Meta or Pinterest.
+4. Write three scenarios in a \`tagreeve/\` folder: the visitor ignores the cookie banner (\`consent: none\`), accepts it (\`consent: accept\`) and rejects it (\`consent: reject\`). Each scenario opens the home page and one product or content page. Add rules: no Meta or Google Ads hit before consent, no marketing hit after a reject, and the analytics hits that I expect after an accept.
+5. Run each scenario with \`tagreeve run <file> --site <address>\`. Keep the default network mode, \`stub\`, so no tracking hit leaves my machine.
+6. Show me a short table: the scenario, the result, and each failed rule with its evidence IDs. Explain each failure in plain words. Tell me if it looks like a real problem on my site or a rule that needs a change.
+
+Rules for you:
+- Never type real personal data. Tagreeve makes a fake visitor for each run.
+- Never automate a payment or a log-in. Use a \`handoff\` step and ask me to do that part.
+- Do not use \`--network live\` unless I ask for it.
+- Keep the \`runs/\` folder on my machine. Do not commit it or upload it.`;
+
+const C = { fg: '#D9E2DF', dim: '#6E7B78', mint: 'oklch(0.82 0.12 175)', fail: 'oklch(0.72 0.16 25)', warn: 'oklch(0.84 0.13 85)' };
+const BASE = [
+  { at: 1900, v: 'ga4', e: 'page_view', why: '' },
+  { at: 2300, v: 'meta', e: 'PageView', why: 'before' },
+  { at: 2700, v: 'google-ads', e: 'page_view', why: 'before' },
+];
+const EV = ['hit_01M66G9M2S992B5DF1MZ15ZQ08', 'hit_01M66G9M2T97WBWV5AA85VFM3W', 'hit_01M66G9M2VCB4KHQ2ZD3ZQ9J4R', 'hit_01M66G9M2WQ0R3T8N7C1VHX2EA'];
+const RECORD = 'runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl';
+const BUILTINS = ['builtin: unknownDestination', 'builtin: deniedIdentifiers', 'builtin: possibleRealData'].map(e => ({ e, pass: true }));
+const SC = {
+  none: { label: 'ignores banner', file: 'undecided.yml', action: null, epoch2: null,
+    after: [{ at: 4300, v: 'ga4', e: 'page_view', why: '' }, { at: 4700, v: 'pinterest', e: 'pagevisit', why: 'before' }],
+    rules: [
+      { e: 'mustNot: {"vendor":["meta","google-ads","pinterest"],"before":"consent"}', pass: false, msg: 'Expected no matching hits before consent, found 3 matching hits (3 before narrowing).', ev: [EV[0], EV[1], EV[3]] },
+      { e: 'must: {"vendor":"ga4","event":"page_view","count":">=2"}', pass: true },
+    ],
+    verdict: ['3 hits before consent', 'Meta, Google Ads and Pinterest fire while the banner is still open.', 'exit 1'] },
+  reject: { label: 'rejects', file: 'reject.yml', action: 'reject', epoch2: 'denied',
+    after: [{ at: 3900, v: 'ga4', e: 'page_view', why: 'denied' }, { at: 4300, v: 'ga4', e: 'page_view', why: 'denied' }, { at: 4700, v: 'meta', e: 'AddToCart', why: 'afterReject' }],
+    rules: [
+      { e: 'mustNot: {"vendor":["meta","google-ads"],"before":"consent"}', pass: false, msg: 'Expected no matching hits before consent, found 2 matching hits (2 before narrowing).', ev: [EV[0], EV[1]] },
+      { e: 'mustNot: {"vendor":"meta","in":"epoch(denied)"}', pass: false, msg: 'Expected no matching hits in epoch(denied), found 1 matching hit (2 before narrowing).', ev: [EV[2]] },
+    ],
+    verdict: ['Meta ignores "Reject"', '2 hits before the answer, and 1 more after the visitor said no.', 'exit 1'] },
+  accept: { label: 'accepts', file: 'accept.yml', action: 'accept', epoch2: 'granted',
+    after: [{ at: 3900, v: 'ga4', e: 'page_view', why: 'granted' }, { at: 4300, v: 'meta', e: 'ViewContent', why: 'granted' }, { at: 4700, v: 'google-ads', e: 'conversion', why: 'granted' }],
+    rules: [
+      { e: 'mustNot: {"vendor":["meta","google-ads"],"before":"consent"}', pass: false, msg: 'Expected no matching hits before consent, found 2 matching hits (2 before narrowing).', ev: [EV[0], EV[1]] },
+      { e: 'must: {"vendor":"meta","event":"ViewContent","in":"epoch(granted)"}', pass: true },
+    ],
+    verdict: ['Accept works. Waiting doesn\'t', 'Everything fires after Accept, but Meta and Ads jump the gun before it.', 'exit 1'] },
+};
+function summaryLines(sc) {
+  const by = {};
+  for (const h of [...BASE, ...sc.after].sort((a, b) => a.at - b.at)) { by[h.v] = by[h.v] || {}; by[h.v][h.e] = (by[h.v][h.e] || 0) + 1; }
+  const L = [['Hits', 'fg']];
+  for (const v of Object.keys(by)) L.push([`  ${v}: ${Object.entries(by[v]).map(([e, n]) => `${e} x${n}`).join(', ')}`, 'fg']);
+  L.push(['Consent epochs', 'fg']);
+  if (sc.action) L.push(['  undecided (3.3 s)', 'fg'], [`  ${sc.epoch2} (to end)`, 'fg']); else L.push(['  undecided (to end)', 'fg']);
+  L.push(['Flags', 'fg'], ['  none', 'fg'], ['Expectations', 'fg']);
+  const all = [...sc.rules, ...BUILTINS];
+  for (const r of all) {
+    L.push([`  ${r.pass ? 'PASS' : 'FAIL'} ${r.e}`, r.pass ? 'mint' : 'fail']);
+    if (!r.pass && r.msg) L.push([`       ${r.msg}`, 'dim']);
+    if (r.ev && r.ev.length) L.push([`       evidence: ${r.ev.join(', ')}`, 'dim']);
+  }
+  const failed = all.filter(r => !r.pass).length;
+  L.push([failed ? `Result: fail (${failed} of ${all.length})` : 'Result: pass', failed ? 'fail' : 'mint'], [`Record: ${RECORD}`, 'dim']);
+  return L;
+}
+function suiteLines() {
+  const rows = [['accept', 'FAIL: 1 rule', 'PASS', '-2 removed'], ['reject', 'FAIL: 2 rules', 'PASS', '-3 removed'], ['undecided', 'FAIL: 1 rule', 'PASS', '-3 removed']];
+  const header = ['scenario', 'published', 'workspace', 'diff (published -> workspace)'];
+  const w = header.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)));
+  const line = cols => cols.map((c, i) => (i === cols.length - 1 ? c : c.padEnd(w[i] + 3))).join('').trimEnd();
+  const dir = 'runs/suite_01M66H2B7Q4K9X';
+  return [
+    ['$ tagreeve suite scenarios/ --site https://staging.northwind.dk --variant published --variant workspace=ws47.json', 'dim'],
+    ...['accept', 'reject', 'undecided'].flatMap(s => [[`Running ${s} (published)`, 'dim'], [`Running ${s} (workspace)`, 'dim']]),
+    [line(header), 'fg'], ...rows.map(r => [line(r), 'fg']),
+    ['', 'fg'], ['Records', 'fg'],
+    ...['accept', 'reject', 'undecided'].flatMap(s => [[`  ${s} published: ${dir}/${s}.published.jsonl`, 'fg'], [`  ${s} workspace: ${dir}/${s}.workspace.jsonl`, 'fg']]),
+    ['', 'fg'], [`Manifest: ${dir}/suite.json`, 'fg'],
+  ];
+}
+const CMDS = {
+  run: { name: 'tagreeve run', desc: 'Play one scenario. Exit 0, 1 or 2.', lines: [['$ tagreeve run reject.yml --site https://staging.northwind.dk', 'dim'], ...summaryLines(SC.reject)] },
+  diff: { name: 'tagreeve diff', desc: 'Compare two records, e.g. published vs. workspace.', lines: [['$ tagreeve diff runs/published/run_A.jsonl runs/workspace/run_B.jsonl', 'dim'], ['Diff runs/published/run_A.jsonl -> runs/workspace/run_B.jsonl', 'fg'], ['', 'fg'], ['Epoch undecided', 'fg'], ['  google-ads', 'fg'], ['    page_view', 'fg'], ['      removed (step "wait-2"): ' + EV[1], 'mint'], ['  meta', 'fg'], ['    PageView', 'fg'], ['      removed (step "wait-2"): ' + EV[0], 'mint']] },
+  suite: { name: 'tagreeve suite', desc: 'A folder of scenarios × several GTM builds, for CI.', lines: suiteLines() },
+  json: { name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [["$ tagreeve run reject.yml --site … --json | jq '.results[0]'", 'dim'], ['{', 'fg'], ['  "expectation": "mustNot: {\\"vendor\\":[\\"meta\\",\\"google-ads\\"],\\"before\\":\\"consent\\"}",', 'fg'], ['  "pass": false,', 'fail'], ['  "severity": "fail",', 'fg'], ['  "message": "Expected no matching hits before consent, found 2 matching hits (2 before narrowing).",', 'fg'], ['  "evidence": [', 'fg'], ['    "hit_01M66G9M2S992B5DF1MZ15ZQ08",', 'fg'], ['    "hit_01M66G9M2T97WBWV5AA85VFM3W"', 'fg'], ['  ]', 'fg'], ['}', 'fg']] },
+};
+const LETTERS = {
+  T: ['█████', '  █  ', '  █  ', '  █  ', '  █  '], A: [' ███ ', '█   █', '█████', '█   █', '█   █'], G: [' ████', '█    ', '█  ██', '█   █', ' ████'],
+  R: ['████ ', '█   █', '████ ', '█  █ ', '█   █'], E: ['█████', '█    ', '████ ', '█    ', '█████'], V: ['█   █', '█   █', '█   █', ' █ █ ', '  █  '],
+};
+const MARK = [['█▀▀▀     ▀▀▀█', '', ''], ['█      ', '██', '   █'], ['       ', '██', '    '], ['█           █', '', ''], ['█▄▄▄     ▄▄▄█', '', '']];
+const BANNER = MARK.map(([a, px, b], i) => ({ m1: a, mpx: px, m2: b + '    ', w1: 'TAG'.split('').map(l => LETTERS[l][i]).join(' ') + ' ', w2: 'REEVE'.split('').map(l => LETTERS[l][i]).join(' ') }));
+const ANNOT = [
+  ['Hits', 'hits', 'Hits', 'Each vendor and event, and how many times it was sent.'],
+  ['  ga4: page_view x3', 'hits'], ['  sgtm: (no event) x1', 'sgtm', 'sgtm', 'A server-side GTM container. (no event) means the hit had no event name.'], ['  meta: PageView x1', 'hits'],
+  ['Consent epochs', 'epochs', 'Consent epochs', 'The periods of one consent state in the run. This run never answered the banner, so it ends undecided.'], ['  undecided (to end)', 'epochs'],
+  ['Flags', 'flags', 'Flags', 'Things worth a look. Some fail the run, such as unknownDestination. Others only inform.'], ['  unknownDestination: 127.0.0.1:57305 x1', 'flags'],
+  ['Expectations', 'exp', 'Expectations', 'Your rules and the built-in checks, each with PASS, FAIL or WARN.'],
+  ['  FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}', 'exp'],
+  ['       evidence: hit_01M66G9M2S992B5DF1MZ15ZQ08', 'ev', 'evidence', 'The IDs of the records behind the failure. grep the record file for one to see the whole hit.'],
+  ['  PASS builtin: deniedIdentifiers', 'exp'],
+  ['Result: fail (3 of 5)', 'res', 'Result', '3 of 5 checks passed. The exit code is 1.'],
+  ['Record: runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl', 'rec', 'Record', 'One JSON object per line: run, step, request, hit, consentEpoch, flag, result…'],
+];
+const END = 5600;
+const OFF = 2800, RATE = 0.16, SEND_AT = 1450;
+const REPLY_AT = OFF + 5600 + 700;
+const USER_PROMPT = "Meta numbers fell off a cliff after Tuesday's publish, and Legal says Meta fires before people answer the cookie banner. Can you check staging.northwind.dk?";
+const PLANS = {
+  none: "I'll run Tagreeve as a visitor who sees the cookie banner but never answers it, and check what's sent while they're undecided.",
+  reject: "I'll run Tagreeve as a visitor who rejects the cookie banner, then browses on. Stub mode, so no real hits reach Meta.",
+  accept: "I'll run Tagreeve as a visitor who accepts the cookie banner, to see what fires before and after the answer.",
+};
+const REPLIES = {
+  none: ["Legal is right. While the banner is still open, three marketing tags already fire: Meta PageView, Google Ads and Pinterest (3 hits, all before any answer).", "GA4 behaves: it sends page_view with consent denied, as it should.", "Evidence: hit_…ZQ08, hit_…FM3W, hit_…2EA. Most likely a Meta and an Ads tag on All Pages without a consent check."],
+  reject: ["Found it. Two problems on staging:", "1. Meta and Google Ads fire before the visitor answers the banner (2 hits). That's what Legal is hearing about.\n2. After the visitor clicks Reject, Meta still sends AddToCart.", "No identifiers leak, and the fake visitor's data is clean. Evidence: hit_…ZQ08, hit_…FM3W, hit_…J4R."],
+  accept: ["After Accept, everything works: GA4, Meta ViewContent and the Ads conversion all fire as expected.", "The problem is before the answer: Meta and Google Ads send hits while the banner is still open (2 hits). That explains Legal's complaints.", "Evidence: hit_…ZQ08, hit_…FM3W."],
+};
+for (const k of Object.keys(SC)) { SC[k].plan = PLANS[k]; SC[k].reply = REPLIES[k]; }
+const replyEnd = sc => REPLY_AT + sc.reply.join('').length / RATE;
+const TOTAL = REPLY_AT + Math.max(...Object.values(REPLIES).map(r => r.join('').length)) / RATE + 7600;
+const P = (who, role, initial, color, text) => ({ who, role, initial, color, text });
+const MADS = ['Mads', 'Performance', 'M', '#2F6FD6'], SOFIE = ['Sofie', 'Legal', 'S', '#7A5AF8'], JONAS = ['Jonas', 'Dev', 'J', '#0E9384'], KARIN = ['Karin', 'CMO', 'K', '#C4320A'], DPO = ['Henrik', 'DPO', 'H', '#475467'], AG = ['Pixel & Co', 'Agency', 'P', '#DD2590'];
+const MTOASTS_RAW = [
+  P(...SOFIE, 'Three complaints this week saying Meta loads before people answer the cookie banner.'),
+  P(...JONAS, 'I didn\'t touch GTM. Maybe the agency\'s pixel?'),
+  P(...MADS, 'Any luck? The ROAS dashboard is all red.'),
+  P(...SOFIE, 'Looping in our DPO.'),
+  P(...AG, 'We didn\'t change anything. Have you tried clearing your cache?'),
+  P(...KARIN, 'Is this fixed?'),
+  P(...DPO, 'Please send a list of every vendor that gets data before consent. Today.'),
+  P(...JONAS, 'Preview mode doesn\'t load for me either'),
+  P(...MADS, '??'),
+  P(...KARIN, 'Board meeting in 20 minutes.'),
+  P(...SOFIE, 'A customer has complained to the data protection authority.'),
+  P(...MADS, 'hello?'),
+  P(...AG, 'Our invoice for the "consent fix" is attached'),
+  P(...KARIN, 'Call me.'),
+  P(...DPO, 'Escalating.'),
+  P(...JONAS, 'it\'s 23:40, going to bed'),
+  P(...KARIN, 'CALL ME'),
+];
+const CHANNELS = ['mail', 'chat', 'chat', 'mail', 'mail', 'chat', 'mail', 'chat', 'chat', 'chat', 'mail', 'chat', 'mail', 'chat', 'mail', 'chat', 'chat'];
+const SUBJECTS = ['FW: Complaint re. cookies', '', '', 'Consent audit, DPO cc', 'RE: RE: pixel', '', 'URGENT: vendor list', '', '', '', 'Complaint to the authority', '', 'Invoice #2302', '', 'Escalation', '', ''];
+const MTOASTS = MTOASTS_RAW.map((m, i) => ({ ...m, channel: CHANNELS[i] || 'chat', subject: SUBJECTS[i] || m.text }));
+const MDELAYS = [1300, 1100, 950, 800, 650, 520, 420, 340, 270, 220, 180, 150, 130];
+const SCATTER = [['8%', '22%', '-3deg'], ['34%', '58%', '2deg'], ['52%', '14%', '-1deg'], ['14%', '64%', '4deg'], ['40%', '32%', '-5deg'], ['62%', '70%', '3deg'], ['22%', '42%', '-2deg'], ['48%', '48%', '6deg'], ['6%', '80%', '-4deg'], ['30%', '8%', '2deg'], ['56%', '38%', '-6deg'], ['18%', '30%', '5deg'], ['44%', '76%', '-3deg']];
+const MTAGS = [
+  { name: 'FB Pixel - OLD - do not delete', type: 'Custom HTML', trig: 'All Pages', ago: '3 yrs', consent: 'Not set', note: '"Removing this broke something in 2023" — K.' },
+  { name: 'Meta CAPI v2 (copy) (copy)', type: 'Custom HTML', trig: 'DOM Ready - ALL', ago: '2 days', consent: 'Not set', note: 'Which copy is live? Both, apparently.' },
+  { name: 'Meta - Purchase NEW', type: 'Template', trig: 'ce - purchase_v2', ago: '2 days', consent: 'ad_storage (maybe)', note: 'Is the email lowercased before hashing? Nobody knows.' },
+  { name: 'GA4 config (Jonas test)', type: 'GA4 Config', trig: 'All Pages', ago: '5 mo', consent: 'Built-in', note: 'Test tag. In production.' },
+  { name: 'consent fix?? 14.03', type: 'Custom HTML', trig: 'Consent Init - All', ago: '8 mo', consent: 'n/a', note: 'Sets ad_storage to granted. "TODO revert".' },
+  { name: 'GAds Remarketing', type: 'Google Ads', trig: 'All Pages', ago: '1 yr', consent: 'Built-in', note: '' },
+  { name: 'Pinterest base (agency)', type: 'Custom HTML', trig: 'Window Loaded', ago: '2 yrs', consent: 'Not set', note: 'Agency left in 2024.' },
+  { name: 'CookieBanner listener v4 FINAL', type: 'Custom HTML', trig: 'Initialization', ago: '8 mo', consent: 'n/a', note: 'v5 is in "Unsorted".' },
+  { name: 'Meta AddToCart (dupe?)', type: 'Template', trig: 'Click - Add btn', ago: '2 days', consent: 'Not set', note: '' },
+  { name: 'TikTok – paused?', type: 'Custom HTML', trig: '—', ago: '1 yr', consent: 'Not set', note: '' },
+  { name: 'sGTM forwarder (Stape)', type: 'GA4 Event', trig: 'All Events', ago: '6 mo', consent: 'Built-in', note: '' },
+  { name: 'zz_temp_hotjar', type: 'Custom HTML', trig: 'All Pages', ago: '4 yrs', consent: 'Not set', note: '' },
+  { name: 'Meta ViewContent', type: 'Template', trig: 'PDP - all', ago: '2 days', consent: 'Not set', note: '' },
+  { name: 'LinkedIn Insight', type: 'Custom HTML', trig: 'All Pages', ago: '3 yrs', consent: 'Not set', note: '' },
+  { name: 'Meta Lead (old form)', type: 'Custom HTML', trig: 'Form Submit', ago: '2 yrs', consent: 'Not set', note: '' },
+  { name: 'Reddit pixel test', type: 'Custom HTML', trig: 'All Pages', ago: '7 mo', consent: 'Not set', note: '' },
+];
+
+class Component extends DCLogic {
+  state = { narrow: false, showPrompt: false, armed: false, theme: 'dark', page: 'home', sc: 'reject', t: 0, cmd: 'run', ann: 'hits', copied: false, npm: false, intro: null, mi: 0, msel: 1, preview: false, attempt: 1, siteAnim: 'none' };
+  componentDidMount() {
+    let seen = false;
+    try { seen = localStorage.getItem('tagreeve.introSeen') === '1'; } catch (e) {}
+    this.onResize = () => this.setState({ narrow: window.innerWidth < 860 });
+    window.addEventListener('resize', this.onResize);
+    const narrow = window.innerWidth < 860;
+    this.setState({ narrow });
+    this.reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!seen && !narrow && !this.reduce) this.openIntro();
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this.onResize); clearInterval(this.iv); (this.tos || []).forEach(clearTimeout); document.body.style.overflow = ''; }
+  later(fn, ms) { this.tos = this.tos || []; this.tos.push(setTimeout(fn, ms)); }
+  openIntro = () => {
+    (this.tos || []).forEach(clearTimeout); this.tos = [];
+    clearInterval(this.iv);
+    window.scrollTo(0, 0); document.body.style.overflow = 'hidden';
+    this.setState({ intro: 'ask', mi: 0, preview: false, page: 'home', siteAnim: 'none' });
+  };
+  startMess = () => {
+    this.setState({ intro: 'mess', mi: 0 });
+    let acc = 0;
+    MDELAYS.forEach((d, i) => { acc += d; this.later(() => this.setState({ mi: i + 1 }), acc); });
+    this.later(() => this.setState({ intro: 'wasted', preview: false }), acc + 600);
+    this.later(() => this.fly(), acc + 600 + 2400);
+  };
+  fly = () => {
+    (this.tos || []).forEach(clearTimeout); this.tos = [];
+    const from = this.state.intro;
+    this.setState({ intro: 'shrink', preview: false, wastedSeen: from === 'wasted' });
+    try { localStorage.setItem('tagreeve.introSeen', '1'); } catch (e) {}
+    this.later(() => this.setState({ intro: 'fly', siteAnim: 'siteIn 1.1s cubic-bezier(.65,0,.35,1) both' }), 750);
+    this.later(() => { document.body.style.overflow = ''; this.setState({ intro: null }); }, 750 + 1150);
+  };
+  start(from = SEND_AT) {
+    clearInterval(this.iv);
+    this.setState({ t: from, armed: true });
+    this.iv = setInterval(() => {
+      if (this.state.t >= TOTAL) { clearInterval(this.iv); return; }
+      this.setState(s => ({ t: s.t + 80 }));
+    }, 80);
+  }
+  copy(text, key) { try { navigator.clipboard.writeText(text); } catch (e) {} this.setState({ [key]: true }); setTimeout(() => this.setState({ [key]: false }), 2200); }
+  renderVals() {
+    const s = this.state, T = s.t, t = s.t - OFF, sc = SC[s.sc], dark = s.theme === 'dark';
+    const go = p => e => { e && e.preventDefault && e.preventDefault(); this.setState({ page: p }); window.scrollTo(0, 0); };
+    const cmd = `tagreeve run scenarios/${sc.file} --site https://staging.northwind.dk`;
+    const typed = cmd.slice(0, Math.floor(Math.min(1, t / 1100) * cmd.length));
+    const answered = sc.action && t >= 3300;
+    const term = t > END ? summaryLines(sc) : [];
+    const all = [...BASE, ...sc.after].filter(h => h.at <= t);
+    const hits = all.slice().reverse().map(h => {
+      const bad = h.why === 'before' || h.why === 'afterReject';
+      const tag = h.why === 'before' ? 'before consent' : h.why === 'afterReject' ? 'after reject' : h.why === 'denied' ? 'gcs denied' : h.why === 'granted' ? 'granted' : 'undecided';
+      return { t: (h.at / 1000).toFixed(1) + 's', vendor: h.v, event: h.e, tag,
+        border: bad ? 'var(--fail)' : 'var(--line)', bg: bad ? 'var(--faildim)' : 'var(--panel)',
+        tagBg: bad ? 'var(--fail)' : h.why === 'granted' ? 'var(--mintdim)' : 'var(--bg2)', tagFg: bad ? 'var(--bg)' : h.why === 'granted' ? 'var(--mint)' : 'var(--muted)' };
+    });
+    const epoch = answered ? sc.epoch2 : 'undecided';
+    const pressing = sc.action && t >= 3000 && t < 3300;
+    const [vt, vb, ve] = sc.verdict;
+    const cm = CMDS[s.cmd];
+    const ann = ANNOT.find(a => a[2] && a[1] === s.ann) || ANNOT[0];
+    return {
+      introOn: !!s.intro,
+      isAsk: s.intro === 'ask',
+      isMessStage: s.intro === 'mess' || s.intro === 'wasted' || ((s.intro === 'shrink' || s.intro === 'fly') && s.mi > 0),
+      isWasted: s.intro === 'wasted' || ((s.intro === 'shrink' || s.intro === 'fly') && s.wastedSeen),
+      introTransform: s.intro === 'fly' ? 'translateY(-105vh) scale(.84)' : s.intro === 'shrink' ? 'scale(.84)' : 'none',
+      introOpacity: s.intro === 'fly' ? 0.4 : 1,
+      introRadius: s.intro === 'shrink' || s.intro === 'fly' ? '22px' : '0px',
+      introShadow: s.intro === 'shrink' || s.intro === 'fly' ? '0 0 0 1px rgba(255,255,255,.08), 0 60px 120px -20px rgba(0,0,0,.8)' : 'none',
+      messFilter: s.intro === 'wasted' || ((s.intro === 'shrink' || s.intro === 'fly') && s.wastedSeen) ? 'grayscale(1) contrast(1.15) brightness(.8)' : 'none',
+      zoomAnim: s.intro === 'wasted' || ((s.intro === 'shrink' || s.intro === 'fly') && s.wastedSeen) ? 'slowZoom 4s ease-out both' : 'none',
+      activeApp: s.intro === 'ask' ? 'Mail' : 'TagMangler Pro',
+      unread: 1 + s.mi,
+      deskClock: (() => { const m = 47 + 5 * 0 + Math.round(s.mi * s.mi * 1.15); const tot = 16 * 60 + m; return `Thu ${Math.floor(tot / 60) % 24}:${String(tot % 60).padStart(2, '0')}`; })(),
+      battery: `${Math.max(8, 80 - s.mi * 4)}%`,
+      browserDot: s.intro === 'ask' ? 'transparent' : 'rgba(255,255,255,.9)',
+      chromeTabs: [
+        { title: 'Tags · TagMangler', active: true, icon: '#5F6B7A', radius: '3px' },
+        { title: 'Events Manager · Ads', icon: '#4A7BD0', radius: '50%' },
+        { title: 'consent_audit (2).xlsx', icon: '#2E8B57', radius: '3px' },
+        { title: 'why does consent mode not work - Search', icon: '#9aa0a6', radius: '50%' },
+        { title: 'Consent banner settings', icon: '#C77D2E', radius: '50%' },
+      ].map(t => ({ ...t, bg: t.active ? '#35363a' : 'transparent', fg: t.active ? '#e8eaed' : '#9aa0a6' })),
+      mailTransform: s.intro === 'ask' ? 'none' : 'translate(-2%,-1%) scale(.97)',
+      mailFilter: s.intro === 'ask' ? 'none' : 'brightness(.85)',
+      mailList: [
+        ...MTOASTS.slice(0, s.mi).filter(m => m.channel === 'mail').reverse().map(m => ({ from: m.who, subject: m.subject, preview: m.text, time: 'now', weight: 700, dot: '#007AFF', bg: 'transparent', fg: '#1d1d1f', anim: 'toastIn .3s both' })),
+        { from: 'Mads Holm', subject: 'Quick favour? Meta numbers + consent', preview: 'Sorry to bother you. Meta numbers fell off a cliff…', time: '16:47', weight: 700, dot: '#fff', bg: '#007AFF', fg: '#fff', anim: 'none' },
+        { from: 'Sofie (Legal)', subject: 'RE: Consent complaints (3)', preview: 'Forwarding the latest one from a customer…', time: '14:02', weight: 400, dot: 'transparent', bg: 'transparent', fg: '#1d1d1f', anim: 'none' },
+        { from: 'Pixel & Co', subject: 'Invoice #2291 · "Consent fix"', preview: 'Please find attached our invoice for…', time: '11:30', weight: 400, dot: 'transparent', bg: 'transparent', fg: '#1d1d1f', anim: 'none' },
+        { from: 'Office', subject: 'Cake on Friday!', preview: 'It\'s Jonas\'s birthday, so…', time: 'Wed', weight: 400, dot: 'transparent', bg: 'transparent', fg: '#1d1d1f', anim: 'none' },
+        { from: 'GTM Weekly', subject: '10 tags you should delete today', preview: 'Number 7 will surprise you…', time: 'Tue', weight: 400, dot: 'transparent', bg: 'transparent', fg: '#1d1d1f', anim: 'none' },
+      ].slice(0, 9),
+      shakeAnim: s.intro === 'mess' && s.mi >= 10 ? 'shake .25s linear infinite' : 'none',
+      skipIntro: this.fly, startMess: this.startMess, replayIntro: this.openIntro,
+      siteAnim: s.siteAnim,
+      timeSpent: (() => { const m = 5 + Math.round(s.mi * s.mi * 1.15); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; })(),
+      wastedLine: `${(() => { const m = 5 + Math.round(MDELAYS.length ** 2 * 1.15); return `${Math.floor(m / 60)}h ${m % 60}m`; })()} in the tag manager. Meta still fires before consent.`,
+      mTags: MTAGS.map((x, i) => ({ ...x, bg: i === s.msel ? '#E8F0FE' : '#fff', select: () => this.setState({ msel: i }) })),
+      mSel: MTAGS[s.msel],
+      openPreview: () => this.setState({ preview: true }),
+      closePreview: () => this.setState({ preview: false }),
+      retryPreview: () => this.setState(x => ({ attempt: x.attempt + 1 })),
+      previewOpen: s.preview && s.intro === 'mess',
+      previewAttempt: s.attempt + 3,
+      mToasts: MTOASTS.slice(0, s.mi).map((m, i) => i < 4
+        ? { ...m, x: 'calc(100% - 340px)', y: `${42 + i * 88}px`, r: '0deg' }
+        : { ...m, x: SCATTER[(i - 4) % SCATTER.length][0], y: SCATTER[(i - 4) % SCATTER.length][1], r: SCATTER[(i - 4) % SCATTER.length][2] }),
+      theme: s.theme, themeLabel: dark ? '☀ light' : '☾ dark', toggleTheme: () => this.setState({ theme: dark ? 'light' : 'dark' }),
+      isHome: s.page === 'home', isDocs: s.page === 'docs', isSystem: s.page === 'system',
+      goHome: go('home'), goDocs: go('docs'), goSystem: go('system'),
+      tabHome: s.page === 'home' ? '#3A3C40' : 'transparent', tabDocs: s.page === 'docs' ? '#3A3C40' : 'transparent', tabSystem: s.page === 'system' ? '#3A3C40' : 'transparent',
+      copyPrompt: () => this.copy(PROMPT, 'copied'), copyLabel: s.copied ? 'Copied. Paste into your agent' : 'Copy the agent setup prompt',
+      copyNpm: () => this.copy('npm i -g tagreeve@next', 'npm'), npmLabel: s.npm ? '✓ copied' : '$ npm i -g tagreeve@next',
+      scenarios: Object.keys(SC).map(k => ({ label: SC[k].label, bg: k === s.sc ? 'var(--mint)' : 'transparent', fg: k === s.sc ? 'var(--onmint)' : 'var(--muted)', pick: () => { this.setState({ sc: k }); if (this.state.armed) this.start(); } })),
+      replay: () => this.start(),
+      clock: `t = ${(Math.min(T, TOTAL) / 1000).toFixed(1)}s`,
+
+      idle: !s.armed,
+      demoCols: s.narrow ? 'minmax(0,1fr)' : 'minmax(0,1.05fr) minmax(0,0.95fr) minmax(0,1fr)',
+      demoH: s.narrow ? 'auto' : '520px',
+      termH: s.narrow ? '440px' : '100%',
+      browserH: s.narrow ? '320px' : '100%',
+      navDisplay: s.narrow ? 'none' : 'flex',
+      showPrompt: !!s.showPrompt,
+      togglePrompt: () => this.setState(x => ({ showPrompt: !x.showPrompt })),
+      promptToggleLabel: s.showPrompt ? 'hide the prompt' : 'what does the prompt say?',
+      safety: [
+        { code: 'stub mode', title: 'Nothing reaches the vendor', body: 'Known collection endpoints are recorded and answered locally. Unknown destinations fail the run.' },
+        { code: 'fake identity', title: 'Fake people only', body: 'Every run invents a visitor. Any other email, phone or hash in the record is flagged.' },
+        { code: 'handoff', title: 'No log-ins, no real payments', body: 'A person does those steps. Test cards only, opt-in, with three checks before anything is paid.' },
+        { code: 'runs/*.jsonl', title: 'Your data stays yours', body: 'No hosted service, no account. Records are JSONL on your machine.' },
+      ],
+      ask: () => { if (this.reduce) { clearInterval(this.iv); this.setState({ armed: true, t: TOTAL }); } else this.start(); },
+      hlStory: (this.props.headline ?? 'story') === 'story', hlHits: this.props.headline === 'hits', hlSheriff: this.props.headline === 'sheriff',
+      menuOpen: !!(s.narrow && s.menu), menuIcon: s.menu ? '✕' : '☰', toggleMenu: () => this.setState(x => ({ menu: !x.menu })),
+      goDocsM: e => { e && e.preventDefault && e.preventDefault(); this.setState({ page: 'docs', menu: false }); window.scrollTo(0, 0); },
+      goSystemM: e => { e && e.preventDefault && e.preventDefault(); this.setState({ page: 'system', menu: false }); window.scrollTo(0, 0); },
+      inputText: s.armed && T < 1500 ? USER_PROMPT : '',
+      inputCursor: !s.armed || T >= 1500,
+      inputBorder: '#3A3C40',
+      inputGlow: 'none',
+      showUserMsg: s.armed && T >= 1500, userPrompt: USER_PROMPT,
+      working: s.armed && T >= 1500 && T < REPLY_AT,
+      spinGlyph: ['·', '✢', '✳', '✶', '✻', '✽'][Math.floor(T / 160) % 6],
+      spinWord: T < OFF ? 'Thinking' : t <= END ? 'Running tagreeve' : 'Reading the summary',
+      spinSecs: Math.max(0, Math.floor((T - 1500) / 1000)),
+      footerHint: !s.armed ? 'waiting for your question' : T >= 1500 && T < REPLY_AT ? 'stub mode · no hits leave this machine' : 'auto-accept: off',
+      showPlan: s.armed && T > 1800, planText: sc.plan,
+      showTool: s.armed && T > OFF - 300, scFile: sc.file,
+      toolDot: t > END ? 'oklch(0.72 0.16 25)' : (Math.floor(T / 400) % 2 ? '#D9E2DF' : '#5B6865'),
+      toolOut: (() => {
+        if (t <= END) return [{ glyph: '⎿', text: t > 0 ? 'running… chromium · stub mode' : 'starting…', color: '#8A9794' }];
+        const L = summaryLines(sc);
+        return [...L.slice(0, 3).map(([x], i) => ({ glyph: i ? '' : '⎿', text: x, color: '#8A9794' })), { glyph: '', text: `… +${L.length - 5} lines`, color: '#5B6865' }, ...L.slice(-2).map(([x, c]) => ({ glyph: '', text: x, color: c === 'fail' ? 'oklch(0.72 0.16 25)' : '#8A9794' })), { glyph: '', text: 'exit 1', color: '#5B6865' }];
+      })(),
+      showReply: s.armed && T > REPLY_AT,
+      showSend: s.armed && T > replyEnd(sc) + 400,
+      sendAnswer: T > replyEnd(sc) + 1100 ? 'y' : '',
+      showSent: s.armed && T > replyEnd(sc) + 1400,
+      showThanks: s.armed && T > replyEnd(sc) + 2300 && T < replyEnd(sc) + 7300,
+      reply: (() => { const n = Math.floor(Math.max(0, T - REPLY_AT) * RATE); let left = n; return sc.reply.map(p => { const txt = p.slice(0, Math.max(0, left)); left -= p.length; return { text: txt }; }).filter(p => p.text); })(),
+      typed, typing: t < 1250,
+      termLines: term.map(([text, c]) => ({ text: (text || ' ').trimStart() || ' ', color: C[c], indent: `${(text.match(/^ */) || [''])[0].length}ch` })), waiting: t >= 1250 && t <= END, done: t > END, banner: BANNER,
+      url: t < 4000 ? 'staging.northwind.dk/products/linen-shirt' : 'staging.northwind.dk/collections/all',
+      pageOpacity: t > 1250 ? 1 : 0.25,
+      bannerTransform: t > 1600 && !answered ? 'none' : 'translateY(130%)',
+      bannerOpacity: t > 1600 && !answered ? 1 : 0,
+      rejectBg: pressing && sc.action === 'reject' ? 'var(--ink)' : 'transparent', rejectFg: pressing && sc.action === 'reject' ? 'var(--bg)' : 'var(--ink)',
+      acceptBg: pressing && sc.action === 'accept' ? 'var(--mint)' : 'var(--bg2)', acceptFg: pressing && sc.action === 'accept' ? 'var(--onmint)' : 'var(--ink)',
+      epoch, epochColor: epoch === 'denied' ? 'var(--fail)' : epoch === 'granted' ? 'var(--mint)' : 'var(--warn)',
+      hits, hitCount: `${hits.length} recorded · 0 sent`,
+      showVerdict: t > END, verdictTitle: vt, verdictBody: vb, verdictExit: ve,
+      verdictBg: 'var(--faildim)', verdictBorder: 'var(--fail)', verdictColor: 'var(--fail)',
+      cmds: Object.keys(CMDS).map(k => ({ name: CMDS[k].name, desc: CMDS[k].desc, bg: k === s.cmd ? 'var(--panel)' : 'transparent', border: k === s.cmd ? 'var(--line)' : 'transparent', pick: () => this.setState({ cmd: k }) })),
+      cmdLines: cm.lines.map(([text, c]) => ({ text: text || ' ', color: C[c] })), bannerBig: BANNER,
+      annot: ANNOT.map(a => {
+        const on = a[1] === s.ann;
+        const color = a[0].includes('FAIL') ? C.fail : a[0].includes('PASS') ? C.mint : /^[A-Z]/.test(a[0]) ? C.dim : C.fg;
+        return { text: a[0], color, bg: on ? 'rgba(120,220,200,.12)' : 'transparent', hover: () => this.setState({ ann: a[1] }) };
+      }),
+      annotTitle: ann[2], annotBody: ann[3],
+      swatches: [
+        { name: 'Void', hex: '#090B0B', v: '#090B0B' }, { name: 'Panel', hex: '#121716', v: '#121716' }, { name: 'Rule', hex: '#1F2826', v: '#1F2826' },
+        { name: 'Fg', hex: '#E8EEEC', v: '#E8EEEC' }, { name: 'Mint', hex: 'oklch(.82 .12 175)', v: 'oklch(0.82 0.12 175)' },
+        { name: 'Fail', hex: 'oklch(.72 .16 25)', v: 'oklch(0.72 0.16 25)' }, { name: 'Warn', hex: 'oklch(.84 .13 85)', v: 'oklch(0.84 0.13 85)' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
