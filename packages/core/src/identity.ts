@@ -383,6 +383,26 @@ function ownValues(identity: Identity) {
   return { email, phoneDigits, nationalDigits: format.nationalDigits(phoneDigits), hashes, extraEmails, extraPhones };
 }
 
+/** The kinds of value an email, phone or hash detector finds in text, whoever owns the value. */
+export function valueKinds(text: string): Set<LeakKind> {
+  const kinds = new Set<LeakKind>();
+  for (const variant of variants(text)) {
+    if (!hasUrlEscapes(variant)) {
+      for (const raw of variant.match(EMAIL) ?? []) {
+        const m = raw.slice(raw.lastIndexOf('+') + 1);
+        if (m.includes('@') && !FILE_EXTENSION.test(m)) kinds.add('email');
+      }
+      if (HASH.test(variant)) kinds.add('hash');
+      HASH.lastIndex = 0;
+    }
+    for (const m of variant.match(PHONE) ?? []) {
+      const digits = m.replace(/\D/g, '');
+      if (digits.length >= 8 && digits.length <= 15 && !(/^\+\d+\+/.test(m) && !/^\+\d{1,3}\+/.test(m))) kinds.add('phone');
+    }
+  }
+  return kinds;
+}
+
 /** Finds emails, phone numbers and SHA-256 hex strings in text that do not belong to the identity. */
 export function scan(text: string, identity: Identity, options: { stableHashes?: ReadonlySet<string> } = {}): LeakMatch[] {
   const own = ownValues(identity);

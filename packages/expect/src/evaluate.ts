@@ -25,7 +25,7 @@ import {
   type Step,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, bodyEntries, guardFieldName, multipartPartName, multipartParts, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, bodyEntries, guardFieldName, multipartChunks, multipartPartName, multipartParts, parseMultipartChunk, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -1025,16 +1025,29 @@ function textPieces(text: string): ScanText[] {
   return out;
 }
 
+// Headers, preamble, epilogue and text parts stay in the text, so nothing a whole-body scan finds is lost.
+function withoutBinaryParts(headers: Record<string, string>, body: string): string {
+  const split = multipartChunks(body, headers);
+  if (!split) return body;
+  return split.chunks
+    .map((raw) => {
+      const part = parseMultipartChunk(raw);
+      return part && isBinaryBody(part.headers, part.body) ? raw.slice(0, part.bodyStart) : raw;
+    })
+    .join(`--${split.boundary}`);
+}
+
 // Each multipart part and each line of a body that is not JSON is judged on its own, so a compressed part or line does not hide a text one.
 function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   if (body === '' || headersSayBinary(headers)) return [];
   const parts = multipartParts(body, headers);
   if (parts?.length) {
-    return parts.flatMap((part) => {
-      if (isBinaryBody(part.headers, part.body)) return [];
+    const named = parts.flatMap((part) => {
       const name = multipartPartName(part);
+      if (isBinaryBody(part.headers, part.body)) return [];
       return name === undefined ? textPieces(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name) }];
     });
+    return [{ text: withoutBinaryParts(headers, body), where: 'the body' }, ...named];
   }
   const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
   if (!isJson && /[\r\n]/.test(body.trim())) {

@@ -1,4 +1,4 @@
-import { MAX_POST_DATA, type Hit, type Request } from '@tagreeve/core';
+import { MAX_POST_DATA, valueKinds, type Hit, type Request } from '@tagreeve/core';
 import { isIdentifierField } from './identifiers.ts';
 
 /** A field name and its value. The value is read to classify the field and is never stored. */
@@ -32,7 +32,11 @@ function looksLikeValue(segment: string): boolean {
  */
 export function guardFieldName(name: string): string {
   if (name.includes('@')) return OTHER_NAME;
+  // A value split into segments would print its pieces, so a name that holds an email or phone prints whole as (other).
+  const raw = valueKinds(name);
+  if (raw.has('email') || raw.has('phone')) return OTHER_NAME;
   const kept = name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment));
+  if (kept.some((segment) => segment !== OTHER_NAME && valueKinds(segment).has('hash'))) return OTHER_NAME;
   // A number split on dots or brackets has a short digit run in every segment.
   const digits = kept.filter((segment) => segment !== OTHER_NAME).join('').replace(/\D/g, '');
   return LONG_DIGITS.test(digits) ? OTHER_NAME : kept.join('.');
@@ -81,22 +85,35 @@ export interface MultipartPart {
   body: string;
 }
 
-/** The parts of a multipart/form-data body, or null when the headers name no boundary. Parts with no blank line after their headers are dropped. */
-export function multipartParts(body: string, headers: Record<string, string>): MultipartPart[] | null {
+/** Splits a multipart/form-data body at its boundary, or returns null when the headers name none. */
+export function multipartChunks(body: string, headers: Record<string, string>): { boundary: string; chunks: string[] } | null {
   const contentType = Object.entries(headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? '';
   const m = /multipart\/form-data;.*?boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
   const boundary = m?.[1] ?? m?.[2];
-  if (!boundary) return null;
+  return boundary ? { boundary, chunks: body.split(`--${boundary}`) } : null;
+}
+
+/** The headers and the body of one chunk of a multipart body, with the index where its body starts. Null when it has no blank line. */
+export function parseMultipartChunk(raw: string): (MultipartPart & { bodyStart: number }) | null {
+  const split = /\r?\n\r?\n/.exec(raw);
+  if (!split) return null;
+  const headers: Record<string, string> = {};
+  for (const line of raw.slice(0, split.index).split(/\r?\n/)) {
+    const colon = line.indexOf(':');
+    if (colon > 0) headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
+  }
+  const bodyStart = split.index + split[0].length;
+  return { headers, body: raw.slice(bodyStart).replace(/\r?\n$/, ''), bodyStart };
+}
+
+/** The parts of a multipart/form-data body, or null when the headers name no boundary. Parts with no blank line after their headers are dropped. */
+export function multipartParts(body: string, headers: Record<string, string>): MultipartPart[] | null {
+  const split = multipartChunks(body, headers);
+  if (!split) return null;
   const parts: MultipartPart[] = [];
-  for (const raw of body.split(`--${boundary}`)) {
-    const split = /\r?\n\r?\n/.exec(raw);
-    if (!split) continue;
-    const partHeaders: Record<string, string> = {};
-    for (const line of raw.slice(0, split.index).split(/\r?\n/)) {
-      const colon = line.indexOf(':');
-      if (colon > 0) partHeaders[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
-    }
-    parts.push({ headers: partHeaders, body: raw.slice(split.index + split[0].length).replace(/\r?\n$/, '') });
+  for (const raw of split.chunks) {
+    const part = parseMultipartChunk(raw);
+    if (part) parts.push({ headers: part.headers, body: part.body });
   }
   return parts;
 }

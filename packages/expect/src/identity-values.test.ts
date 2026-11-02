@@ -325,3 +325,30 @@ test('possibleRealData does not print a multipart part named with a phone number
   const detail = leaks.map((l) => l.detail).join('\n');
   for (const group of ['555', '123', '4567']) expect(detail).not.toContain(group);
 });
+
+const PHONE_TEXT = '(555) 123.4567';
+const mpPart = (name: string) => ['--b', `Content-Disposition: form-data; name="${name}"`, '', 'x', '--b--', ''].join('\r\n');
+test.each([
+  ['form name with spaces and parens', `${PHONE_TEXT}=x`, {}],
+  ['form name after another field', 'x=1&+1 (555) 123.4567=y', {}],
+  ['form name percent-encoded', '(555)%20123.4567=x', {}],
+  ['multipart part name', mpPart(PHONE_TEXT), { 'content-type': 'multipart/form-data; boundary=b' }],
+])('possibleRealData prints no digit of a phone used as a name: %s', (_n, body, headers) => {
+  expect(body).toContain('4567');
+  const detail = findForeignData([withHeaders(body, headers)], [], identity).map((l) => l.detail).join('\n');
+  expect(detail).not.toBe('');
+  for (const digits of ['4567', '123', '555']) expect(detail).not.toContain(digits);
+});
+
+test.each([
+  ['a filename', `--XB\r\nContent-Disposition: form-data; name="f"; filename="${EMAIL}.txt"\r\n\r\nx\r\n--XB--\r\n`],
+  ['an epilogue', `${part('a', 'x')}--XB--\r\nem=${EMAIL}\r\n`],
+  ['a preamble', `see ${EMAIL}\r\n${part('a', 'x')}--XB--\r\n`],
+  ['a part header', `--XB\r\nContent-Disposition: form-data; name="f"\r\nX-Note: ${EMAIL}\r\n\r\nx\r\n--XB--\r\n`],
+])('possibleRealData still finds a value in %s of a multipart body', (_n, body) => {
+  expect(body).toContain(EMAIL);
+  const details = detailsOf(withHeaders(body, MULTIPART));
+  expect(details).toHaveLength(1);
+  expect(details[0]).toMatch(/in the body$/);
+  expect(details[0]).not.toContain(EMAIL);
+});
