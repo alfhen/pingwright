@@ -370,6 +370,27 @@ test('possibleRealData reports a form-encoded +cc+nn phone once, in its field', 
   expect(leak!.detail).toMatch(/in p$/);
 });
 
+test.each([
+  ['a JSON newline escape', JSON.stringify({ e: 'line\nvisitor@other-person.example' }), 'e'],
+  ['a JSON unicode escape', '{"e":"\\u00e9visitor@other-person.example"}', 'e'],
+  ['a tab escape in an NDJSON line', '{"a":"x\\tvisitor@other-person.example"}\n{"b":1}', 'a'],
+  ['a [] joined into the name', 'x[]visitor@other-person.example=1', '(other)'],
+])('possibleRealData reports one value once when the body and its field read it with different edges: %s', (_n, body, where) => {
+  expect(body).toContain('visitor@other-person.example');
+  const [leak, ...rest] = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(rest).toHaveLength(0);
+  expect(leak!.detail).toContain('carries 1 email value(s)');
+  expect(leak!.detail.endsWith(`in ${where}`)).toBe(true);
+  expect(leak!.detail).not.toContain('other-person');
+});
+
+test('possibleRealData still counts two different emails in the body and a field', () => {
+  const body = 'note=x&e=visitor@other-person.example\nsecond@another-person.example';
+  expect(body).toContain('second@another-person.example');
+  const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(leak!.detail).toContain('carries 2 email value(s)');
+});
+
 test.each(['xxxxxxxxxxxx[]555-123-4567', '555-123-4567[]xxxxxxxxxxxx'])('possibleRealData does not print the name %s', (name) => {
   for (const body of [`${name}=visitor@other-person.example`, JSON.stringify({ [name]: 'visitor@other-person.example' })]) {
     const details = findForeignData([rawRequest(REPLAY, body)], [], identity).map((l) => l.detail).join('\n');

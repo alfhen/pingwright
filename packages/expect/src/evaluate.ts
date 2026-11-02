@@ -1071,6 +1071,26 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   return isBinaryText(body) ? [] : [{ text: body, where: 'the body' }, ...leafTexts(body)];
 }
 
+// The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
+// merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost.
+function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>): void {
+  const best = (f: { where: Map<string, number> }) => Math.min(...f.where.values());
+  const valueOf = (key: string, kind: string) => key.slice(kind.length + 1);
+  const fields = [...found].filter(([, f]) => best(f) < 2);
+  for (const [key, f] of [...found]) {
+    if (best(f) < 2) continue;
+    const value = valueOf(key, f.kind);
+    const twin = fields.find(([k, other]) => {
+      if (other.kind !== f.kind) return false;
+      const v = valueOf(k, other.kind);
+      return v.includes(value) || value.includes(v);
+    });
+    if (!twin) continue;
+    for (const [w, tier] of f.where) twin[1].where.set(w, Math.min(tier, twin[1].where.get(w) ?? tier));
+    found.delete(key);
+  }
+}
+
 export interface ForeignData {
   requestId: string;
   detail: string;
@@ -1116,6 +1136,7 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
       }
     }
     if (found.size === 0) continue;
+    mergeEdgeReadings(found);
     const kinds = [...new Set([...found.values()].map((f) => f.kind))].join(', ');
     const places = new Set<string>();
     for (const { where } of found.values()) {
