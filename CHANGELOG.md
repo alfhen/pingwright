@@ -37,6 +37,9 @@
 
 <!-- H10 -->
 
+- `possibleRealData` now names where the foreign value was found: the hit parameter path, `the URL` or `the body`. It never prints the value. (#582)
+- `identity.hashesMatch` says when the hit carried no identity fields at all, and that server side matching is not visible to Pingwright. A hit with fields that do not match keeps `Not matching: <field>`. (#584)
+
 <!-- R01 -->
 
 ## 0.3.0

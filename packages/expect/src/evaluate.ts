@@ -695,7 +695,11 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message };
   }
   if (!withHash.length) {
-    return { pass: false, evidence: hits.map((h) => h.id), message: `${several ? 'none of them carried any' : 'it carried no'} hashed email, phone, name or address value.` };
+    return {
+      pass: false,
+      evidence: hits.map((h) => h.id),
+      message: `${several ? 'none of the hits carried any' : 'the hit carried no'} identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Pingwright.`,
+    };
   }
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
@@ -979,7 +983,7 @@ export interface ForeignData {
 
 /** Finds email, phone and hash values in requests and hits that are not the identity's own. Takes raw records. */
 export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[], identity: Identity): ForeignData[] {
-  const byRequest = new Map<string, { texts: string[]; hitIds: string[]; stepId: string | null }>();
+  const byRequest = new Map<string, { texts: { text: string; where: string }[]; hitIds: string[]; stepId: string | null }>();
   const slot = (key: string, stepId: string | null) => {
     let entry = byRequest.get(key);
     if (!entry) byRequest.set(key, (entry = { texts: [], hitIds: [], stepId }));
@@ -990,26 +994,42 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     if (request.resourceType === 'script' && isLibraryLoadPath(pathOf(request.url))) continue;
     const persisted = withoutPersistedQueryIds(request.url, request.postData ?? '');
     const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
-    slot(request.id, request.stepId).texts.push(url, ...pathSegments(url), persisted.postData);
+    const texts = slot(request.id, request.stepId).texts;
+    for (const text of [url, ...pathSegments(url)]) texts.push({ text, where: 'the URL' });
+    texts.push({ text: persisted.postData, where: 'the body' });
   }
   for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);
     entry.hitIds.push(hit.id);
-    for (const [key, value] of Object.entries(hit.params)) entry.texts.push(`${key}=${value}`);
+    for (const [key, value] of Object.entries(hit.params)) entry.texts.push({ text: `${key}=${value}`, where: guardFieldName(key) });
   }
   const stableHashes = findStableHashes(
-    [...byRequest].flatMap(([requestId, entry]) => entry.texts.map((text) => ({ requestId, text }))),
+    [...byRequest].flatMap(([requestId, entry]) => entry.texts.map(({ text }) => ({ requestId, text }))),
   );
   const out: ForeignData[] = [];
   for (const [requestId, entry] of byRequest) {
-    const found = new Map<string, string>();
-    for (const text of entry.texts) for (const m of scan(text, identity, { stableHashes })) found.set(`${m.kind}:${m.value}`, m.kind);
+    const found = new Map<string, { kind: string; where: Set<string> }>();
+    for (const { text, where } of entry.texts) {
+      for (const m of scan(text, identity, { stableHashes })) {
+        const key = `${m.kind}:${m.value}`;
+        const seen = found.get(key) ?? { kind: m.kind, where: new Set<string>() };
+        seen.where.add(where);
+        found.set(key, seen);
+      }
+    }
     if (found.size === 0) continue;
-    const kinds = [...new Set(found.values())].join(', ');
+    const kinds = [...new Set([...found.values()].map((f) => f.kind))].join(', ');
+    const places = new Set<string>();
+    for (const { where } of found.values()) {
+      const named = [...where].filter((w) => w !== 'the URL' && w !== 'the body');
+      for (const w of named.length ? named : where) places.add(w);
+    }
+    const shown = [...places].sort();
+    const in_ = shown.length > 5 ? `${shown.slice(0, 5).join(', ')} and ${shown.length - 5} more` : shown.join(', ');
     const step = entry.stepId ? ` in step ${entry.stepId}` : '';
     out.push({
       requestId,
-      detail: `request ${requestId}${step} carries ${found.size} ${kinds} value(s) that are not from the run identity`,
+      detail: `request ${requestId}${step} carries ${found.size} ${kinds} value(s) that are not from the run identity, in ${in_}`,
       evidence: [requestId, ...entry.hitIds, ...(entry.stepId ? [entry.stepId] : [])],
     });
   }

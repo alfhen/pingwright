@@ -260,7 +260,7 @@ test('identity.hashesMatch', () => {
   expect(failed.evidence).toEqual([bad.hit.id]);
   const none = ev([hit({ vendor: 'meta' })]);
   expect(none.message).toBe(
-    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: it carried no hashed email, phone, name or address value.',
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: the hit carried no identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Pingwright.',
   );
   expect(none.message).not.toContain('found 1 matching hit');
   expect(failed.message).toBe(
@@ -305,7 +305,7 @@ test('identity.hashesMatch messages name the failing field and the evidence', ()
   const rawName = hit({ vendor: 'sgtm', params: { 'user_data.first_name': identity.firstName } });
   expect(run([rawName]).message).toContain('it carried an unhashed first name.');
   const none = run([hit({ vendor: 'sgtm' }), hit({ vendor: 'sgtm' })]);
-  expect(none.message).toContain('none of them carried any hashed email, phone, name or address value.');
+  expect(none.message).toContain('none of the hits carried any identity fields (no hashed or plain email, phone, name or address)');
   const a = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex } });
   const b = hit({ vendor: 'sgtm', params: { 'user_data.email_address': em.hex } });
   expect(run([a, b], {}).evidence).toEqual([a.hit.id, b.hit.id]);
