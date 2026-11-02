@@ -65,10 +65,11 @@ test('the baseline file holds no email, hash, cookie value, URL or query', async
   const records = base.records!;
   const otherHash = '88f45d748ead76a339d3815f0b475088eb8b9621cad412386906e15209bfa045';
   const sha = createHash('sha256').update(EMAIL);
-  const identitySecrets = [sha.copy().digest('hex'), sha.copy().digest('base64'), sha.copy().digest('base64url')];
+  const identitySecrets = [EMAIL, encodeURIComponent(EMAIL), sha.copy().digest('hex'), sha.copy().digest('base64'), sha.copy().digest('base64url')];
   const secrets = [otherHash, ...identitySecrets];
-  const seen = JSON.stringify(records.requests);
-  expect(seen).toContain(otherHash);
+  expect(JSON.stringify(records.requests)).toContain(otherHash);
+  const hitParams = JSON.stringify(records.hits.map((h) => h.params));
+  for (const secret of identitySecrets.filter((s) => s !== encodeURIComponent(EMAIL))) expect(hitParams).toContain(secret);
   expect(JSON.stringify(records.checkpoints)).toContain('_pwalready');
   expect(records.requests.some((r) => r.url.includes('/set-cookie-already'))).toBe(true);
 
@@ -78,7 +79,7 @@ test('the baseline file holds no email, hash, cookie value, URL or query', async
     expect(saved.code).toBe(0);
     const file = await readFile(path, 'utf8');
     for (const secret of secrets) expect(file).not.toContain(secret);
-    expect(file).not.toMatch(/https?:|\?|hit_|req_/);
+    expect(file).not.toMatch(/https?:|\?|hit_|req_|_pwalready|pw-fixture-cookie-value/);
     expect(file).toContain(byPage ? '"page": "/shared-hashes"' : '"vendor": "ga4"');
     const result = await run('baseline-leak', ['--baseline', path]);
     for (const secret of identitySecrets) expect(result.stdout + result.stderr).not.toContain(secret);
