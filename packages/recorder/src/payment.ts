@@ -1,6 +1,6 @@
 import type { Identity, Step as StepRecord } from '@tagreeve/core';
 import { canonicalCard, findPaymentProvider, type PaymentProvider } from '@tagreeve/expect';
-import type { ElementHandle, Page } from 'playwright';
+import type { ElementHandle, Frame, Page } from 'playwright';
 import { isLoopbackHost } from './guard.ts';
 import type { Recorder } from './recorder.ts';
 
@@ -38,9 +38,9 @@ const RUNTIME: Record<string, ProviderRuntime> = {
     marker: '#pw-test-mode',
     cardHost: '127.0.0.1',
     fields: [
-      { kind: 'number', frame: '#card-frame', input: '#cc-number' },
-      { kind: 'expiry', frame: '#card-frame', input: '#cc-exp' },
-      { kind: 'cvc', frame: '#card-frame', input: '#cc-csc' },
+      { kind: 'number', frame: '#card-frame, #card-frame-number', input: '#cc-number' },
+      { kind: 'expiry', frame: '#card-frame, #card-frame-exp', input: '#cc-exp' },
+      { kind: 'cvc', frame: '#card-frame, #card-frame-csc', input: '#cc-csc' },
     ],
   },
 };
@@ -77,17 +77,31 @@ function hostOf(url: string): string {
   }
 }
 
-/** The frame element, once it exists and its document is served from the provider's card host. */
-async function cardFrameServed(page: Page, field: CardField, cardHost: string, deadline: number): Promise<ElementHandle | undefined> {
+interface CardFrame {
+  element: ElementHandle;
+  frame: Frame;
+}
+
+/** The first matching iframe that is visible and whose document is served from the card host, or the reason there is none. */
+async function cardFrameServed(page: Page, field: CardField, cardHost: string, deadline: number): Promise<CardFrame | string> {
+  let reason = 'not found';
   for (;;) {
     try {
-      const element = await page.locator(field.frame).first().elementHandle({ timeout: Math.max(1, deadline - Date.now()) });
-      const frame = await element?.contentFrame();
-      if (element && frame && hostOf(frame.url()) === cardHost) return element;
+      let hidden = false;
+      let elsewhere = false;
+      for (const element of await page.locator(field.frame).elementHandles()) {
+        const frame = await element.contentFrame();
+        if (!frame) continue;
+        const served = hostOf(frame.url()) === cardHost;
+        if (served && (await element.isVisible())) return { element, frame };
+        if (served) hidden = true;
+        else elsewhere = true;
+      }
+      reason = hidden ? 'not visible' : elsewhere ? 'served from another host' : 'not found';
     } catch {
-      return undefined;
+      return reason;
     }
-    if (Date.now() >= deadline) return undefined;
+    if (Date.now() >= deadline) return reason;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
@@ -147,20 +161,67 @@ export async function runPayment(
   const declared = testPayment.declaredProviders?.includes(provider.id) === true;
   const wait = Math.min(timeout, MARKER_TIMEOUT_MS);
   const deadline = Date.now() + wait;
-  const frames: ElementHandle[] = [];
+  const found: CardFrame[] = [];
   for (const field of runtime.fields) {
-    const frame = await cardFrameServed(page, field, runtime.cardHost, deadline);
-    if (!frame) throw new Error(`card frame not found (${field.kind})`);
-    frames.push(frame);
+    const result = await cardFrameServed(page, field, runtime.cardHost, deadline);
+    if (typeof result === 'string') throw new Error(`card frame not found (${field.kind}): ${result}`);
+    found.push(result);
   }
-  if (!declared && !(await markerInCardContainer(frames, runtime.marker, wait))) throw new Error('test mode not detected');
+  if (!declared && !(await markerInCardContainer(found.map((f) => f.element), runtime.marker, wait))) throw new Error('test mode not detected');
   recorder.holdRedaction();
+  const typed = typedValues(provider, card, identity);
   for (const [index, field] of runtime.fields.entries()) {
     try {
-      await page.frameLocator(field.frame).locator(field.input).fill(valueOf(field.kind, provider, card, identity), { timeout });
-    } catch {
-      throw new Error(`card field ${field.kind} could not be filled`);
+      await fillVerified(found[index]!.element, field, runtime.cardHost, valueOf(field.kind, provider, card, identity), timeout);
+    } catch (error) {
+      throw new Error(`card field ${field.kind} could not be filled: ${reasonOf(error, typed)}`);
     }
     if (index === 0) record.payment = { provider: provider.id, mode: 'test', testMode: declared ? 'declared' : 'marker' };
   }
+}
+
+async function frameStillServed(element: ElementHandle, cardHost: string): Promise<Frame> {
+  const frame = await element.contentFrame();
+  if (!frame || hostOf(frame.url()) !== cardHost) throw new OwnReason('the card frame is gone or not served from the card host');
+  return frame;
+}
+
+/** Types into the one visible input of the frame that the frame check verified, and checks that frame's host again right before the fill. */
+async function fillVerified(element: ElementHandle, field: CardField, cardHost: string, value: string, timeout: number): Promise<void> {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const frame = await frameStillServed(element, cardHost);
+    const inputs = frame.locator(field.input).filter({ visible: true });
+    const count = await inputs.count();
+    if (count === 1) {
+      await frameStillServed(element, cardHost);
+      await inputs.fill(value, { timeout: Math.max(1, deadline - Date.now()) });
+      return;
+    }
+    if (Date.now() >= deadline) throw new OwnReason(`${count} visible inputs match`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+function typedValues(provider: PaymentProvider, card: string, identity: Identity): string[] {
+  const values = [card, provider.expiry, provider.cvc, identity.firstName, identity.lastName, `${identity.firstName} ${identity.lastName}`];
+  return values.filter((v) => v.length > 0).sort((a, b) => b.length - a.length);
+}
+
+/** A reason this file builds itself. It holds no typed value, so the scrubber leaves it alone. */
+class OwnReason extends Error {}
+
+/**
+ * The first line of the error, with every typed value removed.
+ * Only values shorter than 4 characters (the test card `1`, a CVC) are matched on digit boundaries, so they don't eat digits of other numbers.
+ * Longer values are removed wherever they appear, even next to a digit.
+ */
+function reasonOf(error: unknown, typed: string[]): string {
+  if (error instanceof OwnReason) return error.message;
+  const first = (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
+  const pattern = (value: string): RegExp => {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(value.length < 4 ? `(?<!\\d)${escaped}(?!\\d)` : escaped, 'g');
+  };
+  return typed.reduce((text, value) => text.replace(pattern(value), '[value]'), first).trim() || 'unknown error';
 }

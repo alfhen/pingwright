@@ -2,7 +2,7 @@
 
 ## 0.4.0-rc.3
 
-<!-- P02 -->
+- The `payment` step now types into the exact card iframe that it checked. It skips hidden duplicate frames and frames served from another host, and uses the one visible input in the frame. If several visible inputs match, it fails with the count instead of guessing. A fill error now keeps its reason: `card field number could not be filled: <reason>`, with typed values removed. `card frame not found` also says why. This targets the Shopify Payments failure in the rc.2 field test; it is not confirmed on a real store. (#682, #648)
 
 - The declaration hint after `test mode not detected` names the provider of the `payment` step that failed. It appears only when the allowlist file would accept the entry, so it no longer suggests the `fixture` provider on a hosted host or a loopback host without the test seam. The declared-payment e2e now checks that a run prints no email, email hash or cookie value. (#646, #647, #649)
 

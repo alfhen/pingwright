@@ -25,6 +25,11 @@ const pages: Record<string, string> = {
   '/checkout': 'checkout.html',
   '/checkout/payment': 'payment.html',
   '/checkout/test-payment': 'test-payment.html',
+  '/checkout/test-payment-dup-first': 'test-payment-dup-first.html',
+  '/checkout/test-payment-dup-second': 'test-payment-dup-second.html',
+  '/checkout/test-payment-dup-input': 'test-payment-dup-input.html',
+  '/checkout/test-payment-split-inside': 'test-payment-split-inside.html',
+  '/checkout/test-payment-split-outside': 'test-payment-split-outside.html',
   '/thank-you': 'thank-you.html',
   '/thank-you-late': 'thank-you-late.html',
   '/handoff/until': 'handoff-until.html',
@@ -199,11 +204,14 @@ function thirdPartyHandler(_req: IncomingMessage, res: ServerResponse): void {
   res.end(gif);
 }
 
+const cardFrames = ['card-frame', 'card-frame-extra-input', 'card-frame-number', 'card-frame-exp', 'card-frame-csc'];
+
 function paymentFrameHandler(submits: string[], extras: string[]) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
-    if (req.method === 'GET' && path === '/card-frame') {
-      await sendFile(res, 'card-frame.html');
+    const frameName = req.method === 'GET' ? cardFrames.find((name) => path === `/${name}`) : undefined;
+    if (frameName) {
+      await sendFile(res, `${frameName}.html`);
     } else if (req.method === 'POST' && path === '/card-submit') {
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(chunk as Buffer);

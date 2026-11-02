@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card CVC frame</title>
+</head>
+<body>
+<label>CVC <input id="cc-csc" autocomplete="cc-csc"></label>
+<script>
+window.addEventListener('message', function (e) {
+  if (e.data !== 'pw-pay') return;
+  fetch('/card-extra', { method: 'POST', body: document.getElementById('cc-csc').value });
+});
+</script>
+</body>
+</html>

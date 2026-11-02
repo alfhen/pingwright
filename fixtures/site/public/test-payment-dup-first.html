@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Test payment, duplicate frame first</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Test payment, duplicate frame first</h1>
+<p>Fake form. No real payment happens.</p>
+<form id="payment-form">
+  <div id="card-container">
+    <iframe id="card-frame" class="duplicate" title="Card details" style="display:none"></iframe>
+    <iframe id="card-frame" class="real" title="Card details" style="width:320px;height:140px;border:1px solid #888"></iframe>
+    <p id="pw-test-mode">Test mode</p>
+  </div>
+  <button id="pay" type="submit">Pay</button>
+</form>
+<script>
+(function () {
+  var frames = document.querySelectorAll('#card-container iframe');
+  var real = document.querySelector('#card-container iframe.real');
+  for (var i = 0; i < frames.length; i++) frames[i].src = window.__PW_FIXTURE.paymentFrameUrl + '/card-frame';
+  window.addEventListener('message', function (e) {
+    if (e.source === real.contentWindow && e.data === 'pw-card-submitted') location.href = '/thank-you-late';
+  });
+  document.getElementById('payment-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    real.contentWindow.postMessage('pw-pay', '*');
+  });
+})();
+</script>
+</body>
+</html>
