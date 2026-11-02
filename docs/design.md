@@ -125,7 +125,7 @@ Every profile:
 
 Why unknown destinations pass rather than being blocked: blocking by host stops vendor libraries from loading, which hides the very hits a test is looking for, and makes a broken setup look compliant. Flagging them makes them visible without changing the site's behaviour. Requests that `stub` mode stubs by vendor host or path (Meta `/tr`, Ads `rmkt`, `ccm` and `viewthroughconversion`) are known destinations, not unknown ones.
 
-Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, an empty 200 JavaScript response for scripts (gtag.js sends some Ads hits as script requests), and an empty 200 HTML response for documents (such as `td.doubleclick.net` iframes). The CORS headers echo the request `Origin` and allow credentials. Reports mark stubbed requests with `outcome: stubbed`. In `live` mode every request continues and has `outcome: passed`.
+Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, a 200 success body for the Meta Conversions API endpoint, an empty 200 JavaScript response for scripts (gtag.js sends some Ads hits as script requests), and an empty 200 HTML response for documents (such as `td.doubleclick.net` iframes). The CORS headers echo the request `Origin` and allow credentials. Reports mark stubbed requests with `outcome: stubbed`. In `live` mode every request continues and has `outcome: passed`.
 
 **Unknown destination rule.** A request is flagged `unknownDestination` when its host is not first party, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
 
