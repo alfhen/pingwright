@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { readRun, type RunRecords } from '@tagreeve/core';
-import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey } from '@tagreeve/expect';
+import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey, type ShapeMove } from '@tagreeve/expect';
 import type { BaselineArgs } from './args.ts';
 import type { Io } from './run.ts';
 import type { BaselineSummary } from './summary.ts';
@@ -96,24 +96,40 @@ function tupleLabel(t: { consent: Record<string, string>; ids: string[] }): stri
 
 export function describeDiff(diff: ShapeDiff): string[] {
   const lines: string[] = [];
-  for (const c of diff.added) lines.push(c.wholeKey ? `added ${keyLabel(c.key)}` : `added tuple ${keyLabel(c.key)}: ${tupleLabel(c)}`);
-  for (const c of diff.removed) lines.push(c.wholeKey ? `removed ${keyLabel(c.key)}` : `removed tuple ${keyLabel(c.key)}: ${tupleLabel(c)}`);
-  for (const c of diff.countChanges) lines.push(`count ${keyLabel(c.key)}: ${c.a} -> ${c.b} (not drift)`);
-  return [...new Set(lines)];
+  for (const c of diff.added) lines.push(c.wholeKey ? `added ${keyLabel(c.key)}: ${tupleLabel(c)}` : `added tuple ${keyLabel(c.key)}: ${tupleLabel(c)}`);
+  for (const c of diff.removed) lines.push(c.wholeKey ? `removed ${keyLabel(c.key)}: ${tupleLabel(c)}` : `removed tuple ${keyLabel(c.key)}: ${tupleLabel(c)}`);
+  for (const c of diff.countChanges) lines.push(`count ${keyLabel(c.key)}: ${tupleLabel(c)}: ${c.a} -> ${c.b} (not drift)`);
+  return lines;
 }
+
+function describeMove(m: ShapeMove): string {
+  const page = m.page === undefined ? '' : ` on page ${m.page || '(none)'}`;
+  const hits = m.count > 1 ? ` (${m.count} hits)` : '';
+  const early = m.to === 'undecided' ? ' The hit now fires before the consent answer.' : '';
+  return `moved ${m.vendor} ${m.event || '(no event)'} from ${m.from} to ${m.to}${page}${hits}. This is not drift.${early}`;
+}
+
+const scenarioName = (name: string) => name.replace(/\.ya?ml$/, '');
 
 /** The baseline decides `byPage`, so the new run is shaped the way the file was. A different scenario or site is a warning, not an error. */
 export function compareBaseline(baseline: BaselineFile, records: RunRecords): BaselineSummary {
   const warnings: string[] = [];
-  if (baseline.scenario !== records.run.scenario) {
+  if (scenarioName(baseline.scenario) !== scenarioName(records.run.scenario)) {
     warnings.push(`The baseline is from scenario ${baseline.scenario}, and this run is ${records.run.scenario}.`);
   }
   const host = hostOf(records.run.site);
   if (baseline.site !== host) warnings.push(`The baseline is from site ${baseline.site || '(none)'}, and this run is ${host || '(none)'}.`);
-  const diff = diffShapes(baseline.keys, hitShape(records, { byPage: baseline.byPage }));
-  const changes = describeDiff(diff);
-  const counted = (prefix: string) => changes.filter((c) => c.startsWith(prefix)).length;
-  return { drift: diff.drift, added: counted('added '), removed: counted('removed '), countChanges: counted('count '), warnings, changes };
+  const epochOrder = [...records.consentEpochs].sort((x, y) => x.startT - y.startT).map((e) => e.label);
+  const diff = diffShapes(baseline.keys, hitShape(records, { byPage: baseline.byPage }), { epochOrder });
+  warnings.push(...diff.moved.map(describeMove));
+  return {
+    drift: diff.drift,
+    added: diff.added.length,
+    removed: diff.removed.length,
+    countChanges: diff.countChanges.length,
+    warnings,
+    changes: describeDiff(diff),
+  };
 }
 
 export async function baselineCommand(args: BaselineArgs, io: Io): Promise<number> {

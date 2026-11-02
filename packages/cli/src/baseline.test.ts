@@ -114,3 +114,73 @@ test('baseline save writes a sorted file and exits 2 for a missing run', async (
   expect(file.keys.map((k) => k.key.event)).toEqual(['a_event', 'b_event']);
   expect(out.join('')).toContain('2 keys, 2 hits');
 });
+
+function runWithEpochs(hits: Array<{ t: number }>, labels: string[]): RunRecords {
+  const run = makeRun([]);
+  run.consentEpochs = labels.map((label, i) => ({ ...run.consentEpochs[0]!, id: newId('consentEpoch'), startT: i * 100, label })) as RunRecords['consentEpochs'];
+  const template = makeRun(['x']).hits[0]!;
+  run.hits = hits.map((h): Hit => ({ ...template, id: newId('hit'), runId: run.run.id, t: h.t, vendor: 'meta', event: 'PageView' }));
+  return run;
+}
+
+test('the scenario names compare without .yml or .yaml', () => {
+  const baseline = buildBaseline(makeRun(['page_view']), false);
+  for (const name of ['s', 's.yaml']) {
+    const run = makeRun(['page_view']);
+    run.run.scenario = name;
+    expect(compareBaseline(baseline, run).warnings).toEqual([]);
+  }
+  const other = makeRun(['page_view']);
+  other.run.scenario = 'other';
+  expect(compareBaseline(baseline, other).warnings).toHaveLength(1);
+});
+
+test('two tuples with the same count change are two count changes', () => {
+  const shaped = (n: number) => {
+    const run = makeRun(Array.from({ length: n * 2 }, () => 'a'));
+    run.hits.forEach((h, i) => { if (i % 2) h.ids = {}; });
+    return run;
+  };
+  const result = compareBaseline(buildBaseline(shaped(1), false), shaped(2));
+  expect(result).toMatchObject({ drift: false, countChanges: 2 });
+  expect(result.changes).toHaveLength(2);
+  const added = compareBaseline(buildBaseline(makeRun([]), false), makeRun(['a', 'b']));
+  expect(added.added).toBe(2);
+});
+
+test('two tuples of one new key are two added tuples', () => {
+  const run = makeRun(['a', 'a']);
+  run.hits[1]!.ids = {};
+  const result = compareBaseline(buildBaseline(makeRun([]), false), run);
+  expect(result.added).toBe(2);
+  expect(result.changes).toHaveLength(2);
+});
+
+test('a baseline with sorted keys compares the same', () => {
+  const baseline = buildBaseline(makeRun(['page_view']), false);
+  const sort = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(sort) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => (x < y ? -1 : 1)).map(([k, x]) => [k, sort(x)])) : v;
+  const sorted = sort(baseline) as typeof baseline;
+  expect(Object.keys(sorted)).not.toEqual(Object.keys(baseline));
+  expect(compareBaseline(sorted, makeRun(['page_view']))).toMatchObject({ drift: false, added: 0, removed: 0, countChanges: 0 });
+});
+
+test('a hit that moved across one consent answer is a warning and no drift', () => {
+  const labels = ['undecided', 'granted'];
+  const result = compareBaseline(buildBaseline(runWithEpochs([{ t: 10 }], labels), false), runWithEpochs([{ t: 150 }], labels));
+  expect(result).toMatchObject({ drift: false, added: 0, removed: 0 });
+  expect(result.warnings).toEqual(['moved meta PageView from undecided to granted. This is not drift.']);
+  const back = compareBaseline(buildBaseline(runWithEpochs([{ t: 150 }], labels), false), runWithEpochs([{ t: 10 }], labels));
+  expect(back.drift).toBe(false);
+  expect(back.warnings[0]).toContain('from granted to undecided');
+  expect(back.warnings[0]).toContain('before the consent answer');
+});
+
+test('a changed total or a move across two answers is drift', () => {
+  const labels = ['undecided', 'granted', 'denied'];
+  const base = buildBaseline(runWithEpochs([{ t: 10 }, { t: 150 }], labels), false);
+  expect(compareBaseline(base, runWithEpochs([{ t: 150 }], labels)).drift).toBe(true);
+  const skip = compareBaseline(buildBaseline(runWithEpochs([{ t: 10 }], labels), false), runWithEpochs([{ t: 250 }], labels));
+  expect(skip.drift).toBe(true);
+  expect(skip.warnings).toEqual([]);
+});

@@ -1,6 +1,6 @@
 import { newId, type ConsentEpoch, type Flag, type Hit, type Request, type RunRecords, type Step } from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { diffRuns, diffShapes, hitShape } from './diff.ts';
+import { diffRuns, diffShapes, hitShape, type ShapeKey, type ShapeTuple } from './diff.ts';
 
 const state = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' } as const;
 const consent = { ...state, raw: { gcs: 'G100' } };
@@ -267,7 +267,7 @@ test('hitShape groups hits by key and tuple with a count, and holds no ID, time 
 
 test('diffShapes finds no drift in the same run', () => {
   const [a, b] = pair([{}, { vendor: 'meta', event: 'PageView' }], [{}, { vendor: 'meta', event: 'PageView' }]);
-  expect(diffShapes(shapeOf(a), shapeOf(b))).toEqual({ added: [], removed: [], countChanges: [], drift: false });
+  expect(diffShapes(shapeOf(a), shapeOf(b))).toEqual({ added: [], removed: [], countChanges: [], moved: [], drift: false });
 });
 
 test('a key on one side only is drift, and is also added or removed in diffRuns', () => {
@@ -325,4 +325,68 @@ test('byPage adds the page path to the shape key', () => {
   expect(shapeOf(a, true)[0]!.key.page).toBe('/a');
   expect(diffShapes(shapeOf(a, true), shapeOf(b, true)).drift).toBe(true);
   expect(diffShapes(shapeOf(a), shapeOf(b)).drift).toBe(false);
+});
+
+const tuple = (count: number, over: Partial<ShapeTuple> = {}): ShapeTuple => ({ consent: { analytics: 'denied', gcs: 'G100' }, ids: [], count, ...over });
+const shapeKey = (epoch: string, tuples: ShapeTuple[], vendor = 'meta'): ShapeKey => ({ key: { epoch, vendor, event: 'PageView' }, tuples });
+const order = { epochOrder: ['undecided', 'granted', 'denied'] };
+
+test('a sorted copy of the keys and consent fields gives no drift', () => {
+  const a = [shapeKey('undecided', [tuple(1)])];
+  const sorted: ShapeKey[] = [{ key: { vendor: 'meta', event: 'PageView', epoch: 'undecided' } as ShapeKey['key'], tuples: [{ ids: [], count: 1, consent: { gcs: 'G100', analytics: 'denied' } }] }];
+  expect(diffShapes(a, sorted)).toMatchObject({ drift: false, added: [], removed: [], countChanges: [] });
+});
+
+test('a whole key that moves across one consent answer is a move, in both directions', () => {
+  const early = [shapeKey('undecided', [tuple(1)])];
+  const late = [shapeKey('granted', [tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } })])];
+  expect(diffShapes(early, late, order)).toMatchObject({ drift: false, added: [], removed: [], moved: [{ vendor: 'meta', event: 'PageView', from: 'undecided', to: 'granted', count: 1 }] });
+  expect(diffShapes(late, early, order)).toMatchObject({ drift: false, moved: [{ from: 'granted', to: 'undecided' }] });
+  expect(diffShapes(early, late).drift).toBe(true);
+});
+
+test('a partial move is a move', () => {
+  const granted = tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } });
+  const a = [shapeKey('undecided', [tuple(1)]), shapeKey('granted', [granted])];
+  const b = [shapeKey('granted', [{ ...granted, count: 2 }])];
+  expect(diffShapes(a, b, order)).toMatchObject({ drift: false, moved: [{ from: 'undecided', to: 'granted', count: 1 }] });
+});
+
+test('a move across two answers, a changed total, or a hit that did not stay is drift', () => {
+  const t = tuple(1);
+  expect(diffShapes([shapeKey('undecided', [t])], [shapeKey('denied', [t])], order).drift).toBe(true);
+  expect(diffShapes([shapeKey('undecided', [t]), shapeKey('granted', [t])], [shapeKey('granted', [t])], order).drift).toBe(true);
+  const other = tuple(1, { ids: ['client_id'] });
+  expect(diffShapes([shapeKey('undecided', [t, t])], [shapeKey('undecided', [other]), shapeKey('granted', [t])], order).drift).toBe(true);
+  expect(diffShapes([shapeKey('undecided', [t])], [shapeKey('granted', [t])], { epochOrder: ['undecided', 'granted', 'undecided'] }).drift).toBe(true);
+});
+
+test('a hit that stayed and changed consent is drift, not a move', () => {
+  const denied = tuple(1, { consent: { analytics: 'denied', gcs: 'G100' } });
+  const granted = tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } });
+  const mixed = tuple(1, { consent: { analytics: 'mixed', gcs: 'G101' } });
+  const a = [shapeKey('undecided', [{ ...denied, count: 2 }]), shapeKey('granted', [granted])];
+  const b = [shapeKey('undecided', [mixed]), shapeKey('granted', [{ ...mixed, count: 2 }])];
+  expect(mixed.ids).toEqual(denied.ids);
+  expect(mixed.consent).not.toEqual(denied.consent);
+  expect(diffShapes(a, b, order)).toMatchObject({ drift: true, moved: [] });
+});
+
+test('a moved hit that gains or loses an ID name is drift', () => {
+  const plain = tuple(1);
+  const granted = tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } });
+  const withId = { ...granted, ids: ['client_id'] };
+  expect(withId.ids).not.toEqual(plain.ids);
+  expect(diffShapes([shapeKey('undecided', [plain])], [shapeKey('granted', [withId])], order)).toMatchObject({ drift: true, moved: [] });
+  const idPlain = tuple(1, { ids: ['client_id'] });
+  expect(diffShapes([shapeKey('undecided', [idPlain])], [shapeKey('granted', [granted])], order)).toMatchObject({ drift: true, moved: [] });
+  const a = [shapeKey('undecided', [plain]), shapeKey('granted', [granted])];
+  const b = [shapeKey('granted', [granted, withId])];
+  expect(diffShapes(a, b, order)).toMatchObject({ drift: true, moved: [] });
+});
+
+test('another vendor in the same epochs is compared as before', () => {
+  const a = [shapeKey('undecided', [tuple(1)]), shapeKey('undecided', [tuple(1)], 'ga4')];
+  const b = [shapeKey('granted', [tuple(1)]), shapeKey('undecided', [tuple(1)], 'ga4')];
+  expect(diffShapes(a, b, order)).toMatchObject({ drift: false, moved: [{ vendor: 'meta' }] });
 });
