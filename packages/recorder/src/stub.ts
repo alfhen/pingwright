@@ -1,5 +1,5 @@
 import { isLibraryLoadPath, type Request } from '@tagreeve/core';
-import { isCollectionEndpoint, type TrackerEntry } from '@tagreeve/decoders';
+import { isCollectionEndpoint, isMetaCapiEndpoint, type TrackerEntry } from '@tagreeve/decoders';
 import { hostMatches } from '@tagreeve/expect';
 
 const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
@@ -23,9 +23,14 @@ export function corsHeaders(headers: Record<string, string>): Record<string, str
   return out;
 }
 
-/** A 1x1 GIF for images, an empty script or page for those loads, 204 for everything else. */
-export function stubResponse(req: Pick<Request, 'resourceType' | 'headers'>): StubResponse {
+const CAPI_ANSWER = Buffer.from('{"events_received":1,"messages":[],"fbtrace_id":"pw-fixture"}');
+
+/** A 1x1 GIF for images, an empty script or page for those loads, a success body for the Meta Conversions API, 204 for everything else. */
+export function stubResponse(req: Pick<Request, 'resourceType' | 'headers'> & Partial<Pick<Request, 'url'>>): StubResponse {
   const cors = corsHeaders(req.headers);
+  if (req.url !== undefined && isMetaCapiEndpoint({ url: req.url })) {
+    return { status: 200, headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' }, body: CAPI_ANSWER };
+  }
   switch (req.resourceType) {
     case 'image':
       return { status: 200, headers: { ...cors, 'content-type': 'image/gif', 'cache-control': 'no-store' }, body: GIF };

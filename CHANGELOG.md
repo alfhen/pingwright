@@ -8,7 +8,7 @@
 
 <!-- B01 -->
 
-<!-- M01 -->
+- Adds a `meta-capi` decoder for Meta Conversions API calls (`graph.facebook.com/v<n>/<id>/events`). One hit for each event in `data`. In `stub` mode the endpoint is answered with a success body. Part of #358.
 
 <!-- V01 -->
 
