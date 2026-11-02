@@ -6,6 +6,7 @@ import { expect, test } from 'vitest';
 import { outDir, root, run, runCli, scenario, site, type CliRun } from './cli-helpers.ts';
 
 const EMAIL = 'pw-fixture@example.com';
+const COOKIE_VALUE = 'pw-fixture-cookie-value';
 
 function baselineSave(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
@@ -70,6 +71,7 @@ test('the baseline file holds no email, hash, cookie value, URL or query', async
   expect(JSON.stringify(records.requests)).toContain(otherHash);
   const hitParams = JSON.stringify(records.hits.map((h) => h.params));
   for (const secret of identitySecrets.filter((s) => s !== encodeURIComponent(EMAIL))) expect(hitParams).toContain(secret);
+  expect(hitParams).toContain(COOKIE_VALUE);
   expect(JSON.stringify(records.checkpoints)).toContain('_pwalready');
   expect(records.requests.some((r) => r.url.includes('/set-cookie-already'))).toBe(true);
 
@@ -82,7 +84,7 @@ test('the baseline file holds no email, hash, cookie value, URL or query', async
     expect(file).not.toMatch(/https?:|\?|hit_|req_|_pwalready|pw-fixture-cookie-value/);
     expect(file).toContain(byPage ? '"page": "/shared-hashes"' : '"vendor": "ga4"');
     const result = await run('baseline-leak', ['--baseline', path]);
-    for (const secret of identitySecrets) expect(result.stdout + result.stderr).not.toContain(secret);
+    for (const secret of [...identitySecrets, COOKIE_VALUE]) expect(result.stdout + result.stderr).not.toContain(secret);
   }
 }, 180_000);
 
