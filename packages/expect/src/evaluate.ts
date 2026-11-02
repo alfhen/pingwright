@@ -1039,10 +1039,9 @@ function leafTexts(text: string): ScanText[] {
 }
 
 // Headers, preamble, epilogue and text parts stay in the text, so nothing a whole-body scan finds is lost.
-// A body that is not binary as a whole keeps a part unless its own headers say binary, as a whole-body scan reads it.
+// A body that is not binary as a whole keeps every part, whatever a part's headers say, as a whole-body scan reads it.
 function withoutBinaryParts(split: MultipartBody, wholeIsBinary: boolean): string {
-  const cut = (part: { headers: Record<string, string>; body: string }) =>
-    headersSayBinary(part.headers) || (wholeIsBinary && isBinaryText(part.body));
+  const cut = (part: { headers: Record<string, string>; body: string }) => wholeIsBinary && isBinaryBody(part.headers, part.body);
   return split.chunks
     .map(({ raw, part }) => (part && cut(part) ? raw.slice(0, part.bodyStart) : raw))
     .join(`--${split.boundary}`);

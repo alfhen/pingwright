@@ -262,6 +262,15 @@ test('possibleRealData skips the binary part of a multipart body and scans its t
   expect(detailsOf(withHeaders(filePart + '--XB--\r\n', MULTIPART))).toHaveLength(0);
 });
 
+test.each([
+  ['application/octet-stream', JSON.stringify({ email: EMAIL })],
+  ['image/png', `contact ${EMAIL}`],
+])('possibleRealData still scans a text part labelled %s when the whole body is text', (type, text) => {
+  const body = part('a', 'hello') + part('payload', text, `; filename="blob"\r\nContent-Type: ${type}`) + '--XB--\r\n';
+  expect(body).toContain(EMAIL);
+  expect(detailsOf(withHeaders(body, MULTIPART))).toHaveLength(1);
+});
+
 test('possibleRealData scans a short text part with a few control characters when the whole body is text', () => {
   const noisy = `${EMAIL}\u0001\u0001\u0001\u0001`;
   const body = part('a', 'x'.repeat(400)) + part('f', noisy) + '--XB--\r\n';
