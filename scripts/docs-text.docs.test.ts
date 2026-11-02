@@ -53,7 +53,7 @@ test('the changelog has 0.3.0 above rc.2 and rc.1, with no leftover markers', ()
 
 test('the version in the README and cli.md equals package.json', () => {
   const version = (JSON.parse(read('package.json')) as { version: string }).version;
-  expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+  expect(version).toMatch(/^\d+\.\d+\.\d+(?:-rc\.\d+)?$/);
   for (const file of ['README.md', 'docs/cli.md']) {
     const named = read(file).match(/`\d+\.\d+\.\d+(?:-rc\.\d+)?`/g) ?? [];
     expect(named.length).toBeGreaterThan(0);

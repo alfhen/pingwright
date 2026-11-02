@@ -2,6 +2,8 @@
 
 ## 0.4.0-rc.1
 
+Release candidate. Install it with `npm i -g tagreeve@next`.
+
 ### Pingwright is now Tagreeve
 
 The tool, the npm package, the command, the repository and the docs site have a new name. To move over:
@@ -17,56 +19,45 @@ Do the steps in this order. The old package owns the `pingwright` command link, 
 - Records and scenarios need no change. Records keep the key `pingwrightVersion`, so older records still read, and the report labels it `Tagreeve`.
 
 ### Changes
-
 - A `handoff` step can end by itself: `until` (a URL or an element), `settle` and `timeout`. The step record says what ended it in `handoffEnd`. `wait` takes `{ url }` too. (#515)
-
-<!-- U05 -->
-
 - New `payment` step: types a payment provider's documented test card (`shopify-bogus`, `shopify-test`) on a hosted store. It is opt-in with three checks: `--allow-test-payment <host>` equal to the `--site` host, the host in `~/.config/tagreeve/test-payment-hosts.json`, and the provider's test mode on the page. Log-ins stay handoff steps, and `fill`, `select` and `evaluate` still refuse card fields. From the first key until the run ends, non-tracking requests are redacted. The summary prints `TEST PAYMENT`. `suite` runs these scenarios only with `--with-test-payment` and `--allow-test-payment`. (#463, #529)
-
-<!-- U04 -->
-
 - New option `--viewport <W>x<H>` on `run` and `suite`, and `options.viewport` in the scenario. The record has `Run.viewport` and the report shows it. It sets the window size only: the user agent and client hints stay desktop. `mobile` and other values exit 2. (#514)
-
-<!-- U03 -->
-
 - `identity.country` now picks the format of the fake identity. GB and DE are added beside US and SE. A country with no format keeps US-shaped data and the run warns. (#32)
 - A `fill` entry can be `{ value: phone, optional: true }`. A field that is not on the page is skipped, and the summary and `--json` list it. New option `optionalTimeout`. (#586)
 - The real-phone warning says why the number looks real and names the fictional range for the country. German drama numbers get no warning. (#583)
-
-<!-- V01 -->
 - `tagreeve baseline save` keeps the shape of a run as names and counts, and `run --baseline` fails with exit 1 when a key or tuple appears or disappears. A missing or invalid baseline exits 2. (#359)
-
-<!-- V02 -->
-
-<!-- V04 -->
-
-<!-- V03 -->
 - Docs: design §8.5 says what is visible of a server container and what is not. `expectedTags` is stored and not evaluated. (#358)
-
-<!-- H07 -->
 - Docs: design §5.3 now has the measured rate of the missed redirect hop and its cause. Playwright's request interception drops the hop. New flag `possibleRedirectHop` marks a request handed to Chromium that either failed with `net::ERR_FAILED` and no response, or got a non-redirect status together with a `Location` header. It covers both shapes of a missed hop that were measured: a hop that fails CORS and a hop that allows it. The hop itself is still not recorded or stubbed. (#180)
-
-<!-- H08 -->
-
-<!-- H02 -->
-
 - **Report: a segment with an early hit, a granted hit and a denied hit shows `mixed`.** It showed `early` and hid the denied hit.
-
-<!-- H04 -->
-
 - **Fixed.** `tagreeve report` on a suite with a malformed cell `failed` field now says it is not a suite manifest, instead of failing with a TypeError. (#506)
-
-<!-- H09 -->
-
 - **Fixed.** `tagreeve report` accepts the `--out` folder of `suite`. It uses the one `suite_*` folder inside and says which on stderr. With several, the error lists them. (#581)
-
-<!-- H10 -->
-
 - `possibleRealData` now names where the foreign value was found: the hit parameter path, `the URL` or `the body`. It never prints the value. (#582)
 - `identity.hashesMatch` says when the hit carried no identity fields at all, and that server side matching is not visible to Tagreeve. A hit with fields that do not match keeps `Not matching: <field>`. (#584)
 
-<!-- R01 -->
+### Known in 0.4.0-rc.1
+
+Issues still open that you can meet:
+
+- Playwright's request interception sometimes misses a redirect hop (about 9 in 100 runs on a bare context with `route.continue`). That is the cause of #180. The new `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
+- With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload` (#256).
+- Server-to-vendor traffic is not visible to Tagreeve. Design section 8.5 says what is and is not. The rest of #358, such as evaluating `expectedTags`, is planned for 0.5.0.
+- `--viewport` takes `<W>x<H>` only. There is no `mobile` preset (#514).
+- `identity.country` has local formats for US, SE, GB and DE. NL, DK, NO and other countries keep US-shaped data and the run warns.
+- The `payment` step has not been checked on a real store. The Shopify values it relies on (the test-mode marker text, the card iframe selectors and the card host) may not match. If they do not, the step fails closed and types nothing.
+- Platform infrastructure hosts fill the `unknownDestination` list (#585). Planned for 0.5.0.
+- Several stores in one suite (#360) and `unloadGap` at the end of a run (#261) are deferred to 0.5.0.
+- After a baseline drift, `pass` stays true while `ok` is false (#590). Read `ok`.
+- Baseline matching depends on JSON property order (#591), and the summary counts come from deduplicated text lines (#589).
+- `wait: { url }` matches any page, not only the active page (#569).
+- The leak check misses a URL-encoded email (#565).
+- `Step.payment` is set before any key is typed (#603). No test covers the Shopify payment runtime and the typed name (#604).
+- The no-identity-fields message also fires for fields that were not checked (#595).
+- A suite child without `suite.json` beside a valid one has no test (#593). No test checks that `suite` passes `--viewport` to its runs (#601). No leak test covers the new `skippedFields` output (#599).
+- A gap frame is requested twice when `mode` is given (#552).
+- Some e2e leak checks cannot fail: the SE `possibleRealData` check (#598), the baseline hash and cookie checks (#588), the handoff `until` check (#570) and the cookie already-set check (#543).
+- Rename gaps: CI does not check that the old-name alias prints the version (#606), and the docs tell users to install `tagreeve` before it is on npm (#607). Use `npm i -g tagreeve@next` for this release.
+
+Other open `review-minor` issues are wording or test gaps in the plan and design docs: #526, #531, #533, #535, #536, #538, #546, #555, #560, #561, #562 and #563.
 
 ## 0.3.0
 

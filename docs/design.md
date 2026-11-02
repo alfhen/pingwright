@@ -1,6 +1,6 @@
 # Tagreeve design
 
-Status: revision 8, for release 0.3.0. Milestones 0.1, 0.2 and 0.3 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15.
+Status: revision 9, for release 0.4.0-rc.1. Milestones 0.1, 0.2, 0.3 and 0.4 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0.
 
 ## 1. Problem
 
@@ -23,7 +23,7 @@ Tagreeve makes this checkable by a program: a coding agent, a CI job, or a perso
 3. Test an unpublished GTM workspace before publishing it, in the test browser only.
 4. Express expected behaviour as data, and report pass or fail with evidence.
 5. Compare two runs per vendor and per event.
-6. Expose all of this to agents through MCP, with stable, structured results.
+6. Expose all of this to agents through the CLI, with stable, structured `--json` results.
 7. Be safe by default: fake identities, no payments except the opt-in test payment (§5.4), no hosted service, and known collection endpoints stubbed. Unknown destinations still receive test hits, and every one is flagged (§5.3).
 
 **Non-goals**
@@ -49,10 +49,10 @@ flowchart TB
   store --> decoders["Decoders"]
   decoders --> expect["Expect"]
   expect --> report["Report and diff"]
-  report --> front["CLI and MCP server"]
+  report --> front["CLI"]
 ```
 
-The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. The decoders, expectations, report and diff read the store, and the CLI and MCP server expose them.
+The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. The decoders, expectations, report and diff read the store, and the CLI exposes them.
 
 ## 4. Data model
 
@@ -383,20 +383,9 @@ Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`)
 
 ## 12. Interfaces
 
-**CLI:** `tagreeve run`, `tagreeve diff`, `tagreeve suite` and `tagreeve report` (an HTML file for one run or a suite). Terminal, JSON and JUnit output of `report` is not built (§15.3).
+**CLI:** `tagreeve run`, `tagreeve diff`, `tagreeve suite`, `tagreeve baseline` (`baseline save`, and `run --baseline` to check a run against it), `tagreeve report` (an HTML file for one run or a suite) and `tagreeve install-browser`. Terminal, JSON and JUnit output of `report` is not built (§15.3).
 
-**MCP tools:**
-
-| Tool | Returns |
-| --- | --- |
-| `run_scenario(file, options)` | Run ID and summary. `options` can hold a GTM override (§8.2), a server preview header, and an expected tag list. Overrides apply to this run only. |
-| `list_runs(filter)` | Runs with scenario, site, time, result |
-| `get_records(runId, type, filter)` | Hits, requests, responses, tag reports, dataLayer events, epochs or checkpoints |
-| `get_record(id)` | One record by ID, from any run |
-| `diff_runs(a, b)` | Per-vendor, per-event differences |
-| `handoff_status(runId)` | Whether a run waits for a person |
-
-Every result includes record IDs, the run ID and the step label. Errors say what was expected and what was found. The MCP output schema is frozen before 0.2.
+**CLI only.** Tagreeve has no MCP server. An agent runs the CLI and reads `--json` output and the JSONL record. Every result includes record IDs, the run ID and the step label. Errors say what was expected and what was found.
 
 ## 13. Test identities, privacy and security
 
@@ -422,7 +411,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 **Other rules**
 
 - Playwright traces, HAR files and screenshots are off by default. When turned on, the report states that they are unfiltered.
-- MCP results go to the agent's model provider. With fake identities this is acceptable. Flagged `possibleRealData` values are replaced with a placeholder in MCP output.
+- CLI `--json` output goes to the agent's model provider. With fake identities this is acceptable. A flagged `possibleRealData` value is never printed: the output holds the name, the request and the step only.
 - Tagreeve never enters a password on a hosted site. Log-ins are handoff steps. Payments are handoff steps too, except the opt-in test payment, which types only a provider's documented test card after the three gates in §5.4 hold. Loopback hosts are exempt as before (§5.4).
 - Tagreeve never takes a target address from incoming traffic.
 
@@ -445,8 +434,8 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 1. **0.1:** recorder with `stub` and `live` modes, consent epochs, fake identities, `ga4`, `meta`, `google-ads` and `stape-custom-loader` decoders, autoconsent, YAML expectations, CLI, JSONL output. 0.1.0 adds the field-test fixes and withdrawal epochs.
 2. **0.2 (built, `0.2.0`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3 (built, `0.3.0`):** rules on payload fields (`body.has`, `body.only`) and cookies, the `deniedIdentifiers` check, `suite`, an HTML `report` for one run and for a suite, the Done control for handoff steps, role and `any` locators, a `select` step, a minimal `server` network mode (`serverHosts`), record schema version 2. See docs/plan-0.3.md.
-4. **0.4 (planned):** MCP server (schema frozen first), web tag-firing reporter template and expected tag lists, full `microsoft-uet` decoder, server-container visibility (#358), baselines (#359), multi-store runs (#360), a WebKit probe (#361), Shopify custom pixel bridge, collector origin bridge.
-5. **0.5 (planned):** server tag reporter, sink reader, server workspace preview header. The `server` network mode itself is built in 0.3 in its minimal form.
+4. **0.4 (built, `0.4.0-rc.1`):** handoff steps that end by themselves, an opt-in test payment step, baselines for drift checks, a `<W>x<H>` viewport, fake identities by country, server-container visibility described in §8.5, the `possibleRedirectHop` flag, a WebKit probe, the release workflow and the rename to Tagreeve. See docs/plan-0.4.md.
+5. **0.5 (planned):** server tag reporter, sink reader, server workspace preview header, several stores in one suite (#360), `unloadGap` at the end of a run (#261), platform infrastructure hosts in `unknownDestination` (#585), the web tag-firing reporter template and expected tag lists, a full `microsoft-uet` decoder, the Shopify custom pixel bridge, the collector origin bridge, a `mobile` viewport preset (#514) and server-to-vendor visibility (the rest of #358). The `server` network mode itself is built in 0.3 in its minimal form.
 
 Deferred: terminal, JSON and JUnit output for `report`, sink setup commands, a replay page.
 
@@ -504,6 +493,19 @@ Where the code in 0.3 differs from the design above. Sections 15.1 and 15.2 stil
 - **`click` and `wait` take `{ role, name }` and `{ any: [selectors] }`.** `fill` and `addToCart` keep selector strings. `select` chooses by value, then by label, and reads the value back.
 - **Older fields still hold values.** `Request.url`, `Request.postData`, `Hit.params` and `DataLayerEvent.args` are unchanged. The names-and-counts rule covers only what 0.3 adds: fields, messages, `suite.json` and the report.
 - **Still not built:** the MCP server, the GTM tag-firing reporters, evaluation of `expectedTags`, a full `microsoft-uet` decoder, Firefox and WebKit. `Run.containerVersions` is still `{}`.
+
+### 15.4 Differences in 0.4
+
+Where the code in 0.4 differs from the design above. Sections 15.1 to 15.3 still apply, except where noted.
+
+- **`handoff` can end by itself.** `until` takes a URL or an element, with `settle` and `timeout`. `Step.handoffEnd` says what ended it. `wait` takes `{ url }` too.
+- **A `payment` step exists, opt-in.** It types a provider's documented test card (`shopify-bogus`, `shopify-test`). It needs `--allow-test-payment <host>` equal to the `--site` host, the host in the user's test-payment hosts file, and the provider's test mode on the page. Log-ins stay handoff steps, and `fill`, `select` and `evaluate` refuse card fields. The Shopify runtime values are not yet checked on a real store; the step fails closed and types nothing if they do not match.
+- **`baseline save` and `run --baseline`.** A baseline keeps names and counts. A key or tuple that appears or disappears gives exit code 1. A missing or invalid baseline gives exit code 2.
+- **`--viewport <W>x<H>`** sets the window size only. The user agent and client hints stay desktop. There is no `mobile` preset.
+- **`identity.country`** picks the format of the fake identity for US, SE, GB and DE. Other countries keep US-shaped data and the run warns. `fill` entries can be optional.
+- **`possibleRedirectHop`** flags a request handed to Chromium that failed with `net::ERR_FAILED` and no response, or got a non-redirect status with a `Location` header. The hop itself is still not recorded (§5.3). `live` mode has no such flag.
+- **The report and the identity evidence** show `mixed` for a segment with early, granted and denied hits, and `possibleRealData` names where the foreign value was found.
+- **Still not built:** an MCP server (dropped, the tool is CLI only), several stores in one suite, `unloadGap` at the end of a run, evaluation of `expectedTags`, the server tag reporter, the Shopify bridge and a full `microsoft-uet` decoder.
 
 ## 16. Related tools
 
