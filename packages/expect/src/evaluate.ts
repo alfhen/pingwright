@@ -615,7 +615,6 @@ function joinLabels(labels: Set<string>): string {
 }
 
 const PLAIN_ADDRESS_PARAMS = new Set(['user_data.city', 'user_data.postal_code', 'user_data.country']);
-const META_UNCHECKED_PARAMS = new Set(['fn', 'ln', 'ct', 'st', 'zp', 'country', 'ge', 'db']);
 const DIGEST_SHAPE = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/i;
 
 function allForms(h: HashForms): string[] {
@@ -652,8 +651,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     let seen = false;
     let bad = false;
     let raw = false;
+    if (hit.vendor === 'meta') {
+      for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(id);
+    }
     for (const [name, value] of Object.entries(hit.params)) {
-      if (hit.vendor === 'meta' && META_UNCHECKED_PARAMS.has(name) && value) uncheckedFields.add(name);
       const field = FIELD_PARAMS[name]?.(identity);
       const accepted = field === undefined ? [] : [field, ...extra];
       const known = EMAIL_PARAM.test(name)
@@ -706,7 +707,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     return {
       pass: false,
       evidence: hits.map((h) => h.id),
-      message: `${several ? 'none of the hits carried a' : 'the hit carried no'} hashed email or phone, only ${[...uncheckedFields].join(', ')} that Tagreeve does not check.`,
+      message: `${several ? 'none of the hits carried a' : 'the hit carried no'} hashed email or phone, only ${joinLabels(uncheckedFields)} that Tagreeve does not check.`,
     };
   }
   if (!withHash.length && plainAddressFields.size) {
