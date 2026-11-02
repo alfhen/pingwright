@@ -64,7 +64,7 @@ steps:
       "select[name=countryCode]": SE
   - payment: { provider: shopify-bogus, card: "1" }
   - click: { role: button, name: "Pay now" }
-  - wait: { url: "/thank-you*" }
+  - wait: { url: "*/thank-you*" }
 expect:
   must:
     - { vendor: ga4, event: purchase, after: checkout }

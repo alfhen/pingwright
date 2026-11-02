@@ -78,7 +78,7 @@ Locators: `click` and `wait` take a selector string, or a mapping:
 
 `role` and `name` are Playwright's `getByRole(role, { name })`. `exact: true` (with a `name`) matches the whole name. `any` is a list of selectors. The step uses the first one that matches an element within the step timeout, and the step record stores its position in `locator` (the step label is not changed). `any` cannot be combined with `role`. `fill`, `select` and `addToCart` take selector strings only. When a `click` or `wait` times out, the error lists up to ten buttons, radios, checkboxes, links, tabs and options on the page, as role and accessible name cut at 60 characters, for example `Controls on the page: button "White (01)", button "Black (02)".` The names are accessible names from the accessibility tree, and for a button or link that is usually its visible text. No other page text and no form value is listed. A name that is an email, has a run of 6 or more digits or looks like a hash is printed as `(hidden)`. For a `role` locator with the role button, radio, checkbox, link, tab or option, the list holds only the controls of that role, closest name first, for example `Closest radio controls: "White (01)", "Black (02)".` The order uses shared words, then shared prefix length, then edit distance, and ties keep page order. If the page has no control of that role, the error says `No radio controls on the page.` and then gives the general list. Any other role, such as `textbox`, gets the general list. No list is made while a handoff is waiting.
 
-`wait` also takes a URL: `wait: { url: "/thank-you*" }` waits up to the step timeout for the top-level URL of a page to match. A string is a path glob (`*` is any run of characters), matched against the path and query. `{ url: { matches: "^https://.*/thank-you$" } }` is a regular expression matched against the whole URL.
+`wait` also takes a URL: `wait: { url: "*/thank-you*" }` waits up to the step timeout for the top-level URL of a page to match. A string is a path glob (`*` is any run of characters), matched against the path and query. `{ url: { matches: "^https://.*/thank-you$" } }` is a regular expression matched against the whole URL.
 
 A `fill` entry can be optional: `"input[name=phone]": { value: phone, optional: true }`. If the field is not attached and visible within `options.optionalTimeout` (default 2s, from 100ms to 30s), the step skips it and goes on. The record lists the selectors in `Step.skippedFields`, never a value. The text summary prints `SKIPPED FIELD <selector> (not present)` under the step, and `--json` has `skippedFields`. A field that is present but cannot be filled (disabled, read-only, wrong type) still fails the step. Only `fill` has the optional form.
 
@@ -145,7 +145,7 @@ Payments and log-ins are handoff steps on any host other than `localhost`, `127.
 ```yaml
 - payment: { provider: shopify-bogus, card: "1" }
 - click: { role: button, name: "Pay now" }
-- wait: { url: "/thank-you*" }
+- wait: { url: "*/thank-you*" }
 ```
 
 The providers are `shopify-bogus` (cards `1`, `2`, `3`), `shopify-test` (the test card numbers in Shopify's docs) and `fixture` (Pingwright's own fixture shop, loopback sites only). Any other card value is a scenario error. Expiry and CVC are fixed values from the provider's docs. The name on the card is the run's fake name. These checks all pass before anything is typed, or the run exits 2 or the step fails:
