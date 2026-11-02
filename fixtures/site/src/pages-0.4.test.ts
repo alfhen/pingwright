@@ -140,6 +140,16 @@ describe('README and CHANGELOG', () => {
     expect(sentence).toMatch(/not only/);
   });
 
+  test('the CHANGELOG has the 0.4.0-rc.2 heading above 0.4.0-rc.1, with the install line, a Known list and no markers', () => {
+    const head = changelog.indexOf('## 0.4.0-rc.2');
+    expect(head).toBeGreaterThan(-1);
+    expect(head).toBeLessThan(changelog.indexOf('## 0.4.0-rc.1'));
+    const section = changelog.slice(head, changelog.indexOf('## 0.4.0-rc.1'));
+    expect(section).toContain('Install it with `npm i -g tagreeve@next`.');
+    expect(section).toContain('### Known in 0.4.0-rc.2\n');
+    expect(section).not.toMatch(/<!-- [A-Z]\d{2} -->/);
+  });
+
   test('the CHANGELOG has the 0.4.0-rc.1 heading above 0.3.0, with the install line, a Known list and no markers', () => {
     const head = changelog.indexOf('## 0.4.0-rc.1');
     expect(head).toBeGreaterThan(-1);
