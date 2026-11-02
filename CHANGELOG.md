@@ -23,6 +23,7 @@ Issues still open that you can meet:
 - Playwright's request interception sometimes misses a redirect hop (#180). The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
 - With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload` (#256).
 - `unloadGap` compares dataLayer event names to hit names literally (#261).
+- `--viewport` takes `<W>x<H>` only. A `mobile` preset is planned for 0.5.0 (#514).
 - The leak check misses a URL-encoded email (#565).
 - Platform infrastructure hosts fill the `unknownDestination` list (#585).
 - A gap frame is requested twice when `mode` is given (#552).
