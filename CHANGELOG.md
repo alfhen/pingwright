@@ -41,7 +41,9 @@ Issues still open that you can meet:
 - The `--json` summary flags (`unknownDestination`, `firstPartySubdomain`, `stubBypass`, `possibleRedirectHop`) carry the full request URL, including query values. Do not share the summary from a page that sends an identifier in a query (#679).
 - The verdict can hide a failed `deniedIdentifiers` when only early identifiers are named (#663).
 - A text part of a multipart body that is typed as binary is reported `in the body`, not by its field name (#669).
-- A mistyped option before the command loses the command name in the usage hint (#657), and the hint can name the wrong command (#644). Most per-command `--help` prints the general usage (#641).
+- A mistyped option before the command loses the command name in the usage hint (#657), and the hint can name the wrong command (#644). Most per-command `--help` prints the general usage (#641). The unknown-option line is very long (#640).
+- With two payment steps for different providers, the declaration hint names the first step's provider, not the one that failed (#647). The hint can also suggest an allowlist entry that the file refuses, which breaks later runs (#646). Check the hint before you copy it.
+- The possible-real-data check merges two different emails or two different phones when one contains the other, so the count and the place are wrong (#667). A number prefix in a JSON path can be flagged as a phone (#668). The binary-share check counts UTF-16 units, not code points (#673).
 - Playwright's request interception sometimes misses a redirect hop (#180). The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
 - With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload` (#256).
 - The leak check misses a URL-encoded email (#565).
@@ -49,7 +51,7 @@ Issues still open that you can meet:
 - A gap frame is requested twice when `mode` is given (#552).
 - Server-to-vendor traffic is not visible to Tagreeve (#358), and several stores in one suite (#360) is planned. Both are deferred to 0.5.0.
 
-Other open `review-minor` issues are test gaps and wording. They carry the `review-minor` label.
+Other open `review-minor` issues are test gaps, wording, or edge cases with no effect on a normal run. They carry the `review-minor` label.
 
 ## 0.4.0-rc.1
 
