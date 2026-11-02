@@ -652,7 +652,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     let bad = false;
     let raw = false;
     if (hit.vendor === 'meta') {
-      for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(id);
+      for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(guardFieldName(id));
     }
     for (const [name, value] of Object.entries(hit.params)) {
       const field = FIELD_PARAMS[name]?.(identity);

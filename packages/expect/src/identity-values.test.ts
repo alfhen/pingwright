@@ -479,6 +479,22 @@ test('hashesMatch says a Meta hit with only hashed name fields carried fields it
   expect(r.message).toContain('hashed email or phone, only fn and ln that Tagreeve does not check');
 });
 
+test('hashesMatch never prints a Meta ud key that holds an email or phone', () => {
+  const req: Request = {
+    type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: 'GET',
+    url: 'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&ud[visitor@other-person.example]=1&ud[%2B49%20151%201234567]=1',
+    resourceType: 'image', frameUrl: null, initiator: null, headers: {}, postData: null, outcome: 'stubbed',
+  };
+  const hit = decodeRequest(req)[0]!;
+  expect(Object.keys(hit.ids)).toContain('visitor@other-person.example');
+  const metaRule = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, event: Purchase, identity.hashesMatch: true }');
+  const r = evaluate([hit, req], metaRule, { identity })[0]!;
+  expect(r.message).toContain('that Tagreeve does not check');
+  expect(r.message).toContain('(other)');
+  expect(r.message).not.toContain('other-person');
+  expect(r.message).not.toMatch(/151|1234567/);
+});
+
 test('hashesMatch does not count Meta custom data as unchecked identity fields', () => {
   const req: Request = {
     type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: 'GET',
