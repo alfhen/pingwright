@@ -31,6 +31,8 @@ jobs:
           npm i -g --prefix "$prefix" "$RUNNER_TEMP"/tagreeve-*.tgz
           version=$(node -p 'require("./package.json").version')
           test "$("$prefix/bin/tagreeve" --version)" = "$version"
+          test "$("$prefix/bin/pingwright" --version 2>"$prefix/alias.err")" = "$version"
+          grep -q "is now tagreeve" "$prefix/alias.err"
           echo "PW_BIN=$prefix/bin/tagreeve" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: $PW_BIN install-browser

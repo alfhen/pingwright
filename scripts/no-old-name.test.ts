@@ -12,6 +12,7 @@ const allowedLines: Record<string, RegExp> = {
   'package.json': /^\s*"pingwright": "dist\/pingwright\.js"/,
   'scripts/build.ts': /alias-bin\.ts|'pingwright\.js'/,
   '.github/workflows/ci.yml': /bin\/pingwright" --version/,
+  '.github/workflows/release-tag.yml': /bin\/pingwright" --version/,
   'README.md': /^> \*\*Pingwright is now Tagreeve/,
 };
 
