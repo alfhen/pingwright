@@ -287,7 +287,7 @@ The input is one record, or a suite directory from `suite`. A suite directory ne
 A run report has these parts:
 
 - **Title.** `Pingwright run: <scenario> on <host>, <date>`. It is also the page `<title>`.
-- **Header.** Variant, run ID, date, network mode, site host, Pingwright version and record schema version.
+- **Header.** Variant, run ID, date, network mode, viewport (when the run set one), site host, Pingwright version and record schema version.
 - **Verdict.** One plain-language line built from the marks and counts. It names the vendors that send hits or identifiers, by plain name such as Google Analytics 4 or server container, and the consent state. Then it counts the failed rules (`must`, `mustNot` and unreadable rules) and names each failed or warned built-in check, for example `no leaks; 1 rule failed; built-in check sandboxPageUrl failed`. A result that cannot be evaluated reads `could not be checked`. `deniedIdentifiers` is not named again when the line already says which vendors received identifiers. `no leaks` when there are none. It holds no value.
 - **Timeline per vendor.** One row per vendor, headed `Name (key)`, and one segment per consent epoch, each with a mark and a hit count. The mark also has a text label, so it reads without colour.
 - **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, up to five evidence IDs and, on a failed or warned result, `on failure: fail` or `on failure: warn`. A passing result shows no severity.
