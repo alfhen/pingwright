@@ -65,6 +65,7 @@ import {
   type GtmOverrideInput,
 } from './gtm-override.ts';
 import { Scrubber } from './gtm-scrub.ts';
+import { loopbackIsHostedForTests } from './guard.ts';
 
 export const PINGWRIGHT_VERSION = readVersion();
 const REDACTED_VALUE = '[redacted]';
@@ -183,7 +184,7 @@ export class Recorder {
   private readonly checkpoints: Checkpoint[] = [];
   private readonly bannerEvents: BannerEvent[] = [];
   private currentStepId: Id<'stp'> | null = null;
-  private readonly handoffWindows: { from: number; to: number | null }[] = [];
+  private readonly handoffWindows: { from: number; to: number | null; hold?: true }[] = [];
   readonly handoff = new HandoffGate();
   private closed = false;
   private readonly fetchErrors: string[] = [];
@@ -289,6 +290,7 @@ export class Recorder {
       coverage: selfTest.coverage,
       ...(this.options.graceWindowMs !== undefined ? { graceWindowMs: this.options.graceWindowMs } : {}),
       ...(this.options.viewport ? { viewport: { ...this.options.viewport } } : {}),
+      ...(loopbackIsHostedForTests() ? { testLoopbackHosted: true as const } : {}),
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);
@@ -405,9 +407,14 @@ export class Recorder {
   setHandoff(active: boolean): void {
     if (active) this.handoffWindows.push({ from: Date.now(), to: null });
     else {
-      const open = this.handoffWindows.find((w) => w.to === null);
+      const open = this.handoffWindows.find((w) => w.to === null && !w.hold);
       if (open) open.to = Date.now();
     }
+  }
+
+  /** Opens a redaction window that setHandoff(false) never closes. It lasts until the run ends. */
+  holdRedaction(): void {
+    this.handoffWindows.push({ from: Date.now(), to: null, hold: true });
   }
 
   private recordUnloadSend(payload: UnloadSendPayload): void {

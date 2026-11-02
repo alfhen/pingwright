@@ -237,3 +237,21 @@ test('skipped optional fields are listed under their step and carried in the sum
   expect(summary.skippedFields).toEqual([{ step: 'fill-1', selector: '#phone' }]);
   expect(formatSummary(summary)).toContain('Skipped fields\n  fill-1\n    SKIPPED FIELD #phone (not present)');
 });
+
+test('a test payment prints one line with the provider and host, and carries names only', () => {
+  const records = {
+    run: { id: 'run_1', site: 'https://shop.example.com/checkout?token=abc' },
+    hits: [],
+    consentEpochs: [],
+    flags: [],
+    steps: [{ label: 'start' }, { label: 'payment-1', payment: { provider: 'shopify-bogus', mode: 'test' } }],
+  } as unknown as RunRecords;
+  const summary = buildSummary(records, [result(true)], 'p');
+  expect(summary.testPayment).toEqual({ provider: 'shopify-bogus', host: 'shop.example.com' });
+  const text = formatSummary(summary);
+  expect(text.split('\n')[0]).toBe('TEST PAYMENT: shopify-bogus on shop.example.com');
+  expect(JSON.stringify(summary)).not.toMatch(/token|12\/40|"1"/);
+  const without = buildSummary({ ...records, steps: [{ label: 'start' }] } as unknown as RunRecords, [result(true)], 'p');
+  expect(without).not.toHaveProperty('testPayment');
+  expect(formatSummary(without)).not.toContain('TEST PAYMENT');
+});

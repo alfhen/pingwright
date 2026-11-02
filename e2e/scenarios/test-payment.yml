@@ -1,0 +1,11 @@
+start: /checkout/test-payment
+identity: { email: pw-fixture@example.com }
+steps:
+  - payment: { provider: fixture, card: "4242 4242 4242 4242" }
+  - click: "#pay"
+  - wait: { url: "/thank-you-late" }
+  - wait: 3s
+expect:
+  must:
+    - { vendor: ga4, event: purchase }
+options: { seed: 1, allowUnknownDestination: true }

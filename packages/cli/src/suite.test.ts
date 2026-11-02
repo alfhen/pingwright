@@ -29,6 +29,7 @@ function args(dir: string, out: string, extra: Partial<SuiteArgs> = {}): SuiteAr
     out,
     seed: undefined,
     withHandoff: false,
+    withTestPayment: false,
     autoconsentRules: [],
     trackerList: undefined,
     vars: {},

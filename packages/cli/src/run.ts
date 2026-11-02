@@ -12,11 +12,15 @@ import {
   Scrubber,
   StepError,
   TEST_GTM_ORIGIN_ENV,
+  TEST_LOOPBACK_IS_HOSTED_ENV,
+  loopbackIsHostedForTests,
   type GtmOverrideInput,
+  type TestPayment,
 } from '@pingwright/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
 import { buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
+import { checkTestPaymentGates } from './test-payment-hosts.ts';
 
 export interface Io {
   stdout: (text: string) => void;
@@ -83,6 +87,8 @@ export interface RunSpec {
   autoconsentRules: string[];
   trackers: TrackerEntry[];
   gtmOverride: GtmOverrideInput | undefined;
+  /** Set once the allow flag and the allowlist file have passed. */
+  testPayment?: TestPayment;
   /** Set by `suite`: stored on the record, which is renamed to `<fileStem>.<variant>.jsonl` in `out`. */
   variant?: { name: string; fileStem: string };
 }
@@ -114,6 +120,12 @@ export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog'>, parsed
   }
   if (networkMode === 'live') io.stderr('Warning: live mode. Hits reach real vendor accounts.\n');
   return networkMode;
+}
+
+export function warnTestLoopbackHosted(io: Io): void {
+  if (loopbackIsHostedForTests()) {
+    io.stderr(`Warning: ${TEST_LOOPBACK_IS_HOSTED_ENV} is set. The fill, select and evaluate guards treat loopback hosts as hosted. This is for tests only.\n`);
+  }
 }
 
 export function warnTestGtmOrigin(io: Io): void {
@@ -164,6 +176,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
       gtmOverride,
       warn: (text) => io.stderr(`Warning: ${text}\n`),
       trackerList: spec.trackers,
+      ...(spec.testPayment && { testPayment: spec.testPayment }),
       userAgentOverride: process.env.PINGWRIGHT_TEST_USER_AGENT || undefined,
     });
     records = result.records;
@@ -227,6 +240,12 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   const network = resolveNetwork(args, parsed, io);
   if (!network) return 2;
 
+  const gates = await checkTestPaymentGates(parsed, args.site, args.allowTestPayment);
+  if (!gates.ok) {
+    io.stderr(`${gates.error}\n`);
+    return 2;
+  }
+
   let baseline: BaselineFile | undefined;
   if (args.baseline !== undefined) {
     try {
@@ -248,6 +267,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     return 2;
   }
   warnTestGtmOrigin(io);
+  warnTestLoopbackHosted(io);
 
   const outcome = await executeRun(
     {
@@ -263,6 +283,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       autoconsentRules: args.autoconsentRules,
       trackers,
       gtmOverride,
+      ...(gates.testPayment && { testPayment: gates.testPayment }),
     },
     io,
   );

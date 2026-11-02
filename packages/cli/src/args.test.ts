@@ -121,3 +121,15 @@ test('--viewport takes WxH on run and suite', () => {
 test.each(['mobile', '390', '390x', 'x844', '390X844', '199x844', '390x4001', '390x844x1', '-390x844', ''])('--viewport "%s" is a usage error', (value) => {
   expect(() => parseCli(['run', 's.yml', '--site', 'http://x.test', '--viewport', value])).toThrow(UsageError);
 });
+
+test('run and suite take --allow-test-payment, suite also --with-test-payment', () => {
+  expect(parseCli(['run', 's.yml', '--site', 'http://x.test', '--allow-test-payment', 'x.test'])).toMatchObject({ command: 'run', allowTestPayment: 'x.test' });
+  expect(parseCli(['run', 's.yml', '--site', 'http://x.test'])).not.toHaveProperty('allowTestPayment');
+  expect(parseCli([...suiteBase, '--with-test-payment', '--allow-test-payment', 'shop.example.com'])).toMatchObject({
+    withTestPayment: true,
+    allowTestPayment: 'shop.example.com',
+  });
+  expect(parseCli(suiteBase)).toMatchObject({ withTestPayment: false });
+  expect(() => parseCli(['run', 's.yml', '--site', 'http://x.test', '--with-test-payment'])).toThrow('not an option of run');
+  expect(() => parseCli(['run', 's.yml', '--site', 'http://x.test', '--allow-test-payment'])).toThrow(UsageError);
+});

@@ -20,7 +20,7 @@ All servers listen on port 0 (random).
 | `url` | `http://localhost:<p1>` | The shop. |
 | `sgtmUrl` | `http://127.0.0.1:<p2>` | Mock server-container host. `/pwstape?pk=<base64 path>`: 200 with a tiny script when the decoded path starts with `/gtag/js`, 204 otherwise. |
 | `thirdPartyUrl` | `http://127.0.0.1:<p3>` | Unknown third-party host. Answers every path with a 1x1 GIF. |
-| `paymentFrameUrl` | `http://127.0.0.1:<p5>` | Card frame host for `/checkout/test-payment`. Answers only `GET /card-frame` and `POST /card-submit`. Each submit adds the posted card number (a test card value) to `cardSubmits`. |
+| `paymentFrameUrl` | `http://127.0.0.1:<p5>` | Card frame host for `/checkout/test-payment`. Answers only `GET /card-frame`, `POST /card-extra` and `POST /card-submit`. Each extra post adds the expiry and CVC to `cardExtras`. Each submit adds the posted card number (a test card value) to `cardSubmits`. |
 
 `localhost` and `127.0.0.1` are different sites, so requests to every 127.0.0.1 server are cross-site.
 

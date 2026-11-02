@@ -12,6 +12,14 @@ test('the hosted checkout pattern parses', () => {
   expect(s.expect.must.some((r) => r.hashesMatch)).toBe(true);
 });
 
+test('the test payment variant parses, with a payment step in place of the handoff', () => {
+  const block = /```yaml\n([\s\S]*?)```/g;
+  block.exec(doc);
+  const s = parseScenario(block.exec(doc)?.[1] ?? '');
+  expect(s.steps.map((x) => x.kind)).toEqual(['consent', 'addToCart', 'visit', 'fill', 'payment', 'click', 'wait']);
+  expect(s.steps.some((x) => x.kind === 'handoff')).toBe(false);
+});
+
 test('the fixture shop keeps the pattern flag and hashes the stored email', () => {
   const payment = readFileSync(new URL('../public/payment.html', import.meta.url), 'utf8');
   const thanks = readFileSync(new URL('../public/thank-you.html', import.meta.url), 'utf8');

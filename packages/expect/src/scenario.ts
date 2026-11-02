@@ -3,6 +3,7 @@ import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@pingw
 import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
 import { isHostPattern, isServerHostPattern, isSpecificServerHost } from './hosts.ts';
+import { PAYMENT_PROVIDERS, canonicalCard, findPaymentProvider } from './payment-providers.ts';
 
 export type ConsentField = 'analytics' | 'ads' | 'adUserData' | 'adPersonalization';
 
@@ -64,7 +65,8 @@ export type StepBody =
   | { kind: 'addToCart'; value: string }
   | { kind: 'evaluate'; value: string }
   | { kind: 'checkpoint'; value: string }
-  | { kind: 'handoff'; value: string; until?: Condition; settle?: number; timeout?: number };
+  | { kind: 'handoff'; value: string; until?: Condition; settle?: number; timeout?: number }
+  | { kind: 'payment'; value: { provider: string; card: string } };
 
 /** `label` is the written label, or the default: the checkpoint's own name, else the kind and the step's index. */
 export type Step = StepBody & { label: string; line: number };
@@ -152,7 +154,7 @@ const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
 const OUTCOMES = ['passed', 'stubbed', 'failed'];
 const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
-const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
+const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff', 'payment'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
 const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts', 'viewport'];
 
@@ -430,6 +432,30 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
           ...(until ? { until, settle: settle ?? 5000 } : {}),
           ...(timeout !== undefined ? { timeout } : {}),
         });
+        return;
+      }
+      case 'payment': {
+        const at = [...path, kind];
+        if (!isMap(value)) {
+          fail(at, 'must be a mapping with provider and card');
+          return;
+        }
+        const unknown = Object.keys(value).find((k) => !['provider', 'card'].includes(k));
+        if (unknown !== undefined) {
+          fail([...at, unknown], 'unknown key, expected provider or card');
+          return;
+        }
+        const provider = typeof value.provider === 'string' ? findPaymentProvider(value.provider) : undefined;
+        if (!provider) {
+          fail([...at, 'provider'], `must be one of ${PAYMENT_PROVIDERS.map((p) => p.id).join(', ')}`);
+          return;
+        }
+        const card = typeof value.card === 'string' || typeof value.card === 'number' ? canonicalCard(provider, String(value.card)) : undefined;
+        if (card === undefined) {
+          fail([...at, 'card'], `is not a documented test value of ${provider.id}, see ${provider.docs}`);
+          return;
+        }
+        add({ kind, value: { provider: provider.id, card } });
         return;
       }
       case 'select': {

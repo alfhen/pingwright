@@ -11,6 +11,7 @@ export interface FixtureSite {
   paymentFrameUrl: string;
   receivedGtmAuth: string[];
   cardSubmits: string[];
+  cardExtras: string[];
   close(): Promise<void>;
 }
 
@@ -191,7 +192,7 @@ function thirdPartyHandler(_req: IncomingMessage, res: ServerResponse): void {
   res.end(gif);
 }
 
-function paymentFrameHandler(submits: string[]) {
+function paymentFrameHandler(submits: string[], extras: string[]) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
     if (req.method === 'GET' && path === '/card-frame') {
@@ -200,6 +201,11 @@ function paymentFrameHandler(submits: string[]) {
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(chunk as Buffer);
       submits.push(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(204, { 'cache-control': 'no-store' }).end();
+    } else if (req.method === 'POST' && path === '/card-extra') {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      extras.push(Buffer.concat(chunks).toString('utf8'));
       res.writeHead(204, { 'cache-control': 'no-store' }).end();
     } else {
       res.writeHead(404).end('not found');
@@ -223,7 +229,8 @@ export async function startFixtureSite(): Promise<FixtureSite> {
   const container = createServer(containerHandler(thirdPartyUrl, received));
   const containerUrl = `http://127.0.0.1:${await listen(container)}`;
   const cardSubmits: string[] = [];
-  const paymentFrame = createServer((req, res) => void paymentFrameHandler(cardSubmits)(req, res));
+  const cardExtras: string[] = [];
+  const paymentFrame = createServer((req, res) => void paymentFrameHandler(cardSubmits, cardExtras)(req, res));
   const paymentFrameUrl = `http://127.0.0.1:${await listen(paymentFrame)}`;
   const config = `window.__PW_FIXTURE=${JSON.stringify({ sgtmUrl, thirdPartyUrl, paymentFrameUrl })};`;
   const handler = shopHandler(config);
@@ -237,6 +244,7 @@ export async function startFixtureSite(): Promise<FixtureSite> {
     paymentFrameUrl,
     receivedGtmAuth: received,
     cardSubmits,
+    cardExtras,
     close: async () => {
       await Promise.all([shop, sgtm, thirdParty, container, paymentFrame].map(closeServer));
     },

@@ -1,0 +1,4 @@
+start: /checkout/test-payment
+steps:
+  - fill: { "#card-number": "not-a-card" }
+options: { seed: 1, allowUnknownDestination: true }
