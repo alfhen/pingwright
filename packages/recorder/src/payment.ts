@@ -182,7 +182,7 @@ export async function runPayment(
 
 async function frameStillServed(element: ElementHandle, cardHost: string): Promise<Frame> {
   const frame = await element.contentFrame();
-  if (!frame || hostOf(frame.url()) !== cardHost) throw new Error('the card frame is gone or not served from the card host');
+  if (!frame || hostOf(frame.url()) !== cardHost) throw new OwnReason('the card frame is gone or not served from the card host');
   return frame;
 }
 
@@ -198,7 +198,7 @@ async function fillVerified(element: ElementHandle, field: CardField, cardHost: 
       await inputs.fill(value, { timeout: Math.max(1, deadline - Date.now()) });
       return;
     }
-    if (Date.now() >= deadline) throw new Error(`${count} visible inputs match`);
+    if (Date.now() >= deadline) throw new OwnReason(`${count} visible inputs match`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
@@ -208,8 +208,12 @@ function typedValues(provider: PaymentProvider, card: string, identity: Identity
   return values.filter((v) => v.length > 0).sort((a, b) => b.length - a.length);
 }
 
-/** The first line of the error, with every typed value removed. */
+/** A reason this file builds itself. It holds no typed value, so the scrubber leaves it alone. */
+class OwnReason extends Error {}
+
+/** The first line of the error, with every typed value removed. A value inside a longer number is kept, so short test cards like `1` don't eat digits. */
 function reasonOf(error: unknown, typed: string[]): string {
+  if (error instanceof OwnReason) return error.message;
   const first = (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
-  return typed.reduce((text, value) => text.split(value).join('[value]'), first).trim() || 'unknown error';
+  return typed.reduce((text, value) => text.replace(new RegExp(`(?<!\\d)${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\d)`, 'g'), '[value]'), first).trim() || 'unknown error';
 }

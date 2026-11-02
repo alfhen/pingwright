@@ -240,6 +240,15 @@ describe('the reason of a fill error', () => {
     expect(record.payment).toBeUndefined();
   });
 
+  test('a short test card does not eat digits of a longer number in the reason', async () => {
+    const { error } = await play(
+      { provider: 'shopify-bogus', url: 'https://shop.example.com/checkout', frameUrl: 'https://checkout.pci.shopifyinc.com/frame', failFill: true, fillMessage: (value) => `Timeout 15000ms exceeded fill("${value}")` },
+      { host: 'shop.example.com', declaredProviders: ['shopify-bogus'] },
+      'shop.example.com',
+    );
+    expect(error?.message).toBe('card field number could not be filled: Timeout 15000ms exceeded fill("[value]")');
+  });
+
   test('a later fill failing keeps payment set and names the field', async () => {
     const { error, record } = await play({ failFill: true, failFillAt: 1 });
     expect(error?.message).toContain('card field expiry could not be filled: ');
