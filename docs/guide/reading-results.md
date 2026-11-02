@@ -78,6 +78,7 @@ Built-in checks run on every run. You do not write them:
 - `unknownDestination` fails if a request went to a host that is not your site and that Tagreeve does not know. The scenario can allow a host with `options.allowUnknownDestination`.
 - `sandboxPageUrl` fails if a vendor received the address of a sandboxed iframe as the page address. The vendor then reports the wrong page. Shopify custom pixels run in such an iframe.
 - `deniedIdentifiers` fails if a hit carries an identifier, such as a user ID or a hashed email, while the matching consent signal is denied. See [deniedIdentifiers](../cli.md#deniedidentifiers).
+- `earlyIdentifiers` warns if a hit sent before the first consent answer carries an identifier and its consent signal is unknown. It does not change the exit code unless you set it to `fail`. See [earlyIdentifiers](../cli.md#earlyidentifiers).
 - `possibleRealData` fails if the record holds an email address, a phone number or a hash that does not belong to the fake identity. A hash is a fixed code made from a value, such as an email address.
 
 The [CLI page](../cli.md) lists the options that change these checks. One of them, `options.builtins`, sets a check to `warn`. The summary then shows `WARN` for it and the exit code stays 0.
