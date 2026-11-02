@@ -292,3 +292,16 @@ test('possibleRealData skips a text body padded with many control characters', (
   expect(body).toContain(EMAIL);
   expect(detailsOf(rawRequest(REPLAY, body))).toHaveLength(0);
 });
+
+test('possibleRealData skips a hash under a nested always-exempt key of a JSON body', () => {
+  const body = JSON.stringify({ context: { session_id: FOREIGN_HASH }, user: { client_id: FOREIGN_HASH }, items: [{ visitor_id: FOREIGN_HASH }] });
+  expect(body).toContain(FOREIGN_HASH);
+  expect(detailsOf(withHeaders(body, { 'content-type': 'application/json' }))).toHaveLength(0);
+});
+
+test('possibleRealData skips a nested repeat-only ID of a JSON body sent in two requests', () => {
+  const body = JSON.stringify({ user: { id: FOREIGN_HASH } });
+  expect(body).toContain(FOREIGN_HASH);
+  const send = () => withHeaders(body, { 'content-type': 'application/json' });
+  expect(findForeignData([{ ...send(), id: newId('request') }, { ...send(), id: newId('request') }], [], identity)).toHaveLength(0);
+});

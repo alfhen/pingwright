@@ -1012,7 +1012,16 @@ function textPieces(text: string): ScanText[] {
   if (isBinaryText(text)) return [];
   const out: ScanText[] = [{ text, where: 'the body' }];
   const { entries, parsed } = bodyEntries({ postData: text });
-  if (parsed) for (const { name, value } of entries) out.push({ text: `${name}=${value}`, where: guardFieldName(name) });
+  if (parsed) {
+    const isJson = /^\s*[{[]/.test(text);
+    // The ID-key exemptions look at the key right before the value, so a JSON path is cut to its last segment.
+    for (const { name, value } of entries) {
+      const path = isJson ? name.replace(/\[\]/g, '').split('.') : [name];
+      const where = guardFieldName(name);
+      if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where });
+      out.push({ text: `${path[path.length - 1]}=${value}`, where });
+    }
+  }
   return out;
 }
 
