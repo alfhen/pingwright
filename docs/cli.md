@@ -351,6 +351,8 @@ Prints the version.
 | 1 | At least one expectation or built-in check failed, or `--baseline` found drift. |
 | 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, a `payment` step without `--allow-test-payment <host>` for the `--site` host or without that host in the allowlist file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `tagreeve install-browser`. |
 
+A usage error prints its message and one line, `Run tagreeve <command> --help for the options.`, on stderr. It does not print the full help. `--help` prints it. The line names the command when the arguments name one.
+
 The JSONL file is still written when a step fails, up to the failing step.
 
 A built-in check can be set to `warn` with `options.builtins`. A warned check still runs. Its `result` record keeps the evidence and has `severity: "warn"`. The text summary shows it as `WARN` with its message. It does not change the exit code. `expect` rules are not affected. Use it for a failure you accept, such as `sandboxPageUrl` on a Shopify custom pixel, so that a clean run exits 0 in CI:
