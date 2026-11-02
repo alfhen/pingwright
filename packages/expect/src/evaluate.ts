@@ -1016,7 +1016,7 @@ function textPieces(text: string): ScanText[] {
   return out;
 }
 
-// Each multipart part and each line of a body that is not JSON or a form is judged on its own, so a compressed part or line does not hide a text one.
+// Each multipart part and each line of a body that is not JSON is judged on its own, so a compressed part or line does not hide a text one.
 function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   if (body === '' || headersSayBinary(headers)) return [];
   const parts = multipartParts(body, headers);
@@ -1027,8 +1027,8 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
       return name === undefined ? textPieces(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name) }];
     });
   }
-  const { entries, parsed } = bodyEntries({ postData: body });
-  if (!(parsed && entries.length > 0) && /[\r\n]/.test(body.trim())) {
+  const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
+  if (!isJson && /[\r\n]/.test(body.trim())) {
     return body.split(/\r?\n/).filter((line) => line.trim() !== '').flatMap(textPieces);
   }
   return textPieces(body);

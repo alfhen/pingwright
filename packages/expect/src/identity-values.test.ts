@@ -270,6 +270,23 @@ test('possibleRealData scans a JSON header line and skips a compressed line afte
   expect(detailsOf(rawRequest(REPLAY, `{"a":1}\n${binary}`))).toHaveLength(0);
 });
 
+test('possibleRealData scans a form line next to a compressed line', () => {
+  const binary = asRecorded(gzipSync(randomBytes));
+  const body = `contact=${EMAIL}\n${binary}`;
+  expect(body).toContain(EMAIL);
+  const details = detailsOf(rawRequest(REPLAY, body));
+  expect(details).toHaveLength(1);
+  expect(details[0]).toMatch(/in contact$/);
+});
+
+test('possibleRealData names each line of a multi-line form body by its own key', () => {
+  const body = `en=page_view&ep.a=1\r\nem=${FOREIGN_HASH}&en=x`;
+  expect(body).toContain(FOREIGN_HASH);
+  const details = detailsOf(rawRequest(REPLAY, body));
+  expect(details).toHaveLength(1);
+  expect(details[0]).toMatch(/in em$/);
+});
+
 test('possibleRealData skips a text body padded with many control characters', () => {
   const body = `a=${EMAIL}${'\u0001'.repeat(40)}`;
   expect(body).toContain(EMAIL);
