@@ -41,9 +41,10 @@ afterAll(async () => {
 // Playwright sometimes reports neither the redirect nor the hop that Chromium follows from a child frame (#180).
 // The first request then fails with ERR_FAILED, or, when the hop allows CORS, carries the hop's response. What must hold in every run where the server saw the hop:
 // the hop is flagged stubBypass, or the first request carries possibleRedirectHop.
-test.each([false, true])(`every redirect hop the server saw is flagged, or its first request is flagged possibleRedirectHop, in ${RUNS} runs (hop sends CORS headers: %s)`, { timeout: RUNS * 10_000 }, async (cors) => {
+test.each([false, true])(`every redirect hop the server saw is flagged, or its first request is flagged possibleRedirectHop, in ${RUNS} runs (hop sends CORS headers: %s)`, { timeout: RUNS * 20_000 }, async (cors) => {
   hopAllowsCors = cors;
   const unexplained: number[] = [];
+  let hopSeen = 0;
   for (let run = 0; run < RUNS; run++) {
     serverSaw = [];
     const { records } = await recordVisit({
@@ -54,11 +55,16 @@ test.each([false, true])(`every redirect hop the server saw is flagged, or its f
       waitMs: 500,
     });
     if (serverSaw.length === 0) continue;
+    hopSeen++;
     const hops = records.requests.filter((q) => q.url.includes('en=hop'));
-    if (hops.some((h) => records.flags.some((f) => f.kind === 'stubBypass' && f.recordIds.includes(h.id)))) continue;
     const first = records.requests.find((q) => q.url === `http://localhost:${port}/r`);
+    if (hops.some((h) => records.flags.some((f) => f.kind === 'stubBypass' && f.recordIds.includes(h.id)))) {
+      if (first !== undefined && records.flags.some((f) => f.kind === 'possibleRedirectHop' && f.recordIds.includes(first.id))) unexplained.push(run);
+      continue;
+    }
     const flagged = first !== undefined && records.flags.some((f) => f.kind === 'possibleRedirectHop' && f.recordIds.includes(first.id));
     if (!flagged) unexplained.push(run);
   }
+  expect(hopSeen).toBe(RUNS);
   expect(unexplained).toEqual([]);
 });
