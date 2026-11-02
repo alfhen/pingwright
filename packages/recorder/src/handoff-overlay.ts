@@ -50,7 +50,15 @@ export interface HandoffWait {
   reminderMs?: number;
   /** Called once the gate is open, so a document whose polling stopped asks for the state again. Never awaited, and dropped after HANDOFF_WAKE_LIMIT_MS: a page that cannot answer must not hold up Enter or Done. */
   wake?: () => Promise<void>;
+  /** Settles when the condition the handoff waits for holds. A rejection counts as never. */
+  until?: Promise<void>;
+  /** How long recording goes on after `until` settles. Done or Enter still end the wait first. Default 0. */
+  settleMs?: number;
+  /** Ends the wait as `timeout` when neither Done, Enter nor `until` has by then. */
+  timeoutMs?: number;
 }
+
+export type HandoffEnd = 'done' | 'enter' | 'until' | 'timeout';
 
 /** Settles when the wake does, fails quietly, or after the limit, so a page that cannot answer is dropped. */
 export async function boundedWake(wake: () => Promise<void>, limitMs: number = HANDOFF_WAKE_LIMIT_MS): Promise<void> {
@@ -66,16 +74,31 @@ export async function boundedWake(wake: () => Promise<void>, limitMs: number = H
   }
 }
 
-/** Waits for the first of the Done button and the terminal, and reminds the person in the terminal while it waits. */
-export async function waitForHandoff(wait: HandoffWait): Promise<void> {
+/** Waits for the first of the Done button, the terminal, `until` and the timeout, and reminds the person in the terminal while it waits. */
+export async function waitForHandoff(wait: HandoffWait): Promise<HandoffEnd> {
   const abort = new AbortController();
+  const timers: NodeJS.Timeout[] = [];
+  const after = <T>(ms: number, value: T) =>
+    new Promise<T>((resolve) => {
+      timers.push(setTimeout(() => resolve(value), ms));
+    });
   const reminder = setInterval(() => wait.print(`Still waiting for the handoff: ${wait.text}`), wait.reminderMs ?? HANDOFF_REMINDER_MS);
   const fromButton = wait.gate.begin(wait.text);
   try {
     if (wait.wake) void boundedWake(wait.wake);
-    await Promise.race([fromButton, wait.resolver(wait.text, abort.signal)]);
+    const person: Promise<HandoffEnd>[] = [fromButton.then(() => 'done' as const), wait.resolver(wait.text, abort.signal).then(() => 'enter' as const)];
+    const matched = wait.until ? wait.until.then(() => 'until' as const, () => new Promise<never>(() => {})) : undefined;
+    const first = await Promise.race([
+      ...person,
+      ...(matched ? [matched] : []),
+      ...(wait.timeoutMs === undefined ? [] : [after(wait.timeoutMs, 'timeout' as const)]),
+    ]);
+    if (first !== 'until') return first;
+    if (!wait.settleMs) return 'until';
+    return await Promise.race([...person, after(wait.settleMs, 'until' as const)]);
   } finally {
     clearInterval(reminder);
+    for (const timer of timers) clearTimeout(timer);
     abort.abort();
     wait.gate.end();
   }

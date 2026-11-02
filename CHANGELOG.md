@@ -2,7 +2,7 @@
 
 ## 0.4.0-rc.1
 
-<!-- U02 -->
+- A `handoff` step can end by itself: `until` (a URL or an element), `settle` and `timeout`. The step record says what ended it in `handoffEnd`. `wait` takes `{ url }` too. (#515)
 
 <!-- U05 -->
 

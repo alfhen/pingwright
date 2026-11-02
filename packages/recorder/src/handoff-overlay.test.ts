@@ -296,3 +296,69 @@ test('a not-waiting answer that is current removes the pill and stops the pollin
   expect(overlay.removed.count).toBe(1);
   expect(overlay.intervals.size).toBe(0);
 });
+
+test('until ends the wait after the settle time', async () => {
+  const gate = new HandoffGate();
+  let matched = () => {};
+  const until = new Promise<void>((resolve) => (matched = resolve));
+  let end: string | undefined;
+  const wait = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, until, settleMs: 5000 }).then((e) => void (end = e));
+  matched();
+  await vi.advanceTimersByTimeAsync(4999);
+  expect(end).toBeUndefined();
+  expect(gate.state().waiting).toBe(true);
+  await vi.advanceTimersByTimeAsync(1);
+  await wait;
+  expect(end).toBe('until');
+  expect(gate.state().waiting).toBe(false);
+});
+
+test('Done and Enter still end the wait during the settle time', async () => {
+  for (const by of ['done', 'enter'] as const) {
+    const gate = new HandoffGate();
+    let enter = () => {};
+    const resolver = () => new Promise<void>((resolve) => (enter = resolve));
+    const wait = waitForHandoff({ text: 'Pay', gate, resolver, print: () => {}, until: Promise.resolve(), settleMs: 60_000 });
+    await vi.advanceTimersByTimeAsync(1000);
+    if (by === 'done') gate.done(gate.nonce);
+    else enter();
+    expect(await wait).toBe(by);
+  }
+});
+
+test('without a settle time until ends the wait at once', async () => {
+  const gate = new HandoffGate();
+  expect(await waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, until: Promise.resolve() })).toBe('until');
+});
+
+test('the timeout ends the wait as timeout and leaves no timer', async () => {
+  const gate = new HandoffGate();
+  const wait = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, timeoutMs: 10_000, until: new Promise<void>(() => {}) });
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(await wait).toBe('timeout');
+  expect(gate.state().waiting).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('a match before the timeout cancels it, and a failing until never ends the wait', async () => {
+  const gate = new HandoffGate();
+  const wait = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, timeoutMs: 10_000, until: Promise.resolve(), settleMs: 20_000 });
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(gate.state().waiting).toBe(true);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(await wait).toBe('until');
+
+  const failing = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {}, until: Promise.reject(new Error('page closed')) });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(gate.state().waiting).toBe(true);
+  gate.done(gate.nonce);
+  expect(await failing).toBe('done');
+});
+
+test('Done reports done and Enter reports enter', async () => {
+  const gate = new HandoffGate();
+  const byButton = waitForHandoff({ text: 'Pay', gate, resolver: never, print: () => {} });
+  gate.done(gate.nonce);
+  expect(await byButton).toBe('done');
+  expect(await waitForHandoff({ text: 'Pay', gate, resolver: () => Promise.resolve(), print: () => {} })).toBe('enter');
+});

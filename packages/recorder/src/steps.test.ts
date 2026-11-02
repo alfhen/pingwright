@@ -305,6 +305,26 @@ describe('select and locator steps on a fake page', () => {
     expect(clickTimeout).toBeGreaterThan(0);
   });
 
+  describe('wait: { url }', () => {
+    const waitPage = (reachedAfterMs: number) => {
+      const started = Date.now();
+      return { goto: () => Promise.resolve(), url: () => (Date.now() - started >= reachedAfterMs ? 'https://shop.example.com/thank-you-late' : 'https://shop.example.com/cart') };
+    };
+    const wait = (page: unknown, timeoutMs: number) => {
+      const started = Date.now();
+      const yaml = 'start: /\nsteps:\n  - wait: { url: "/thank-you-late" }\n';
+      return play(page, yaml, { context: { pages: () => [page] }, wait: (ms: number) => new Promise((r) => setTimeout(r, ms)) }, { actionTimeoutMs: timeoutMs }).then(() => Date.now() - started);
+    };
+
+    test('blocks until a page reaches the path', async () => {
+      expect(await wait(waitPage(400), 3000)).toBeGreaterThanOrEqual(350);
+    });
+
+    test('fails with the glob and the timeout when the page never gets there', async () => {
+      await expect(wait(waitPage(60_000), 300)).rejects.toThrow(/page did not reach \/thank-you-late within /);
+    });
+  });
+
   test('a locator timeout lists the controls, and not during a handoff', async () => {
     const timeout = Object.assign(new Error('locator.click: Timeout 10ms exceeded.\nCall log: ...'), { name: 'TimeoutError' });
     const page = {

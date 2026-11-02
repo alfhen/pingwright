@@ -1,0 +1,9 @@
+start: /handoff/until
+steps:
+  - click: "#pw-to-thank-you"
+  - wait: { url: "/thank-you-late" }
+  - wait: 4s
+expect:
+  must:
+    - { vendor: ga4, event: purchase }
+options: { seed: 1, allowUnknownDestination: true }
