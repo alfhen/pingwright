@@ -25,7 +25,8 @@ A usage error now prints the message and one line, `Run tagreeve <command> --hel
 <!-- D01 -->
 
 ### Fixed
-- `identity.hashesMatch` no longer says a hit carried no identity fields when it carried only plain city, postal code or country. It now says the hit carried only plain fields that are not checked. (#595)
+- `identity.hashesMatch` no longer says a hit carried no identity fields when it carried only plain city, postal code or country. It now says the hit carried no hashed identity field, only plain fields that are not checked. (#595)
+- `possibleRealData` now counts C1 control characters (0x80-0x9f) the same way for bodies as for base64 text: they are not binary. A body with 10% of them is now scanned. (#624)
 - A form field with an empty name, such as `=value`, is placed in `the body` in a `possibleRealData` finding, not in a blank place. (#672)
 
 <!-- E02 -->

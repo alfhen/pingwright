@@ -633,10 +633,9 @@ describe('binaryShare', () => {
     expect(binaryShare('a\u0001\u007f�')).toBe(0.75);
   });
 
-  it('counts C1 characters only when asked', () => {
+  it('does not count C1 characters', () => {
     expect(binaryShare('a\u0085\u009fb')).toBe(0);
-    expect(binaryShare('a\u0085\u009fb', true)).toBe(0.5);
-    expect(binaryShare('a ÿb', true)).toBe(0);
+    expect(binaryShare('a ÿb')).toBe(0);
   });
 });
 

@@ -194,16 +194,15 @@ const EDGE = 4;
 const MIN_BYTES_FOR_EDGES = 12;
 
 /**
- * The share of UTF-16 units that are U+FFFD, C0 controls other than tab, LF and CR, or 0x7f. With `countC1` the C1 range
- * 0x80-0x9f counts too. Callers pick their own threshold.
+ * The share of UTF-16 units that are U+FFFD, C0 controls other than tab, LF and CR, or 0x7f. Callers pick their own
+ * threshold.
  */
-export function binaryShare(text: string, countC1 = false): number {
+export function binaryShare(text: string): number {
   if (text.length === 0) return 0;
-  const top = countC1 ? 0x9f : 0x7f;
   let binary = 0;
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
-    if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7f && c <= top)) binary++;
+    if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || c === 0x7f) binary++;
   }
   return binary / text.length;
 }

@@ -703,7 +703,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     return {
       pass: false,
       evidence: hits.map((h) => h.id),
-      message: `${several ? 'none of the hits carried' : 'the hit carried'} a hashed identity field, only plain ${joinLabels(plainAddressFields)} that Tagreeve does not check.`,
+      message: `${several ? 'none of the hits carried a' : 'the hit carried no'} hashed identity field, only plain ${joinLabels(plainAddressFields)} that Tagreeve does not check.`,
     };
   }
   if (!withHash.length) {
@@ -1072,7 +1072,7 @@ function isBinaryBody(headers: Record<string, string>, body: string): boolean {
 
 function isBinaryText(body: string): boolean {
   if (body.length < BINARY_MIN_LENGTH) return false;
-  return binaryShare(body, true) >= BINARY_SHARE;
+  return binaryShare(body) >= BINARY_SHARE;
 }
 
 interface ScanText {
