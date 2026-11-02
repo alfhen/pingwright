@@ -169,6 +169,8 @@ export class Recorder {
   private readonly extraRequests: Request[] = [];
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
+  private readonly handedToChromium = new Set<string>();
+  private readonly redirectHeaderWithoutRedirect = new Set<string>();
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
@@ -447,6 +449,7 @@ export class Recorder {
     if (this.stubRecorded.has(record.id)) return;
     let setCookieNames: string[] = [];
     try {
+      if (response.status() !== 201 && (response.status() < 300 || response.status() >= 400) && (await response.headerValue('location')) !== null) this.redirectHeaderWithoutRedirect.add(record.id);
       setCookieNames = (await response.headerValues('set-cookie')).flatMap(setCookieNameOf);
     } catch {
       // The page closed before the headers arrived.
@@ -476,6 +479,7 @@ export class Recorder {
       await this.routeWithRedirectCheck(route, record);
       return;
     }
+    if (record) this.handedToChromium.add(record.id);
     await route.continue();
   }
 
@@ -567,6 +571,7 @@ export class Recorder {
   private async routeWithRedirectCheck(route: Route, first: Request): Promise<void> {
     const original = route.request();
     if (!this.isFetchableRequest(original)) {
+      this.handedToChromium.add(first.id);
       await route.continue();
       return;
     }
@@ -807,6 +812,9 @@ export class Recorder {
       hits,
       identity: this.run.identity,
       routedRequestIds: this.routed,
+      responses: this.responses,
+      handedToChromium: this.handedToChromium,
+      redirectHeaderWithoutRedirect: this.redirectHeaderWithoutRedirect,
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
