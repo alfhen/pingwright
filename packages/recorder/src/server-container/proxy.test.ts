@@ -5,7 +5,7 @@ import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import tls from 'node:tls';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunCa } from './ca.ts';
 import type { RunCa } from './ca.ts';
 import { createRecordingProxy } from './proxy.ts';
@@ -19,28 +19,20 @@ interface Reply {
 let root: string;
 let ca: RunCa;
 let proxy: RecordingProxy | undefined;
-let upstream: net.Server;
-let upstreamTouches: number;
 let seen: ProxyRequest[];
 let forwarded: ProxyRequest[];
 
-beforeEach(async () => {
+beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'tagreeve-proxy-test-'));
   ca = createRunCa(root);
   seen = [];
   forwarded = [];
-  upstreamTouches = 0;
-  upstream = net.createServer((s) => {
-    upstreamTouches += 1;
-    s.destroy();
-  });
-  await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', r));
 });
 
 afterEach(async () => {
   await proxy?.close();
   proxy = undefined;
-  await new Promise<void>((r) => upstream.close(() => r()));
+  vi.restoreAllMocks();
   ca.close();
   rmSync(root, { recursive: true, force: true });
 });
@@ -84,7 +76,7 @@ function connect(p: RecordingProxy, target: string, auth?: string): Promise<{ st
 async function viaTunnel(
   p: RecordingProxy,
   url: string,
-  init: { method?: string; body?: string; trust?: boolean; auth?: string } = {},
+  init: { method?: string; body?: string; trust?: boolean; auth?: string; path?: string } = {},
 ): Promise<Reply> {
   const u = new URL(url);
   const target = `${u.hostname}:${u.port || '443'}`;
@@ -99,7 +91,7 @@ async function viaTunnel(
   return new Promise((resolve, reject) => {
     secure.once('error', reject);
     const req = https.request(
-      { createConnection: () => secure, host: u.hostname, path: u.pathname + u.search, method: init.method ?? 'GET' },
+      { createConnection: () => secure, host: u.hostname, path: init.path ?? u.pathname + u.search, method: init.method ?? 'GET' },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
@@ -148,16 +140,36 @@ describe('recording proxy', () => {
 
   it('never dials the CONNECT target, for any host', async () => {
     const p = await start();
-    const port = (upstream.address() as net.AddressInfo).port;
-    await viaTunnel(p, `https://127.0.0.1:${port}/x`);
-    await viaTunnel(p, `https://localhost:${port}/x`);
+    const dials: unknown[] = [];
+    const connectSpy = vi.spyOn(net.Socket.prototype, 'connect');
+    const tlsSpy = vi.spyOn(tls, 'connect');
+    await viaTunnel(p, 'https://127.0.0.1:9/x');
+    await viaTunnel(p, 'https://localhost:9/x');
     await viaTunnel(p, 'https://graph.facebook.com/x');
     await viaTunnel(p, 'https://www.googletagmanager.com/server.js?gtm_auth=fake');
     await viaTunnel(p, 'https://www.googletagmanager.com/static/serverjs/a.js');
     await viaTunnel(p, 'https://www.googletagmanager.com/s/gtag/destination');
-    expect(upstreamTouches).toBe(0);
+    for (const call of connectSpy.mock.calls) {
+      const raw = call[0] as unknown;
+      const first = Array.isArray(raw) ? (raw[0] as unknown) : raw;
+      const port = typeof first === 'object' && first !== null ? (first as { port?: number }).port : first;
+      if (port !== p.port) dials.push(first);
+    }
+    for (const call of tlsSpy.mock.calls) {
+      if (!(call[0] as { socket?: unknown }).socket) dials.push(call[0]);
+    }
+    expect(dials).toEqual([]);
     expect(seen).toHaveLength(3);
     expect(forwarded).toHaveLength(3);
+  });
+
+  it('takes the host from the CONNECT target, not from a // path', async () => {
+    const p = await start();
+    await viaTunnel(p, 'https://www.googletagmanager.com:8443/x', { path: '//www.googletagmanager.com/server.js' });
+    expect(forwarded).toHaveLength(0);
+    expect(p.passThrough()).toEqual({ serverjs: 0, config: 0, destination: 0 });
+    await viaTunnel(p, 'https://graph.facebook.com/x', { path: '//collect/x' });
+    expect(seen.map((r) => r.url)).toContain('https://graph.facebook.com//collect/x');
   });
 
   it('refuses a client that does not trust the run CA', async () => {
@@ -197,6 +209,7 @@ describe('recording proxy', () => {
       expect((await connect(p, 'graph.facebook.com:443', 'Basic')).status).toBe(407);
       expect(seen).toHaveLength(0);
       expect(forwarded).toHaveLength(0);
+      expect(p.refused()).toBe(3);
       expect(p.passThrough()).toEqual({ serverjs: 0, config: 0, destination: 0 });
     });
 
@@ -204,7 +217,9 @@ describe('recording proxy', () => {
       const p = await start();
       expect((await plain(p, 'http://graph.facebook.com/x')).status).toBe(407);
       expect((await plain(p, 'http://graph.facebook.com/x', basic(p, 'wrong'))).status).toBe(407);
+      expect(p.refused()).toBe(2);
       expect(seen).toHaveLength(0);
+      expect(forwarded).toHaveLength(0);
     });
 
     it('uses a different credential each run', async () => {
@@ -222,7 +237,6 @@ describe('recording proxy', () => {
     const reply = await plain(p, 'http://collect.example.invalid/hit?x=1', basic(p));
     expect(reply).toEqual({ status: 200, body: 'handled' });
     expect(seen[0]?.url).toBe('http://collect.example.invalid/hit?x=1');
-    expect(upstreamTouches).toBe(0);
   });
 
   it('cuts a 2 MiB body at 1 MiB and marks it incomplete', async () => {

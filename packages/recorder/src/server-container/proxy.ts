@@ -35,7 +35,6 @@ export interface RecordingProxyOptions {
   readonly handler: ProxyHandler;
   /** The only way a request leaves the machine. Called for forward-list matches only. */
   readonly forward: ProxyHandler;
-  readonly credential?: string;
   readonly idleTimeoutMs?: number;
   readonly maxBodyBytes?: number;
 }
@@ -49,6 +48,8 @@ export interface RecordingProxy {
   /** The per-run secret. Send it as the password of `Proxy-Authorization: Basic`. */
   readonly credential: string;
   passThrough(): PassThroughCounts;
+  /** Requests answered 407 for a missing or wrong credential. */
+  refused(): number;
   close(): Promise<void>;
 }
 
@@ -82,11 +83,12 @@ function parseConnectTarget(authority: string | undefined): Target | undefined {
 
 export async function createRecordingProxy(options: RecordingProxyOptions): Promise<RecordingProxy> {
   if (WILDCARD_HOSTS.has(options.host)) throw new Error('The proxy must not listen on a wildcard address.');
-  const credential = options.credential ?? randomBytes(24).toString('base64url');
+  const credential = randomBytes(24).toString('base64url');
   const expected = digest(`Basic ${Buffer.from(`${USERNAME}:${credential}`).toString('base64')}`);
   const idleMs = options.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
   const maxBody = options.maxBodyBytes ?? MAX_BODY_BYTES;
   const counts: PassThroughCounts = { serverjs: 0, config: 0, destination: 0 };
+  let refusedCount = 0;
   const sockets = new Set<Duplex>();
   const tunnelTargets = new WeakMap<Duplex, Target>();
   const contexts = new Map<string, tls.SecureContext>();
@@ -106,6 +108,7 @@ export async function createRecordingProxy(options: RecordingProxyOptions): Prom
   }
 
   function reject407(res: ServerResponse): void {
+    refusedCount += 1;
     res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="tagreeve"', 'Content-Length': '0', Connection: 'close' });
     res.end();
   }
@@ -184,8 +187,12 @@ export async function createRecordingProxy(options: RecordingProxyOptions): Prom
     }
     let url: URL;
     try {
-      url = new URL(req.url, target.origin);
+      url = new URL(target.origin + req.url);
     } catch {
+      res.writeHead(400, { 'Content-Length': '0' }).end();
+      return;
+    }
+    if (url.origin !== target.origin) {
       res.writeHead(400, { 'Content-Length': '0' }).end();
       return;
     }
@@ -209,6 +216,7 @@ export async function createRecordingProxy(options: RecordingProxyOptions): Prom
   server.on('connect', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     track(socket);
     if (!authorized(req.headers)) {
+      refusedCount += 1;
       socket.end('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="tagreeve"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
       return;
     }
@@ -245,6 +253,7 @@ export async function createRecordingProxy(options: RecordingProxyOptions): Prom
     username: USERNAME,
     credential,
     passThrough: () => ({ ...counts }),
+    refused: () => refusedCount,
     async close() {
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
