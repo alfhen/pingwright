@@ -92,7 +92,7 @@ The rules in `AGENTS.md` and the earlier plans still hold. In short:
 
 More for rc.2:
 
-- Each PR adds a regression test that fails when the change is removed. The PR description says how that was checked. C02 is the one exception: its validation is a CI run against a deliberately broken alias (see C02).
+- Each PR adds a regression test that fails when the change is removed. The PR description says how that was checked. C02 and R02 are the exceptions. C02 is checked by a CI run against a deliberately broken alias (see C02). R02 is release prep with no behaviour change.
 - Each negative test checks that its input really contains what the check looks for. A test that passes because the input never had it proves nothing.
 - New e2e tests go in new files. Named exceptions: D01 updates `e2e/report-marks.e2e.test.ts`, E01 adds a case to `e2e/identity-messages.e2e.test.ts`, T01 tightens `e2e/identity-country.e2e.test.ts`, B01 and B02 change `e2e/baseline.e2e.test.ts`, and C01 changes `e2e/viewport.e2e.test.ts` and `e2e/cli-flags.e2e.test.ts` where they assert the usage text.
 - No record schema bump. `recordSchemaVersion` stays 2. P01 adds one optional field (see below).

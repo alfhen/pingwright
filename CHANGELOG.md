@@ -2,34 +2,56 @@
 
 ## 0.4.0-rc.2
 
-### Fixed
-- `possibleRealData` no longer scans compressed or binary request bodies, such as a session-replay beacon. Bytes in them can look like an email by chance. The URL is still scanned, and a text body is scanned as before. (#614)
+Release candidate. Install it with `npm i -g tagreeve@next`.
 
-- A host in the test payment allowlist can declare its test mode: `{ "host": "shop.example.com", "testMode": "shopify-test" }`. A declared host needs no marker on the page. Without a declaration, the marker must now sit inside the card form. The record, the `TEST PAYMENT` line and `--json` say whether the test mode was declared or seen on the page. A failed `payment` step now leaves `Step.payment` unset until the first key is typed, and `test mode not detected` shows the declaration to write (#611, #603, #604, #633).
+### Changes
+- The built-in check `earlyIdentifiers` warns when a hit sent before the first consent answer carries an identifier, such as a hashed email, and its consent signal is unknown. It is `warn` by default, so no exit code changes. Set `options.builtins: { earlyIdentifiers: fail }` to fail a run. The report marks such a hit `leak` with the label `identifiers sent before an answer`, and the verdict names the vendors. A hit with only `fbp` or `cid` is not flagged. (#626, #627)
+
+- A host in the test payment allowlist can declare its test mode: `{ "host": "shop.example.com", "testMode": "shopify-test" }`. A declared host needs no marker on the page. Without a declaration, the marker must now sit inside the card form. The record, the `TEST PAYMENT` line and `--json` say whether the test mode was declared or seen on the page. A failed `payment` step now leaves `Step.payment` unset until the first key is typed, and `test mode not detected` shows the declaration to write. (#611, #603, #604, #633)
 
 - `possibleRealData` now names the path of a value in a JSON or form body, for example `in customerHashed.country`, and no longer says `in the body` for it. A multipart body is split into parts, and its text fields are scanned and named. When the body is binary as a whole, its binary parts are skipped and its text parts are still scanned. A multi-line body is checked line by line, so one compressed line no longer hides a text line. (#610, #620, #622, #623)
 
+- A usage error now prints the message and one line, `Run tagreeve <command> --help for the options.`, not the full help text. `--help` still prints it. (#613)
+
 ### Fixed
 - `run --baseline` compares scenario names without `.yml` or `.yaml`, so a baseline saved from `checkout` matches a run of `checkout.yml`. (#612)
-- The baseline counts of added, removed and changed tuples come from the diff, so two tuples with the same change count as two. (#589)
-- A baseline saved with sorted keys, for example by `jq -S`, compares the same. (#591)
-- Hits that move across one consent answer, with the same total, are a warning and no longer drift. A move across two answers or a changed total is still drift. (#618)
 
-A usage error now prints the message and one line, `Run tagreeve <command> --help for the options.`, not the full help text. `--help` still prints it.
+- The baseline counts of added, removed and changed tuples come from the diff, so two tuples with the same change count as two. (#589)
+
+- A baseline saved with sorted keys, for example by `jq -S`, compares the same. (#591)
+
+- Hits that move across one consent answer, with the same total, are a warning and no longer drift. A move across two answers or a changed total is still drift. (#618)
 
 - Baseline drift sets `pass` to false in the `--json` summary, as well as `ok`. (#590)
 
-### Added
-- The built-in check `earlyIdentifiers` warns when a hit sent before the first consent answer carries an identifier, such as a hashed email, and its consent signal is unknown. It is `warn` by default, so no exit code changes. Set `options.builtins: { earlyIdentifiers: fail }` to fail a run. The report marks such a hit `leak` with the label `identifiers sent before an answer`, and the verdict names the vendors. A hit with only `fbp` or `cid` is not flagged. (#626, #627)
+- `possibleRealData` no longer scans compressed or binary request bodies, such as a session-replay beacon. Bytes in them can look like an email by chance. The URL is still scanned, and a text body is scanned as before. (#614)
 
-<!-- D01 -->
-
-### Fixed
-- `identity.hashesMatch` no longer says a hit carried no identity fields when it carried only plain city, postal code or country. It now says the hit carried no hashed identity field, only plain fields that are not checked. (#595)
 - `possibleRealData` now counts C1 control characters (0x80-0x9f) the same way for bodies as for base64 text: they are not binary. A body with 10% of them is now scanned. (#624)
+
 - A form field with an empty name, such as `=value`, is placed in `the body` in a `possibleRealData` finding, not in a blank place. (#672)
 
-<!-- E02 -->
+- `identity.hashesMatch` no longer says a hit carried no identity fields when it carried only plain city, postal code or country. It now says the hit carried no hashed identity field, only plain fields that are not checked. (#595)
+
+### Known in 0.4.0-rc.2
+
+Issues still open that you can meet:
+
+- The Shopify payment runtime is not yet checked on a real checkout: the test-mode marker, the card input selectors and the expiry format (`12/40` against a masked field). A supervised field test runs it with a declared host. If a value does not match, the step fails closed and a later release fixes it. Tests do not yet check the selectors or the order of the checks (#648).
+- `earlyIdentifiers` is `warn` by default. The rc.2 field test decides whether it becomes `fail` for 0.4.0.
+- The `--json` summary flags (`unknownDestination`, `firstPartySubdomain`, `stubBypass`, `possibleRedirectHop`) carry the full request URL, including query values. Do not share the summary from a page that sends an identifier in a query (#679).
+- The verdict can hide a failed `deniedIdentifiers` when only early identifiers are named (#663).
+- A text part of a multipart body that is typed as binary is reported `in the body`, not by its field name (#669).
+- A mistyped option before the command loses the command name in the usage hint (#657), and the hint can name the wrong command (#644). Most per-command `--help` prints the general usage (#641). The unknown-option line is very long (#640).
+- With two payment steps for different providers, the declaration hint names the first step's provider, not the one that failed (#647). The hint can also suggest an allowlist entry that the file refuses, which breaks later runs (#646). Check the hint before you copy it.
+- The possible-real-data check merges two different emails or two different phones when one contains the other, so the count and the place are wrong (#667). A number prefix in a JSON path can be flagged as a phone (#668). The binary-share check counts UTF-16 units, not code points (#673).
+- Playwright's request interception sometimes misses a redirect hop (#180). The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
+- With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload` (#256).
+- The leak check misses a URL-encoded email (#565).
+- Platform infrastructure hosts fill the `unknownDestination` list (#585).
+- A gap frame is requested twice when `mode` is given (#552).
+- Server-to-vendor traffic is not visible to Tagreeve (#358), and several stores in one suite (#360) is planned. Both are deferred to 0.5.0.
+
+Other open `review-minor` issues are test gaps, wording, or edge cases with no effect on a normal run. They carry the `review-minor` label.
 
 ## 0.4.0-rc.1
 
