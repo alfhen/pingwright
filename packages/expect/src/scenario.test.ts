@@ -277,6 +277,28 @@ test('a real German mobile number in identity.phone is warned about with a reaso
   expect(s.warnings[0]).toContain('+49 30 23125000 to 23125999');
 });
 
+test('the warning follows the dial code of a + number over the declared country', () => {
+  const s = parseScenario('start: /\nidentity:\n  country: GB\n  phone: "+4915112345678"\n');
+  expect(s.warnings[0]).toContain('mobile prefix is a real one for DE');
+  expect(s.warnings[0]).toContain('+49 30 23125000 to 23125999');
+});
+
+test('a national number is not guessed from its leading digits', () => {
+  const s = parseScenario('start: /\nidentity:\n  phone: "(469) 555-1234"\n');
+  expect(s.warnings[0]).toContain('for US');
+});
+
+test('a country with no format says no fictional range is known', () => {
+  const s = parseScenario('start: /\nidentity:\n  country: DK\n  phone: "+4520123456"\n');
+  expect(s.warnings[0]).toContain('no fictional range is known');
+});
+
+test('BNetzA mobile drama numbers get no warning', () => {
+  for (const phone of ['+491713920000', '+4917604069042']) {
+    expect(parseScenario(`start: /\nidentity:\n  phone: "${phone}"\n`).warnings).toEqual([]);
+  }
+});
+
 test('drama numbers for DE, GB and SE get no warning', () => {
   for (const phone of ['+493023125042', '+447700900123', '+46701740620']) {
     expect(parseScenario(`start: /\nidentity:\n  phone: "${phone}"\n`).warnings).toEqual([]);

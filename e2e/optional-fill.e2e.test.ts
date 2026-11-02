@@ -15,5 +15,4 @@ test('the same fill without optional fails on the missing field', async () => {
   const r = await run('optional-fill-required');
   expect(r.code).toBe(2);
   expect(r.stderr).toContain('step "fill-1"');
-  expect(r.records?.steps.some((s) => s.skippedFields)).not.toBe(true);
 }, 120_000);

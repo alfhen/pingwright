@@ -1,4 +1,4 @@
-import { FICTIONAL_PHONE_HINT, hasCountryFormat } from '@pingwright/core';
+import { FICTIONAL_PHONE_HINT } from '@pingwright/core';
 import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@pingwright/core';
 import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
@@ -699,6 +699,8 @@ const FICTIONAL_PHONE = [
   /^442079460\d{3}$/,
   /^441632960\d{3}$/,
   /^493023125\d{3}$/,
+  /^4917139200\d{2}$/,
+  /^49176040690\d{2}$/,
   /^44(?:113|114|115|116|117|118|121|131|141|151|161)4960\d{3}$/,
 ];
 
@@ -718,12 +720,13 @@ const DIAL_CODE_COUNTRY: [string, string][] = [['49', 'DE'], ['46', 'SE'], ['44'
 
 function phoneWarning(value: string, declaredCountry: string | undefined): string {
   const digits = value.replace(/\D/g, '');
-  const inferred = DIAL_CODE_COUNTRY.find(([code]) => digits.startsWith(code))?.[1];
-  const declared = declaredCountry?.toUpperCase();
-  const country = declared && hasCountryFormat(declared) ? declared : (inferred ?? 'US');
+  const fromDialCode = value.trim().startsWith('+') ? DIAL_CODE_COUNTRY.find(([code]) => digits.startsWith(code))?.[1] : undefined;
+  const country = fromDialCode ?? declaredCountry?.toUpperCase() ?? 'US';
   const reasons = ['it is not in a fictional range'];
   if (REAL_MOBILE_PREFIX[country]?.test(digits)) reasons.push('its mobile prefix is a real one');
-  return `looks like a real phone (${reasons.join(' and ')} for ${country}); use ${FICTIONAL_PHONE_HINT[country]}`;
+  const hint = FICTIONAL_PHONE_HINT[country];
+  const range = hint ? `use ${hint}` : 'no fictional range is known for it';
+  return `looks like a real phone (${reasons.join(' and ')} for ${country}); ${range}`;
 }
 
 function realDataWarning(value: string, country: string | undefined): string | undefined {

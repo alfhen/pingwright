@@ -182,7 +182,6 @@ async function inspectField(page: Page, selector: string, timeout: number): Prom
   return { field, tag: inspected.tag, sensitive };
 }
 
-/** Returns true when the field is a card or password field (only allowed on loopback hosts). */
 async function isPresent(page: Page, selector: string, timeout: number): Promise<boolean> {
   try {
     await page.locator(selector).first().waitFor({ state: 'visible', timeout });
@@ -193,6 +192,7 @@ async function isPresent(page: Page, selector: string, timeout: number): Promise
   }
 }
 
+/** Returns true when the field is a card or password field (only allowed on loopback hosts). */
 async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<boolean> {
   const { field, tag, sensitive } = await inspectField(page, selector, timeout);
   if (tag === 'select') await field.selectOption(value, { timeout });
