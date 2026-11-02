@@ -1,8 +1,11 @@
-start: /products/fake-tee?em=pw-fixture@example.com
+start: /set-cookie-already
 steps:
+  - wait: 1s
+  - evaluate: "new Image().src = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view&dl=' + encodeURIComponent(location.href); true"
+  - wait: 500ms
   - consent: accept
-  - wait: 10s
+  - wait: 1s
 expect:
   must:
     - { vendor: ga4, event: page_view }
-options: { seed: 1, allowUnknownDestination: true, builtins: { possibleRealData: warn, sandboxPageUrl: warn } }
+options: { seed: 1, allowUnknownDestination: true }

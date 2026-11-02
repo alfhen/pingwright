@@ -19,7 +19,7 @@ import {
 } from '@tagreeve/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
-import { buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
+import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 import { checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
 
 export interface Io {
@@ -302,11 +302,8 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   if (!outcome.summary) return outcome.code;
   let code: 0 | 1 = outcome.code === 1 ? 1 : 0;
   if (baseline && outcome.path) {
-    outcome.summary.baseline = compareBaseline(baseline, await readRun(outcome.path));
-    if (outcome.summary.baseline.drift) {
-      code = 1;
-      outcome.summary.ok = false;
-    }
+    applyBaseline(outcome.summary, compareBaseline(baseline, await readRun(outcome.path)));
+    if (outcome.summary.baseline?.drift) code = 1;
   }
   const output = args.json ? `${JSON.stringify(outcome.summary, null, 2)}\n` : `${formatSummary(outcome.summary)}\n`;
   io.stdout(gtmOverride ? new Scrubber(gtmOverride.gtmAuth).text(output) : output);

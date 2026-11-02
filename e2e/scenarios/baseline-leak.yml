@@ -1,0 +1,13 @@
+start: /shared-hashes?leak=email
+identity: { email: pw-fixture@example.com }
+steps:
+  - wait: 4s
+  - consent: accept
+  - visit: /set-cookie-already
+  - evaluate: "new Image().src = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view&ep.em=pw-fixture@example.com&ep.hex=c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6&ep.b64=xXyn7gfRxfXjwrXpk%2BmGPAZ3%2FRV2X%2FpS6GlGxPUS36Y%3D&ep.b64url=xXyn7gfRxfXjwrXpk-mGPAZ3_RV2X_pS6GlGxPUS36Y&ep.ck=' + encodeURIComponent(document.cookie); true"
+  - wait: 2s
+  - checkpoint: after
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true, builtins: { possibleRealData: warn, sandboxPageUrl: warn } }
