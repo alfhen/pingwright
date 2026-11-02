@@ -16,10 +16,13 @@ function renderHtml(path: string, out: string): Promise<number> {
 test('a Meta hit before any answer is early, severity shows only on a failed result, and --json has severity on every result', async () => {
   const r = await run('report-marks');
   expect(r.code).toBe(1);
-  const summary = JSON.parse(r.stdout) as { path: string; results: { pass: boolean; severity?: string }[] };
+  const summary = JSON.parse(r.stdout) as { path: string; results: { expectation: string; pass: boolean; severity?: string }[] };
   expect(summary.results.length).toBeGreaterThan(2);
   expect(summary.results.some((x) => x.pass)).toBe(true);
-  expect(summary.results.every((x) => x.severity === 'fail')).toBe(true);
+  const early = summary.results.find((x) => x.expectation === 'builtin: earlyIdentifiers')!;
+  expect(early.pass).toBe(false);
+  expect(early.severity).toBe('warn');
+  expect(summary.results.filter((x) => x !== early).every((x) => x.severity === 'fail')).toBe(true);
 
   const out = join(outDir, 'report-marks.html');
   expect(await renderHtml(summary.path, out)).toBe(0);
@@ -30,6 +33,12 @@ test('a Meta hit before any answer is early, severity shows only on a failed res
   expect(row![0]).toContain('class="m-early"');
   expect(row![0]).toContain('before an answer');
   expect(row![0]).not.toContain('class="m-full"');
+
+  const sgtm = /<tr><th scope="row">server container \(sgtm\)<\/th>.*?<\/tr>/i.exec(html);
+  expect(sgtm).not.toBeNull();
+  expect(sgtm![0]).toContain('class="m-leak"');
+  expect(sgtm![0]).toContain('identifiers sent before an answer');
+  expect(html).toContain('identifiers go out to server container in the undecided state');
 
   expect(html).not.toContain('severity: fail');
   const passing = /<li class="s-pass">.*?<\/li>/.exec(html);

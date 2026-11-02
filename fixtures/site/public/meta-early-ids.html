@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Early Meta identifiers</title>
+</head>
+<body>
+<h1>Early Meta identifiers</h1>
+<p>Sends a Meta <code>Purchase</code> hit for the fake pixel at once. The hit carries <code>ud[em]</code>, the SHA-256 of the fake fixture email. <code>?ids=fbp</code> sends <code>fbp</code> instead, which is not an identifier for the check. The page has no banner and sets no Consent Mode default, so the consent state stays unknown.</p>
+<script>
+(function () {
+  var ids = new URLSearchParams(location.search).get('ids');
+  var who = ids === 'fbp' ? '&fbp=fb.1.1700000000000.100000001' : '&ud[em]=c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6';
+  new Image().src = 'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&cd[value]=10&cd[currency]=EUR' + who + '&dl=' + encodeURIComponent(location.href);
+})();
+</script>
+</body>
+</html>

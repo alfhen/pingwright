@@ -1,0 +1,45 @@
+import { expect, test } from 'vitest';
+import { run } from './cli-helpers.ts';
+
+const FIXTURE_EMAIL = 'pw-fixture@example.com';
+const FIXTURE_HASH = 'c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6';
+
+interface Summary {
+  results: { expectation: string; pass: boolean; severity?: string; message: string; evidence: string[] }[];
+}
+
+async function early(name: string) {
+  const r = await run(name);
+  const summary = JSON.parse(r.stdout) as Summary;
+  return { code: r.code, stdout: r.stdout, result: summary.results.find((x) => x.expectation === 'builtin: earlyIdentifiers'), records: r.records! };
+}
+
+test('a Meta hit with ud[em] before any answer warns, names the field and keeps exit 0', async () => {
+  const { code, result, records, stdout } = await early('early-identifiers');
+  expect(code).toBe(0);
+  expect(result).toBeDefined();
+  expect(result!.pass).toBe(false);
+  expect(result!.severity).toBe('warn');
+  expect(result!.message).toContain('before the consent answer: meta ud[em] (ads unknown)');
+  const hit = records.hits.find((h) => h.vendor === 'meta' && h.idFields?.includes('ud[em]'));
+  expect(hit).toBeDefined();
+  expect(result!.evidence).toEqual([hit!.id]);
+  const text = JSON.stringify(result) + stdout;
+  for (const secret of [FIXTURE_EMAIL, FIXTURE_HASH, records.run.identity!.email]) expect(text).not.toContain(secret);
+}, 90_000);
+
+test('earlyIdentifiers: fail turns the same hit into exit 1', async () => {
+  const { code, result } = await early('early-identifiers-fail');
+  expect(code).toBe(1);
+  expect(result!.pass).toBe(false);
+  expect(result!.severity).toBe('fail');
+}, 90_000);
+
+test('a Meta hit with only fbp passes', async () => {
+  const { code, result, records } = await early('early-identifiers-fbp');
+  const hit = records.hits.find((h) => h.vendor === 'meta' && h.fields?.includes('fbp'));
+  expect(hit).toBeDefined();
+  expect(hit!.idFields).toEqual([]);
+  expect(code).toBe(0);
+  expect(result!.pass).toBe(true);
+}, 90_000);

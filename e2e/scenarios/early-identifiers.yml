@@ -1,0 +1,6 @@
+start: /meta-early-ids
+identity:
+  email: pw-fixture@example.com
+steps:
+  - wait: 2s
+options: { seed: 1, allowUnknownDestination: true }

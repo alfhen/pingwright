@@ -371,6 +371,43 @@ test('the header keeps the host only', () => {
   expect(model.header.networkMode).toBe('stub');
 });
 
+describe('earlyIdentifiers evidence', () => {
+  const early = (over: Partial<Hit> = {}) => hit('meta', 100, { idFields: [], fields: ['fbp'], ...over });
+  const check = (evidence: string[], over: Partial<Result> = {}) => result('builtin: earlyIdentifiers', false, { evidence, severity: 'warn', ...over });
+
+  test('a hit in the evidence is a leak with its own label, and one outside it stays early', () => {
+    const flagged = early({ idFields: ['ud[em]'], fields: ['ud[em]'] });
+    const clean = early();
+    expect(marksOf(buildReportModel(records({ hits: [clean], results: [check([flagged.id])] })), 'meta')).toEqual(['early', 'nothing', 'nothing']);
+    const model = buildReportModel(records({ hits: [flagged], results: [check([flagged.id])] }));
+    expect(marksOf(model, 'meta')).toEqual(['leak', 'nothing', 'nothing']);
+    expect(model.rows[0]!.segments[0]!.label).toBe('identifiers sent before an answer');
+  });
+
+  test('the label from deniedIdentifiers wins when a hit is in both results', () => {
+    const h = early({ idFields: ['ud[em]'], fields: ['ud[em]'] });
+    const denied = result('builtin: deniedIdentifiers', false, { evidence: [h.id], severity: 'warn' });
+    for (const results of [[check([h.id]), denied], [denied, check([h.id])]]) {
+      const model = buildReportModel(records({ hits: [h], results }));
+      expect(model.rows[0]!.segments[0]!.label).toBe('identifiers sent while denied');
+    }
+  });
+
+  test('a segment holding both identifier labels reads as the denied label', () => {
+    const a = early({ idFields: ['ud[em]'], fields: ['ud[em]'] });
+    const b = early({ idFields: ['ud[em]'], fields: ['ud[em]'] });
+    const denied = result('builtin: deniedIdentifiers', false, { evidence: [b.id], severity: 'warn' });
+    const model = buildReportModel(records({ hits: [a, b], results: [check([a.id]), denied] }));
+    expect(model.rows[0]!.segments[0]!.label).toBe('identifiers sent while denied');
+  });
+
+  test('a cannot-evaluate result marks nothing', () => {
+    const h = early();
+    const model = buildReportModel(records({ hits: [h], results: [check([h.id], { note: 'fieldsNotRecorded' })] }));
+    expect(marksOf(model, 'meta')).toEqual(['early', 'nothing', 'nothing']);
+  });
+});
+
 describe('deniedIdentifiers evidence', () => {
   const denied = () => hit('sgtm', 1500);
   const failedCheck = (h: Hit, severity: 'fail' | 'warn') => result('builtin: deniedIdentifiers', false, { evidence: [h.id], severity });

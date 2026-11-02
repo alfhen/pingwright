@@ -52,6 +52,7 @@ const pages: Record<string, string> = {
   '/set-cookie-unstored': 'set-cookie-unstored.html',
   '/set-cookie-already': 'set-cookie-already.html',
   '/meta-early': 'meta-early.html',
+  '/meta-early-ids': 'meta-early-ids.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',

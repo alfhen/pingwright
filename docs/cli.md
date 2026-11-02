@@ -65,8 +65,8 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. Use it for custom events that are not meant to produce a hit. |
 | `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. A `pagehide` or `visibilitychange` send to a server host is answered in the page, so the cookies it would set are not seen. A passing cookie rule in `server` mode can miss them. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
-| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData` and `deniedIdentifiers`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
-| `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` treats as analytics identifiers, matched against the field names of each hit. |
+| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData`, `deniedIdentifiers` and `earlyIdentifiers`. `earlyIdentifiers` is `warn` by default and every other check is `fail`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
+| `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` and `earlyIdentifiers` treat as analytics identifiers, matched against the field names of each hit. |
 
 Locators: `click` and `wait` take a selector string, or a mapping:
 
@@ -391,4 +391,19 @@ Upgrading to 0.3 can change exit codes. The check is `fail` by default, like the
 options:
   builtins: { deniedIdentifiers: warn }
 ```
+
+### earlyIdentifiers
+
+The `earlyIdentifiers` check warns when a hit sent before the first consent answer carries an identifier field and the consent signal for that field's class is unknown. This is the case on a page with no Consent Mode default, where a tag can send a hashed email before the visitor sees the banner. It uses the same field classes, signals and ignored names as [deniedIdentifiers](#deniedidentifiers), and it reads field names only.
+
+A hit is never reported by both checks. A denied signal belongs to `deniedIdentifiers`. A granted signal, and any hit after an answer, is not flagged. A hit with only `cid`, `fbp`, `fbc` or `gclid` is not flagged.
+
+The default severity is `warn`, so the exit code does not change. The result reads `1 hit carries identifiers before the consent answer: meta em, ph (ads unknown)`. The signal is `ads` when `adUserData` is unknown. The evidence is the hit IDs. A hit before the answer with no recorded field names or a body that was cut reports `cannot evaluate`, like `deniedIdentifiers`. To make the check fail a run, set it to `fail`:
+
+```yaml
+options:
+  builtins: { earlyIdentifiers: fail }
+```
+
+In the report, a flagged hit gets the `leak` mark with the label `identifiers sent before an answer`, judged per field: a hit with `em` is `leak`, and a hit with only `fbp` stays `early`. The label `identifiers sent while denied` wins when a hit is in both checks. The verdict reads `identifiers go out to <vendor> in the undecided state`.
 
