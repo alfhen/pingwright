@@ -1,5 +1,5 @@
-import { newId, type DataLayerEvent, type Hit, type Request } from '@pingwright/core';
-import { expect, test } from 'vitest';
+import { newId, type DataLayerEvent, type Hit, type Request, type Response } from '@pingwright/core';
+import { describe, expect, test } from 'vitest';
 import { buildFlags, buildUnloadGapFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
 
 function req(url: string, over: Partial<Request> = {}): Request {
@@ -283,4 +283,36 @@ test('unload gap: the advice depends on the network mode', () => {
   expect(stub).toContain('unloadGapIgnore');
   expect(stub).toContain('--network live --net-log');
   expect(gap({ ...input, networkMode: 'live' })[0]!.detail).toContain('not captured without --net-log');
+});
+
+describe('possibleRedirectHop', () => {
+  const failed = () => req('http://localhost:3000/r', { resourceType: 'fetch', outcome: 'failed', failure: 'net::ERR_FAILED' });
+  const redirectFlags = (request: Request, over: Partial<Parameters<typeof buildFlags>[0]> = {}) =>
+    buildFlags({
+      runId: request.runId,
+      networkMode: 'stub',
+      siteUrl: 'http://localhost:3000/',
+      requests: [request],
+      hits: [],
+      routedRequestIds: new Set([request.id]),
+      handedToChromium: new Set([request.id]),
+      ...over,
+    }).filter((f) => f.kind === 'possibleRedirectHop');
+
+  test('a request handed to Chromium that fails with no response is flagged', () => {
+    const request = failed();
+    const flags = redirectFlags(request);
+    expect(flags).toHaveLength(1);
+    expect(flags[0]?.recordIds).toEqual([request.id]);
+    expect(flags[0]?.detail).toContain('may have');
+  });
+
+  test('a response, another failure, a recorder-made failure or live mode is not flagged', () => {
+    const request = failed();
+    const response = { type: 'response', id: newId('response'), requestId: request.id, status: 302, setCookieNames: [] } as Response;
+    expect(redirectFlags(request, { responses: [response] })).toEqual([]);
+    expect(redirectFlags({ ...request, failure: 'net::ERR_ABORTED' })).toEqual([]);
+    expect(redirectFlags(request, { handedToChromium: new Set() })).toEqual([]);
+    expect(redirectFlags(request, { networkMode: 'live' })).toEqual([]);
+  });
 });

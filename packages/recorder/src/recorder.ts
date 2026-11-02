@@ -169,6 +169,7 @@ export class Recorder {
   private readonly extraRequests: Request[] = [];
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
+  private readonly handedToChromium = new Set<string>();
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
@@ -476,6 +477,7 @@ export class Recorder {
       await this.routeWithRedirectCheck(route, record);
       return;
     }
+    if (record) this.handedToChromium.add(record.id);
     await route.continue();
   }
 
@@ -567,6 +569,7 @@ export class Recorder {
   private async routeWithRedirectCheck(route: Route, first: Request): Promise<void> {
     const original = route.request();
     if (!this.isFetchableRequest(original)) {
+      this.handedToChromium.add(first.id);
       await route.continue();
       return;
     }
@@ -807,6 +810,8 @@ export class Recorder {
       hits,
       identity: this.run.identity,
       routedRequestIds: this.routed,
+      responses: this.responses,
+      handedToChromium: this.handedToChromium,
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));

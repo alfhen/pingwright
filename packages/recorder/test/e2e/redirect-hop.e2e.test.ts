@@ -38,9 +38,9 @@ afterAll(async () => {
 });
 
 // Playwright sometimes reports neither the redirect nor the hop that Chromium follows from a child frame (#180).
-// The first request then fails with no response and no redirectedTo(), so the recorder has nothing to walk.
-// What must hold in every run: the hop is flagged, or the first request is recorded as failed with no response.
-test(`a missed redirect hop leaves the failed first request as its only trace, in ${RUNS} runs`, { timeout: RUNS * 10_000 }, async () => {
+// The first request then fails with no response. What must hold in every run where the server saw the hop:
+// the hop is flagged stubBypass, or the first request carries possibleRedirectHop.
+test(`every redirect hop the server saw is flagged, or its first request is flagged possibleRedirectHop, in ${RUNS} runs`, { timeout: RUNS * 10_000 }, async () => {
   const unexplained: number[] = [];
   for (let run = 0; run < RUNS; run++) {
     serverSaw = [];
@@ -55,8 +55,8 @@ test(`a missed redirect hop leaves the failed first request as its only trace, i
     const hops = records.requests.filter((q) => q.url.includes('en=hop'));
     if (hops.some((h) => records.flags.some((f) => f.kind === 'stubBypass' && f.recordIds.includes(h.id)))) continue;
     const first = records.requests.find((q) => q.url === `http://localhost:${port}/r`);
-    const answered = first !== undefined && records.responses.some((r) => r.requestId === first.id);
-    if (hops.length > 0 || first?.outcome !== 'failed' || answered) unexplained.push(run);
+    const flagged = first !== undefined && records.flags.some((f) => f.kind === 'possibleRedirectHop' && f.recordIds.includes(first.id));
+    if (!flagged) unexplained.push(run);
   }
   expect(unexplained).toEqual([]);
 });
