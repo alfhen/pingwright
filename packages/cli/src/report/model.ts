@@ -60,6 +60,7 @@ export interface ReportModel {
   flags: FlagView[];
   /** Undefined on a record that holds no field names (schema version below 2). */
   fields: FieldsView[] | undefined;
+  skippedFields: { step: string; selector: string }[];
 }
 
 export const NOTE_TEXT: Record<ResultNote, string> = {
@@ -306,5 +307,6 @@ export function buildReportModel(records: RunRecords): ReportModel {
     expectations: records.results.map(expectationView),
     flags: flagViews(records),
     fields,
+    skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
   };
 }

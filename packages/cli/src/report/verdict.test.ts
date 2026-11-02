@@ -14,6 +14,7 @@ function model(expectations: ExpectationView[], leaks: { vendor: string; label?:
     expectations,
     flags: [],
     fields: [],
+    skippedFields: [],
   };
 }
 

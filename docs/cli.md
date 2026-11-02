@@ -85,9 +85,8 @@ Run identity: a run has a seeded fake identity (name, email, phone, address). In
 
 ```yaml
 identity:
+  country: SE
   phone: "+46701740620"
-identity:
-  country: DE
 ```
 
 `identity.country` picks the format of the generated name, address, zip and phone. A two-letter value is upper-cased. US, SE, GB and DE have a format. Any other country keeps US-shaped data under its label, and the run prints `Warning: identity.country DK has no local format; name, address, zip and phone are US-shaped`. Zips come from Faker patterns (GB from a UK postcode pattern) and can be real postcodes. A postcode alone is not personal data.

@@ -191,6 +191,16 @@ test('a version 1 record says fields were not recorded', () => {
   expect(html).toContain('not recorded (record schema version 1)');
 });
 
+test('a skipped optional field is listed with its step and escaped', () => {
+  const base = records();
+  const steps = [{ type: 'step' as const, id: newId('step'), runId, label: 'fill-1', skippedFields: ['#phone', '<b>x</b>'] }];
+  const html = renderReport(buildReportModel({ ...base, steps } as RunRecords));
+  expect(html).toContain('fill-1: SKIPPED FIELD <code>#phone</code> (not present)');
+  expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
+  expect(html).not.toContain('<b>x</b>');
+  expect(renderReport(buildReportModel(base))).not.toContain('SKIPPED FIELD');
+});
+
 let dir: string;
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'pw-report-'));
