@@ -1,6 +1,6 @@
 import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import type { PingwrightRecord, Result, Run, RunRecords } from '@pingwright/core';
+import { readRun, type PingwrightRecord, type Result, type Run, type RunRecords } from '@pingwright/core';
 import { parseTrackerList, type TrackerEntry } from '@pingwright/decoders';
 import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
 import {
@@ -14,6 +14,7 @@ import {
   TEST_GTM_ORIGIN_ENV,
   type GtmOverrideInput,
 } from '@pingwright/recorder';
+import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
 import { buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 
@@ -222,6 +223,17 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   const network = resolveNetwork(args, parsed, io);
   if (!network) return 2;
 
+  let baseline: BaselineFile | undefined;
+  if (args.baseline !== undefined) {
+    try {
+      baseline = await readBaseline(args.baseline);
+    } catch (error) {
+      if (!(error instanceof BaselineError)) throw error;
+      io.stderr(`${error.message}\n`);
+      return 2;
+    }
+  }
+
   let gtmOverride: GtmOverrideInput | undefined;
   try {
     parseTestGtmOrigin(process.env[TEST_GTM_ORIGIN_ENV]);
@@ -250,7 +262,15 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io,
   );
   if (!outcome.summary) return outcome.code;
+  let code: 0 | 1 = outcome.code === 1 ? 1 : 0;
+  if (baseline && outcome.path) {
+    outcome.summary.baseline = compareBaseline(baseline, await readRun(outcome.path));
+    if (outcome.summary.baseline.drift) {
+      code = 1;
+      outcome.summary.ok = false;
+    }
+  }
   const output = args.json ? `${JSON.stringify(outcome.summary, null, 2)}\n` : `${formatSummary(outcome.summary)}\n`;
   io.stdout(gtmOverride ? new Scrubber(gtmOverride.gtmAuth).text(output) : output);
-  return outcome.code;
+  return code;
 }

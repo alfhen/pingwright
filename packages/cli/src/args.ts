@@ -20,9 +20,17 @@ export interface RunArgs {
   netLog: boolean;
   autoconsentRules: string[];
   gtmOverride: string | undefined;
+  baseline: string | undefined;
   trackerList: string | undefined;
   vars: Record<string, string>;
   json: boolean;
+}
+
+export interface BaselineArgs {
+  command: 'baseline';
+  input: string;
+  output: string;
+  byPage: boolean;
 }
 
 export interface DiffArgs {
@@ -64,11 +72,12 @@ export interface SuiteArgs {
 export const PUBLISHED_VARIANT = 'published';
 const VARIANT_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
-export type Command = RunArgs | DiffArgs | ReportArgs | SuiteArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
+export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
 
 export const USAGE = `Usage:
   pingwright run <scenario.yml> --site <url> [options]
   pingwright diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
+  pingwright baseline save <run.jsonl> <baseline.json> [--by-page]
   pingwright report <run.jsonl | suite-dir> --html <out.html>
   pingwright suite <dir> --site <url> [--variant published] [--variant name=override.json] [options]
   pingwright install-browser
@@ -92,6 +101,7 @@ Options for run:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
+  --baseline <file>          Compare the hits with a baseline file and fail on drift
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
 `;
@@ -111,6 +121,7 @@ Options:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
+  --baseline <file>          Compare the hits with a baseline file made by "pingwright baseline save" and fail on drift
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
   -h, --help                 Show this help
@@ -154,6 +165,7 @@ export function parseCli(argv: string[]): Command {
         'autoconsent-rules': { type: 'string', multiple: true },
         'gtm-override': { type: 'string' },
         'tracker-list': { type: 'string' },
+        baseline: { type: 'string' },
         variant: { type: 'string', multiple: true },
         'with-handoff': { type: 'boolean' },
         var: { type: 'string', multiple: true },
@@ -180,6 +192,11 @@ export function parseCli(argv: string[]): Command {
   if (command === 'diff') {
     if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
     return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
+  }
+  if (command === 'baseline') {
+    if (rest[0] !== 'save') throw new UsageError('baseline needs a subcommand: save');
+    if (rest.length !== 3) throw new UsageError('baseline save takes a JSONL file and a baseline file');
+    return { command: 'baseline', input: rest[1]!, output: rest[2]!, byPage: values['by-page'] ?? false };
   }
   if (command === 'report') {
     if (rest.length !== 1) throw new UsageError('report takes one JSONL file or one suite directory');
@@ -212,7 +229,7 @@ export function parseCli(argv: string[]): Command {
     vars[entry.slice(0, eq)] = entry.slice(eq + 1);
   }
   if (command === 'suite') {
-    for (const flag of ['gtm-override', 'headed', 'net-log'] as const) {
+    for (const flag of ['baseline', 'gtm-override', 'headed', 'net-log'] as const) {
       if (values[flag] !== undefined) throw new UsageError(`--${flag} is not an option of suite`);
     }
     return {
@@ -245,6 +262,7 @@ export function parseCli(argv: string[]): Command {
     autoconsentRules: values['autoconsent-rules'] ?? [],
     gtmOverride: values['gtm-override'],
     trackerList: values['tracker-list'],
+    baseline: values.baseline,
     vars,
     json: values.json ?? false,
   };

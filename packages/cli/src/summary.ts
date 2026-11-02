@@ -1,6 +1,16 @@
 import type { Result, ResultNote, RunRecords, Severity } from '@pingwright/core';
 import { NOTE_TEXT } from './report/model.ts';
 
+export interface BaselineSummary {
+  /** A key or tuple is on one side only. */
+  drift: boolean;
+  added: number;
+  removed: number;
+  countChanges: number;
+  warnings: string[];
+  changes: string[];
+}
+
 export interface Summary {
   runId: string;
   path: string;
@@ -12,6 +22,8 @@ export interface Summary {
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
   results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; note?: ResultNote; evidence: string[] }[];
+  /** Set when the run was compared with a baseline. */
+  baseline?: BaselineSummary;
 }
 
 const EVIDENCE_CAP = 5;
@@ -139,10 +151,17 @@ export function formatSummary(summary: Summary): string {
       lines.push(`       evidence: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`);
     }
   }
+  if (summary.baseline) {
+    const b = summary.baseline;
+    lines.push(`Baseline: ${b.drift ? 'drift' : 'no drift'} (${b.added} added, ${b.removed} removed, ${b.countChanges} count changes)`);
+    for (const w of b.warnings) lines.push(`  Warning: ${w}`);
+    for (const c of b.changes) lines.push(`  ${c}`);
+  }
   const failed = summary.results.filter((r) => !passesGate(r)).length;
   const warned = summary.results.filter((r) => !r.pass && passesGate(r)).length;
   const warnings = warned > 0 ? ` with ${warned} warning${warned === 1 ? '' : 's'}` : '';
-  lines.push(failed === 0 ? `Result: pass${warnings}` : `Result: fail (${failed} of ${summary.results.length})${warnings}`);
+  if (failed === 0 && summary.baseline?.drift) lines.push(`Result: fail (baseline drift)${warnings}`);
+  else lines.push(failed === 0 ? `Result: pass${warnings}` :`Result: fail (${failed} of ${summary.results.length})${warnings}`);
   lines.push(`Record: ${summary.path}`);
   return lines.join('\n');
 }

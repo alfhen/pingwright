@@ -376,7 +376,7 @@ Every run also gets built-in checks. `unknownDestination` fails the run when a r
 
 Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`), `transport`, `host`, `outcome` and `params.*`. `host` is a `host:port` or a bare hostname, matched exactly and with case. `ids.hashes` is true when any hashed ID is present; `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` test one parameter.
 
-`pingwright diff a b` groups hits by vendor and event and reports added, removed and changed hits, including consent and ID changes.
+`pingwright diff a b` groups hits by vendor and event and reports added, removed and changed hits, including consent and ID changes. `pingwright baseline save` keeps one run as names and counts (keys, consent and ID-presence tuples, hit counts) and `run --baseline` fails on drift, a key or tuple on one side only. A baseline compares sets of tuples and `diff` compares the hits of a key in order, so a reordering is not drift and a new tuple in a shared key is.
 
 ## 12. Interfaces
 

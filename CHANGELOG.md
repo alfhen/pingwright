@@ -11,6 +11,7 @@
 <!-- U03 -->
 
 <!-- V01 -->
+- `pingwright baseline save` keeps the shape of a run as names and counts, and `run --baseline` fails with exit 1 when a key or tuple appears or disappears. A missing or invalid baseline exits 2. (#359)
 
 <!-- V02 -->
 

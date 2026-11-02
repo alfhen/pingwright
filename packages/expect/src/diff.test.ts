@@ -1,6 +1,6 @@
 import { newId, type ConsentEpoch, type Flag, type Hit, type Request, type RunRecords, type Step } from '@pingwright/core';
 import { expect, test } from 'vitest';
-import { diffRuns } from './diff.ts';
+import { diffRuns, diffShapes, hitShape } from './diff.ts';
 
 const state = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' } as const;
 const consent = { ...state, raw: { gcs: 'G100' } };
@@ -238,4 +238,91 @@ test('warns when record schema versions differ,treating a missing version as 0',
   expect(d.warnings).toHaveLength(1);
   expect(d.warnings[0]).toContain('0 and 1');
   expect(diffRuns(makeRun(1), makeRun(1)).warnings).toEqual([]);
+});
+
+const granted = { ...consent, analytics: 'granted' as const };
+const shapeOf = (r: RunRecords, byPage = false) => hitShape(r, { byPage });
+
+function pair(hitsA: Partial<Hit>[], hitsB: Partial<Hit>[]): [RunRecords, RunRecords] {
+  const a = makeRun();
+  const b = makeRun();
+  for (const h of hitsA) addHit(a, h);
+  for (const h of hitsB) addHit(b, h);
+  return [a, b];
+}
+
+test('hitShape groups hits by key and tuple with a count, and holds no ID, time or URL', () => {
+  const run = makeRun();
+  addHit(run, { t: 5, ids: { client_id: true, user_id: false } });
+  addHit(run, { t: 6, ids: { client_id: true } });
+  addHit(run, { t: 7, consent: granted });
+  const [shape] = shapeOf(run);
+  expect(shape!.key).toEqual({ epoch: 'undecided', vendor: 'ga4', event: 'page_view' });
+  expect(shape!.tuples).toHaveLength(2);
+  expect(shape!.tuples.map((t) => t.count).sort()).toEqual([1, 2]);
+  expect(shape!.tuples.find((t) => t.count === 2)).toMatchObject({ ids: ['client_id'], consent: { analytics: 'denied', gcs: 'G100', gcd: '' } });
+  const text = JSON.stringify(shape);
+  for (const leak of ['hit_', 'req_', 'localhost']) expect(text).not.toContain(leak);
+});
+
+test('diffShapes finds no drift in the same run', () => {
+  const [a, b] = pair([{}, { vendor: 'meta', event: 'PageView' }], [{}, { vendor: 'meta', event: 'PageView' }]);
+  expect(diffShapes(shapeOf(a), shapeOf(b))).toEqual({ added: [], removed: [], countChanges: [], drift: false });
+});
+
+test('a key on one side only is drift, and is also added or removed in diffRuns', () => {
+  const [a, b] = pair([{}], [{}, { event: 'add_to_cart' }]);
+  const d = diffShapes(shapeOf(a), shapeOf(b));
+  expect(d.drift).toBe(true);
+  expect(d.added).toMatchObject([{ key: { event: 'add_to_cart' }, wholeKey: true }]);
+  expect(diffRuns(a, b).added.map((h) => h.key.event)).toEqual(['add_to_cart']);
+  expect(diffShapes(shapeOf(b), shapeOf(a)).removed).toMatchObject([{ key: { event: 'add_to_cart' }, wholeKey: true }]);
+});
+
+test('a consent change is one tuple removed and one added', () => {
+  const [a, b] = pair([{}], [{ consent: granted }]);
+  const d = diffShapes(shapeOf(a), shapeOf(b));
+  expect(d.drift).toBe(true);
+  expect(d.removed).toHaveLength(1);
+  expect(d.added).toHaveLength(1);
+  expect(d.added[0]!.wholeKey).toBe(false);
+});
+
+test('a change in raw gcs, or in ID presence, is drift', () => {
+  const [a, b] = pair([{}], [{ consent: { ...consent, raw: { gcs: 'G111' } } }]);
+  expect(diffShapes(shapeOf(a), shapeOf(b)).drift).toBe(true);
+  const [c, d] = pair([{ ids: { client_id: true } }], [{ ids: {} }]);
+  expect(diffShapes(shapeOf(c), shapeOf(d)).drift).toBe(true);
+});
+
+test('a count-only change is listed and is not drift', () => {
+  const [a, b] = pair([{}], [{}, {}, {}]);
+  const d = diffShapes(shapeOf(a), shapeOf(b));
+  expect(d.drift).toBe(false);
+  expect(d.countChanges).toMatchObject([{ a: 1, b: 3 }]);
+  expect(diffRuns(a, b).countMismatches).toHaveLength(1);
+});
+
+test('a new tuple inside a key on both sides is drift, although diffRuns shows a count mismatch and one added hit', () => {
+  const [a, b] = pair([{ t: 1 }], [{ t: 1 }, { t: 2, consent: granted }]);
+  const shape = diffShapes(shapeOf(a), shapeOf(b));
+  expect(shape.drift).toBe(true);
+  expect(shape.added).toMatchObject([{ wholeKey: false }]);
+  const runs = diffRuns(a, b);
+  expect(runs.countMismatches).toHaveLength(1);
+  expect(runs.added).toHaveLength(1);
+  expect(runs.changed).toEqual([]);
+});
+
+test('reordered tuples in a key are changed in diffRuns and are not drift', () => {
+  const [a, b] = pair([{ t: 1 }, { t: 2, consent: granted }], [{ t: 1, consent: granted }, { t: 2 }]);
+  expect(diffRuns(a, b).changed).toHaveLength(2);
+  expect(diffShapes(shapeOf(a), shapeOf(b)).drift).toBe(false);
+});
+
+test('byPage adds the page path to the shape key', () => {
+  const [a, b] = pair([{ page: 'http://localhost/a' }], [{ page: 'http://localhost/b' }]);
+  expect(shapeOf(a, true)[0]!.key.page).toBe('/a');
+  expect(diffShapes(shapeOf(a, true), shapeOf(b, true)).drift).toBe(true);
+  expect(diffShapes(shapeOf(a), shapeOf(b)).drift).toBe(false);
 });
