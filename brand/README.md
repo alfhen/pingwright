@@ -1,6 +1,6 @@
 # Brand
 
-The Pingwright mark is one tracking pixel inside four corner brackets. The pixel sits 4 units up and to the right of centre, as if it was just caught.
+The Tagreeve mark is one tracking pixel inside four corner brackets. The pixel sits 4 units up and to the right of centre, as if it was just caught.
 
 ## Files
 
@@ -31,4 +31,4 @@ The Pingwright mark is one tracking pixel inside four corner brackets. The pixel
 
 ## Wordmark
 
-The wordmark is "pingwright" in Jost Medium, converted to outlines. The tagline in the social preview is Jost Regular. Jost is by Owen Earl (indestructible type\*) under the SIL Open Font License 1.1. The repo holds only the outlines, not the font.
+The wordmark is "tagreeve" in Jost Medium, converted to outlines. The tagline in the social preview is Jost Regular. Jost is by Owen Earl (indestructible type\*) under the SIL Open Font License 1.1. The repo holds only the outlines, not the font. `node scripts/wordmark.ts` redraws them from the Jost file in `@fontsource/jost`, and the social preview PNG is rendered from its SVG.

@@ -1,12 +1,12 @@
 {
-  "name": "@pingwright/expect",
+  "name": "@tagreeve/expect",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pingwright/core": "workspace:*",
-    "@pingwright/decoders": "workspace:*",
+    "@tagreeve/core": "workspace:*",
+    "@tagreeve/decoders": "workspace:*",
     "tldts": "7.4.18",
     "yaml": "2.9.1"
   }

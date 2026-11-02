@@ -1,4 +1,4 @@
-import { MAX_POST_DATA, type Hit, type Request } from '@pingwright/core';
+import { MAX_POST_DATA, type Hit, type Request } from '@tagreeve/core';
 import { isIdentifierField } from './identifiers.ts';
 
 /** A field name and its value. The value is read to classify the field and is never stored. */

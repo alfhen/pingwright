@@ -1,5 +1,5 @@
 import { runInNewContext } from 'node:vm';
-import { newId } from '@pingwright/core';
+import { newId } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript } from './datalayer.ts';
 

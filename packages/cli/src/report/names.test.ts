@@ -1,4 +1,4 @@
-import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
+import { trackerVendorKeys, vendorKeys } from '@tagreeve/decoders';
 import { expect, test } from 'vitest';
 import { byVendorName, vendorLabel, vendorName, VENDOR_NAMES } from './names.ts';
 

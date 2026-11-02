@@ -62,16 +62,16 @@ importers:
 
   packages/cli:
     dependencies:
-      '@pingwright/core':
+      '@tagreeve/core':
         specifier: workspace:*
         version: link:../core
-      '@pingwright/decoders':
+      '@tagreeve/decoders':
         specifier: workspace:*
         version: link:../decoders
-      '@pingwright/expect':
+      '@tagreeve/expect':
         specifier: workspace:*
         version: link:../expect
-      '@pingwright/recorder':
+      '@tagreeve/recorder':
         specifier: workspace:*
         version: link:../recorder
 
@@ -80,11 +80,11 @@ importers:
       '@duckduckgo/autoconsent':
         specifier: 16.51.0
         version: 16.51.0
-      '@pingwright/core':
+      '@tagreeve/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@pingwright/fixture-site':
+      '@tagreeve/fixture-site':
         specifier: workspace:*
         version: link:../../fixtures/site
 
@@ -96,16 +96,16 @@ importers:
 
   packages/decoders:
     dependencies:
-      '@pingwright/core':
+      '@tagreeve/core':
         specifier: workspace:*
         version: link:../core
 
   packages/expect:
     dependencies:
-      '@pingwright/core':
+      '@tagreeve/core':
         specifier: workspace:*
         version: link:../core
-      '@pingwright/decoders':
+      '@tagreeve/decoders':
         specifier: workspace:*
         version: link:../decoders
       tldts:
@@ -117,16 +117,16 @@ importers:
 
   packages/recorder:
     dependencies:
-      '@pingwright/consent':
+      '@tagreeve/consent':
         specifier: workspace:*
         version: link:../consent
-      '@pingwright/core':
+      '@tagreeve/core':
         specifier: workspace:*
         version: link:../core
-      '@pingwright/decoders':
+      '@tagreeve/decoders':
         specifier: workspace:*
         version: link:../decoders
-      '@pingwright/expect':
+      '@tagreeve/expect':
         specifier: workspace:*
         version: link:../expect
       playwright:
@@ -136,7 +136,7 @@ importers:
         specifier: 7.4.18
         version: 7.4.18
     devDependencies:
-      '@pingwright/fixture-site':
+      '@tagreeve/fixture-site':
         specifier: workspace:*
         version: link:../../fixtures/site
 

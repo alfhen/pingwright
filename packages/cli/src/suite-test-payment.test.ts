@@ -56,8 +56,8 @@ function recorder() {
 
 async function withAllowlist<T>(hosts: string[], body: () => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), 'pw-suite-xdg-'));
-  await mkdir(join(root, 'pingwright'));
-  await writeFile(join(root, 'pingwright', 'test-payment-hosts.json'), JSON.stringify(hosts), { mode: 0o600 });
+  await mkdir(join(root, 'tagreeve'));
+  await writeFile(join(root, 'tagreeve', 'test-payment-hosts.json'), JSON.stringify(hosts), { mode: 0o600 });
   const before = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = root;
   try {

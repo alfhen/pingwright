@@ -68,7 +68,7 @@ export interface Run {
   browser: { name: string; version: string };
   networkMode: NetworkMode;
   gtmOverride: GtmOverrideRecord | null;
-  /** Set when `PINGWRIGHT_TEST_GTM_ORIGIN` replaced the GTM origin in gtm.js fetches. */
+  /** Set when `TAGREEVE_TEST_GTM_ORIGIN` replaced the GTM origin in gtm.js fetches. */
   testGtmOrigin?: string;
   containerVersions: Record<string, string>;
   identity: Identity | null;
@@ -80,7 +80,7 @@ export interface Run {
   variant?: string;
   /** The viewport that was asked for. Absent means the Playwright default. */
   viewport?: { width: number; height: number };
-  /** Set when `PINGWRIGHT_TEST_LOOPBACK_IS_HOSTED` made the `fill`, `select` and `evaluate` guards treat loopback hosts as hosted. */
+  /** Set when `TAGREEVE_TEST_LOOPBACK_IS_HOSTED` made the `fill`, `select` and `evaluate` guards treat loopback hosts as hosted. */
   testLoopbackHosted?: true;
 }
 
@@ -297,7 +297,7 @@ export interface InvalidReport {
   body: string;
 }
 
-export type PingwrightRecord =
+export type TagreeveRecord =
   | Run
   | Step
   | Request
@@ -312,4 +312,4 @@ export type PingwrightRecord =
   | CollectorReport
   | InvalidReport;
 
-export type RecordType = PingwrightRecord['type'];
+export type RecordType = TagreeveRecord['type'];

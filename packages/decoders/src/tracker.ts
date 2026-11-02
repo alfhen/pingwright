@@ -1,4 +1,4 @@
-import { isLibraryLoadPath, type Hit, type Request } from '@pingwright/core';
+import { isLibraryLoadPath, type Hit, type Request } from '@tagreeve/core';
 import { isSandboxPageUrl } from './sandbox.ts';
 import { defaultHitId, type NewHitId } from './decoder.ts';
 import { bodyComplete, bodyEntries, queryEntries, withFields } from './fields.ts';

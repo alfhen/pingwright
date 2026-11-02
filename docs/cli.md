@@ -3,32 +3,32 @@
 ## Install
 
 ```bash
-npm i -g pingwright
-pingwright install-browser
+npm i -g tagreeve@next
+tagreeve install-browser
 ```
 
-`npm i -g pingwright` installs `0.3.0`. Pingwright needs Node 22.18 or later.
+`npm i -g tagreeve@next` installs the newest 0.4 release candidate. The first Tagreeve release is 0.4.0-rc.1. Versions up to `0.3.0` were published under the old name, as the README explains. Tagreeve needs Node 22.18 or later.
 
 You can also install a release from its git tag:
 
 ```bash
-npm i -g --install-links github:alfhen/pingwright#v<version>
+npm i -g --install-links github:alfhen/tagreeve#v<version>
 ```
 
-`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes. Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
+Tags before `v0.4.0-rc.1` install the old command name, not `tagreeve`. `--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes. Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 Or build a tarball in a checkout and install that:
 
 ```bash
 pnpm install && pnpm build && pnpm pack
-npm i -g ./pingwright-<version>.tgz
+npm i -g ./tagreeve-<version>.tgz
 ```
 
-`install-browser` runs the Playwright CLI that ships with Pingwright, so the Chromium revision matches.
+`install-browser` runs the Playwright CLI that ships with Tagreeve, so the Chromium revision matches.
 
 ## Commands
 
-### `pingwright run <scenario.yml> --site <url>`
+### `tagreeve run <scenario.yml> --site <url>`
 
 Plays the scenario in Chromium, records every request, decodes the hits, checks the expectations and writes one JSONL file.
 
@@ -45,11 +45,11 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
 | `--tracker-list <file>` | Adds tracker entries to the built-in list. See below. |
-| `--baseline <file>` | Compares the hits of the run with a baseline file made by `pingwright baseline save`, after the expectations. A key or tuple on one side only is drift and makes the exit code 1. A missing or invalid file exits 2 before the browser starts. See `pingwright baseline`. |
+| `--baseline <file>` | Compares the hits of the run with a baseline file made by `tagreeve baseline save`, after the expectations. A key or tuple on one side only is drift and makes the exit code 1. A missing or invalid file exits 2 before the browser starts. See `tagreeve baseline`. |
 | `--var <k=v>` | Overrides a variable the scenario declares under `vars`. A name the scenario does not declare exits 2. Can be repeated. |
 | `--json` | Prints a JSON summary on stdout instead of the text summary. |
 
-`pingwright run --help` prints this command's own help.
+`tagreeve run --help` prints this command's own help.
 
 The text summary lists hits per vendor and event, consent epochs, flags (`unknownDestination` and `firstPartySubdomain` grouped by host, and `sandboxPageUrl` grouped by vendor, each with a count and up to three example paths, or one for `sandboxPageUrl`; `possibleRealData` is one line with a count; the `--json` summary keeps every flag), each expectation with PASS, FAIL or WARN (failures show the message; every expectation shows up to five evidence IDs and a count of the rest), and the path of the JSONL file. When a result has a note, a `note:` line with fixed text follows its `PASS`, `WARN` or `FAIL` line. The `--json` summary has the note code in `note` on that result. The text holds no field names or values. The `result` records are appended to that file.
 
@@ -84,7 +84,7 @@ A `fill` entry can be optional: `"input[name=phone]": { value: phone, optional: 
 
 `select` chooses an option of a `<select>`: `select: { "select[name=countryCode]": DE }`. It matches the option value first, then the option label. Quote a number (`"01"`), because YAML drops leading zeros and the step is refused otherwise. After the change it reads the select back. If the option is not selected, the step fails with `value not applied (still: <option label>)`. A select that is a card field (for example `autocomplete=cc-exp-month`) fails with the same handoff message as `fill` on a site that is not on this machine. The chosen option value and label join the run identity as extra values under the rule below, so a hashed country can match in `identity.hashesMatch`. `fill` on a select still works as before.
 
-Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. A value joins the run identity only after it is typed into a field that is not a card or password field, whatever the selector: Pingwright checks the field when it fills it. If the run stops before that, the value is not in the run record. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
+Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. A value joins the run identity only after it is typed into a field that is not a card or password field, whatever the selector: Tagreeve checks the field when it fills it. If the run stops before that, the value is not in the run record. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
 
 ```yaml
 identity:
@@ -101,11 +101,11 @@ Use fictional numbers and `example.com` emails only. A phone number inside one o
 - Germany: 030 23125 000 to 999, from the [Bundesnetzagentur drama numbers](https://www.bundesnetzagentur.de/DE/Fachthemen/Telekommunikation/Nummerierung/DramaNumbers/artikel.html).
 - UK, from the [Ofcom drama numbers](https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama): 07700 900000 to 900999, 020 7946 0000 to 0999, 01632 960000 to 960999, and 0xxx 496 0000 to 0999 for Leeds, Sheffield, Nottingham, Leicester, Bristol, Reading, Birmingham, Edinburgh, Glasgow, Liverpool and Manchester.
 
-The warning covers numbers written as `+` and digits, and the common US shapes. Values that a person types during a `handoff` step are unknown to Pingwright. To have them count as the run identity, declare the same value under `identity`, or the run reports their hashes as `possibleRealData`.
+The warning covers numbers written as `+` and digits, and the common US shapes. Values that a person types during a `handoff` step are unknown to Tagreeve. To have them count as the run identity, declare the same value under `identity`, or the run reports their hashes as `possibleRealData`.
 
 `identity.hashesMatch` reads hashed email and phone values from Meta, Pinterest and from the server container's data client (`sgtm`). On an `sgtm` hit it reads `user_data` (`email_address`, `phone_number`, `first_name`, `last_name`, `street`, `city`, `postal_code`, `country`, at the top level or under `address`) and shows each as the hit param `user_data.<field>`.
 
-When a hit carries no identity field at all, the message says so, and that matching done server side, for example by a conversions API, is not visible to Pingwright. A hit with fields that do not match keeps `Not matching: <field>`.
+When a hit carries no identity field at all, the message says so, and that matching done server side, for example by a conversions API, is not visible to Tagreeve. A hit with fields that do not match keeps `Not matching: <field>`.
 
 `identity.hashesMatch` cannot be in the same entry as `body.has` or `body.only`. Use two entries.
 
@@ -122,7 +122,7 @@ steps:
 
 `addToCart` clicks the selector and then needs proof that the cart changed: a cart request, or an `add_to_cart` dataLayer event. Cart requests it knows are a Shopify POST to `/cart/add`, `/cart/change` or `/cart/update` and a GET of `/cart/add?id=`, a POST to `/cart` (Hydrogen), Magento `/checkout/cart/add/...`, WooCommerce `?wc-ajax=add_to_cart` and a Storefront `cartCreate` or `cartLinesAdd` mutation. A request counts once its response arrived with a 2xx or 3xx status (a form POST often answers with a redirect). A request that is still pending, failed or got a 4xx or 5xx response does not count. Without proof the step fails with "click did not add to cart", for example when the click only opened a variant picker. For a cart endpoint it does not know, set the `cartRequest` option, or use a plain `click` step, which checks nothing. Through the library, `cartCheck` and `cartTimeoutMs` in the play options replace the check and the 5 s wait.
 
-A `handoff` step waits for a person. In the headed window a small pill with the handoff text and a **Done** button sits in a corner of the top document. Click Done, or press Enter in the terminal: the first of the two ends the wait. The pill is a closed shadow root on one element, `#pingwright-handoff`, installed by a context init script. It is not drawn in sandboxed iframes, it survives navigations during the handoff, and it makes no network request. While the wait lasts, the terminal prints `Still waiting for the handoff: <text>` every 60 seconds. The host is a child of `<html>`, a sibling of `<body>`, and its styles are inline with `!important`, so `body { display: none }` does not hide it. The pill is part of the page, so a page can still hide it (a script that edits the element, or a rule such as `html { display: none }`), and a capture-phase listener on `window` or `document` sees a click on it. The pill is at most the viewport width minus 32 px wide: a long text is cut with an ellipsis and the Done button stays whole. It does not move when a page control is under it, but you can drag it. Enter in the terminal is the fallback when the pill is hidden.
+A `handoff` step waits for a person. In the headed window a small pill with the handoff text and a **Done** button sits in a corner of the top document. Click Done, or press Enter in the terminal: the first of the two ends the wait. The pill is a closed shadow root on one element, `#tagreeve-handoff`, installed by a context init script. It is not drawn in sandboxed iframes, it survives navigations during the handoff, and it makes no network request. While the wait lasts, the terminal prints `Still waiting for the handoff: <text>` every 60 seconds. The host is a child of `<html>`, a sibling of `<body>`, and its styles are inline with `!important`, so `body { display: none }` does not hide it. The pill is part of the page, so a page can still hide it (a script that edits the element, or a rule such as `html { display: none }`), and a capture-phase listener on `window` or `document` sees a click on it. The pill is at most the viewport width minus 32 px wide: a long text is cut with an ellipsis and the Done button stays whole. It does not move when a page control is under it, but you can drag it. Enter in the terminal is the fallback when the pill is hidden.
 
 A handoff can end by itself. Write it as a mapping:
 
@@ -148,10 +148,10 @@ Payments and log-ins are handoff steps on any host other than `localhost`, `127.
 - wait: { url: "*/thank-you*" }
 ```
 
-The providers are `shopify-bogus` (cards `1`, `2`, `3`), `shopify-test` (the test card numbers in Shopify's docs) and `fixture` (Pingwright's own fixture shop, loopback sites only). Any other card value is a scenario error. Expiry and CVC are fixed values from the provider's docs. The name on the card is the run's fake name. These checks all pass before anything is typed, or the run exits 2 or the step fails:
+The providers are `shopify-bogus` (cards `1`, `2`, `3`), `shopify-test` (the test card numbers in Shopify's docs) and `fixture` (Tagreeve's own fixture shop, loopback sites only). Any other card value is a scenario error. Expiry and CVC are fixed values from the provider's docs. The name on the card is the run's fake name. These checks all pass before anything is typed, or the run exits 2 or the step fails:
 
 1. `--allow-test-payment <host>` names the exact `--site` host. A scenario with a `payment` step and no flag, or with a flag for another host, exits 2 before the browser starts.
-2. The host is in the user-level file `$XDG_CONFIG_HOME/pingwright/test-payment-hosts.json`, or `~/.config/pingwright/test-payment-hosts.json`. It is a JSON array of exact hosts. The file must not be writable by group or others. Otherwise the run exits 2 before the browser starts.
+2. The host is in the user-level file `$XDG_CONFIG_HOME/tagreeve/test-payment-hosts.json`, or `~/.config/tagreeve/test-payment-hosts.json`. It is a JSON array of exact hosts. The file must not be writable by group or others. Otherwise the run exits 2 before the browser starts.
 3. At the step, the page is on the allowed host, the provider's test-mode marker is visible, and each card frame is served from the provider's card host. Otherwise the step fails with `test mode not detected` or `card frame not found`.
 
 The step has its own code path. `fill`, `select` and `evaluate` still refuse card fields on hosted pages. From the first key until the run ends, every request that is not a tracking hit is stored without its body and query values (`redacted: handoff`), including the card submit that the later Pay click sends. No card number, expiry or CVC goes into a record, a message, the summary or the report. The step record has `payment: { provider, mode: "test" }`. The text summary prints `TEST PAYMENT: <provider> on <host>`, and `--json` has `testPayment: { provider, host }`. The gates stop mistakes. They do not stop a person who sets all three on purpose.
@@ -187,7 +187,7 @@ Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not
 | `meta` | `id`, `ev`, `dl`, `rl`, `if`, `ts`, `sw`, `sh`, `v`, `r`, `ec`, `o`, `fbp`, `it`, `coo`, `rqm`, `ler`, `cdl`, `plt`, `pmd[*]`, `expv2[*]`, `cs_est`, `a` |
 | `sgtm` | `v`, `tid`, `event`, `en`, `dtdc` |
 
-The lists are exported from `@pingwright/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
+The lists are exported from `@tagreeve/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
 
 ### Rules on cookies
 
@@ -214,7 +214,7 @@ In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for th
 
 ### GTM override
 
-`--gtm-override <file>` takes JSON with the values of a GTM preview. Pingwright never calls the GTM API, so you supply them.
+`--gtm-override <file>` takes JSON with the values of a GTM preview. Tagreeve never calls the GTM API, so you supply them.
 
 ```json
 {"container": "GTM-XXXXXXX", "gtmAuth": "…", "gtmPreview": "env-12", "expectedTags": [{"id": "45", "name": "GA4 - Purchase"}]}
@@ -222,17 +222,17 @@ In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for th
 
 `container` must match `^GTM-[A-Z0-9]+$`. `expectedTags` is stored in the run record and not evaluated, because nothing yet reports which tags fired. See [design §8.5](design.md#_8-5-what-the-server-container-sends-on).
 
-When the page requests `https://www.googletagmanager.com/gtm.js?id=<container>`, Pingwright fetches `gtm.js?id=<container>&gtm_auth=<gtmAuth>&gtm_preview=<gtmPreview>&gtm_cookies_win=x` and answers the page with that build. The page's own request URL is not changed. If the page's request has `l=<name>` (a data layer that is not `dataLayer`) or `gtm_debug`, they are copied to the preview fetch. The override applies to that run in the test browser only. It applies when the page loads the container script itself, and when a Stape-style custom loader fetches it. In the loader case the loader script stays in place and its request is answered with the preview build; the record says `way: "loader"`. A real Stape custom loader script has a URL like `https://load.<sgtm host>/<random>.js?<key>=<obfuscated>`, and nothing in the URL names the container. For a cross-origin script request with a `.js` path and a query to the site's registrable domain or a `firstPartyHosts` host (on a loopback site, loopback hosts only), Pingwright fetches the script and, if its body holds the container ID, answers with the preview build instead. The record says `way: "loader"`, with a `loses` note, because the loader script is replaced. Query values are never listed in messages, since they may hold per-site keys. That fetch runs in Playwright's request client, not Chromium, so it uses the Playwright cookie jar and stores any `Set-Cookie` from the script response. A script that answers with a redirect is not fetched further: Chromium follows it, and a hop to a collection endpoint is stubbed or flagged `stubBypass` as usual. Scripts on other hosts are left to Chromium. Scripts served from the site's own origin are neither sniffed nor listed.
+When the page requests `https://www.googletagmanager.com/gtm.js?id=<container>`, Tagreeve fetches `gtm.js?id=<container>&gtm_auth=<gtmAuth>&gtm_preview=<gtmPreview>&gtm_cookies_win=x` and answers the page with that build. The page's own request URL is not changed. If the page's request has `l=<name>` (a data layer that is not `dataLayer`) or `gtm_debug`, they are copied to the preview fetch. The override applies to that run in the test browser only. It applies when the page loads the container script itself, and when a Stape-style custom loader fetches it. In the loader case the loader script stays in place and its request is answered with the preview build; the record says `way: "loader"`. A real Stape custom loader script has a URL like `https://load.<sgtm host>/<random>.js?<key>=<obfuscated>`, and nothing in the URL names the container. For a cross-origin script request with a `.js` path and a query to the site's registrable domain or a `firstPartyHosts` host (on a loopback site, loopback hosts only), Tagreeve fetches the script and, if its body holds the container ID, answers with the preview build instead. The record says `way: "loader"`, with a `loses` note, because the loader script is replaced. Query values are never listed in messages, since they may hold per-site keys. That fetch runs in Playwright's request client, not Chromium, so it uses the Playwright cookie jar and stores any `Set-Cookie` from the script response. A script that answers with a redirect is not fetched further: Chromium follows it, and a hop to a collection endpoint is stubbed or flagged `stubBypass` as usual. Scripts on other hosts are left to Chromium. Scripts served from the site's own origin are neither sniffed nor listed.
 
-To replace a loader yourself, add `"loader": {"replace": "<script URL>"}` to the override file. The request for exactly that URL is then answered with the preview build, and the record says `way: "replace"`, with a `loses` note. To reuse one rule across stores, add `"loader": {"match": "<regex>"}` instead: any script request (resource type `script` only) whose URL matches the regular expression is answered the same way and recorded as `way: "replace"`. On the replace way, `l` and `gtm_debug` are copied only if the replaced script URL carries them. Each match is listed in `run.gtmOverride.applied` as `{way, url, status}`. Passing `gtm_auth` and `gtm_preview` through the loader is not built. Pingwright also sniffs unknown loader scripts for the container ID, but only when the override file has no `loader` key.
+To replace a loader yourself, add `"loader": {"replace": "<script URL>"}` to the override file. The request for exactly that URL is then answered with the preview build, and the record says `way: "replace"`, with a `loses` note. To reuse one rule across stores, add `"loader": {"match": "<regex>"}` instead: any script request (resource type `script` only) whose URL matches the regular expression is answered the same way and recorded as `way: "replace"`. On the replace way, `l` and `gtm_debug` are copied only if the replaced script URL carries them. Each match is listed in `run.gtmOverride.applied` as `{way, url, status}`. Passing `gtm_auth` and `gtm_preview` through the loader is not built. Tagreeve also sniffs unknown loader scripts for the container ID, but only when the override file has no `loader` key.
 
 The run fails with exit 2 if no request matched ("no container request matched"; the message lists the cross-origin script URLs it checked, without query values, and suggests `loader.replace` or `loader.match`), or if the preview fetch did not return 200, or if `loader.replace` is set and the page never requested that URL. A 404 usually means the environment has no version. The JSONL is still written, and `run.gtmOverride.applied` lists each match with its status.
 
 The `gtmAuth` value is removed from the record and from all output, in any form: plain, URL-encoded, or inside nested URL-encoding and base64 layers, up to 8 layers (each URL-decode, base64 decode or query-value step counts as one). A base64 value glued to unseparated text, such as `abc<base64>xyz`, may not be decoded. A request URL parameter, a request body, a result record, a step error or any other string that holds it in any decoded form becomes `[redacted]`. The record keeps `gtmAuth: "[redacted]"`.
 
-Tests can set `PINGWRIGHT_TEST_GTM_ORIGIN` to a loopback origin (`http://localhost`, `http://127.0.0.1` or `http://[::1]`, with an optional port, and no path) to fetch every `gtm.js` from there instead of from `www.googletagmanager.com`. Any other value is an error. The run records it as `testGtmOrigin` and the CLI prints a warning. It is not read from the scenario or the override file.
+Tests can set `TAGREEVE_TEST_GTM_ORIGIN` to a loopback origin (`http://localhost`, `http://127.0.0.1` or `http://[::1]`, with an optional port, and no path) to fetch every `gtm.js` from there instead of from `www.googletagmanager.com`. Any other value is an error. The run records it as `testGtmOrigin` and the CLI prints a warning. It is not read from the scenario or the override file.
 
-### `pingwright diff <a.jsonl> <b.jsonl>`
+### `tagreeve diff <a.jsonl> <b.jsonl>`
 
 Compares two runs of the same scenario, for example one with a GTM override and one without. It does not open a browser.
 
@@ -244,9 +244,9 @@ Compares two runs of the same scenario, for example one with a GTM override and 
 
 The text summary is grouped by consent epoch label, then vendor, then event. Under each event it lists hits that were added (only in the second run), removed (only in the first), and changed. A changed hit is one that pairs up but differs in a consent field, in `gcs` or `gcd`, or in whether an ID is present. Hits are paired by epoch label, vendor and event (and the page path with `--by-page`), in time order: the first hit of a group in one run with the first in the other, and so on. The step is not part of the match, so a hit that lands in a different step in the two runs still pairs. Each line shows the step of the hit. A changed line shows `step "a" -> "b"` when the step differs, and with `--by-page` it shows `recorded as <page a> -> <page b>` when either raw page differs from the key. A hit left over in a group after pairing is reported as added or removed. When a group has a different number of hits in the two runs, its event also gets a line such as `count 2 -> 1 (pairing by order)`, which with `--by-page` also shows the page, because the pairing may then match the wrong hits. A line at the end lists flag counts that changed per host.
 
-Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missing, is not JSONL, or does not start with a `run` record exits 2 with a message that names the file. A run record with a newer schema version than Pingwright knows prints a warning and the diff goes on. A file whose last line is cut off (a crashed run) is read up to that line, and the diff prints a warning that names the file and the line.
+Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missing, is not JSONL, or does not start with a `run` record exits 2 with a message that names the file. A run record with a newer schema version than Tagreeve knows prints a warning and the diff goes on. A file whose last line is cut off (a crashed run) is read up to that line, and the diff prints a warning that names the file and the line.
 
-### `pingwright baseline save <run.jsonl> <baseline.json>`
+### `tagreeve baseline save <run.jsonl> <baseline.json>`
 
 Writes the shape of one run to a small file you can commit, so a later run can be checked for drift in CI. It does not open a browser.
 
@@ -259,19 +259,19 @@ The file holds `baselineSchemaVersion`, the `scenario` name, the `site` host (no
 Then check a new run against it:
 
 ```bash
-pingwright run checkout.yml --site https://shop.example --baseline baselines/checkout.json
+tagreeve run checkout.yml --site https://shop.example --baseline baselines/checkout.json
 ```
 
 Drift is a key or tuple that is on one side only. A changed consent field or ID presence shows as one tuple removed and one added. A count change is listed and is not drift. The summary gets a `Baseline` block, and the `--json` summary gets a `baseline` field with `drift`, the counts of added, removed and count changes, `warnings` and the `changes` lines. Drift sets `ok` to false and the exit code to at least 1. A baseline from another scenario name or another site host prints a warning and the compare goes on. The run is shaped as the baseline was, so `--by-page` is the file's choice.
 
 `baseline` and `diff` answer different questions. `diff` pairs the hits of a key in order and reports each one. A baseline compares sets of tuples, so a reordering of hits is not drift and a new tuple inside a key is.
 
-### `pingwright suite <dir> --site <url>`
+### `tagreeve suite <dir> --site <url>`
 
 Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
 
 ```bash
-pingwright suite scenarios/ --site https://staging.example.com \
+tagreeve suite scenarios/ --site https://staging.example.com \
   --variant published --variant workspace=override.json
 ```
 
@@ -297,7 +297,7 @@ checkout-pay    SKIPPED     SKIPPED
 
 A difference between variants is not a failure. Your rules decide. A run that exits 2 (for example, the banner was not shown) shows `ERROR (exit 2)` and does not stop the suite. A failed or warned cell says what failed: `FAIL: 5 rules, deniedIdentifiers` counts the failed rules and names the failed built-in checks, and `WARN: 1 rule` does the same for warnings. It never prints a rule or a message. The report uses the same text. The suite's exit code is the worst cell, in this order: 2, then 1, then 0. With `--json`, stdout is the manifest instead of the table.
 
-### `pingwright report <run.jsonl | suite dir> --html <out.html>`
+### `tagreeve report <run.jsonl | suite dir> --html <out.html>`
 
 Writes one HTML file that people can read without knowing JSONL. It opens no browser and reads no network. `--html` is required, and the command refuses to overwrite its own input. A missing file, or a file that is not a run record, exits 2, as `diff` does.
 
@@ -305,21 +305,21 @@ The input is one record, or a suite directory from `suite`. A suite directory ne
 
 A run report has these parts:
 
-- **Title.** `Pingwright run: <scenario> on <host>, <date>`. It is also the page `<title>`.
-- **Header.** Variant, run ID, date, network mode, viewport (when the run set one), site host, Pingwright version and record schema version.
+- **Title.** `Tagreeve run: <scenario> on <host>, <date>`. It is also the page `<title>`.
+- **Header.** Variant, run ID, date, network mode, viewport (when the run set one), site host, Tagreeve version and record schema version.
 - **Verdict.** One plain-language line built from the marks and counts. It names the vendors that send hits or identifiers, by plain name such as Google Analytics 4 or server container, and the consent state. Then it counts the failed rules (`must`, `mustNot` and unreadable rules) and names each failed or warned built-in check, for example `no leaks; 1 rule failed; built-in check sandboxPageUrl failed`. A result that cannot be evaluated reads `could not be checked`. `deniedIdentifiers` is not named again when the line already says which vendors received identifiers. `no leaks` when there are none. It holds no value.
 - **Timeline per vendor.** One row per vendor, headed `Name (key)`, and one segment per consent epoch, each with a mark and a hit count. The mark also has a text label, so it reads without colour.
 - **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, up to five evidence IDs and, on a failed or warned result, `on failure: fail` or `on failure: warn`. A passing result shows no severity.
 - **Flags** and **fields.** The flag kinds with counts and hosts, and the field names seen on denied hits.
 
-A suite report has these parts, in this order: a title such as `Pingwright suite: published vs workspace on shop.example.com, 2026-10-31`, a header with the suite ID, the variants and the exit code, a verdict per variant, which adds the number of runs to a built-in check (`built-in check sandboxPageUrl failed in 4 runs`), a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`.
+A suite report has these parts, in this order: a title such as `Tagreeve suite: published vs workspace on shop.example.com, 2026-10-31`, a header with the suite ID, the variants and the exit code, a verdict per variant, which adds the number of runs to a built-in check (`built-in check sandboxPageUrl failed in 4 runs`), a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`.
 
 The marks, worst first:
 
 | Mark | Meaning |
 | --- | --- |
 | `leak` | A hit that `deniedIdentifiers` flags, or that is in the evidence of a failed `deniedIdentifiers` result at either severity, or of a failed `mustNot` with a consent scope (`in: epoch(denied)`, `in: epoch(withdrawn)`, `before: consent` or a `consent.<field>: denied` filter). A failed `mustNot` with no consent scope does not mark a hit. |
-| `unchecked` | A hit with a denied signal whose body was not fully recorded, or that has identifier names whose own consent signal is unknown. A result that cannot be evaluated also gives `unchecked`, never `leak`. Pingwright cannot call it clean. |
+| `unchecked` | A hit with a denied signal whose body was not fully recorded, or that has identifier names whose own consent signal is unknown. A result that cannot be evaluated also gives `unchecked`, never `leak`. Tagreeve cannot call it clean. |
 | `mixed` | Granted and denied hits in one segment, or a hit with some signals granted and some denied. A hit with any denied signal is never shown as plain `full`. |
 | `early` | A hit with unknown consent in the undecided epoch, with the label "before an answer". The page set no Consent Mode default, so the hit fired before the person answered. A page with a denied default gives `ping` instead. |
 | `full` | Hits with every known signal granted, or with no signal known after an answer. |
@@ -329,17 +329,17 @@ The marks, worst first:
 Only names and counts are shown: no request URL, query value, body, page path, cookie value, hash, identity value or result message. A result's `note` is shown as a fixed sentence, for example "stub mode: stubbed endpoints set no cookies, so this pass says nothing about server cookies". A scenario's `params`, `ids` and `page` keys show their names and never their values. Every string from the records is escaped. The file has no script, no link, no image and no font, one inline style and a `Content-Security-Policy` meta tag. It does not claim that a site complies with a law.
 
 ```bash
-pingwright report runs/run_<id>.jsonl --html report.html
-pingwright report runs/suite_<id> --html suite-report.html
+tagreeve report runs/run_<id>.jsonl --html report.html
+tagreeve report runs/suite_<id> --html suite-report.html
 ```
 
 `report` for a record from before schema version 2 shows `not recorded` where field names are missing.
 
-### `pingwright install-browser`
+### `tagreeve install-browser`
 
-Installs Chromium with the Playwright version Pingwright depends on.
+Installs Chromium with the Playwright version Tagreeve depends on.
 
-### `pingwright --version`
+### `tagreeve --version`
 
 Prints the version.
 
@@ -349,7 +349,7 @@ Prints the version.
 | --- | --- |
 | 0 | Every expectation and built-in check passed, or failed only as a `warn` check. |
 | 1 | At least one expectation or built-in check failed, or `--baseline` found drift. |
-| 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, a `payment` step without `--allow-test-payment <host>` for the `--site` host or without that host in the allowlist file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `pingwright install-browser`. |
+| 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, a `payment` step without `--allow-test-payment <host>` for the `--site` host or without that host in the allowlist file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `tagreeve install-browser`. |
 
 The JSONL file is still written when a step fails, up to the failing step.
 
@@ -365,8 +365,8 @@ The `--json` summary has `severity` on every result, `expect` rules included. A 
 A CI job can gate on the exit code, or on `ok` in the `--json` summary:
 
 ```bash
-pingwright run checkout.yml --site https://staging.example.com
-pingwright run checkout.yml --site https://staging.example.com --json | jq -e .ok
+tagreeve run checkout.yml --site https://staging.example.com
+tagreeve run checkout.yml --site https://staging.example.com --json | jq -e .ok
 ```
 
 ### deniedIdentifiers

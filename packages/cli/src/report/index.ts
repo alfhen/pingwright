@@ -1,4 +1,4 @@
-import { readRun, type RunRecords } from '@pingwright/core';
+import { readRun, type RunRecords } from '@tagreeve/core';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { ReportArgs } from '../args.ts';

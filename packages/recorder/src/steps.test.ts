@@ -1,5 +1,5 @@
-import { createIdentity, type Request } from '@pingwright/core';
-import { parseScenario } from '@pingwright/expect';
+import { createIdentity, type Request } from '@tagreeve/core';
+import { parseScenario } from '@tagreeve/expect';
 import { afterEach, describe, expect, test } from 'vitest';
 import { TEST_LOOPBACK_IS_HOSTED_ENV, isGuardExemptHost, isLoopbackHost, isSensitiveField } from './guard.ts';
 import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath } from './steps.ts';

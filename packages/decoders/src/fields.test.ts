@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { MAX_POST_DATA, newId, type Request } from '@pingwright/core';
+import { MAX_POST_DATA, newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest } from './index.ts';
 import { guardFieldName } from './fields.ts';

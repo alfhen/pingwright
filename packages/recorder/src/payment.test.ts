@@ -1,4 +1,4 @@
-import type { Identity, Step as StepRecord } from '@pingwright/core';
+import type { Identity, Step as StepRecord } from '@tagreeve/core';
 import type { Page } from 'playwright';
 import { expect, test } from 'vitest';
 import { providerBlockedOnSite, runPayment } from './payment.ts';

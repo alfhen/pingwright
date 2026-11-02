@@ -2,7 +2,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { launchRecorder } from '../../src/index.ts';
 
 let site: FixtureSite;
@@ -25,7 +25,7 @@ afterAll(async () => {
   await rm(tmpParent, { recursive: true, force: true });
 });
 
-const netLogDirs = async () => (await readdir(tmpParent)).filter((n) => n.startsWith('pingwright-netlog-'));
+const netLogDirs = async () => (await readdir(tmpParent)).filter((n) => n.startsWith('tagreeve-netlog-'));
 
 test('the net log captures the unload hit of a sandboxed iframe on the fixture site', async () => {
   const before = await netLogDirs();

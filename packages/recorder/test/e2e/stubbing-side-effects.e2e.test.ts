@@ -1,4 +1,4 @@
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import { chromium, type Browser } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { chromeUserAgent, stubResponse } from '../../src/index.ts';

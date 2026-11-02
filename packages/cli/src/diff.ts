@@ -1,5 +1,5 @@
-import { readRun, type RunRecords } from '@pingwright/core';
-import { diffRuns, type ChangedHit, type DiffKey, type DiffResult } from '@pingwright/expect';
+import { readRun, type RunRecords } from '@tagreeve/core';
+import { diffRuns, type ChangedHit, type DiffKey, type DiffResult } from '@tagreeve/expect';
 import type { DiffArgs } from './args.ts';
 import type { Io } from './run.ts';
 

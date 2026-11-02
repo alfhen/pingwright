@@ -9,9 +9,9 @@ import {
   type Hit,
   type Request,
   type Step,
-} from '@pingwright/core';
+} from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { decodeRequest } from '@pingwright/decoders';
+import { decodeRequest } from '@tagreeve/decoders';
 import { effectiveConsentAt, epochForHit, evaluate, placeHitsInEpochs, type EvalEpoch } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 import { README_SCENARIO } from './readme-scenario.ts';
@@ -260,7 +260,7 @@ test('identity.hashesMatch', () => {
   expect(failed.evidence).toEqual([bad.hit.id]);
   const none = ev([hit({ vendor: 'meta' })]);
   expect(none.message).toBe(
-    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: the hit carried no identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Pingwright.',
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor, but identity.hashesMatch failed: the hit carried no identity fields (no hashed or plain email, phone, name or address); matching done server side, for example by a conversions API, is not visible to Tagreeve.',
   );
   expect(none.message).not.toContain('found 1 matching hit');
   expect(failed.message).toBe(

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import type { RunArgs } from './args.ts';
-import { parseScenario } from '@pingwright/expect';
+import { parseScenario } from '@tagreeve/expect';
 import { resolveNetwork, runCommand } from './run.ts';
 
 test('--var for an inherited name exits 2 as undeclared', async () => {

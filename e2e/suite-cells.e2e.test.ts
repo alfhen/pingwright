@@ -51,7 +51,7 @@ beforeAll(async () => {
   const pairOut = join(outDir, 'pair-runs');
   const pair = await node(
     ['suite', join(root, 'e2e/suites/mixed'), '--site', site.url, '--out', pairOut, '--variant', 'published', '--variant', `workspace=${overridePath}`],
-    { ...process.env, PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl },
+    { ...process.env, TAGREEVE_TEST_GTM_ORIGIN: site.containerUrl },
   );
   expect(pair.code, pair.stderr).toBe(1);
   pairTable = pair.stdout;

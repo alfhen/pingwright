@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { Request } from '@pingwright/core';
+import type { Request } from '@tagreeve/core';
 import { isKnownVendorCollection, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
 
 test('fetch, xhr and ping get 204 with CORS that echoes the origin and allows credentials', () => {

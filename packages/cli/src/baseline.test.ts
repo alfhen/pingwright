@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newId, type Hit, type RunRecords } from '@pingwright/core';
+import { newId, type Hit, type RunRecords } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
 import { buildBaseline, compareBaseline, parseBaseline } from './baseline.ts';

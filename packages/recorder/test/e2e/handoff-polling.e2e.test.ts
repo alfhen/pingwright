@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseScenario } from '@pingwright/expect';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
+import { parseScenario } from '@tagreeve/expect';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import type { Page } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { HANDOFF_HOST_ID, HANDOFF_WAKE_EVENT, launchRecorder, playScenario, type HandoffState } from '../../src/index.ts';

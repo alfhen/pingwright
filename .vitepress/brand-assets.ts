@@ -15,7 +15,7 @@ const read = (path: string) => readFileSync(fileURLToPath(new URL(`../brand${pat
 // Serves the logo and favicons straight from brand/, so the files are never copied or edited.
 export function brandAssets(): Plugin {
   return {
-    name: 'pingwright-brand-assets',
+    name: 'tagreeve-brand-assets',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const path = req.url?.split('?')[0] ?? '';

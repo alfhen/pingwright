@@ -1,5 +1,5 @@
-import { stripSandboxPrefix } from '@pingwright/decoders';
-import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@pingwright/core';
+import { stripSandboxPrefix } from '@tagreeve/decoders';
+import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@tagreeve/core';
 import { consentFields } from './scenario.ts';
 import { epochForHit } from './evaluate.ts';
 

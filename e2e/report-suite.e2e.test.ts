@@ -38,7 +38,7 @@ beforeAll(async () => {
   const out = join(outDir, 'runs');
   const suite = await node(
     ['suite', join(root, 'e2e/suites/mixed'), '--site', site.url, '--out', out, '--variant', 'published', '--variant', `workspace=${overridePath}`],
-    { ...process.env, PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl },
+    { ...process.env, TAGREEVE_TEST_GTM_ORIGIN: site.containerUrl },
   );
   expect(suite.code, suite.stderr).toBe(1);
   const [name] = await readdir(out);

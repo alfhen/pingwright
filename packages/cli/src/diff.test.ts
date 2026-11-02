@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { DiffResult } from '@pingwright/expect';
+import type { DiffResult } from '@tagreeve/expect';
 import { describe, expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
 import { flagChangeLabel, formatDiff } from './diff.ts';

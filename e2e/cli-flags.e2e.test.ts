@@ -39,7 +39,7 @@ test('firstPartyHosts turns those requests into firstPartySubdomain flags that d
 test('run --help prints the help of run', async () => {
   const r = await runCli(['run', '--help']);
   expect(r.code).toBe(0);
-  expect(r.stdout).toContain('Usage: pingwright run <scenario.yml>');
+  expect(r.stdout).toContain('Usage: tagreeve run <scenario.yml>');
 });
 
 test('text summary groups sandboxPageUrl flags into one line per vendor', async () => {

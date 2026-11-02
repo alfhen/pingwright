@@ -5,10 +5,10 @@ import { expect, test } from 'vitest';
 const read = (path: string): string => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf8');
 
 const installProblem = (text: string): string | undefined =>
-  !/npm i -g pingwright(?![@\w-])/.test(text)
-    ? 'does not give npm i -g pingwright as the install command'
-    : /pingwright@next|-rc\./.test(text)
-      ? 'mentions pingwright@next or an -rc. version'
+  !/npm i -g tagreeve@next(?![\w-])/.test(text)
+    ? 'does not give npm i -g tagreeve@next as the install command'
+    : /npm i -g tagreeve(?![@\w-])|tagreeve[^.\n]*installs `0\.3\.0`/.test(text)
+      ? 'gives a bare tagreeve install or says tagreeve installs 0.3.0'
       : undefined;
 
 const installSection = (cli: string): string => cli.slice(cli.indexOf('## Install'), cli.indexOf('\n## ', cli.indexOf('## Install') + 1));
@@ -16,17 +16,17 @@ const installSection = (cli: string): string => cli.slice(cli.indexOf('## Instal
 const enterAlwaysProblem = (text: string): string | undefined =>
   /Enter in the terminal always works/.test(text) ? 'says Enter always works' : undefined;
 
-test('install text gives npm i -g pingwright and no pre-release', () => {
+test('install text gives npm i -g tagreeve@next and no tagreeve 0.3.0', () => {
   expect(installProblem(read('README.md'))).toBeUndefined();
   expect(installProblem(read('docs/guide/first-run.md'))).toBeUndefined();
   expect(installProblem(installSection(read('docs/cli.md')))).toBeUndefined();
   expect(installProblem(read('.vitepress/theme/GetStartedPrompt.vue'))).toBeUndefined();
 });
 
-test('the install check fails on the rc text', () => {
-  expect(installProblem('`npm i -g pingwright@next` installs the release candidate, `0.3.0-rc.2`.')).toBeDefined();
-  expect(installProblem('Run `npm i -g pingwright`. The 0.3 sections need `pingwright@next`.')).toBeDefined();
-  expect(installProblem('Run `npm i -g pingwright`, version `0.3.0-rc.2`.')).toBeDefined();
+test('the install check fails on a bare install or a tagreeve 0.3.0 claim', () => {
+  expect(installProblem('Run `npm i -g tagreeve`.')).toBeDefined();
+  expect(installProblem('`npm i -g tagreeve@next` and `npm i -g tagreeve`.')).toBeDefined();
+  expect(installProblem('`npm i -g tagreeve@next` installs `0.3.0`.')).toBeDefined();
 });
 
 test('the docs do not say Enter always works', () => {

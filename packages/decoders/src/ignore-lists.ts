@@ -1,4 +1,4 @@
-import { globToRegExp } from '@pingwright/core';
+import { globToRegExp } from '@tagreeve/core';
 
 /** Transport fields every GA4 hit carries. A name may use `*` as a glob. */
 export const GA4_BODY_ONLY_IGNORE: readonly string[] = [

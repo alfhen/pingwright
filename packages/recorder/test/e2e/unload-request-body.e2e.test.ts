@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { startFixtureSite, type FixtureSite } from '@pingwright/fixture-site';
-import { decodeRequest } from '@pingwright/decoders';
+import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
+import { decodeRequest } from '@tagreeve/decoders';
 import { launchRecorder } from '../../src/index.ts';
 
 let site: FixtureSite;
@@ -31,7 +31,7 @@ test('a keepalive fetch built from a Request with a body keeps its body when sen
     throw error;
   }
   const { records } = await recorder.close();
-  const sent = records.requests.filter((q) => q.url.startsWith('https://sgtm.pingwright.invalid/g/collect'));
+  const sent = records.requests.filter((q) => q.url.startsWith('https://sgtm.tagreeve.invalid/g/collect'));
   expect(sent).toHaveLength(1);
   expect(sent[0]!.method).toBe('POST');
   expect(sent[0]!.postData).toBe('en=add_to_cart&ep.via=request\nen=view_item&ep.via=request');

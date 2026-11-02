@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
-import { createIdentity, hasCountryFormat, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
-import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step, type UrlMatcher } from '@pingwright/expect';
+import { createIdentity, hasCountryFormat, type Identity, type Request, type Step as StepRecord } from '@tagreeve/core';
+import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step, type UrlMatcher } from '@tagreeve/expect';
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isGuardExemptHost, isSensitiveField, type FieldAttributes } from './guard.ts';
@@ -280,7 +280,7 @@ async function rememberFieldValues(frame: Frame): Promise<void> {
     .evaluate(() => {
       const initial = new WeakMap<Element, string>();
       for (const e of document.querySelectorAll('input, textarea')) initial.set(e, (e as HTMLInputElement).value);
-      (window as unknown as { __pingwrightInitial: WeakMap<Element, string> }).__pingwrightInitial = initial;
+      (window as unknown as { __tagreeveInitial: WeakMap<Element, string> }).__tagreeveInitial = initial;
     })
     .catch(() => undefined);
 }
@@ -288,8 +288,8 @@ async function rememberFieldValues(frame: Frame): Promise<void> {
 async function changedSensitiveFields(frame: Frame): Promise<PageField[]> {
   const fields = await frame
     .evaluate((): PageField[] => {
-      const initial = (window as unknown as { __pingwrightInitial?: WeakMap<Element, string> }).__pingwrightInitial;
-      delete (window as unknown as { __pingwrightInitial?: unknown }).__pingwrightInitial;
+      const initial = (window as unknown as { __tagreeveInitial?: WeakMap<Element, string> }).__tagreeveInitial;
+      delete (window as unknown as { __tagreeveInitial?: unknown }).__tagreeveInitial;
       return [...document.querySelectorAll('input, textarea')].map((e, index) => ({
         autocomplete: e.getAttribute('autocomplete'),
         name: e.getAttribute('name'),
@@ -327,7 +327,7 @@ async function evaluateGuarded(page: Page, script: string): Promise<void> {
   for (const frame of trapped) {
     const hit = await frame
       .evaluate(() => {
-        const trap = (window as unknown as { __pingwrightTrap: { state: { blocked: boolean }; release: () => void } }).__pingwrightTrap;
+        const trap = (window as unknown as { __tagreeveTrap: { state: { blocked: boolean }; release: () => void } }).__tagreeveTrap;
         trap.release();
         return trap.state.blocked;
       })

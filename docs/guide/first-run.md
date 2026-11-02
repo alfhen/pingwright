@@ -1,19 +1,19 @@
 # Your first run
 
-This guide installs Pingwright and runs one scenario. You need Node 22.18 or newer and a site with a cookie banner.
+This guide installs Tagreeve and runs one scenario. You need Node 22.18 or newer and a site with a cookie banner.
 
-A coding agent, for example Claude Code, can do these steps for you. Copy the prompt and paste it into the agent. The agent installs Pingwright, asks for your site and writes your first scenarios.
+A coding agent, for example Claude Code, can do these steps for you. Copy the prompt and paste it into the agent. The agent installs Tagreeve, asks for your site and writes your first scenarios.
 
 <GetStartedPrompt />
 
 ## Install
 
 ```bash
-npm i -g pingwright
-pingwright install-browser
+npm i -g tagreeve@next
+tagreeve install-browser
 ```
 
-The first command installs the `pingwright` command. The second installs Chromium, the browser that Pingwright drives. Both steps are needed once per machine. The [CLI page](../cli.md) lists other ways to install.
+The first command installs the `tagreeve` command. The second installs Chromium, the browser that Tagreeve drives. Both steps are needed once per machine. The [CLI page](../cli.md) lists other ways to install.
 
 ## Write a scenario
 
@@ -41,19 +41,19 @@ If the page shows no banner, the run stops with "banner not shown" and exit code
 ## Run it
 
 ```bash
-pingwright run scenario.yml --site https://test.example.com
+tagreeve run scenario.yml --site https://test.example.com
 ```
 
 Replace the address with your own site. Use a test copy of your site when you can.
 
 ```mermaid
 flowchart TB
-  a["scenario.yml<br/>and --site"] --> b["pingwright run"]
+  a["scenario.yml<br/>and --site"] --> b["tagreeve run"]
   b --> c["Chromium plays<br/>the visitor"]
   c --> d["Text summary,<br/>record file<br/>runs/run_ID.jsonl,<br/>exit code 0, 1 or 2"]
 ```
 
-`pingwright run` plays the scenario in Chromium, then prints a summary, writes a record file and sets the exit code.
+`tagreeve run` plays the scenario in Chromium, then prints a summary, writes a record file and sets the exit code.
 
 The summary lists the hits, the consent epochs and each check with PASS, FAIL or WARN. [Reading a run's results](./reading-results.md) explains it line by line.
 
@@ -69,8 +69,8 @@ A script can read this code. So can a job that runs your tests on every change. 
 
 ## Safe by default
 
-- The run is in stub mode. Pingwright records known tracking requests and answers them itself. It does not send them on. See [What Pingwright checks](./what-it-checks.md).
-- Pingwright types fake data only.
+- The run is in stub mode. Tagreeve records known tracking requests and answers them itself. It does not send them on. See [What Tagreeve checks](./what-it-checks.md).
+- Tagreeve types fake data only.
 - A request to a site it does not know is flagged as an unknown destination, and the run fails. Allow a host in the scenario with `options: { allowUnknownDestination: ['tracker.example.net'] }`.
 
 ## Next

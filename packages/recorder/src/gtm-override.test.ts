@@ -71,7 +71,7 @@ test('the test origin rejects anything else', () => {
     '127.0.0.1:4000',
     'nonsense',
   ]) {
-    expect(() => parseTestGtmOrigin(value), value).toThrow(/PINGWRIGHT_TEST_GTM_ORIGIN/);
+    expect(() => parseTestGtmOrigin(value), value).toThrow(/TAGREEVE_TEST_GTM_ORIGIN/);
   }
 });
 

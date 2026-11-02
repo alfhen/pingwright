@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 export const HANDOFF_STATE_BINDING = '__pwHandoffState';
 export const HANDOFF_DONE_BINDING = '__pwHandoffDone';
-export const HANDOFF_HOST_ID = 'pingwright-handoff';
-export const HANDOFF_WAKE_EVENT = 'pingwright-handoff-wake';
+export const HANDOFF_HOST_ID = 'tagreeve-handoff';
+export const HANDOFF_WAKE_EVENT = 'tagreeve-handoff-wake';
 export const HANDOFF_REMINDER_MS = 60_000;
 export const HANDOFF_WAKE_LIMIT_MS = 2_000;
 

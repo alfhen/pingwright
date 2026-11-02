@@ -25,10 +25,10 @@ import {
   type Run,
   type RunRecords,
   type Step,
-} from '@pingwright/core';
+} from '@tagreeve/core';
 import { HANDOFF_DONE_BINDING, HANDOFF_STATE_BINDING, HandoffGate, handoffOverlayScript, type HandoffState } from './handoff-overlay.ts';
-import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@pingwright/consent';
-import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@pingwright/decoders';
+import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@tagreeve/consent';
+import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@tagreeve/decoders';
 import {
   chromium,
   type APIResponse,
@@ -67,7 +67,7 @@ import {
 import { Scrubber } from './gtm-scrub.ts';
 import { loopbackIsHostedForTests } from './guard.ts';
 
-export const PINGWRIGHT_VERSION = readVersion();
+export const TAGREEVE_VERSION = readVersion();
 const REDACTED_VALUE = '[redacted]';
 
 
@@ -219,7 +219,7 @@ export class Recorder {
     let netLogPath: string | undefined;
     let removeNetLogDir: (() => void) | undefined;
     if (options.netLog) {
-      const dir = await mkdtemp(join(tmpdir(), 'pingwright-netlog-'));
+      const dir = await mkdtemp(join(tmpdir(), 'tagreeve-netlog-'));
       netLogPath = join(dir, 'netlog.json');
       removeNetLogDir = watchNetLogDir(dir);
     }
@@ -272,7 +272,7 @@ export class Recorder {
       site: this.options.site,
       startedAt: nodeNow(),
       recordSchemaVersion: RECORD_SCHEMA_VERSION,
-      pingwrightVersion: PINGWRIGHT_VERSION,
+      pingwrightVersion: TAGREEVE_VERSION,
       browser: { name: 'chromium', version: this.browser.version() },
       networkMode: this.options.networkMode,
       gtmOverride: this.gtmOverride
@@ -358,7 +358,7 @@ export class Recorder {
     const existing = this.requests.get(request);
     if (existing) return existing;
     const url = request.url();
-    // The collector and self-test origins are Pingwright's own channel, not site traffic.
+    // The collector and self-test origins are Tagreeve's own channel, not site traffic.
     if (!/^https?:/.test(url) || url.startsWith(COLLECTOR_ORIGIN) || url.startsWith(SELFTEST_ORIGIN)) return undefined;
     const body = request.postData();
     let record: Request = {

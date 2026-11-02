@@ -1,6 +1,6 @@
-import { isLibraryLoadPath, type Request } from '@pingwright/core';
-import { isCollectionEndpoint, type TrackerEntry } from '@pingwright/decoders';
-import { hostMatches } from '@pingwright/expect';
+import { isLibraryLoadPath, type Request } from '@tagreeve/core';
+import { isCollectionEndpoint, type TrackerEntry } from '@tagreeve/decoders';
+import { hostMatches } from '@tagreeve/expect';
 
 const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 

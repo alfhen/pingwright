@@ -8,7 +8,7 @@
   });
   function hitUrl(via) {
     return (
-      'https://sgtm.pingwright.invalid/g/collect?v=2&tid=G-PWTEST0001&cid=3333333333.4444444444&gcs=G100&en=add_to_cart&ep.via=' +
+      'https://sgtm.tagreeve.invalid/g/collect?v=2&tid=G-PWTEST0001&cid=3333333333.4444444444&gcs=G100&en=add_to_cart&ep.via=' +
       via +
       '&dl=' +
       encodeURIComponent(held)

@@ -1,5 +1,5 @@
-import { globToRegExp } from '@pingwright/core';
-import type { Condition, Locator, UrlMatcher } from '@pingwright/expect';
+import { globToRegExp } from '@tagreeve/core';
+import type { Condition, Locator, UrlMatcher } from '@tagreeve/expect';
 import type { BrowserContext, Page } from 'playwright';
 
 const POLL_MS = 100;

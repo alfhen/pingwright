@@ -42,7 +42,7 @@ afterAll(async () => {
 
 function suite(dir: string, out: string, json = true) {
   const args = ['suite', join(root, 'e2e/suites', dir), '--site', site.url, '--out', out, '--variant', 'published', '--variant', `workspace=${overridePath}`, ...(json ? ['--json'] : [])];
-  const env = { ...process.env, PINGWRIGHT_TEST_GTM_ORIGIN: site.containerUrl };
+  const env = { ...process.env, TAGREEVE_TEST_GTM_ORIGIN: site.containerUrl };
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
     execFile(process.execPath, [cli, ...args], { cwd: root, env }, (error, stdout, stderr) => {
       resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, stdout, stderr });

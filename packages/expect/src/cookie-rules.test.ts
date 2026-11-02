@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createIdentity, newId, type Checkpoint, type ConsentState, type Request, type Response, type Step } from '@pingwright/core';
+import { createIdentity, newId, type Checkpoint, type ConsentState, type Request, type Response, type Step } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { evaluate, type EvalEpoch } from './evaluate.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';

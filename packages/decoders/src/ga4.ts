@@ -1,4 +1,4 @@
-import type { ConsentValue, Hit, HitConsent, Request } from '@pingwright/core';
+import type { ConsentValue, Hit, HitConsent, Request } from '@tagreeve/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
 import { bodyComplete, queryEntries, withFields } from './fields.ts';
 

@@ -78,7 +78,7 @@ test('after a reject only, epoch(label=withdrawn) matches nothing', async () => 
 
 test('banner not shown: a HeadlessChrome user agent exits 2', async () => {
   const ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36';
-  const r = await run('banner-not-shown', [], { PINGWRIGHT_TEST_USER_AGENT: ua });
+  const r = await run('banner-not-shown', [], { TAGREEVE_TEST_USER_AGENT: ua });
   expect(r.code).toBe(2);
   expect(r.stderr).toContain('banner not shown');
   expect(r.stderr).toContain('Record:');

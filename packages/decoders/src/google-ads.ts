@@ -1,4 +1,4 @@
-import type { Hit, Request } from '@pingwright/core';
+import type { Hit, Request } from '@tagreeve/core';
 import { defaultHitId, type Decoder, type NewHitId } from './decoder.ts';
 import { bodyComplete, queryEntries, withFields } from './fields.ts';
 import { decodeGa4Consent } from './ga4.ts';

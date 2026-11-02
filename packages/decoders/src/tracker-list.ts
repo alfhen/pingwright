@@ -1,4 +1,4 @@
-import type { Request } from '@pingwright/core';
+import type { Request } from '@tagreeve/core';
 import { vendorKeys } from './decoder.ts';
 
 export interface TrackerEntry {

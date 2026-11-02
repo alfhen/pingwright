@@ -1,4 +1,4 @@
-import { newId, type ConsentEpoch, type Flag, type Hit, type Request, type RunRecords, type Step } from '@pingwright/core';
+import { newId, type ConsentEpoch, type Flag, type Hit, type Request, type RunRecords, type Step } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { diffRuns, diffShapes, hitShape } from './diff.ts';
 

@@ -1,4 +1,4 @@
-import { newId, type Request } from '@pingwright/core';
+import { newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest, isCollectionEndpoint, trackerCollection, type TrackerEntry } from './index.ts';
 

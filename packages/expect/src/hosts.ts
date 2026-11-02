@@ -1,4 +1,4 @@
-import { trackerList } from '@pingwright/decoders';
+import { trackerList } from '@tagreeve/decoders';
 import { getPublicSuffix } from 'tldts';
 
 const HOST_PATTERN = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i;

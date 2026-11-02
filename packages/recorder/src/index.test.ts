@@ -3,17 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { expect, test, vi } from 'vitest';
-import { readVersion } from '@pingwright/core';
-import { COLLECTOR_ORIGIN, PINGWRIGHT_VERSION, Recorder } from './index.ts';
+import { readVersion } from '@tagreeve/core';
+import { COLLECTOR_ORIGIN, TAGREEVE_VERSION, Recorder } from './index.ts';
 
 test('collector origin is the reserved .invalid host over https', () => {
   const url = new URL(COLLECTOR_ORIGIN);
-  expect(url.hostname).toBe('collector.pingwright.invalid');
+  expect(url.hostname).toBe('collector.tagreeve.invalid');
   expect(url.protocol).toBe('https:');
 });
 
 test('the run record version is the root package.json version', () => {
-  expect(PINGWRIGHT_VERSION).toBe(readVersion());
+  expect(TAGREEVE_VERSION).toBe(readVersion());
 });
 
 test('netLog is refused in stub mode before a browser starts', async () => {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { createIdentity, newId, type ConsentState, type ConsentValue, type HitConsent, type Hit, type Request, type Result } from '@pingwright/core';
-import { decodeRequest } from '@pingwright/decoders';
+import { createIdentity, newId, type ConsentState, type ConsentValue, type HitConsent, type Hit, type Request, type Result } from '@tagreeve/core';
+import { decodeRequest } from '@tagreeve/decoders';
 import { expect, test } from 'vitest';
 import { evaluate, type EvalEpoch } from './evaluate.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';

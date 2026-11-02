@@ -1,6 +1,6 @@
-import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, sha256, type Hit, type Request } from '@pingwright/core';
+import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, sha256, type Hit, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { decodeRequest } from '@pingwright/decoders';
+import { decodeRequest } from '@tagreeve/decoders';
 import { evaluate, findForeignData } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
 

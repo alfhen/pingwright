@@ -1,4 +1,4 @@
-import type { DataLayerEvent } from '@pingwright/core';
+import type { DataLayerEvent } from '@tagreeve/core';
 import { describe, expect, test } from 'vitest';
 import { consentModeChanges, type ConsentPush } from './consent-mode.ts';
 import { buildEpochs, type BannerEvent } from './epochs.ts';

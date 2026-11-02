@@ -1,4 +1,4 @@
-import type { Locator as ScenarioLocator } from '@pingwright/expect';
+import type { Locator as ScenarioLocator } from '@tagreeve/expect';
 import type { Locator, Page } from 'playwright';
 
 const ROLE_FAMILIES = ['button', 'radio', 'checkbox', 'link', 'tab', 'option'];

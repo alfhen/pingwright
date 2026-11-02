@@ -1,5 +1,5 @@
-import { readRun, type RunRecords } from '@pingwright/core';
-import { diffRuns } from '@pingwright/expect';
+import { readRun, type RunRecords } from '@tagreeve/core';
+import { diffRuns } from '@tagreeve/expect';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { flagChangeLabel } from '../diff.ts';
@@ -237,7 +237,7 @@ function overview(model: SuiteReportModel): string {
 }
 
 export function suiteTitle(h: SuiteReportModel['header']): string {
-  return `Pingwright suite: ${h.variants.join(' vs ')}${h.host ? ` on ${h.host}` : ''}, ${h.startedAt.slice(0, 10)}`;
+  return `Tagreeve suite: ${h.variants.join(' vs ')}${h.host ? ` on ${h.host}` : ''}, ${h.startedAt.slice(0, 10)}`;
 }
 
 export function renderSuiteReport(model: SuiteReportModel): string {

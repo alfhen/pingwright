@@ -1,5 +1,5 @@
-import { newId, type Id, type Request, type Response, type Step } from '@pingwright/core';
-import { isCollectionEndpoint, type TrackerEntry } from '@pingwright/decoders';
+import { newId, type Id, type Request, type Response, type Step } from '@tagreeve/core';
+import { isCollectionEndpoint, type TrackerEntry } from '@tagreeve/decoders';
 import { redactHeaders } from './redact.ts';
 import { isKnownVendorCollection } from './stub.ts';
 

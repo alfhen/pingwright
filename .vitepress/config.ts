@@ -4,7 +4,7 @@ import { brandAssets } from './brand-assets.ts';
 import { mermaidFences } from './mermaid.ts';
 import { sidebarPages, unlistedPages } from './page-guard.ts';
 
-const repo = 'https://github.com/alfhen/pingwright';
+const repo = 'https://github.com/alfhen/tagreeve';
 
 const rewrites = { 'docs/index.md': 'index.md', 'README.md': 'readme.md' };
 
@@ -13,7 +13,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
   {
     text: 'Guides',
     items: [
-      { text: 'What Pingwright checks', link: '/docs/guide/what-it-checks' },
+      { text: 'What Tagreeve checks', link: '/docs/guide/what-it-checks' },
       { text: 'Your first run', link: '/docs/guide/first-run' },
       { text: "Reading a run's results", link: '/docs/guide/reading-results' },
     ],
@@ -65,7 +65,7 @@ function markdownSetup(md: MarkdownIt) {
 }
 
 export default defineConfig({
-  title: 'Pingwright',
+  title: 'Tagreeve',
   description: 'Agent-first testing for website tracking and consent.',
   lang: 'en',
   srcDir: '.',
@@ -109,7 +109,7 @@ export default defineConfig({
     if (extra.length) throw new Error(`Pages not in the published list: ${extra.join(', ')}`);
   },
   themeConfig: {
-    logo: { light: '/mark.svg', dark: '/mark-dark.svg', alt: 'Pingwright' },
+    logo: { light: '/mark.svg', dark: '/mark-dark.svg', alt: 'Tagreeve' },
     nav: [
       { text: 'Guides', link: '/docs/guide/what-it-checks', activeMatch: '/docs/guide/' },
       { text: 'CLI', link: '/docs/cli' },

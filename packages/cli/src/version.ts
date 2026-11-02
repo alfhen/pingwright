@@ -1,1 +1,1 @@
-export { readVersion } from '@pingwright/core';
+export { readVersion } from '@tagreeve/core';

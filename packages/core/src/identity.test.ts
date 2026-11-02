@@ -189,7 +189,7 @@ describe('scan', () => {
 
   it('finds a foreign email in base64 after path segments', () => {
     const payload = Buffer.from('{"email":"jane@shop.example.net"}').toString('base64url');
-    for (const url of [`https://collector.pingwright.invalid/r/${payload}`, `/data/${payload}`]) {
+    for (const url of [`https://collector.tagreeve.invalid/r/${payload}`, `/data/${payload}`]) {
       expect(scan(url, id), url).toContainEqual({ kind: 'email', value: 'jane@shop.example.net' });
     }
   });

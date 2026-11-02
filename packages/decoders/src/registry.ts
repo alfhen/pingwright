@@ -1,4 +1,4 @@
-import type { Hit, Request } from '@pingwright/core';
+import type { Hit, Request } from '@tagreeve/core';
 import type { Decoder, NewHitId } from './decoder.ts';
 import { ga4 } from './ga4.ts';
 import { googleAds } from './google-ads.ts';

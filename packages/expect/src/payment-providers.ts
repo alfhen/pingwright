@@ -27,7 +27,7 @@ export const PAYMENT_PROVIDERS: readonly PaymentProvider[] = [
   },
   {
     id: 'fixture',
-    docs: 'https://github.com/alfhen/pingwright/blob/main/fixtures/site/README.md',
+    docs: 'https://github.com/alfhen/tagreeve/blob/main/fixtures/site/README.md',
     cards: ['4242424242424242'],
     expiry: '12/40',
     cvc: '123',

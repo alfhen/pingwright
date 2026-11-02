@@ -1,15 +1,15 @@
 import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import type { Scenario } from '@pingwright/expect';
-import { normalizeHost, providerBlockedOnSite, type TestPayment } from '@pingwright/recorder';
+import type { Scenario } from '@tagreeve/expect';
+import { normalizeHost, providerBlockedOnSite, type TestPayment } from '@tagreeve/recorder';
 
 const FILE_NAME = 'test-payment-hosts.json';
 
 export function testPaymentHostsPath(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
   const xdg = env.XDG_CONFIG_HOME;
   const base = xdg && isAbsolute(xdg) ? xdg : join(home, '.config');
-  return join(base, 'pingwright', FILE_NAME);
+  return join(base, 'tagreeve', FILE_NAME);
 }
 
 /** The exact hosts in the user-level allowlist. Throws a message that names the file, never its other content. */

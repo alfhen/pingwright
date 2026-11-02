@@ -1,8 +1,8 @@
 import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { readRun, type PingwrightRecord, type Result, type Run, type RunRecords } from '@pingwright/core';
-import { parseTrackerList, type TrackerEntry } from '@pingwright/decoders';
-import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario, type Viewport } from '@pingwright/expect';
+import { readRun, type TagreeveRecord, type Result, type Run, type RunRecords } from '@tagreeve/core';
+import { parseTrackerList, type TrackerEntry } from '@tagreeve/decoders';
+import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario, type Viewport } from '@tagreeve/expect';
 import {
   GtmOverrideError,
   GtmOverrideFailure,
@@ -16,7 +16,7 @@ import {
   loopbackIsHostedForTests,
   type GtmOverrideInput,
   type TestPayment,
-} from '@pingwright/recorder';
+} from '@tagreeve/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
 import { buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
@@ -29,7 +29,7 @@ export interface Io {
 
 const MISSING_BROWSER = /Executable doesn't exist|playwright install/i;
 
-function allRecords(records: RunRecords): PingwrightRecord[] {
+function allRecords(records: RunRecords): TagreeveRecord[] {
   const { run, truncatedAtLine, ...rest } = records;
   void truncatedAtLine;
   return [run, ...Object.values(rest).flat()];
@@ -177,13 +177,13 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
       warn: (text) => io.stderr(`Warning: ${text}\n`),
       trackerList: spec.trackers,
       ...(spec.testPayment && { testPayment: spec.testPayment }),
-      userAgentOverride: process.env.PINGWRIGHT_TEST_USER_AGENT || undefined,
+      userAgentOverride: process.env.TAGREEVE_TEST_USER_AGENT || undefined,
     });
     records = result.records;
     path = result.path;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (MISSING_BROWSER.test(message)) return failed('Chromium is not installed. Run `pingwright install-browser`.\n');
+    if (MISSING_BROWSER.test(message)) return failed('Chromium is not installed. Run `tagreeve install-browser`.\n');
     let text = `Run failed: ${error instanceof GtmOverrideFailure ? `GTM override: ${message}` : message}\n`;
     const written = (error instanceof StepError || error instanceof GtmOverrideFailure) && error.run ? error.run.path : undefined;
     if (written) {

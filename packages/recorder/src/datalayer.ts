@@ -1,6 +1,6 @@
-import { newId, pageTimeToEpoch, type DataLayerEvent, type EpochMs, type Id } from '@pingwright/core';
+import { newId, pageTimeToEpoch, type DataLayerEvent, type EpochMs, type Id } from '@tagreeve/core';
 
-export const DATALAYER_BINDING = '__pingwrightDataLayer';
+export const DATALAYER_BINDING = '__tagreeveDataLayer';
 
 /**
  * Runs in every frame before page scripts. dataLayer may be created before or after this runs,
@@ -41,8 +41,8 @@ export const dataLayerInitScript = `(() => {
     send({ t: clock(), args: safe(isArgs ? Array.from(item) : [item]) }).catch(() => {});
   };
   const hook = (layer) => {
-    if (!Array.isArray(layer) || layer.__pingwrightHooked) return;
-    Object.defineProperty(layer, '__pingwrightHooked', { value: true });
+    if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
+    Object.defineProperty(layer, '__tagreeveHooked', { value: true });
     const push = layer.push;
     layer.push = function (...items) {
       for (const item of items) report(item);

@@ -1,4 +1,4 @@
-import { newId, type Hit, type Id, type Request } from '@pingwright/core';
+import { newId, type Hit, type Id, type Request } from '@tagreeve/core';
 
 export type NewHitId = () => Id<'hit'>;
 

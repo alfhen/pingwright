@@ -24,8 +24,8 @@ jobs:
       - run: pnpm test
       - name: Keep the docs domain out of the code
         run: |
-          if grep -rn 'pingwright\.dev' packages fixtures --exclude-dir=node_modules --exclude-dir=dist; then
-            echo 'pingwright.dev must not appear under packages/ or fixtures/' >&2
+          if grep -rn 'tagreeve\.dev' packages fixtures --exclude-dir=node_modules --exclude-dir=dist; then
+            echo 'tagreeve.dev must not appear under packages/ or fixtures/' >&2
             exit 1
           fi
       - run: pnpm docs:build
@@ -84,9 +84,10 @@ jobs:
         run: |
           pnpm pack
           tmp=$(mktemp -d)
-          npm i -g --prefix "$tmp" ./pingwright-*.tgz
-          "$tmp/bin/pingwright" --version
-          echo "PW_BIN=$tmp/bin/pingwright" >> "$GITHUB_ENV"
+          npm i -g --prefix "$tmp" ./tagreeve-*.tgz
+          "$tmp/bin/tagreeve" --version
+          "$tmp/bin/pingwright" --version 2>&1 | grep -q "pingwright is now tagreeve"
+          echo "PW_BIN=$tmp/bin/tagreeve" >> "$GITHUB_ENV"
       - name: Build a release commit
         env:
           GIT_AUTHOR_NAME: CI
@@ -114,8 +115,8 @@ jobs:
           npm i -g --install-links --cache "$cache" --prefix "$tmp2" "git+file://$RELEASE_CLONE#HEAD"
           # A second log means npm ran a nested git dep install.
           test "$(ls "$cache/_logs" | wc -l)" = 1
-          "$tmp2/bin/pingwright" --version
-          echo "GIT_BIN=$tmp2/bin/pingwright" >> "$GITHUB_ENV"
+          "$tmp2/bin/tagreeve" --version
+          echo "GIT_BIN=$tmp2/bin/tagreeve" >> "$GITHUB_ENV"
       - run: $PW_BIN install-browser
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
