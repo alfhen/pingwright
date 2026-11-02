@@ -214,6 +214,11 @@ test('a number split across a JSON array stores (other)', () => {
   expect(entries.map((e) => guardFieldName(e.name))).toEqual(['(other)']);
 });
 
+test('a name that holds a phone next to [] stores (other)', () => {
+  expect(guardFieldName('xxxxxxxxxxxx[]555-123-4567')).toBe('(other)');
+  expect(guardFieldName('555-123-4567[]xxxxxxxxxxxx')).toBe('(other)');
+});
+
 test('splitMultipart keeps the preamble and the close delimiter out of the parts', () => {
   const body = 'pre\r\n\r\ntext\r\n--B\r\nContent-Disposition: form-data; name="a"\r\n\r\none\r\n--B--\r\n\r\nepi';
   const split = splitMultipart(body, { 'content-type': 'multipart/form-data; boundary=B' })!;

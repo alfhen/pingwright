@@ -363,3 +363,17 @@ test.each([
   expect(body).toContain(value);
   expect(findForeignData([rawRequest(REPLAY, body)], [], identity).length).toBeGreaterThan(0);
 });
+
+test('possibleRealData reports a form-encoded +cc+nn phone once, in its field', () => {
+  const [leak] = findForeignData([rawRequest(REPLAY, 'a=1&p=+1+555+123+4567')], [], identity);
+  expect(leak!.detail).toContain('carries 1 phone value(s)');
+  expect(leak!.detail).toMatch(/in p$/);
+});
+
+test.each(['xxxxxxxxxxxx[]555-123-4567', '555-123-4567[]xxxxxxxxxxxx'])('possibleRealData does not print the name %s', (name) => {
+  for (const body of [`${name}=visitor@other-person.example`, JSON.stringify({ [name]: 'visitor@other-person.example' })]) {
+    const details = findForeignData([rawRequest(REPLAY, body)], [], identity).map((l) => l.detail).join('\n');
+    expect(details).not.toBe('');
+    expect(details).not.toMatch(/\d{3}-\d{3}/);
+  }
+});

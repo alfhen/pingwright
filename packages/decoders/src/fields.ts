@@ -33,8 +33,11 @@ function looksLikeValue(segment: string): boolean {
 export function guardFieldName(name: string): string {
   if (name.includes('@')) return OTHER_NAME;
   // A value split into segments would print its pieces, so a name that holds an email or phone prints whole as (other).
-  const raw = valueKinds(name.replace(/\[\]/g, ''));
-  if (raw.has('email') || raw.has('phone')) return OTHER_NAME;
+  // Removing `[]` can join or split digits, so both readings are checked.
+  for (const reading of [name, name.replace(/\[\]/g, '')]) {
+    const kinds = valueKinds(reading);
+    if (kinds.has('email') || kinds.has('phone')) return OTHER_NAME;
+  }
   return name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment)).join('.');
 }
 

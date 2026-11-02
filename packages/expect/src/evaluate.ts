@@ -1012,12 +1012,23 @@ interface ScanText {
 // A leaf is scanned as `name=value` so a key that holds an email is found.
 function leafTexts(text: string): ScanText[] {
   const out: ScanText[] = [];
+  const isJson = /^\s*[{[]/.test(text);
+  if (!isJson) {
+    // Raw substrings, so the scan decodes `+` and `%XX` the same way as in the base text.
+    for (const segment of text.split('&')) {
+      const eq = segment.indexOf('=');
+      if (eq < 0 || eq === segment.length - 1) continue;
+      const rawName = segment.slice(0, eq).replace(/\[\]|%5B%5D/gi, '');
+      const [decoded] = new URLSearchParams(segment).keys();
+      out.push({ text: `${rawName}${segment.slice(eq)}`, where: guardFieldName(decoded ?? ''), leaf: true });
+    }
+    return out;
+  }
   const { entries, parsed } = bodyEntries({ postData: text });
   if (parsed) {
-    const isJson = /^\s*[{[]/.test(text);
     // The ID-key exemptions look at the key right before the value, so a JSON path is cut to its last segment.
     for (const { name, value } of entries) {
-      const path = isJson ? name.split('.') : [name];
+      const path = name.split('.');
       path[path.length - 1] = path[path.length - 1]!.replace(/\[\]/g, '');
       const where = guardFieldName(name);
       if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where, leaf: true });
