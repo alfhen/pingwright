@@ -105,7 +105,7 @@ The warning covers numbers written as `+` and digits, and the common US shapes. 
 
 `identity.hashesMatch` reads hashed email and phone values from Meta, Pinterest and from the server container's data client (`sgtm`). On an `sgtm` hit it reads `user_data` (`email_address`, `phone_number`, `first_name`, `last_name`, `street`, `city`, `postal_code`, `country`, at the top level or under `address`) and shows each as the hit param `user_data.<field>`.
 
-When a hit carries no identity field at all, the message says so, and that matching done server side, for example by a conversions API, is not visible to Tagreeve. A hit with fields that do not match keeps `Not matching: <field>`.
+When a hit carries no identity field at all, the message says so, and that matching done server side, for example by a conversions API, is not visible to Tagreeve. A hit with fields that do not match keeps `Not matching: <field>`. When a hit carries only plain city, postal code or country, the message says it carried no hashed identity field. When a Meta hit carries only other fields, such as `fn` or `ln`, it says the hit carried no hashed email or phone, and names those fields. Tagreeve does not check them.
 
 `identity.hashesMatch` cannot be in the same entry as `body.has` or `body.only`. Use two entries.
 
