@@ -86,13 +86,13 @@ The rules in `AGENTS.md` and the earlier plans still hold. In short:
 
 - fake IDs and fake identities only: GA4 `G-PWTEST0001`, Google Ads `AW-000000001`, Meta `100000000000001`, GTM `GTM-PWTEST1` and `GTM-PWNOVER`, hosts under `.invalid` or loopback. A fixture page sends only to `.invalid` hosts, so nothing leaves the machine;
 - names and counts only in what a PR adds. No cookie value, identity value, card value or `gtmAuth`. Each PR that adds output has a leak test that feeds a fake email (`pw-fixture@example.com`), its SHA-256 and a fake cookie value through the feature and asserts none of them appears;
-- e2e tests run only against `fixtures/site` or an in-test loopback server, in `stub` mode;
+- e2e tests run only against `fixtures/site` or an in-test loopback server, in `stub` mode (the one `server` mode test `AGENTS.md` allows, whose pass-through host is the fixture's own loopback host, stays allowed);
 - context-level hooks only, no CDP, no new browser flags;
 - no publish to npm and no GitHub release without the maintainer's say-so.
 
 More for rc.2:
 
-- Each PR adds a regression test that fails when the change is removed. The PR description says how that was checked.
+- Each PR adds a regression test that fails when the change is removed. The PR description says how that was checked. C02 is the one exception: its validation is a CI run against a deliberately broken alias (see C02).
 - Each negative test checks that its input really contains what the check looks for. A test that passes because the input never had it proves nothing.
 - New e2e tests go in new files. Named exceptions: D01 updates `e2e/report-marks.e2e.test.ts`, E01 adds a case to `e2e/identity-messages.e2e.test.ts`, T01 tightens `e2e/identity-country.e2e.test.ts`, B01 and B02 change `e2e/baseline.e2e.test.ts`, and C01 changes `e2e/viewport.e2e.test.ts` and `e2e/cli-flags.e2e.test.ts` where they assert the usage text.
 - No record schema bump. `recordSchemaVersion` stays 2. P01 adds one optional field (see below).
