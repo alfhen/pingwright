@@ -1,4 +1,5 @@
 import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, sha256, type Hit, type Request } from '@tagreeve/core';
+import { deflateRawSync, gzipSync } from 'node:zlib';
 import { expect, test } from 'vitest';
 import { decodeRequest } from '@tagreeve/decoders';
 import { evaluate, findForeignData } from './evaluate.ts';
@@ -150,4 +151,63 @@ test('hashesMatch keeps the Not matching message when the hit has fields', () =>
   const r = check({ ...good, postal_code: sha256('00000').hex });
   expect(r.message).toContain('Not matching: user_data.postal_code');
   expect(r.message).not.toContain('carried no identity fields');
+});
+
+const EMAIL = 'visitor@other-person.example';
+const REPLAY = 'https://replay.tagreeve.invalid/collect';
+const asRecorded = (bytes: Buffer) => bytes.toString('utf8');
+const withHeaders = (postData: string, headers: Record<string, string>): Request => ({ ...rawRequest(REPLAY, postData), headers });
+const randomBytes = (() => {
+  const out = Buffer.alloc(300);
+  let seed = 7;
+  for (let i = 0; i < out.length; i++) out[i] = (seed = (seed * 1103515245 + 12345) & 0x7fffffff) >> 16;
+  out.write('visitor@other-person.example', 100);
+  return out;
+})();
+
+test('possibleRealData skips a gzip body with content-encoding gzip', () => {
+  const body = asRecorded(gzipSync(randomBytes));
+  expect(body).toContain(EMAIL);
+  expect(findForeignData([withHeaders(body, { 'content-encoding': 'gzip' })], [], identity)).toHaveLength(0);
+});
+
+test('possibleRealData skips a gzip body with no headers', () => {
+  const body = asRecorded(gzipSync(randomBytes));
+  expect(body).toContain(EMAIL);
+  expect(findForeignData([rawRequest(REPLAY, body)], [], identity)).toHaveLength(0);
+});
+
+test('possibleRealData skips a compressed body sent as text/plain', () => {
+  const body = asRecorded(gzipSync(randomBytes));
+  expect(body).toContain(EMAIL);
+  expect(findForeignData([withHeaders(body, { 'Content-Type': 'text/plain;charset=UTF-8' })], [], identity)).toHaveLength(0);
+});
+
+test('possibleRealData skips deflate-raw and random bytes whose bytes spell an email', () => {
+  const deflated = asRecorded(deflateRawSync(randomBytes));
+  expect(deflated).toContain('visitor@other-person.example');
+  expect(findForeignData([withHeaders(deflated, { 'content-type': 'text/plain' })], [], identity)).toHaveLength(0);
+  const random = asRecorded(randomBytes);
+  expect(random).toContain('visitor@other-person.example');
+  expect(findForeignData([withHeaders(random, { 'content-type': 'application/json' })], [], identity)).toHaveLength(0);
+});
+
+test('possibleRealData skips a binary content-type and a non-identity content-encoding', () => {
+  expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-type': 'application/octet-stream' })], [], identity)).toHaveLength(0);
+  expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'Content-Encoding': 'br' })], [], identity)).toHaveLength(0);
+});
+
+test('possibleRealData still scans text subtypes that share a binary prefix', () => {
+  for (const type of ['application/grpc-web-text', 'application/grpc-web+json', 'image/svg+xml']) {
+    expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-type': type })], [], identity)).toHaveLength(1);
+  }
+  expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-type': 'image/png; x=1' })], [], identity)).toHaveLength(0);
+});
+
+test('possibleRealData still scans a plain body and the URL of a compressed request', () => {
+  const plain = findForeignData([withHeaders('a=1&email=visitor@other-person.example', { 'content-type': 'text/plain' })], [], identity);
+  expect(plain[0]!.detail).toMatch(/, in the body$/);
+  expect(findForeignData([withHeaders('a=visitor@other-person.example', { 'content-encoding': 'identity' })], [], identity)).toHaveLength(1);
+  const compressed = { ...rawRequest('https://replay.tagreeve.invalid/collect?e=visitor@other-person.example', asRecorded(randomBytes)), headers: { 'content-encoding': 'gzip' } };
+  expect(findForeignData([compressed], [], identity)[0]!.detail).toMatch(/, in the URL$/);
 });

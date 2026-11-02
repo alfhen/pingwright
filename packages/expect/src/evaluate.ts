@@ -974,6 +974,26 @@ function pathSegments(url: string): string[] {
   }
 }
 
+const BINARY_CONTENT_TYPE = /^(?:application\/(?:octet-stream|gzip|x-gzip|zip|zlib|x-protobuf|protobuf|grpc|msgpack|x-msgpack)|image\/(?!svg\+xml)[^;\s]+|audio\/[^;\s]+|video\/[^;\s]+)\s*(?:;|$)/i;
+const BINARY_SHARE = 0.1;
+const BINARY_MIN_LENGTH = 16;
+
+// The recorder keeps bodies as UTF-8 decoded text, so most high bytes of a compressed body are U+FFFD. The byte check runs whatever the
+// content-type says, because beacons often send compressed bytes as text/plain.
+function isBinaryBody(headers: Record<string, string>, body: string): boolean {
+  const header = (name: string) => Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1]?.trim().toLowerCase() ?? '';
+  const encoding = header('content-encoding');
+  if (encoding !== '' && encoding !== 'identity') return true;
+  if (BINARY_CONTENT_TYPE.test(header('content-type'))) return true;
+  if (body.length < BINARY_MIN_LENGTH) return false;
+  let binary = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body.charCodeAt(i);
+    if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7f && c <= 0x9f)) binary++;
+  }
+  return binary / body.length >= BINARY_SHARE;
+}
+
 export interface ForeignData {
   requestId: string;
   detail: string;
@@ -996,7 +1016,7 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
     const texts = slot(request.id, request.stepId).texts;
     for (const text of [url, ...pathSegments(url)]) texts.push({ text, where: 'the URL' });
-    texts.push({ text: persisted.postData, where: 'the body' });
+    if (!isBinaryBody(request.headers, persisted.postData)) texts.push({ text: persisted.postData, where: 'the body' });
   }
   for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);

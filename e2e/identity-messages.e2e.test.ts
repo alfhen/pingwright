@@ -16,3 +16,13 @@ test('possibleRealData names the hit parameter that carries a foreign hash, and 
   expect(messages).not.toMatch(HEX);
   expect(r.stdout + r.stderr).not.toMatch(HEX);
 }, 120_000);
+
+test('possibleRealData skips a compressed beacon body whose bytes spell an email, and still fails a foreign value', async () => {
+  const compressed = await run('identity-compressed-beacon');
+  const beacon = compressed.records!.requests.find((q) => q.url.startsWith('https://replay.tagreeve.invalid/collect'));
+  expect(beacon?.postData).toContain('visitor@other-person.example');
+  expect(compressed.records!.flags.filter((f) => f.kind === 'possibleRealData')).toHaveLength(0);
+  expect(compressed.failed).not.toContain('builtin: possibleRealData');
+  const foreign = await run('identity-messages');
+  expect(foreign.failed).toContain('builtin: possibleRealData');
+}, 120_000);

