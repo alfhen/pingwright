@@ -23,6 +23,7 @@ import {
   type ResultNote,
   type Severity,
   type Step,
+  binaryShare,
   globToRegExp,
 } from '@tagreeve/core';
 import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
@@ -644,10 +645,15 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const wrongParams = new Set<string>();
   const matchedFields = new Set<string>();
   const unhashedFields = new Set<string>();
+  const plainAddressFields = new Set<string>();
+  const uncheckedFields = new Set<string>();
   for (const hit of hits) {
     let seen = false;
     let bad = false;
     let raw = false;
+    if (hit.vendor === 'meta') {
+      for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(guardFieldName(id));
+    }
     for (const [name, value] of Object.entries(hit.params)) {
       const field = FIELD_PARAMS[name]?.(identity);
       const accepted = field === undefined ? [] : [field, ...extra];
@@ -660,7 +666,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
             : undefined;
       if (!known || !value) continue;
       // Google's user data format sends city, postal code and country as plain text.
-      if (PLAIN_ADDRESS_PARAMS.has(name) && !DIGEST_SHAPE.test(value)) continue;
+      if (PLAIN_ADDRESS_PARAMS.has(name) && !DIGEST_SHAPE.test(value)) {
+        plainAddressFields.add(fieldLabel(name));
+        continue;
+      }
       seen = true;
       if (known.has(value)) {
         matchedFields.add(fieldLabel(name));
@@ -693,6 +702,20 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       `Not matching: ${[...wrongParams].join(', ')}.` +
       (matching.size ? ` Matching: ${joinLabels(matching)}.` : '');
     return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message };
+  }
+  if (!withHash.length && uncheckedFields.size) {
+    return {
+      pass: false,
+      evidence: hits.map((h) => h.id),
+      message: `${several ? 'none of the hits carried a' : 'the hit carried no'} hashed email or phone, only ${joinLabels(uncheckedFields)} that Tagreeve does not check.`,
+    };
+  }
+  if (!withHash.length && plainAddressFields.size) {
+    return {
+      pass: false,
+      evidence: hits.map((h) => h.id),
+      message: `${several ? 'none of the hits carried a' : 'the hit carried no'} hashed identity field, only plain ${joinLabels(plainAddressFields)} that Tagreeve does not check.`,
+    };
   }
   if (!withHash.length) {
     return {
@@ -1060,12 +1083,7 @@ function isBinaryBody(headers: Record<string, string>, body: string): boolean {
 
 function isBinaryText(body: string): boolean {
   if (body.length < BINARY_MIN_LENGTH) return false;
-  let binary = 0;
-  for (let i = 0; i < body.length; i++) {
-    const c = body.charCodeAt(i);
-    if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || (c >= 0x7f && c <= 0x9f)) binary++;
-  }
-  return binary / body.length >= BINARY_SHARE;
+  return binaryShare(body) >= BINARY_SHARE;
 }
 
 interface ScanText {
@@ -1086,7 +1104,7 @@ function leafTexts(text: string): ScanText[] {
       if (eq < 0 || eq === segment.length - 1) continue;
       const rawName = segment.slice(0, eq).replace(/\[\]|%5B%5D/gi, '');
       const [decoded] = new URLSearchParams(segment).keys();
-      out.push({ text: `${rawName}${segment.slice(eq)}`, where: guardFieldName(decoded ?? ''), leaf: true });
+      out.push({ text: `${rawName}${segment.slice(eq)}`, where: decoded ? guardFieldName(decoded) : 'the body', leaf: true });
     }
     return out;
   }

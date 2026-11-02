@@ -132,3 +132,18 @@ test('the result holds names only: no email, hash or value reaches the message o
   const text = JSON.stringify(check([h]));
   for (const secret of [email, sha]) expect(text).not.toContain(secret);
 });
+
+test('a ga4 hit before the answer with analytics unknown and ads denied: deniedIdentifiers names em, earlyIdentifiers names uid', () => {
+  const h = withIds('ga4', 'em', 'uid');
+  h.consent = state('unknown', 'denied');
+  const early = check([h]);
+  expect(early.pass).toBe(false);
+  expect(early.message).toContain('ga4 uid (analytics unknown)');
+  expect(early.message).not.toContain('em');
+  expect(early.evidence).toEqual([h.id]);
+  const denial = evaluate([...undecidedOnly, h], parseScenario('start: /')).find((r) => r.expectation === 'builtin: deniedIdentifiers')!;
+  expect(denial.pass).toBe(false);
+  expect(denial.message).toContain('em');
+  expect(denial.message).not.toContain('uid');
+  expect(denial.evidence).toEqual([h.id]);
+});

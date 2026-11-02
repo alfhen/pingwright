@@ -425,3 +425,85 @@ test.each(['xxxxxxxxxxxx[]555-123-4567', '555-123-4567[]xxxxxxxxxxxx'])('possibl
     expect(details).not.toMatch(/\d{3}-\d{3}/);
   }
 });
+
+const paddedBody = (junk: string) => `${EMAIL}${junk}`.padEnd(40, ' ');
+const bodyScanned = (text: string) => findForeignData([rawRequest(REPLAY, text)], [], identity).length;
+
+test('possibleRealData skips a body at 10% binary characters and keeps one just under', () => {
+  expect(bodyScanned(paddedBody('���'))).toBe(1);
+  expect(bodyScanned(paddedBody('����'))).toBe(0);
+  expect(bodyScanned(paddedBody('\u0001\u0001\u0001'))).toBe(1);
+  expect(bodyScanned(paddedBody('\u0001\u0001\u0001\u0001'))).toBe(0);
+  expect(bodyScanned(paddedBody('\t\n\r\t\t\t\t\t'))).toBe(1);
+});
+
+test('possibleRealData does not count C1 characters, and counts 0x7f, as binary', () => {
+  expect(bodyScanned(paddedBody('\u0085\u0085\u0085'))).toBe(1);
+  expect(bodyScanned(paddedBody('\u0085\u009f\u0085\u009f'))).toBe(1);
+  expect(bodyScanned(paddedBody('\u007f\u007f\u007f\u007f'))).toBe(0);
+  expect(bodyScanned(paddedBody(' ÿ ÿ '))).toBe(1);
+});
+
+test('a form segment with an empty field name is placed in the body', () => {
+  const only = findForeignData([rawRequest(REPLAY, `=${EMAIL}`)], [], identity);
+  expect(only.length).toBeGreaterThan(0);
+  for (const flag of only) expect(flag.detail).toMatch(/in the body$/);
+  const mixed = findForeignData([rawRequest(REPLAY, `a=1&=${EMAIL}`)], [], identity);
+  expect(mixed.length).toBeGreaterThan(0);
+  for (const flag of mixed) expect(flag.detail).not.toMatch(/in $/);
+});
+
+test('hashesMatch says only plain address fields are not checked, not that the hit had no fields', () => {
+  const r = check({ city: 'Berlin' });
+  expect(r.pass).toBe(false);
+  expect(r.message).not.toContain('carried no identity fields');
+  expect(r.message).toBe(
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor and event, but identity.hashesMatch failed: the hit carried no hashed identity field, only plain city that Tagreeve does not check.',
+  );
+  expect(check({ city: 'Berlin', country: 'DE' }).message).toBe(
+    'Expected >=1 hits matching all conditions, found 0. 1 hit matched vendor and event, but identity.hashesMatch failed: the hit carried no hashed identity field, only plain city and country that Tagreeve does not check.',
+  );
+});
+
+test('hashesMatch says a Meta hit with only hashed name fields carried fields it does not check', () => {
+  const req: Request = {
+    type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: 'GET',
+    url: `https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&ud[fn]=${sha256('x').hex}&ud[ln]=${sha256('y').hex}`,
+    resourceType: 'image', frameUrl: null, initiator: null, headers: {}, postData: null, outcome: 'stubbed',
+  };
+  const hit = decodeRequest(req)[0]!;
+  const metaRule = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, event: Purchase, identity.hashesMatch: true }');
+  const r = evaluate([hit, req], metaRule, { identity })[0]!;
+  expect(r.pass).toBe(false);
+  expect(r.message).not.toContain('carried no identity fields');
+  expect(r.message).toContain('hashed email or phone, only fn and ln that Tagreeve does not check');
+});
+
+test('hashesMatch never prints a Meta ud key that holds an email or phone', () => {
+  const req: Request = {
+    type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: 'GET',
+    url: 'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&ud[visitor@other-person.example]=1&ud[%2B49%20151%201234567]=1',
+    resourceType: 'image', frameUrl: null, initiator: null, headers: {}, postData: null, outcome: 'stubbed',
+  };
+  const hit = decodeRequest(req)[0]!;
+  expect(Object.keys(hit.ids)).toContain('visitor@other-person.example');
+  const metaRule = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, event: Purchase, identity.hashesMatch: true }');
+  const r = evaluate([hit, req], metaRule, { identity })[0]!;
+  expect(r.message).toContain('that Tagreeve does not check');
+  expect(r.message).toContain('(other)');
+  expect(r.message).not.toContain('other-person');
+  expect(r.message).not.toMatch(/151|1234567/);
+});
+
+test('hashesMatch does not count Meta custom data as unchecked identity fields', () => {
+  const req: Request = {
+    type: 'request', id: newId('request'), runId, stepId: null, t: 0, method: 'GET',
+    url: 'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&cd[country]=de&cd[ge]=f',
+    resourceType: 'image', frameUrl: null, initiator: null, headers: {}, postData: null, outcome: 'stubbed',
+  };
+  const hit = decodeRequest(req)[0]!;
+  const metaRule = parseScenario('start: /\nexpect:\n  must:\n    - { vendor: meta, event: Purchase, identity.hashesMatch: true }');
+  const r = evaluate([hit, req], metaRule, { identity })[0]!;
+  expect(r.pass).toBe(false);
+  expect(r.message).not.toContain('that Tagreeve does not check');
+});
