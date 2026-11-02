@@ -111,3 +111,13 @@ test('--network server is accepted by run and suite', () => {
   expect(parseCli(['run', 's.yml', '--site', 'http://x.test', '--network', 'server'])).toMatchObject({ network: 'server' });
   expect(parseCli([...suiteBase, '--network', 'server'])).toMatchObject({ network: 'server' });
 });
+
+test('--viewport takes WxH on run and suite', () => {
+  expect(parseCli(['run', 's.yml', '--site', 'http://x.test', '--viewport', '390x844'])).toMatchObject({ viewport: { width: 390, height: 844 } });
+  expect(parseCli([...suiteBase, '--viewport', '1280x720'])).toMatchObject({ viewport: { width: 1280, height: 720 } });
+  expect(parseCli(['run', 's.yml', '--site', 'http://x.test'])).not.toHaveProperty('viewport');
+});
+
+test.each(['mobile', '390', '390x', 'x844', '390X844', '199x844', '390x4001', '390x844x1', '-390x844', ''])('--viewport "%s" is a usage error', (value) => {
+  expect(() => parseCli(['run', 's.yml', '--site', 'http://x.test', '--viewport', value])).toThrow(UsageError);
+});

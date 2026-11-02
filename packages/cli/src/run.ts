@@ -2,7 +2,7 @@ import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { readRun, type PingwrightRecord, type Result, type Run, type RunRecords } from '@pingwright/core';
 import { parseTrackerList, type TrackerEntry } from '@pingwright/decoders';
-import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario } from '@pingwright/expect';
+import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario, type Viewport } from '@pingwright/expect';
 import {
   GtmOverrideError,
   GtmOverrideFailure,
@@ -77,6 +77,8 @@ export interface RunSpec {
   out: string;
   seed: number | undefined;
   headed: boolean;
+  /** From `--viewport`. It wins over `options.viewport`. */
+  viewport?: Viewport;
   netLog: boolean;
   autoconsentRules: string[];
   trackers: TrackerEntry[];
@@ -156,6 +158,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
       graceWindowMs: parsed.options.graceWindow ?? DEFAULT_GRACE_MS,
       seed: spec.seed,
       headed: spec.headed,
+      viewport: spec.viewport ?? parsed.options.viewport,
       netLog: spec.netLog,
       autoconsent: spec.autoconsentRules.length ? { ruleFiles: spec.autoconsentRules } : undefined,
       gtmOverride,
@@ -255,6 +258,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       out: args.out,
       seed: args.seed,
       headed: args.headed,
+      viewport: args.viewport,
       netLog: args.netLog,
       autoconsentRules: args.autoconsentRules,
       trackers,

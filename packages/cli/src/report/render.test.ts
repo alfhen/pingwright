@@ -172,6 +172,13 @@ test('the sgtm row has a leak mark and the header keeps the host only', () => {
   expect(html).not.toContain('/products/');
 });
 
+test('the header shows the viewport only when the run asked for one', () => {
+  const base = records();
+  expect(renderReport(buildReportModel(base))).not.toContain('Viewport');
+  const html = renderReport(buildReportModel({ ...base, run: { ...base.run, viewport: { width: 390, height: 844 } } }));
+  expect(html).toContain('Viewport</dt><dd>390x844</dd>');
+});
+
 test('a stub-mode cookie pass shows the caveat, a cannot-evaluate result is not a plain FAIL', () => {
   const results: Result[] = [
     { type: 'result', id: newId('result'), runId, expectation: 'mustNot: {"cookie":"_pwid"}', pass: true, evidence: [], note: 'stubNoCookies' },

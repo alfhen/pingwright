@@ -263,6 +263,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
           out: dir,
           seed,
           headed: false,
+          viewport: args.viewport,
           netLog: false,
           autoconsentRules: args.autoconsentRules,
           trackers,

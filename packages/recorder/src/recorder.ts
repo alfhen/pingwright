@@ -89,6 +89,8 @@ export interface RecorderOptions {
   handoffOverlay?: boolean;
   /** `block` stops service workers from registering. Default `allow`. */
   serviceWorkers?: 'allow' | 'block';
+  /** Passed to `browser.newContext`. Absent keeps the Playwright default. */
+  viewport?: { width: number; height: number };
   headed?: boolean;
   /** Autoconsent options, such as extra rule files. */
   autoconsent?: ConsentOptions;
@@ -235,6 +237,7 @@ export class Recorder {
       const context = await browser.newContext({
         userAgent: options.userAgentOverride ?? chromeUserAgent(browser.version()),
         serviceWorkers: options.serviceWorkers ?? 'allow',
+        ...(options.viewport ? { viewport: options.viewport } : {}),
       });
       const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin, netLogPath, removeNetLogDir);
       await recorder.init();
@@ -285,6 +288,7 @@ export class Recorder {
       identity: null,
       coverage: selfTest.coverage,
       ...(this.options.graceWindowMs !== undefined ? { graceWindowMs: this.options.graceWindowMs } : {}),
+      ...(this.options.viewport ? { viewport: { ...this.options.viewport } } : {}),
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);

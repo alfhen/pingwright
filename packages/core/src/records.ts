@@ -78,6 +78,8 @@ export interface Run {
   graceWindowMs?: number;
   /** The suite variant this run belongs to. A name, never a file path. */
   variant?: string;
+  /** The viewport that was asked for. Absent means the Playwright default. */
+  viewport?: { width: number; height: number };
 }
 
 export interface Step {

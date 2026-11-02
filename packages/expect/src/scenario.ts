@@ -69,6 +69,28 @@ export type StepBody =
 /** `label` is the written label, or the default: the checkpoint's own name, else the kind and the step's index. */
 export type Step = StepBody & { label: string; line: number };
 
+export interface Viewport {
+  width: number;
+  height: number;
+}
+
+export const VIEWPORT_MIN = 200;
+export const VIEWPORT_MAX = 4000;
+
+function isViewportSide(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= VIEWPORT_MIN && n <= VIEWPORT_MAX;
+}
+
+/** Reads `<W>x<H>`. Returns undefined for anything else, including `mobile`. */
+export function parseViewportText(text: string): Viewport | undefined {
+  const match = /^(\d{1,5})x(\d{1,5})$/.exec(text);
+  if (!match) return undefined;
+  const viewport = { width: Number(match[1]), height: Number(match[2]) };
+  return isViewportSide(viewport.width) && isViewportSide(viewport.height) ? viewport : undefined;
+}
+
+export const VIEWPORT_HINT = `a size such as 390x844, with each side from ${VIEWPORT_MIN} to ${VIEWPORT_MAX}`;
+
 export interface ScenarioOptions {
   network?: NetworkMode;
   seed?: number;
@@ -87,6 +109,8 @@ export interface ScenarioOptions {
   identifierFields?: string[];
   /** Hosts or `*.domain` wildcards that `server` mode passes through to the network. Every other collection request stays stubbed. */
   serverHosts?: string[];
+  /** Browser viewport in CSS pixels. `--viewport` overrides it. */
+  viewport?: Viewport;
   /** Severity per built-in check. A check that is not listed is `fail`. */
   builtins?: Partial<Record<BuiltinName, Severity>>;
 }
@@ -130,7 +154,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts', 'viewport'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -637,6 +661,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
             if (bad !== undefined) fail(p, `"${bad}" is a vendor host or a wildcard on a public suffix. List the server container's own host, such as sgtm.example.com or *.example.com`);
             else options.serverHosts = v as string[];
           }
+        } else if (k === 'viewport') {
+          if (isMap(v) && Object.keys(v).length === 2 && isViewportSide(v.width) && isViewportSide(v.height)) options.viewport = { width: v.width, height: v.height };
+          else fail(p, `must be { width, height }, integers from ${VIEWPORT_MIN} to ${VIEWPORT_MAX}. The preset "mobile" does not exist`);
         } else if (k === 'identifierFields') {
           if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names or globs such as user_data.*');
           else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);

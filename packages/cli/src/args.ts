@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { parseViewportText, VIEWPORT_HINT, type Viewport } from '@pingwright/expect';
 
 export class UsageError extends Error {
   constructor(message: string) {
@@ -17,6 +18,7 @@ export interface RunArgs {
   out: string;
   seed: number | undefined;
   headed: boolean;
+  viewport?: Viewport;
   netLog: boolean;
   autoconsentRules: string[];
   gtmOverride: string | undefined;
@@ -63,6 +65,7 @@ export interface SuiteArgs {
   out: string;
   seed: number | undefined;
   withHandoff: boolean;
+  viewport?: Viewport;
   autoconsentRules: string[];
   trackerList: string | undefined;
   vars: Record<string, string>;
@@ -89,7 +92,7 @@ Options for suite:
   --site <url>               The site to test (required)
   --variant <name[=file]>    A GTM build to test (repeatable). "published" is the live container; name=file serves an override file. Default: published
   --with-handoff             Also run scenarios with handoff steps, last, headed
-  --network, --out, --seed, --var, --tracker-list, --autoconsent-rules, --json work as in run
+  --network, --out, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --json work as in run
 
 Options for run:
   --site <url>               The site to test (required)
@@ -97,6 +100,7 @@ Options for run:
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
+  --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
   --net-log                  Capture collection requests no browser hook reports (unload sends, early sandboxed srcdoc sends) from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
@@ -117,6 +121,7 @@ Options:
   --out <dir>                Directory for the JSONL record (default: runs)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
+  --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
   --net-log                  Capture collection requests no browser hook reports (unload sends, early sandboxed srcdoc sends) from Chromium's net log (needs --network live)
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
@@ -161,6 +166,7 @@ export function parseCli(argv: string[]): Command {
         out: { type: 'string' },
         seed: { type: 'string' },
         headed: { type: 'boolean' },
+        viewport: { type: 'string' },
         'net-log': { type: 'boolean' },
         'autoconsent-rules': { type: 'string', multiple: true },
         'gtm-override': { type: 'string' },
@@ -222,6 +228,11 @@ export function parseCli(argv: string[]): Command {
     seed = Number(values.seed);
     if (!Number.isInteger(seed) || seed < 0) throw new UsageError(`--seed must be a non-negative integer, got "${values.seed}"`);
   }
+  let viewport: Viewport | undefined;
+  if (values.viewport !== undefined) {
+    viewport = parseViewportText(values.viewport);
+    if (!viewport) throw new UsageError(`--viewport must be ${VIEWPORT_HINT}, got "${values.viewport}"`);
+  }
   const vars: Record<string, string> = {};
   for (const entry of values.var ?? []) {
     const eq = entry.indexOf('=');
@@ -241,6 +252,7 @@ export function parseCli(argv: string[]): Command {
       out: values.out ?? 'runs',
       seed,
       withHandoff: values['with-handoff'] ?? false,
+      ...(viewport && { viewport }),
       autoconsentRules: values['autoconsent-rules'] ?? [],
       trackerList: values['tracker-list'],
       vars,
@@ -258,6 +270,7 @@ export function parseCli(argv: string[]): Command {
     out: values.out ?? 'runs',
     seed,
     headed: values.headed ?? false,
+    ...(viewport && { viewport }),
     netLog: values['net-log'] ?? false,
     autoconsentRules: values['autoconsent-rules'] ?? [],
     gtmOverride: values['gtm-override'],
