@@ -137,6 +137,7 @@ export interface ShapeDiff {
   added: ShapeChange[];
   removed: ShapeChange[];
   countChanges: ShapeCountChange[];
+  moved: ShapeMove[];
   /** A key or tuple on one side only. A count change is not drift. */
   drift: boolean;
 }
@@ -168,18 +169,89 @@ function shapeFields(hit: Hit): ShapeFields {
   return { consent, ids };
 }
 
-/** Drift is a key or tuple on one side only. The order of hits and their counts do not matter. */
-export function diffShapes(a: ShapeKey[], b: ShapeKey[]): ShapeDiff {
-  const result: ShapeDiff = { added: [], removed: [], countChanges: [], drift: false };
-  const index = (shape: ShapeKey[]) => new Map(shape.map((k) => [JSON.stringify(k.key), k]));
-  const ia = index(a);
-  const ib = index(b);
+export interface ShapeMove {
+  vendor: string;
+  event: string;
+  page?: string;
+  from: string;
+  to: string;
+  /** Hits that moved. */
+  count: number;
+}
+
+export interface ShapeDiffOptions {
+  /** The labels of the current run's consent epochs, in order. A move is judged against this order. */
+  epochOrder?: string[];
+}
+
+const keyId = (k: DiffKey) => JSON.stringify([k.epoch, k.vendor, k.event, k.page ?? null]);
+const groupId = (k: DiffKey) => JSON.stringify([k.vendor, k.event, k.page ?? null]);
+// Sorted, so a file saved with sorted keys (`jq -S`) gives the same id as one in field order.
+const tupleId = (t: ShapeFields) => JSON.stringify([Object.entries(t.consent).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)), t.ids]);
+
+const total = (k: ShapeKey | undefined) => (k?.tuples ?? []).reduce((n, t) => n + t.count, 0);
+
+function tupleCounts(k: ShapeKey | undefined): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const t of k?.tuples ?? []) out.set(tupleId(t), (out.get(tupleId(t)) ?? 0) + t.count);
+  return out;
+}
+
+function contains(big: Map<string, number>, small: Map<string, number>): boolean {
+  for (const [id, n] of small) if ((big.get(id) ?? 0) < n) return false;
+  return true;
+}
+
+/**
+ * One group (vendor, event, page) moved when its total is the same, exactly two epochs differ, they are
+ * neighbours in the run's order, and every hit that stayed matches. Any other change is drift.
+ */
+function findMove(epochs: Map<string, { a?: ShapeKey; b?: ShapeKey }>, order: string[]): { from: string; to: string; count: number } | undefined {
+  const changed = [...epochs].filter(([, e]) => total(e.a) !== total(e.b));
+  if (changed.length !== 2) return undefined;
+  const [[e1, v1], [e2, v2]] = changed as [[string, { a?: ShapeKey; b?: ShapeKey }], [string, { a?: ShapeKey; b?: ShapeKey }]];
+  const d1 = total(v1.b) - total(v1.a);
+  if (d1 + total(v2.b) - total(v2.a) !== 0) return undefined;
+  const [from, to] = d1 < 0 ? [[e1, v1], [e2, v2]] as const : [[e2, v2], [e1, v1]] as const;
+  const i = order.indexOf(from[0]);
+  const j = order.indexOf(to[0]);
+  if (i < 0 || j < 0 || Math.abs(i - j) !== 1) return undefined;
+  if (order.filter((l) => l === from[0] || l === to[0]).length !== 2) return undefined;
+  if (!contains(tupleCounts(from[1].a), tupleCounts(from[1].b))) return undefined;
+  if (!contains(tupleCounts(to[1].b), tupleCounts(to[1].a))) return undefined;
+  return { from: from[0], to: to[0], count: Math.abs(d1) };
+}
+
+/** Drift is a key or tuple on one side only. The order of hits and their counts do not matter. Hits that moved across one consent answer are listed in `moved` and are not drift. */
+export function diffShapes(a: ShapeKey[], b: ShapeKey[], options: ShapeDiffOptions = {}): ShapeDiff {
+  const result: ShapeDiff = { added: [], removed: [], countChanges: [], moved: [], drift: false };
+  const ia = new Map(a.map((k) => [keyId(k.key), k]));
+  const ib = new Map(b.map((k) => [keyId(k.key), k]));
+
+  const groups = new Map<string, Map<string, { a?: ShapeKey; b?: ShapeKey }>>();
+  for (const [side, index] of [['a', ia], ['b', ib]] as const) {
+    for (const k of index.values()) {
+      const epochs = groups.get(groupId(k.key)) ?? new Map();
+      epochs.set(k.key.epoch, { ...epochs.get(k.key.epoch), [side]: k });
+      groups.set(groupId(k.key), epochs);
+    }
+  }
+  const skipped = new Set<string>();
+  for (const epochs of groups.values()) {
+    const move = findMove(epochs, options.epochOrder ?? []);
+    if (!move) continue;
+    const key = (epochs.get(move.from)!.a ?? epochs.get(move.from)!.b)!.key;
+    result.moved.push({ vendor: key.vendor, event: key.event, ...(key.page === undefined ? {} : { page: key.page }), ...move });
+    for (const label of [move.from, move.to]) skipped.add(keyId({ ...key, epoch: label }));
+  }
+
   for (const id of [...new Set([...ia.keys(), ...ib.keys()])].sort()) {
+    if (skipped.has(id)) continue;
     const ka = ia.get(id);
     const kb = ib.get(id);
     const key = (ka ?? kb)!.key;
-    const ta = new Map((ka?.tuples ?? []).map((t) => [JSON.stringify([t.consent, t.ids]), t]));
-    const tb = new Map((kb?.tuples ?? []).map((t) => [JSON.stringify([t.consent, t.ids]), t]));
+    const ta = new Map((ka?.tuples ?? []).map((t) => [tupleId(t), t]));
+    const tb = new Map((kb?.tuples ?? []).map((t) => [tupleId(t), t]));
     for (const [tid, t] of tb) {
       const before = ta.get(tid);
       if (!before) result.added.push({ key, consent: t.consent, ids: t.ids, wholeKey: !ka });

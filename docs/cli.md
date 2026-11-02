@@ -45,7 +45,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
 | `--tracker-list <file>` | Adds tracker entries to the built-in list. See below. |
-| `--baseline <file>` | Compares the hits of the run with a baseline file made by `tagreeve baseline save`, after the expectations. A key or tuple on one side only is drift and makes the exit code 1. A missing or invalid file exits 2 before the browser starts. See `tagreeve baseline`. |
+| `--baseline <file>` | Compares the hits of the run with a baseline file made by `tagreeve baseline save`, after the expectations. A key or tuple on one side only is drift and makes the exit code 1. Hits that moved across one consent answer are a warning, not drift. A missing or invalid file exits 2 before the browser starts. See `tagreeve baseline`. |
 | `--var <k=v>` | Overrides a variable the scenario declares under `vars`. A name the scenario does not declare exits 2. Can be repeated. |
 | `--json` | Prints a JSON summary on stdout instead of the text summary. |
 
@@ -262,7 +262,7 @@ Then check a new run against it:
 tagreeve run checkout.yml --site https://shop.example --baseline baselines/checkout.json
 ```
 
-Drift is a key or tuple that is on one side only. A changed consent field or ID presence shows as one tuple removed and one added. A count change is listed and is not drift. The summary gets a `Baseline` block, and the `--json` summary gets a `baseline` field with `drift`, the counts of added, removed and count changes, `warnings` and the `changes` lines. Drift sets `ok` to false and the exit code to at least 1. A baseline from another scenario name or another site host prints a warning and the compare goes on. The run is shaped as the baseline was, so `--by-page` is the file's choice.
+Drift is a key or tuple that is on one side only. A changed consent field or ID presence shows as one tuple removed and one added. A count change is listed and is not drift. The summary gets a `Baseline` block, and the `--json` summary gets a `baseline` field with `drift`, the counts of added, removed and count changes, `warnings` and the `changes` lines. Drift sets `ok` to false and the exit code to at least 1. Hits that moved across one consent answer are not drift. This holds when the total for a vendor and event (and page, with `--by-page`) is the same and only two neighbouring consent epochs differ, in either direction. Each move is a warning, for example `moved meta PageView from undecided to granted`. When the hit moves into `undecided`, the warning says it now fires before the consent answer. A move across two answers, or a changed total, is drift. Scenario names are compared without `.yml` or `.yaml`. A baseline from another scenario name or another site host prints a warning and the compare goes on. The run is shaped as the baseline was, so `--by-page` is the file's choice.
 
 `baseline` and `diff` answer different questions. `diff` pairs the hits of a key in order and reports each one. A baseline compares sets of tuples, so a reordering of hits is not drift and a new tuple inside a key is.
 

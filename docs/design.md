@@ -379,7 +379,7 @@ Every run also gets built-in checks. `unknownDestination` fails the run when a r
 
 Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`), `transport`, `host`, `outcome` and `params.*`. `host` is a `host:port` or a bare hostname, matched exactly and with case. `ids.hashes` is true when any hashed ID is present; `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` test one parameter.
 
-`tagreeve diff a b` groups hits by vendor and event and reports added, removed and changed hits, including consent and ID changes. `tagreeve baseline save` keeps one run as names and counts (keys, consent and ID-presence tuples, hit counts) and `run --baseline` fails on drift, a key or tuple on one side only. A baseline compares sets of tuples and `diff` compares the hits of a key in order, so a reordering is not drift and a new tuple in a shared key is.
+`tagreeve diff a b` groups hits by vendor and event and reports added, removed and changed hits, including consent and ID changes. `tagreeve baseline save` keeps one run as names and counts (keys, consent and ID-presence tuples, hit counts) and `run --baseline` fails on drift, a key or tuple on one side only. Hits that moved to the next or the previous consent epoch are not drift: the total of one vendor and event is the same, only two epochs on either side of one consent answer differ, and every other hit matches. Each such move is a warning. A baseline compares sets of tuples and `diff` compares the hits of a key in order, so a reordering is not drift and a new tuple in a shared key is.
 
 ## 12. Interfaces
 
@@ -500,7 +500,7 @@ Where the code in 0.4 differs from the design above. Sections 15.1 to 15.3 still
 
 - **`handoff` can end by itself.** `until` takes a URL or an element, with `settle` and `timeout`. `Step.handoffEnd` says what ended it. `wait` takes `{ url }` too.
 - **A `payment` step exists, opt-in.** It types a provider's documented test card (`shopify-bogus`, `shopify-test`). It needs `--allow-test-payment <host>` equal to the `--site` host, the host in the user's test-payment hosts file, and the provider's test mode on the page. Log-ins stay handoff steps, and `fill`, `select` and `evaluate` refuse card fields. The Shopify runtime values are not yet checked on a real store; the step fails closed and types nothing if they do not match.
-- **`baseline save` and `run --baseline`.** A baseline keeps names and counts. A key or tuple that appears or disappears gives exit code 1. A missing or invalid baseline gives exit code 2.
+- **`baseline save` and `run --baseline`.** A baseline keeps names and counts. A key or tuple that appears or disappears gives exit code 1, except hits that moved across one consent answer, which give a warning (§11). A missing or invalid baseline gives exit code 2.
 - **`--viewport <W>x<H>`** sets the window size only. The user agent and client hints stay desktop. There is no `mobile` preset.
 - **`identity.country`** picks the format of the fake identity for US, SE, GB and DE. Other countries keep US-shaped data and the run warns. `fill` entries can be optional.
 - **`possibleRedirectHop`** flags a request handed to Chromium that failed with `net::ERR_FAILED` and no response, or got a non-redirect status with a `Location` header. The hop itself is still not recorded (§5.3). `live` mode has no such flag.
