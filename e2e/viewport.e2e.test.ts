@@ -35,5 +35,7 @@ test.each(['mobile', '390', '100x100'])('--viewport %s exits 2 before the browse
   const r = await runCli(['run', scenario('viewport'), '--site', site.url, '--out', outDir, '--json', '--viewport', value]);
   expect(r.code).toBe(2);
   expect(r.stderr).toContain('--viewport must be');
+  expect(r.stderr).not.toContain('Usage:');
+  expect(r.stderr.trimEnd().split('\n').length).toBeLessThan(3);
   expect(r.records).toBeUndefined();
 });

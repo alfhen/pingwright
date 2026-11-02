@@ -2,10 +2,19 @@ import { parseArgs } from 'node:util';
 import { parseViewportText, VIEWPORT_HINT, type Viewport } from '@tagreeve/expect';
 
 export class UsageError extends Error {
-  constructor(message: string) {
+  command: string | undefined;
+
+  constructor(message: string, command?: string) {
     super(message);
     this.name = 'UsageError';
+    this.command = command;
   }
+}
+
+const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser'];
+
+export function usageHint(command: string | undefined): string {
+  return `Run tagreeve ${command ? `${command} ` : ''}--help for the options.`;
 }
 
 export type Network = 'stub' | 'server' | 'live';
@@ -161,36 +170,50 @@ function parseVariants(entries: string[]): VariantArg[] {
   return variants;
 }
 
+const OPTIONS = {
+  site: { type: 'string' },
+  network: { type: 'string' },
+  out: { type: 'string' },
+  seed: { type: 'string' },
+  headed: { type: 'boolean' },
+  viewport: { type: 'string' },
+  'net-log': { type: 'boolean' },
+  'autoconsent-rules': { type: 'string', multiple: true },
+  'gtm-override': { type: 'string' },
+  'tracker-list': { type: 'string' },
+  baseline: { type: 'string' },
+  variant: { type: 'string', multiple: true },
+  'with-handoff': { type: 'boolean' },
+  'with-test-payment': { type: 'boolean' },
+  'allow-test-payment': { type: 'string' },
+  var: { type: 'string', multiple: true },
+  json: { type: 'boolean' },
+  html: { type: 'string' },
+  'by-page': { type: 'boolean' },
+  'all-flags': { type: 'boolean' },
+  version: { type: 'boolean' },
+  help: { type: 'boolean', short: 'h' },
+} as const;
+
 export function parseCli(argv: string[]): Command {
+  try {
+    return parseCommand(argv);
+  } catch (error) {
+    if (error instanceof UsageError && error.command === undefined) {
+      const first = parseArgs({ args: argv, allowPositionals: true, strict: false, options: OPTIONS }).positionals[0];
+      if (first !== undefined && COMMANDS.includes(first)) error.command = first;
+    }
+    throw error;
+  }
+}
+
+function parseCommand(argv: string[]): Command {
   let parsed;
   try {
     parsed = parseArgs({
       args: argv,
       allowPositionals: true,
-      options: {
-        site: { type: 'string' },
-        network: { type: 'string' },
-        out: { type: 'string' },
-        seed: { type: 'string' },
-        headed: { type: 'boolean' },
-        viewport: { type: 'string' },
-        'net-log': { type: 'boolean' },
-        'autoconsent-rules': { type: 'string', multiple: true },
-        'gtm-override': { type: 'string' },
-        'tracker-list': { type: 'string' },
-        baseline: { type: 'string' },
-        variant: { type: 'string', multiple: true },
-        'with-handoff': { type: 'boolean' },
-        'with-test-payment': { type: 'boolean' },
-        'allow-test-payment': { type: 'string' },
-        var: { type: 'string', multiple: true },
-        json: { type: 'boolean' },
-        html: { type: 'string' },
-        'by-page': { type: 'boolean' },
-        'all-flags': { type: 'boolean' },
-        version: { type: 'boolean' },
-        help: { type: 'boolean', short: 'h' },
-      },
+      options: OPTIONS,
     });
   } catch (error) {
     throw new UsageError(error instanceof Error ? error.message : String(error));

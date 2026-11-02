@@ -156,6 +156,30 @@ test('handoff scenarios are skipped without --with-handoff, and run last with it
   expect(withHandoff.specs.map((s) => s.scenarioName)).toEqual(['b', 'a-pay']);
 });
 
+test('--viewport reaches every run, and no flag passes undefined', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
+  const variants = [{ name: 'published' }, { name: 'ws', file: await override(dir) }];
+  const viewport = { width: 390, height: 844 };
+  const withFlag = recorder();
+  await suiteCommand(args(dir, out, { variants, viewport }), capture().io, withFlag);
+  expect(withFlag.specs.map((s) => s.viewport)).toEqual([viewport, viewport, viewport, viewport]);
+  const without = recorder();
+  await suiteCommand(args(dir, out), capture().io, without);
+  expect(without.specs.map((s) => s.viewport)).toEqual([undefined, undefined]);
+});
+
+test('a skipped handoff scenario between two others gets exactly one table row', async () => {
+  const { dir, out } = await workDir({ 'accept.yml': VALID, 'checkout.yml': HANDOFF, 'reject.yml': VALID });
+  const variants = [{ name: 'published' }, { name: 'ws', file: await override(dir) }];
+  for (const withVariants of [[{ name: 'published' }], variants]) {
+    const c = capture();
+    await suiteCommand(args(dir, out, { variants: withVariants }), c.io, recorder());
+    const rows = c.out().split('\n').filter((l) => /^(accept|checkout|reject)\s/.test(l));
+    expect(rows.map((l) => l.split(/\s+/)[0])).toEqual(['accept', 'checkout', 'reject']);
+    expect(rows[1]).toMatch(/^checkout\s+SKIPPED/);
+  }
+});
+
 test('every variant of a scenario gets the same seed', async () => {
   const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
   const variants = [{ name: 'published' }, { name: 'ws', file: await override(dir) }];

@@ -107,6 +107,21 @@ test.each([
   expect(() => parseCli(argv)).toThrow(message);
 });
 
+test.each([
+  [['nope', 'run'], undefined],
+  [['--out', 'report', 'nope'], undefined],
+  [['--out', 'report', 'run'], 'run'],
+  [['diff', 'a'], 'diff'],
+])('usage error for %j carries command %s', (argv, command) => {
+  let error: unknown;
+  try {
+    parseCli(argv);
+  } catch (e) {
+    error = e;
+  }
+  expect((error as UsageError).command).toBe(command);
+});
+
 test('--network server is accepted by run and suite', () => {
   expect(parseCli(['run', 's.yml', '--site', 'http://x.test', '--network', 'server'])).toMatchObject({ network: 'server' });
   expect(parseCli([...suiteBase, '--network', 'server'])).toMatchObject({ network: 'server' });

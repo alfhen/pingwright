@@ -9,9 +9,13 @@
 
 <!-- E01 -->
 
-<!-- B01 -->
+### Fixed
+- `run --baseline` compares scenario names without `.yml` or `.yaml`, so a baseline saved from `checkout` matches a run of `checkout.yml`. (#612)
+- The baseline counts of added, removed and changed tuples come from the diff, so two tuples with the same change count as two. (#589)
+- A baseline saved with sorted keys, for example by `jq -S`, compares the same. (#591)
+- Hits that move across one consent answer, with the same total, are a warning and no longer drift. A move across two answers or a changed total is still drift. (#618)
 
-<!-- C01 -->
+A usage error now prints the message and one line, `Run tagreeve <command> --help for the options.`, not the full help text. `--help` still prints it.
 
 <!-- B02 -->
 

@@ -4,7 +4,10 @@ import { rootVersion, run, runCli, runText, scenario, site, UNKNOWN } from './cl
 
 test('usage errors exit 2', async () => {
   expect((await runCli(['run'])).code).toBe(2);
-  expect((await runCli(['run', scenario('undecided')])).stderr).toContain('--site is required');
+  const noSite = await runCli(['run', scenario('undecided')]);
+  expect(noSite.stderr).toContain('--site is required');
+  expect(noSite.stderr).not.toContain('Usage:');
+  expect(noSite.stderr.trimEnd().split('\n').length).toBeLessThan(3);
   const undeclared = await runCli(['run', scenario('undecided'), '--site', site.url, '--var', 'nope=1']);
   expect(undeclared.code).toBe(2);
   expect(undeclared.stderr).toContain('not declared');

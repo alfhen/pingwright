@@ -86,7 +86,9 @@ jobs:
           tmp=$(mktemp -d)
           npm i -g --prefix "$tmp" ./tagreeve-*.tgz
           "$tmp/bin/tagreeve" --version
-          "$tmp/bin/pingwright" --version 2>&1 | grep -q "pingwright is now tagreeve"
+          version=$(node -p 'require("./package.json").version')
+          test "$("$tmp/bin/pingwright" --version 2>"$tmp/alias.err")" = "$version"
+          grep -q "is now tagreeve" "$tmp/alias.err"
           echo "PW_BIN=$tmp/bin/tagreeve" >> "$GITHUB_ENV"
       - name: Build a release commit
         env:
