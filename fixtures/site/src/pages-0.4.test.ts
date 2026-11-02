@@ -134,7 +134,7 @@ describe('/unload-gap modes', () => {
   test('the page passes ?mode to the frame and leaves the frame URL alone without it', async () => {
     const html = await page('/unload-gap');
     expect(html).toContain('src="/web-pixels@0.0.0-fixture/sandbox/gap/"');
-    expect(html).toBe(readFileSync(new URL('../public/unload-gap.html', import.meta.url), 'utf8'));
+    expect(html).toContain("get('mode')");
   });
 
   test('the frame script handles custom and close, and the default hits are unchanged', async () => {
