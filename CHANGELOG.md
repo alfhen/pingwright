@@ -46,7 +46,18 @@ Issues still open that you can meet:
 - The `payment` step has not been checked on a real store. The Shopify values it relies on (the test-mode marker text, the card iframe selectors and the card host) may not match. If they do not, the step fails closed and types nothing.
 - Platform infrastructure hosts fill the `unknownDestination` list (#585). Planned for 0.5.0.
 - Several stores in one suite (#360) and `unloadGap` at the end of a run (#261) are deferred to 0.5.0.
-- Open `review-minor` issues in the 0.4.0 milestone: #601, #599, #598, #552, #538, #536, #535, #533, #531 and #526.
+- After a baseline drift, `pass` stays true while `ok` is false (#590). Read `ok`.
+- Baseline matching depends on JSON property order (#591), and the summary counts come from deduplicated text lines (#589).
+- `wait: { url }` matches any page, not only the active page (#569).
+- The leak check misses a URL-encoded email (#565).
+- `Step.payment` is set before any key is typed (#603). No test covers the Shopify payment runtime and the typed name (#604).
+- The no-identity-fields message also fires for fields that were not checked (#595).
+- A suite child without `suite.json` beside a valid one has no test (#593). No test checks that `suite` passes `--viewport` to its runs (#601). No leak test covers the new `skippedFields` output (#599).
+- A gap frame is requested twice when `mode` is given (#552).
+- Some e2e leak checks cannot fail: the SE `possibleRealData` check (#598), the baseline hash and cookie checks (#588), the handoff `until` check (#570) and the cookie already-set check (#543).
+- Rename gaps: CI does not check that the old-name alias prints the version (#606), and the docs tell users to install `tagreeve` before it is on npm (#607). Use `npm i -g tagreeve@next` for this release.
+
+Other open `review-minor` issues are wording or test gaps in the plan and design docs: #526, #531, #533, #535, #536, #538, #546, #555, #560, #561, #562 and #563.
 
 ## 0.3.0
 

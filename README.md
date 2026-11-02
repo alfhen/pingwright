@@ -186,7 +186,7 @@ tagreeve run scenario.yml --site https://staging.example.com --tracker-list trac
 
 ## For agents
 
-The MCP server is not built yet. It will let an agent run a scenario, query the records, read tag firing per event, and compare runs. Today an agent can call the CLI: `run --json`, `diff --json` and `suite --json` print structured results. Every record has a stable ID, and every result names the run and step.
+There is no MCP server. An agent uses the CLI: `run --json`, `diff --json` and `suite --json` print structured results. Every record has a stable ID, and every result names the run and step.
 
 Tagreeve will not change GTM containers or sign in to Google. An agent that edits a workspace with a GTM API client (for example a GTM MCP server) passes the workspace preview values to Tagreeve for one run with `--gtm-override`.
 
@@ -194,15 +194,14 @@ Tagreeve will not change GTM containers or sign in to Google. An agent that edit
 
 | Package | Job | State |
 | --- | --- | --- |
-| `core` | IDs, clock, record types, record schema version, JSONL run store, fake identity | 0.3 |
-| `recorder` | Launch the browser, play steps, capture requests, responses, cookies and dataLayer events, GTM override, Done control, locators, `server` mode | 0.3 |
-| `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.3 (GA4, Google Ads, Meta, Pinterest, Stape, server-container data client, tracker list; hit field names) |
+| `core` | IDs, clock, record types, record schema version, JSONL run store, fake identity | 0.4 |
+| `recorder` | Launch the browser, play steps, capture requests, responses, cookies and dataLayer events, GTM override, Done control, locators, `server` mode | 0.4 |
+| `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.4 (GA4, Google Ads, Meta, Pinterest, Stape, server-container data client, tracker list; hit field names) |
 | `consent` | Banner handling through DuckDuckGo autoconsent, Consent Mode probe, epochs | 0.1 |
-| `expect` | Scenario format, expectations, `deniedIdentifiers`, diff engine | 0.3 |
-| `cli` | `tagreeve run`, `diff`, `suite`, `report`, `install-browser` | 0.3 |
+| `expect` | Scenario format, expectations, `deniedIdentifiers`, diff engine | 0.4 |
+| `cli` | `tagreeve run`, `diff`, `suite`, `report`, `baseline`, `install-browser` | 0.4 |
 | `gtm` | Tag-firing reporter templates | not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
-| `mcp` | MCP server | not built yet |
 
 ## Related tools
 

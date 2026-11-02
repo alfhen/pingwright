@@ -52,7 +52,7 @@ flowchart TB
   report --> front["CLI"]
 ```
 
-The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. The decoders, expectations, report and diff read the store, and the CLI and MCP server expose them.
+The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. The decoders, expectations, report and diff read the store, and the CLI exposes them.
 
 ## 4. Data model
 
@@ -411,7 +411,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 **Other rules**
 
 - Playwright traces, HAR files and screenshots are off by default. When turned on, the report states that they are unfiltered.
-- MCP results go to the agent's model provider. With fake identities this is acceptable. Flagged `possibleRealData` values are replaced with a placeholder in MCP output.
+- CLI `--json` output goes to the agent's model provider. With fake identities this is acceptable. A flagged `possibleRealData` value is never printed: the output holds the name, the request and the step only.
 - Tagreeve never enters a password on a hosted site. Log-ins are handoff steps. Payments are handoff steps too, except the opt-in test payment, which types only a provider's documented test card after the three gates in §5.4 hold. Loopback hosts are exempt as before (§5.4).
 - Tagreeve never takes a target address from incoming traffic.
 
