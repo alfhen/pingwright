@@ -1,0 +1,9 @@
+start: /checkout?phone=off
+steps:
+  - fill:
+      "#email": email
+      "#phone": { value: phone, optional: true }
+      "#city": city
+  - click: "#continue"
+    label: continue
+options: { seed: 1, optionalTimeout: 300ms, allowUnknownDestination: true }

@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline/promises';
-import { createIdentity, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
+import { createIdentity, hasCountryFormat, type Identity, type Request, type Step as StepRecord } from '@pingwright/core';
 import { IDENTITY_FIELDS, SECRET_FIELD, type IdentityField, type Locator, type Scenario, type Step, type UrlMatcher } from '@pingwright/expect';
 import type { Frame, Page } from 'playwright';
 import { Scrubber } from './gtm-scrub.ts';
@@ -75,6 +75,8 @@ export interface PlayOptions {
   handoffResolver?: (message: string, signal: AbortSignal) => Promise<void>;
   /** Where handoff instructions go. Default: stdout. */
   print?: (text: string) => void;
+  /** Where run warnings go. Default: nowhere. */
+  warn?: (text: string) => void;
   /** Longest wait for a selector, a click or a fill. */
   actionTimeoutMs?: number;
   /** Decides whether an `addToCart` step added anything. Default: `defaultCartCheck`, widened by the scenario's `cartRequest`. */
@@ -105,6 +107,8 @@ export class GtmOverrideFailure extends Error {
     this.name = 'GtmOverrideFailure';
   }
 }
+
+const DEFAULT_OPTIONAL_TIMEOUT_MS = 2000;
 
 const HANDOFF_REMINDER = 'Use test accounts and test cards only. Never enter real personal or payment details.';
 
@@ -179,6 +183,16 @@ async function inspectField(page: Page, selector: string, timeout: number): Prom
 }
 
 /** Returns true when the field is a card or password field (only allowed on loopback hosts). */
+async function isPresent(page: Page, selector: string, timeout: number): Promise<boolean> {
+  try {
+    await page.locator(selector).first().waitFor({ state: 'visible', timeout });
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') return false;
+    throw error;
+  }
+}
+
 async function fillField(page: Page, selector: string, value: string, timeout: number): Promise<boolean> {
   const { field, tag, sensitive } = await inspectField(page, selector, timeout);
   if (tag === 'select') await field.selectOption(value, { timeout });
@@ -368,6 +382,10 @@ async function runStep(
       return;
     case 'fill':
       for (const [selector, value] of Object.entries(step.value)) {
+        if (step.optional?.includes(selector) && !(await isPresent(page, selector, scenario.options.optionalTimeout ?? DEFAULT_OPTIONAL_TIMEOUT_MS))) {
+          record.skippedFields = [...(record.skippedFields ?? []), selector];
+          continue;
+        }
         const typed = fillValue(value, identity);
         const sensitive = await fillField(page, selector, typed, timeout);
         if (sensitive || SECRET_FIELD.test(selector) || typed !== value) continue;
@@ -445,7 +463,9 @@ async function wakeOverlay(recorder: Recorder): Promise<void> {
 
 /** The seeded identity with the scenario's own field values. Literal `fill` values join `extra` once typed into a non-sensitive field. */
 export function scenarioIdentity(scenario: Scenario, seed: number): Identity {
-  return { ...createIdentity(seed), ...scenario.identity };
+  const declared = scenario.identity.country;
+  const country = declared && /^[a-z]{2}$/i.test(declared) ? declared.toUpperCase() : declared;
+  return { ...createIdentity(seed, { country }), ...scenario.identity, ...(country && { country }) };
 }
 
 /**
@@ -455,6 +475,9 @@ export function scenarioIdentity(scenario: Scenario, seed: number): Identity {
 export async function playScenario(recorder: Recorder, scenario: Scenario, options: PlayOptions = {}): Promise<Identity> {
   const identity = scenarioIdentity(scenario, options.seed ?? scenario.options.seed ?? Math.floor(Math.random() * 2 ** 31));
   recorder.setIdentity(identity);
+  if (!hasCountryFormat(identity.country)) {
+    options.warn?.(`identity.country ${identity.country} has no local format; name, address, zip and phone are US-shaped`);
+  }
   const steps: Step[] = [{ kind: 'visit', value: scenario.start, label: 'start', line: 0 }, ...scenario.steps];
   for (const [index, step] of steps.entries()) {
     const record = recorder.beginStep(step.label, index);

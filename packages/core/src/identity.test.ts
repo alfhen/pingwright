@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   findStableHashes,
+  hasCountryFormat,
   createIdentity,
   hashEmail,
   hashPhone,
@@ -590,6 +591,36 @@ describe('foreign digests in base64', () => {
       for (const text of [`utm_campaign=${value}`, `dp=${value}`, `ep.item_id=${value}`, JSON.stringify({ page_path: value }), value]) {
         expect(scan(text, me), text).toEqual([]);
       }
+    }
+  });
+});
+
+describe('country formats', () => {
+  it('gives GB a drama-range phone and a postcode', () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const i = createIdentity(seed, { country: 'GB' });
+      expect(i.phone).toMatch(/^\+447700900\d{3}$/);
+      expect(i.zip).toMatch(/^[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}$/);
+    }
+  });
+
+  it('gives DE a Bundesnetzagentur drama number and a five digit postcode', () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const i = createIdentity(seed, { country: 'DE' });
+      expect(i.phone).toMatch(/^\+493023125\d{3}$/);
+      expect(i.zip).toMatch(/^\d{5}$/);
+    }
+  });
+
+  it('is stable for a seed and reports which countries have a format', () => {
+    expect(createIdentity(5, { country: 'DE' })).toEqual(createIdentity(5, { country: 'DE' }));
+    expect(['US', 'se', 'GB', 'de', 'DK'].map(hasCountryFormat)).toEqual([true, true, true, true, false]);
+  });
+
+  it('does not flag its own GB and DE phone in a scan', () => {
+    for (const country of ['GB', 'DE']) {
+      const i = createIdentity(3, { country });
+      expect(scan(`ph=${i.phone}&n=0${i.phone.slice(3)}`, i)).toEqual([]);
     }
   });
 });

@@ -224,3 +224,16 @@ test.each([
   expect(lines[at + 1]).toBe(`       note: ${text}`);
   expect(lines.join('\n')).not.toContain('secret-field');
 });
+
+test('skipped optional fields are listed under their step and carried in the summary', () => {
+  const records = {
+    run: { id: 'run_1' },
+    hits: [],
+    consentEpochs: [],
+    flags: [],
+    steps: [{ label: 'start' }, { label: 'fill-1', skippedFields: ['#phone'] }],
+  } as unknown as RunRecords;
+  const summary = buildSummary(records, [result(true)], 'p');
+  expect(summary.skippedFields).toEqual([{ step: 'fill-1', selector: '#phone' }]);
+  expect(formatSummary(summary)).toContain('Skipped fields\n  fill-1\n    SKIPPED FIELD #phone (not present)');
+});

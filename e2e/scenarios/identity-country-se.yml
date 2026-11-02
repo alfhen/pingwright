@@ -1,0 +1,16 @@
+start: /checkout
+identity:
+  country: SE
+steps:
+  - fill:
+      "#email": email
+      "#first-name": firstName
+      "#last-name": lastName
+      "#phone": phone
+      "#address1": address1
+      "#city": city
+      "#zip": zip
+      "#country": country
+  - click: "#continue"
+    label: continue
+options: { seed: 1, allowUnknownDestination: true }

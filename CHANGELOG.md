@@ -10,6 +10,10 @@
 
 <!-- U03 -->
 
+- `identity.country` now picks the format of the fake identity. GB and DE are added beside US and SE. A country with no format keeps US-shaped data and the run warns. (#32)
+- A `fill` entry can be `{ value: phone, optional: true }`. A field that is not on the page is skipped, and the summary and `--json` list it. New option `optionalTimeout`. (#586)
+- The real-phone warning says why the number looks real and names the fictional range for the country. German drama numbers get no warning. (#583)
+
 <!-- V01 -->
 - `pingwright baseline save` keeps the shape of a run as names and counts, and `run --baseline` fails with exit 1 when a key or tuple appears or disappears. A missing or invalid baseline exits 2. (#359)
 

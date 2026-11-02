@@ -92,6 +92,8 @@ export interface Step {
   endedAt: number | null;
   /** What ended a `handoff` step. Absent on other steps and on older records. */
   handoffEnd?: 'done' | 'enter' | 'until' | 'timeout';
+  /** Selectors of `optional` fill entries whose field was not on the page. Never values. */
+  skippedFields?: string[];
   /** Why the step failed. Absent when it passed. */
   error?: string;
 }
