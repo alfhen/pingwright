@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-> **Pingwright is now Tagreeve.** The command `pingwright` still works until 0.5.0. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
+> **Pingwright is now Tagreeve.** The command `pingwright` still works until 0.5.0. Versions up to `0.3.0` are on npm as `pingwright`, and `tagreeve` starts at `0.4.0-rc.1`. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
 
 Agent-first testing for tags and consent. Tagreeve plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 
@@ -70,15 +70,15 @@ tagreeve run scenarios/undecided-visitor.yml --site https://staging.example.com
 ## Install
 
 ```bash
-npm i -g tagreeve
+npm i -g tagreeve@next
 tagreeve install-browser
 ```
 
-Node 22.18 or later. `npm i -g tagreeve` installs `0.3.0`. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `npm i -g tagreeve@next` installs the newest 0.4 release candidate. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
 
 ## Quick start
 
-1. `npm i -g tagreeve`
+1. `npm i -g tagreeve@next`
 2. `tagreeve install-browser`
 3. Write `scenario.yml`:
 

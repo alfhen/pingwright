@@ -3,11 +3,11 @@
 ## Install
 
 ```bash
-npm i -g tagreeve
+npm i -g tagreeve@next
 tagreeve install-browser
 ```
 
-`npm i -g tagreeve` installs `0.3.0`. Tagreeve needs Node 22.18 or later.
+`npm i -g tagreeve@next` installs the newest 0.4 release candidate. The first Tagreeve release is `0.4.0-rc.1`. Versions up to `0.3.0` were published under the old name, as the README explains. Tagreeve needs Node 22.18 or later.
 
 You can also install a release from its git tag:
 
@@ -15,7 +15,7 @@ You can also install a release from its git tag:
 npm i -g --install-links github:alfhen/tagreeve#v<version>
 ```
 
-`--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes. Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
+Tags before `v0.4.0-rc.1` install the old command name, not `tagreeve`. `--install-links` is needed because without it npm 10 links the global package to a temporary clone that it then deletes. Installing from a branch such as main does not work. Only release tags carry a built `dist/`.
 
 Or build a tarball in a checkout and install that:
 

@@ -79,3 +79,8 @@ test('the old name in the 0.4.0-rc.1 notes outside the rename block is reported'
   const changelog = ['## 0.4.0-rc.1', '', '### Pingwright is now Tagreeve', '', 'pingwright', '', '### Added', '', 'Pingwright new thing', '', '## 0.3.0', 'Pingwright'].join('\n');
   expect(oldNameHits({ 'CHANGELOG.md': changelog })).toEqual(['CHANGELOG.md:9']);
 });
+
+test('the old name in a bullet right after the rename block is reported when no heading follows', () => {
+  const changelog = ['## 0.4.0-rc.1', '', '### Pingwright is now Tagreeve', '', 'pingwright', '', '### Changes', '', '- A Pingwright bullet. (#1)', '', '## 0.3.0', 'Pingwright'].join('\n');
+  expect(oldNameHits({ 'CHANGELOG.md': changelog })).toEqual(['CHANGELOG.md:9']);
+});
