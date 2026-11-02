@@ -33,7 +33,7 @@ function looksLikeValue(segment: string): boolean {
 export function guardFieldName(name: string): string {
   if (name.includes('@')) return OTHER_NAME;
   // A value split into segments would print its pieces, so a name that holds an email or phone prints whole as (other).
-  const raw = valueKinds(name);
+  const raw = valueKinds(name.replace(/\[\]/g, ''));
   if (raw.has('email') || raw.has('phone')) return OTHER_NAME;
   return name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment)).join('.');
 }
@@ -79,18 +79,44 @@ export interface MultipartPart {
   /** Header names are lower case. */
   headers: Record<string, string>;
   body: string;
+  /** The chunk as split from the body, headers included. */
+  raw: string;
+  /** Where the part body starts in `raw`. */
+  bodyStart: number;
+}
+
+export interface MultipartBody {
+  boundary: string;
+  /** The text before the first boundary line. */
+  preamble: string;
+  /** Only real parts: not the preamble, not the close delimiter, not a chunk with no blank line after its headers. */
+  parts: MultipartPart[];
+  /** The close delimiter and everything after it. */
+  epilogue: string;
+  /** Every chunk between boundary lines, in order, with its part if it is one. Joining the raw texts with `--boundary` rebuilds the body. */
+  chunks: { raw: string; part: MultipartPart | null }[];
 }
 
 /** Splits a multipart/form-data body at its boundary, or returns null when the headers name none. */
-export function multipartChunks(body: string, headers: Record<string, string>): { boundary: string; chunks: string[] } | null {
+export function splitMultipart(body: string, headers: Record<string, string>): MultipartBody | null {
   const contentType = Object.entries(headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? '';
   const m = /multipart\/form-data;.*?boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
   const boundary = m?.[1] ?? m?.[2];
-  return boundary ? { boundary, chunks: body.split(`--${boundary}`) } : null;
+  if (!boundary) return null;
+  const [preamble = '', ...rest] = body.split(`--${boundary}`);
+  const parts: MultipartPart[] = [];
+  const epilogue: string[] = [];
+  const chunks = [{ raw: preamble, part: null as MultipartPart | null }];
+  for (const raw of rest) {
+    const part = raw.startsWith('--') ? null : parseChunk(raw);
+    if (raw.startsWith('--')) epilogue.push(raw);
+    else if (part) parts.push(part);
+    chunks.push({ raw, part });
+  }
+  return { boundary, preamble, parts, epilogue: epilogue.join(`--${boundary}`), chunks };
 }
 
-/** The headers and the body of one chunk of a multipart body, with the index where its body starts. Null when it has no blank line. */
-export function parseMultipartChunk(raw: string): (MultipartPart & { bodyStart: number }) | null {
+function parseChunk(raw: string): MultipartPart | null {
   const split = /\r?\n\r?\n/.exec(raw);
   if (!split) return null;
   const headers: Record<string, string> = {};
@@ -99,23 +125,16 @@ export function parseMultipartChunk(raw: string): (MultipartPart & { bodyStart: 
     if (colon > 0) headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
   }
   const bodyStart = split.index + split[0].length;
-  return { headers, body: raw.slice(bodyStart).replace(/\r?\n$/, ''), bodyStart };
+  return { headers, body: raw.slice(bodyStart).replace(/\r?\n$/, ''), raw, bodyStart };
 }
 
-/** The parts of a multipart/form-data body, or null when the headers name no boundary. Parts with no blank line after their headers are dropped. */
+/** The parts of a multipart/form-data body, or null when the headers name no boundary. */
 export function multipartParts(body: string, headers: Record<string, string>): MultipartPart[] | null {
-  const split = multipartChunks(body, headers);
-  if (!split) return null;
-  const parts: MultipartPart[] = [];
-  for (const raw of split.chunks) {
-    const part = parseMultipartChunk(raw);
-    if (part) parts.push({ headers: part.headers, body: part.body });
-  }
-  return parts;
+  return splitMultipart(body, headers)?.parts ?? null;
 }
 
 /** The field name in a part's content-disposition, if it has one. */
-export function multipartPartName(part: MultipartPart): string | undefined {
+export function multipartPartName(part: Pick<MultipartPart, 'headers'>): string | undefined {
   return /\bname="([^"]*)"/i.exec(part.headers['content-disposition'] ?? '')?.[1];
 }
 

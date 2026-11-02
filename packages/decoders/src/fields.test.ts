@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { MAX_POST_DATA, newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest } from './index.ts';
-import { guardFieldName, multipartPartName, multipartParts } from './fields.ts';
+import { bodyEntries, guardFieldName, multipartPartName, multipartParts, splitMultipart } from './fields.ts';
 import { identifierClass, identifierSignal } from './identifiers.ts';
 
 test('multipartParts splits a body into headers and bodies, and returns null without a boundary', () => {
   const body = '--B\r\nContent-Disposition: form-data; name="a"\r\n\r\none\r\n--B\r\nContent-Disposition: form-data; name="f"; filename="x.bin"\r\nContent-Type: image/png\r\n\r\ntwo\r\n--B--\r\n';
   const parts = multipartParts(body, { 'Content-Type': 'multipart/form-data; boundary=B' });
   expect(parts).toHaveLength(2);
-  expect(parts![0]).toEqual({ headers: { 'content-disposition': 'form-data; name="a"' }, body: 'one' });
+  expect(parts![0]).toMatchObject({ headers: { 'content-disposition': 'form-data; name="a"' }, body: 'one' });
   expect(parts![1]!.headers['content-type']).toBe('image/png');
   expect(multipartPartName(parts![1]!)).toBe('f');
   expect(multipartParts(body, { 'content-type': 'text/plain' })).toBeNull();
@@ -206,4 +206,19 @@ test('a number split across dots or brackets stores (other)', () => {
   expect(guardFieldName('555.123.4567')).toBe('(other)');
   expect(guardFieldName('x.555.123.4567')).toBe('(other)');
   expect(guardFieldName('note 555.123.4567')).toBe('(other)');
+});
+
+test('a number split across a JSON array stores (other)', () => {
+  expect(guardFieldName('555[].123.4567')).toBe('(other)');
+  const { entries } = bodyEntries({ postData: '{"555":[{"123":{"4567":"x"}}]}' });
+  expect(entries.map((e) => guardFieldName(e.name))).toEqual(['(other)']);
+});
+
+test('splitMultipart keeps the preamble and the close delimiter out of the parts', () => {
+  const body = 'pre\r\n\r\ntext\r\n--B\r\nContent-Disposition: form-data; name="a"\r\n\r\none\r\n--B--\r\n\r\nepi';
+  const split = splitMultipart(body, { 'content-type': 'multipart/form-data; boundary=B' })!;
+  expect(split.parts.map((p) => p.body)).toEqual(['one']);
+  expect(split.preamble).toBe('pre\r\n\r\ntext\r\n');
+  expect(split.epilogue).toContain('epi');
+  expect(split.chunks.map((c) => c.raw).join('--B')).toBe(body);
 });

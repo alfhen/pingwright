@@ -5,7 +5,6 @@ import {
   hashPhone,
   isLibraryLoadPath,
   scan,
-  valueKinds,
   sha256,
   newId,
   type ConsentEpoch,
@@ -26,7 +25,7 @@ import {
   type Step,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, type MultipartPart, bodyEntries, guardFieldName, multipartChunks, multipartPartName, parseMultipartChunk, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -1010,12 +1009,6 @@ interface ScanText {
   leaf?: true;
 }
 
-// A finding is named by the text that was scanned, so a name that holds a value once its brackets are gone prints as (other).
-function leafName(name: string): string {
-  const kinds = valueKinds(name.replace(/\[\]/g, ''));
-  return kinds.has('email') || kinds.has('phone') ? '(other)' : guardFieldName(name);
-}
-
 // A leaf is scanned as `name=value` so a key that holds an email is found.
 function leafTexts(text: string): ScanText[] {
   const out: ScanText[] = [];
@@ -1026,7 +1019,7 @@ function leafTexts(text: string): ScanText[] {
     for (const { name, value } of entries) {
       const path = isJson ? name.split('.') : [name];
       path[path.length - 1] = path[path.length - 1]!.replace(/\[\]/g, '');
-      const where = leafName(name);
+      const where = guardFieldName(name);
       if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where, leaf: true });
       out.push({ text: `${path[path.length - 1]}=${value}`, where, leaf: true });
     }
@@ -1035,15 +1028,9 @@ function leafTexts(text: string): ScanText[] {
 }
 
 // Headers, preamble, epilogue and text parts stay in the text, so nothing a whole-body scan finds is lost.
-function withoutBinaryParts(headers: Record<string, string>, body: string): string {
-  const split = multipartChunks(body, headers);
-  if (!split || split.chunks.length < 2) return body;
+function withoutBinaryParts(split: MultipartBody): string {
   return split.chunks
-    .map((raw, i) => {
-      if (i === 0 || raw.startsWith('--')) return raw;
-      const part = parseMultipartChunk(raw);
-      return part && isBinaryBody(part.headers, part.body) ? raw.slice(0, part.bodyStart) : raw;
-    })
+    .map(({ raw, part }) => (part && isBinaryBody(part.headers, part.body) ? raw.slice(0, part.bodyStart) : raw))
     .join(`--${split.boundary}`);
 }
 
@@ -1053,27 +1040,17 @@ function withoutBinaryLines(body: string): string {
   return body.split(/(?<=\n)/).filter((line) => !isBinaryText(line.replace(/\r?\n$/, ''))).join('');
 }
 
-// The preamble, the close delimiter with its epilogue, and a body with no boundary line are not parts.
-function realParts(headers: Record<string, string>, body: string): MultipartPart[] {
-  const split = multipartChunks(body, headers);
-  if (!split || split.chunks.length < 2) return [];
-  return split.chunks.slice(1).filter((raw) => !raw.startsWith('--')).flatMap((raw) => {
-    const part = parseMultipartChunk(raw);
-    return part ? [{ headers: part.headers, body: part.body }] : [];
-  });
-}
-
 // The base text is the whole body minus binary pieces. Each part or line also gets leaf texts, so a value reports with its path.
 function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   if (body === '' || headersSayBinary(headers)) return [];
-  const parts = realParts(headers, body);
-  if (parts.length) {
-    const named = parts.flatMap((part) => {
+  const split = splitMultipart(body, headers);
+  if (split?.parts.length) {
+    const named = split.parts.flatMap((part) => {
       const name = multipartPartName(part);
       if (isBinaryBody(part.headers, part.body)) return [];
-      return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: leafName(name), leaf: true as const }];
+      return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name), leaf: true as const }];
     });
-    return [{ text: withoutBinaryParts(headers, body), where: 'the body' }, ...named];
+    return [{ text: withoutBinaryParts(split), where: 'the body' }, ...named];
   }
   const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
   if (!isJson && /[\r\n]/.test(body.trim())) {
