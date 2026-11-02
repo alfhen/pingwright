@@ -237,7 +237,7 @@ A difference between variants is not a failure. Your rules decide. A run that ex
 
 Writes one HTML file that people can read without knowing JSONL. It opens no browser and reads no network. `--html` is required, and the command refuses to overwrite its own input. A missing file, or a file that is not a run record, exits 2, as `diff` does.
 
-The input is one record, or a suite directory from `suite`. A suite directory needs its `suite.json`. A record that the manifest names and that is missing becomes a warning in the page.
+The input is one record, or a suite directory from `suite`. A suite directory needs its `suite.json`. The `--out` folder of `suite` also works when it holds exactly one `suite_*` folder with a `suite.json`: `report` uses it and names it on stderr. With several, the error lists them. A record that the manifest names and that is missing becomes a warning in the page.
 
 A run report has these parts:
 

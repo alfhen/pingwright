@@ -1,6 +1,6 @@
 import { readRun, type RunRecords } from '@pingwright/core';
 import { diffRuns } from '@pingwright/expect';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { flagChangeLabel } from '../diff.ts';
 import { cellText, type SuiteCell, type SuiteManifest } from '../suite.ts';
@@ -143,6 +143,28 @@ function isManifest(value: unknown): value is SuiteManifest {
       return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number' && isFailedField(cell.failed);
     })
   );
+}
+
+async function hasManifest(dir: string): Promise<boolean> {
+  return readFile(join(dir, 'suite.json')).then(
+    () => true,
+    () => false,
+  );
+}
+
+/** A folder without its own suite.json may be a suite `--out` folder: use its one `suite_*` child that has one. Throws when several do. */
+export async function resolveSuiteDir(dir: string, note: (text: string) => void): Promise<string> {
+  if (await hasManifest(dir)) return dir;
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const found: string[] = [];
+  for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    if (entry.isDirectory() && entry.name.startsWith('suite_') && (await hasManifest(join(dir, entry.name)))) found.push(entry.name);
+  }
+  if (found.length === 0) return dir;
+  if (found.length > 1) throw new Error(`${dir} holds ${found.length} suites: ${found.join(', ')}. Pass one of them.`);
+  const child = join(dir, found[0]!);
+  note(`Using suite ${child}\n`);
+  return child;
 }
 
 /** Throws when `dir` holds no readable suite manifest. A record that cannot be read is left out, and the model warns about it. */

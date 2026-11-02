@@ -33,6 +33,8 @@
 
 <!-- H09 -->
 
+- **Fixed.** `pingwright report` accepts the `--out` folder of `suite`. It uses the one `suite_*` folder inside and says which on stderr. With several, the error lists them. (#581)
+
 <!-- H10 -->
 
 <!-- R01 -->
