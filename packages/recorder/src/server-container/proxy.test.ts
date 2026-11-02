@@ -76,7 +76,7 @@ function connect(p: RecordingProxy, target: string, auth?: string): Promise<{ st
 async function viaTunnel(
   p: RecordingProxy,
   url: string,
-  init: { method?: string; body?: string; trust?: boolean; auth?: string; path?: string } = {},
+  init: { method?: string; body?: string; trust?: boolean; auth?: string; path?: string; headers?: Record<string, string> } = {},
 ): Promise<Reply> {
   const u = new URL(url);
   const target = `${u.hostname}:${u.port || '443'}`;
@@ -91,7 +91,7 @@ async function viaTunnel(
   return new Promise((resolve, reject) => {
     secure.once('error', reject);
     const req = https.request(
-      { createConnection: () => secure, host: u.hostname, path: init.path ?? u.pathname + u.search, method: init.method ?? 'GET' },
+      { createConnection: () => secure, host: u.hostname, path: init.path ?? u.pathname + u.search, method: init.method ?? 'GET', headers: init.headers },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
@@ -199,6 +199,55 @@ describe('recording proxy', () => {
     });
     const reply = await viaTunnel(p, 'https://graph.facebook.com/x');
     expect(reply).toEqual({ status: 502, body: '' });
+  });
+
+  it('writes no fake secret to stdout, stderr, console or a response body', async () => {
+    const gtmAuth = 'fakeGtmAuth0001';
+    const accessToken = 'fakeAccessToken0001';
+    const config = Buffer.from('{"container":"GTM-PWTEST1","fake":true}').toString('base64');
+    const secrets = [gtmAuth, accessToken, config];
+    const query = `gtm_auth=${gtmAuth}&access_token=${accessToken}&config=${config}`;
+    const headers = { 'x-gtm-auth': gtmAuth, 'x-access-token': accessToken, 'x-config': config };
+    const body = JSON.stringify({ gtm_auth: gtmAuth, access_token: accessToken, config });
+    const leaky = (): never => {
+      throw new Error(`failed for ?${query} ${body}`);
+    };
+
+    const out: string[] = [];
+    const capture = (chunk: unknown): boolean => {
+      out.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk as Uint8Array).toString());
+      return true;
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(capture as typeof process.stdout.write);
+    vi.spyOn(process.stderr, 'write').mockImplementation(capture as typeof process.stderr.write);
+    for (const method of ['log', 'info', 'warn', 'error', 'debug', 'trace'] as const) {
+      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+        out.push(args.map(String).join(' '));
+      });
+    }
+
+    const p = await start({ handler: leaky, forward: leaky });
+    const replies = [
+      await viaTunnel(p, `https://graph.facebook.com/events?${query}`, { method: 'POST', body, headers }),
+      await viaTunnel(p, `https://www.googletagmanager.com/server.js?${query}`, { method: 'POST', body, headers }),
+      await plain(p, `http://graph.facebook.com/x?${query}`, basic(p)),
+      await plain(p, `http://graph.facebook.com/x?${query}`),
+      await plain(p, `http://graph.facebook.com/x?${query}`, basic(p, gtmAuth)),
+      await plain(p, `ftp://graph.facebook.com/x?${query}`, basic(p)),
+    ];
+    const refused = await connect(p, 'graph.facebook.com:443', basic(p, accessToken));
+
+    expect(replies.map((r) => r.status)).toEqual([502, 502, 502, 407, 407, 400]);
+    expect(refused.status).toBe(407);
+    const captured = out.join('\n');
+    const bodies = replies.map((r) => r.body).join('\n');
+    for (const secret of secrets) {
+      expect(query).toContain(secret);
+      expect(body).toContain(secret);
+      expect(Object.values(headers)).toContain(secret);
+      expect(captured).not.toContain(secret);
+      expect(bodies).not.toContain(secret);
+    }
   });
 
   describe('credential', () => {
