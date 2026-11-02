@@ -1007,10 +1007,9 @@ interface ScanText {
   where: string;
 }
 
-// A leaf is scanned as `name=value` so a key that holds an email is found. The whole text is scanned too, so a name with no value is not lost.
-function textPieces(text: string): ScanText[] {
-  if (isBinaryText(text)) return [];
-  const out: ScanText[] = [{ text, where: 'the body' }];
+// A leaf is scanned as `name=value` so a key that holds an email is found.
+function leafTexts(text: string): ScanText[] {
+  const out: ScanText[] = [];
   const { entries, parsed } = bodyEntries({ postData: text });
   if (parsed) {
     const isJson = /^\s*[{[]/.test(text);
@@ -1037,7 +1036,13 @@ function withoutBinaryParts(headers: Record<string, string>, body: string): stri
     .join(`--${split.boundary}`);
 }
 
-// Each multipart part and each line of a body that is not JSON is judged on its own, so a compressed part or line does not hide a text one.
+// A body that is not binary as a whole stays whole, as a whole-body scan reads it. Otherwise only its binary lines are cut.
+function withoutBinaryLines(body: string): string {
+  if (!isBinaryText(body)) return body;
+  return body.split(/(?<=\n)/).filter((line) => !isBinaryText(line.replace(/\r?\n$/, ''))).join('');
+}
+
+// The base text is the whole body minus binary pieces. Each part or line also gets leaf texts, so a value reports with its path.
 function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   if (body === '' || headersSayBinary(headers)) return [];
   const parts = multipartParts(body, headers);
@@ -1045,15 +1050,16 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
     const named = parts.flatMap((part) => {
       const name = multipartPartName(part);
       if (isBinaryBody(part.headers, part.body)) return [];
-      return name === undefined ? textPieces(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name) }];
+      return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name) }];
     });
     return [{ text: withoutBinaryParts(headers, body), where: 'the body' }, ...named];
   }
   const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
   if (!isJson && /[\r\n]/.test(body.trim())) {
-    return body.split(/\r?\n/).filter((line) => line.trim() !== '').flatMap(textPieces);
+    const lines = body.split(/\r?\n/).filter((line) => line.trim() !== '' && !isBinaryText(line));
+    return [{ text: withoutBinaryLines(body), where: 'the body' }, ...lines.flatMap(leafTexts)];
   }
-  return textPieces(body);
+  return isBinaryText(body) ? [] : [{ text: body, where: 'the body' }, ...leafTexts(body)];
 }
 
 export interface ForeignData {

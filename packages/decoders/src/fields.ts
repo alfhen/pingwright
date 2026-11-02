@@ -35,11 +35,7 @@ export function guardFieldName(name: string): string {
   // A value split into segments would print its pieces, so a name that holds an email or phone prints whole as (other).
   const raw = valueKinds(name);
   if (raw.has('email') || raw.has('phone')) return OTHER_NAME;
-  const kept = name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment));
-  if (kept.some((segment) => segment !== OTHER_NAME && valueKinds(segment).has('hash'))) return OTHER_NAME;
-  // A number split on dots or brackets has a short digit run in every segment.
-  const digits = kept.filter((segment) => segment !== OTHER_NAME).join('').replace(/\D/g, '');
-  return LONG_DIGITS.test(digits) ? OTHER_NAME : kept.join('.');
+  return name.split('.').map((segment) => (looksLikeValue(segment) ? OTHER_NAME : segment)).join('.');
 }
 
 export function queryEntries(params: Iterable<[string, string]>): FieldEntry[] {

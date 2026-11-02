@@ -352,3 +352,14 @@ test.each([
   expect(details[0]).toMatch(/in the body$/);
   expect(details[0]).not.toContain(EMAIL);
 });
+
+const FFFD = '�';
+test.each([
+  ['a phone split by a line break', 'Call (555)\n123-4567 please', '4567'],
+  ['a phone split over four lines', 'tel\n555\n123\n4567\nend', '4567'],
+  ['a short text line with stray replacement characters', `${'a=b&'.repeat(80)}\ncontact=visitor@other-person.example${FFFD.repeat(4)}`, 'visitor@other-person.example'],
+  ['a hash on a line with control characters', `${'x'.repeat(300)}\nem=${FOREIGN_HASH}${'\u0001'.repeat(10)}`, FOREIGN_HASH],
+])('possibleRealData still finds a value in the whole body: %s', (_n, body, value) => {
+  expect(body).toContain(value);
+  expect(findForeignData([rawRequest(REPLAY, body)], [], identity).length).toBeGreaterThan(0);
+});
