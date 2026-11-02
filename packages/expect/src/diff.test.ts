@@ -361,6 +361,19 @@ test('a move across two answers, a changed total, or a hit that did not stay is 
   expect(diffShapes([shapeKey('undecided', [t])], [shapeKey('granted', [t])], { epochOrder: ['undecided', 'granted', 'undecided'] }).drift).toBe(true);
 });
 
+test('a moved hit that gains or loses an ID name is drift', () => {
+  const plain = tuple(1);
+  const granted = tuple(1, { consent: { analytics: 'granted', gcs: 'G111' } });
+  const withId = { ...granted, ids: ['client_id'] };
+  expect(withId.ids).not.toEqual(plain.ids);
+  expect(diffShapes([shapeKey('undecided', [plain])], [shapeKey('granted', [withId])], order)).toMatchObject({ drift: true, moved: [] });
+  const idPlain = tuple(1, { ids: ['client_id'] });
+  expect(diffShapes([shapeKey('undecided', [idPlain])], [shapeKey('granted', [granted])], order)).toMatchObject({ drift: true, moved: [] });
+  const a = [shapeKey('undecided', [plain]), shapeKey('granted', [granted])];
+  const b = [shapeKey('granted', [granted, withId])];
+  expect(diffShapes(a, b, order)).toMatchObject({ drift: true, moved: [] });
+});
+
 test('another vendor in the same epochs is compared as before', () => {
   const a = [shapeKey('undecided', [tuple(1)]), shapeKey('undecided', [tuple(1)], 'ga4')];
   const b = [shapeKey('granted', [tuple(1)]), shapeKey('undecided', [tuple(1)], 'ga4')];
