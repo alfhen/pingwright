@@ -249,6 +249,14 @@ describe('the reason of a fill error', () => {
     expect(error?.message).toBe('card field number could not be filled: Timeout 15000ms exceeded fill("[value]")');
   });
 
+  test('the card number and the expiry are removed even next to another digit', async () => {
+    const { error } = await play({ failFill: true, fillMessage: (value) => `Timeout fill("${value}1") at 12/401` });
+    expect(error?.message).toContain('card field number could not be filled: ');
+    expect(error?.message).not.toContain(CARD);
+    expect(error?.message).not.toContain('12/40');
+    expect(error?.message).toBe('card field number could not be filled: Timeout fill("[value]1") at [value]1');
+  });
+
   test('a later fill failing keeps payment set and names the field', async () => {
     const { error, record } = await play({ failFill: true, failFillAt: 1 });
     expect(error?.message).toContain('card field expiry could not be filled: ');

@@ -211,9 +211,17 @@ function typedValues(provider: PaymentProvider, card: string, identity: Identity
 /** A reason this file builds itself. It holds no typed value, so the scrubber leaves it alone. */
 class OwnReason extends Error {}
 
-/** The first line of the error, with every typed value removed. A value inside a longer number is kept, so short test cards like `1` don't eat digits. */
+/**
+ * The first line of the error, with every typed value removed.
+ * Only values shorter than 4 characters (the test card `1`, a CVC) are matched on digit boundaries, so they don't eat digits of other numbers.
+ * Longer values are removed wherever they appear, even next to a digit.
+ */
 function reasonOf(error: unknown, typed: string[]): string {
   if (error instanceof OwnReason) return error.message;
   const first = (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
-  return typed.reduce((text, value) => text.replace(new RegExp(`(?<!\\d)${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\d)`, 'g'), '[value]'), first).trim() || 'unknown error';
+  const pattern = (value: string): RegExp => {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(value.length < 4 ? `(?<!\\d)${escaped}(?!\\d)` : escaped, 'g');
+  };
+  return typed.reduce((text, value) => text.replace(pattern(value), '[value]'), first).trim() || 'unknown error';
 }
