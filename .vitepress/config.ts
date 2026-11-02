@@ -84,6 +84,7 @@ export default defineConfig({
     'AGENTS.md',
     'CHANGELOG.md',
     'CLAUDE.md',
+    'docs/goals.md',
     'docs/plan-*.md',
     'docs/proposal-*.md',
     'docs/release.md',
