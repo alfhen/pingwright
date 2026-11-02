@@ -268,3 +268,66 @@ test('wait takes a url as a glob or a regular expression', () => {
   expect(errorOf('start: /\nsteps:\n  - wait: { url: "/x", role: link }\n')).toContain('url cannot be combined');
   expect(errorOf('start: /\nsteps:\n  - wait: { url: 3 }\n')).toContain('wait.url: must be a path glob');
 });
+
+test('a real German mobile number in identity.phone is warned about with a reason and the DE range', () => {
+  const s = parseScenario('start: /\nidentity:\n  country: DE\n  phone: "+4915112345678"\n');
+  expect(s.warnings).toHaveLength(1);
+  expect(s.warnings[0]).toContain('not in a fictional range');
+  expect(s.warnings[0]).toContain('mobile prefix is a real one');
+  expect(s.warnings[0]).toContain('+49 30 23125000 to 23125999');
+});
+
+test('the warning follows the dial code of a + number over the declared country', () => {
+  const s = parseScenario('start: /\nidentity:\n  country: GB\n  phone: "+4915112345678"\n');
+  expect(s.warnings[0]).toContain('mobile prefix is a real one for DE');
+  expect(s.warnings[0]).toContain('+49 30 23125000 to 23125999');
+});
+
+test('a national number is not guessed from its leading digits', () => {
+  const s = parseScenario('start: /\nidentity:\n  phone: "(469) 555-1234"\n');
+  expect(s.warnings[0]).toContain('for US');
+});
+
+test('a country with no format says no fictional range is known', () => {
+  const s = parseScenario('start: /\nidentity:\n  country: DK\n  phone: "+4520123456"\n');
+  expect(s.warnings[0]).toContain('no fictional range is known');
+});
+
+test('a + number with an unknown dial code is not given the declared or US range', () => {
+  for (const country of ['GB', 'US']) {
+    const w = parseScenario(`start: /\nidentity:\n  country: ${country}\n  phone: "+33612345678"\n`).warnings[0];
+    expect(w).toContain('no fictional range is known');
+    expect(w).not.toContain('555');
+    expect(w).not.toContain('7700');
+  }
+});
+
+test('BNetzA mobile drama numbers get no warning', () => {
+  for (const phone of ['+491713920000', '+4917604069042']) {
+    expect(parseScenario(`start: /\nidentity:\n  phone: "${phone}"\n`).warnings).toEqual([]);
+  }
+});
+
+test('drama numbers for DE, GB and SE get no warning', () => {
+  for (const phone of ['+493023125042', '+447700900123', '+46701740620']) {
+    expect(parseScenario(`start: /\nidentity:\n  phone: "${phone}"\n`).warnings).toEqual([]);
+  }
+});
+
+test('a fill literal phone gets the same warning, naming the range for the identity country', () => {
+  const s = parseScenario('start: /\nidentity: { country: GB }\nsteps:\n  - fill: { "#phone": "+447911123456" }\n');
+  expect(s.warnings[0]).toContain('+44 7700 900000 to 900999');
+});
+
+test('fill takes { value, optional: true } and records the optional selectors', () => {
+  const s = parseScenario('start: /\nsteps:\n  - fill:\n      "#email": email\n      "#phone": { value: phone, optional: true }\n');
+  expect(s.steps[0]).toMatchObject({ kind: 'fill', value: { '#email': 'email', '#phone': 'phone' }, optional: ['#phone'] });
+  expect(errorOf('start: /\nsteps:\n  - fill: { "#phone": { value: phone } }\n')).toContain('{ value: <string>, optional: true }');
+  expect(errorOf('start: /\nsteps:\n  - fill: { "#phone": { value: phone, optional: true, x: 1 } }\n')).toContain('optional: true }');
+});
+
+test('options.optionalTimeout is from 100ms to 30s', () => {
+  expect(parseScenario('start: /\noptions: { optionalTimeout: 500ms }').options.optionalTimeout).toBe(500);
+  expect(() => parseScenario('start: /\noptions: { optionalTimeout: 50ms }')).toThrow(/100ms to 30s/);
+  expect(() => parseScenario('start: /\noptions: { optionalTimeout: 31s }')).toThrow(/100ms to 30s/);
+});

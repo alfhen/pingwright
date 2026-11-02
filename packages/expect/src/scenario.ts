@@ -1,3 +1,4 @@
+import { FICTIONAL_PHONE_HINT } from '@pingwright/core';
 import type { ConsentValue, NetworkMode, RequestOutcome, Severity } from '@pingwright/core';
 import { trackerVendorKeys, vendorKeys } from '@pingwright/decoders';
 import { LineCounter, parseDocument } from 'yaml';
@@ -56,7 +57,7 @@ export type Condition = { url: UrlMatcher } | { locator: Locator };
 export type StepBody =
   | { kind: 'visit'; value: string }
   | { kind: 'click'; value: Locator }
-  | { kind: 'fill'; value: Record<string, string> }
+  | { kind: 'fill'; value: Record<string, string>; optional?: string[] }
   | { kind: 'select'; value: Record<string, string> }
   | { kind: 'consent'; value: 'accept' | 'reject' | 'none' | 'withdraw' }
   | { kind: 'wait'; value: number | { selector: Locator } | { url: UrlMatcher } }
@@ -73,6 +74,8 @@ export interface ScenarioOptions {
   seed?: number;
   consentTimeout?: number;
   graceWindow?: number;
+  /** Milliseconds an `optional` fill entry waits for its field. */
+  optionalTimeout?: number;
   /** `true` allows every unknown destination. A list allows only those hosts or `*.domain` wildcards. */
   allowUnknownDestination?: boolean | string[];
   firstPartyHosts?: string[];
@@ -127,7 +130,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -236,10 +239,12 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         else if (typeof v !== 'string' || !v.trim()) fail(['identity', k], 'must be a non-empty string');
         else {
           identity[k as IdentityField] = v;
-          const kind = looksLikeRealData(v);
-          if (kind) warnings.push(`line ${lineOf(['identity', k])}: identity.${k}: looks like a real ${kind}; do not write personal data in a scenario`);
         }
       }
+    for (const [k, v] of Object.entries(identity)) {
+      const problem = realDataWarning(v, identity.country);
+      if (problem) warnings.push(`line ${lineOf(['identity', k])}: identity.${k}: ${problem}; do not write personal data in a scenario`);
+    }
   }
 
   const checkVars = (value: string, path: Path) => {
@@ -423,14 +428,25 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
           return;
         }
         const fields: Record<string, string> = {};
-        for (const [sel, v] of Object.entries(value)) {
+        const optional: string[] = [];
+        for (const [sel, raw] of Object.entries(value)) {
+          let v = raw;
+          if (isMap(raw)) {
+            const extra = Object.keys(raw).filter((key) => key !== 'value' && key !== 'optional');
+            if (extra.length || typeof raw.value !== 'string' || !raw.value || raw.optional !== true) {
+              fail([...path, kind, sel], 'must be a string, or { value: <string>, optional: true }');
+              continue;
+            }
+            v = raw.value;
+            optional.push(sel);
+          }
           if (typeof v === 'string' && v) {
             fields[sel] = v;
-            const kind = SECRET_FIELD.test(sel) ? undefined : looksLikeRealData(v);
-            if (kind) warnings.push(`line ${lineOf([...path, 'fill', sel])}: steps[${i}].fill.${sel}: looks like a real ${kind}; fill uses the run identity, so do not write personal data in a scenario`);
+            const problem = SECRET_FIELD.test(sel) ? undefined : realDataWarning(v, identity.country);
+            if (problem) warnings.push(`line ${lineOf([...path, 'fill', sel])}: steps[${i}].fill.${sel}: ${problem}; fill uses the run identity, so do not write personal data in a scenario`);
           } else fail([...path, kind, sel], 'must be a non-empty string');
         }
-        add({ kind, value: fields });
+        add(optional.length ? { kind, value: fields, optional } : { kind, value: fields });
         return;
       }
       case 'consent': {
@@ -645,7 +661,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
           const ms = parseDuration(v);
           if (ms === undefined) fail(p, 'must be a duration such as 4s or 500ms');
           else if (k === 'consentTimeout') options.consentTimeout = ms;
-          else options.graceWindow = ms;
+          else if (k === 'optionalTimeout') {
+            if (ms < 100 || ms > 30000) fail(p, 'must be from 100ms to 30s');
+            else options.optionalTimeout = ms;
+          } else options.graceWindow = ms;
         }
       }
   }
@@ -671,13 +690,17 @@ const PHONE_SHAPE = /^(?:\+\d{8,15}|\+?[\d\s]*\(\d{3}\)\s?\d{3}[-.\s]\d{4}|\+?\d
 // Digits only, country code first. Ranges set aside for fiction:
 // US 555-0100 to 555-0199 (NANPA, https://www.nationalnanpa.com/),
 // Sweden 070-174 06 05 to 06 99 (PTS, https://pts.se/),
-// UK drama numbers (Ofcom, https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama).
+// UK drama numbers (Ofcom, https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama),
+// Germany 030 23125 000 to 999 (Bundesnetzagentur, https://www.bundesnetzagentur.de/DE/Fachthemen/Telekommunikation/Nummerierung/DramaNumbers/artikel.html).
 const FICTIONAL_PHONE = [
   /^1\d{3}55501\d\d$/,
   /^4670174(?:060[5-9]|06[1-9]\d)$/,
   /^447700900\d{3}$/,
   /^442079460\d{3}$/,
   /^441632960\d{3}$/,
+  /^493023125\d{3}$/,
+  /^4917139200\d{2}$/,
+  /^49176040690\d{2}$/,
   /^44(?:113|114|115|116|117|118|121|131|141|151|161)4960\d{3}$/,
 ];
 
@@ -690,4 +713,24 @@ function looksLikeRealData(value: string): 'email' | 'phone' | undefined {
   const international = digits.length > 10 || text.startsWith('+');
   const nationalUs = !international && /^\d{3}55501\d\d$/.test(digits);
   return nationalUs || FICTIONAL_PHONE.some((range) => range.test(digits)) ? undefined : 'phone';
+}
+
+const REAL_MOBILE_PREFIX: Record<string, RegExp> = { DE: /^49(?:15|16|17)/, GB: /^447/, SE: /^467/ };
+const DIAL_CODE_COUNTRY: [string, string][] = [['49', 'DE'], ['46', 'SE'], ['44', 'GB'], ['1', 'US']];
+
+function phoneWarning(value: string, declaredCountry: string | undefined): string {
+  const digits = value.replace(/\D/g, '');
+  const international = value.trim().startsWith('+');
+  const fromDialCode = international ? DIAL_CODE_COUNTRY.find(([code]) => digits.startsWith(code))?.[1] : undefined;
+  const country = fromDialCode ?? (international ? undefined : (declaredCountry?.toUpperCase() ?? 'US'));
+  const reasons = ['it is not in a fictional range'];
+  if (country && REAL_MOBILE_PREFIX[country]?.test(digits)) reasons.push('its mobile prefix is a real one');
+  const hint = country && FICTIONAL_PHONE_HINT[country];
+  const range = hint ? `use ${hint}` : 'no fictional range is known for it';
+  return `looks like a real phone (${reasons.join(' and ')}${country ? ` for ${country}` : ''}); ${range}`;
+}
+
+function realDataWarning(value: string, country: string | undefined): string | undefined {
+  const kind = looksLikeRealData(value);
+  return kind === 'phone' ? phoneWarning(value, country) : kind && `looks like a real ${kind}`;
 }

@@ -21,6 +21,8 @@ export interface Summary {
   hits: Record<string, Record<string, number>>;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
+  /** Optional fill entries that were skipped because the field was not on the page. */
+  skippedFields?: { step: string; selector: string }[];
   results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; note?: ResultNote; evidence: string[] }[];
   /** Set when the run was compared with a baseline. */
   baseline?: BaselineSummary;
@@ -56,6 +58,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     hits: countHits(records.hits),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
+    skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
     results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, ...(r.note && { note: r.note }), evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
 }
@@ -140,6 +143,13 @@ export function formatSummary(summary: Summary): string {
   lines.push('Flags');
   if (summary.flags.length === 0) lines.push('  none');
   lines.push(...formatFlags(summary.flags));
+  if (summary.skippedFields?.length) {
+    lines.push('Skipped fields');
+    for (const step of new Set(summary.skippedFields.map((f) => f.step))) {
+      lines.push(`  ${step}`);
+      for (const f of summary.skippedFields) if (f.step === step) lines.push(`    SKIPPED FIELD ${f.selector} (not present)`);
+    }
+  }
   lines.push('Expectations');
   for (const r of summary.results) {
     lines.push(`  ${r.pass ? 'PASS' : r.severity === 'warn' ? 'WARN' : 'FAIL'} ${r.expectation}`);

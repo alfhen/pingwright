@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Faker, base, en, en_US, sv, type LocaleDefinition } from '@faker-js/faker';
+import { Faker, base, de, en, en_GB, en_US, sv, type LocaleDefinition } from '@faker-js/faker';
 
 export interface Identity {
   seed: number;
@@ -47,12 +47,42 @@ const SE: CountryFormat = {
   nationalDigits: (digits) => '0' + digits.slice(2),
 };
 
-const COUNTRIES: Record<string, CountryFormat> = { US, SE };
+// Ofcom reserves 07700 900000 to 900999 for drama use: https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama
+const GB: CountryFormat = {
+  locale: [en_GB, en, base],
+  // The en_GB locale patterns can give shapes such as "SW54 27L".
+  zip: (faker) => faker.helpers.fromRegExp('[A-PR-UWYZ][A-HK-Y]?[0-9] [0-9][ABD-HJLNP-UW-Z]{2}'),
+  phone: (faker) => `+447700900${String(faker.number.int({ min: 0, max: 999 })).padStart(3, '0')}`,
+  nationalDigits: (digits) => '0' + digits.slice(2),
+};
 
-/** US and SE get local names, address, zip and phone. Any other country keeps US-shaped data under that label. */
+// The Bundesnetzagentur lists 030 23125 000 to 999 (Berlin) as drama numbers for media productions:
+// https://www.bundesnetzagentur.de/DE/Fachthemen/Telekommunikation/Nummerierung/DramaNumbers/artikel.html
+const DE: CountryFormat = {
+  locale: [de, en, base],
+  zip: (faker) => faker.location.zipCode(),
+  phone: (faker) => `+493023125${String(faker.number.int({ min: 0, max: 999 })).padStart(3, '0')}`,
+  nationalDigits: (digits) => '0' + digits.slice(2),
+};
+
+const COUNTRIES: Record<string, CountryFormat> = { US, SE, GB, DE };
+
+/** The fictional phone range to write for a country with a local format, as a hint for warnings. */
+export const FICTIONAL_PHONE_HINT: Record<string, string> = {
+  US: '+1 <area code> 555 0100 to 0199',
+  SE: '+46 70 174 0605 to 0699',
+  GB: '+44 7700 900000 to 900999',
+  DE: '+49 30 23125000 to 23125999',
+};
+
+export function hasCountryFormat(country: string): boolean {
+  return Object.hasOwn(COUNTRIES, country.toUpperCase());
+}
+
+/** US, SE, GB and DE get local names, address, zip and phone. Any other country keeps US-shaped data under that label. */
 export function createIdentity(seed: number, options: { country?: string } = {}): Identity {
   const country = options.country ?? 'US';
-  const format = COUNTRIES[country.toUpperCase()] ?? US;
+  const format = (hasCountryFormat(country) ? COUNTRIES[country.toUpperCase()] : undefined) ?? US;
   const faker = new Faker({ locale: format.locale });
   faker.seed(seed);
   const firstName = faker.person.firstName();
@@ -347,7 +377,7 @@ function ownValues(identity: Identity) {
   ];
   const hashes = fieldHashes(...fields);
   const phoneDigits = phone.slice(1);
-  const format = COUNTRIES[identity.country.toUpperCase()] ?? US;
+  const format = (hasCountryFormat(identity.country) ? COUNTRIES[identity.country.toUpperCase()] : undefined) ?? US;
   const extraEmails = extra.map(normalizeEmail).filter((v) => v.includes('@'));
   const extraPhones = extra.map((v) => v.replace(/\D/g, '')).filter((v) => v.length >= 8);
   return { email, phoneDigits, nationalDigits: format.nationalDigits(phoneDigits), hashes, extraEmails, extraPhones };

@@ -40,6 +40,7 @@ All servers listen on port 0 (random).
 | `#cart-count`, `#checkout-link` | `/cart` | |
 | `#email`, `#first-name`, `#last-name`, `#phone`, `#address1`, `#city`, `#zip` | `/checkout` | Identity form. |
 | `#country` | `/checkout` | Options US, GB, DE, SE, NO. The default is guessed from the region of `navigator.language`, so scenarios must set it explicitly. |
+| `#phone` | `/checkout?phone=off` | The page has no phone field, like a store that hides it. |
 | `#continue` | `/checkout` | Goes to `/checkout/payment`. |
 | `#card-number` (`cc-number`), `#card-expiry` (`cc-exp`), `#card-cvc` (`cc-csc`), `#pay` | `/checkout/payment` | Fake card form. `#pay` goes to `/thank-you`, or to `/thank-you?pattern=1` when the flag below is set. |
 

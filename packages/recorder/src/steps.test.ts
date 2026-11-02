@@ -208,6 +208,44 @@ test('a password value is never saved in the identity when the run fails at or b
   expect(JSON.stringify(saved)).not.toContain('secret-fake-value');
 });
 
+describe('optional fill on a fake page', () => {
+  const play = (present: boolean, fillError?: Error) => {
+    const record: { skippedFields?: string[] } = {};
+    const page = {
+      goto: () => Promise.resolve(),
+      locator: () => ({
+        first: () => ({
+          waitFor: () => (present ? Promise.resolve() : Promise.reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' }))),
+          evaluate: () => Promise.resolve({ tag: 'input', host: 'localhost', fields: [{ autocomplete: null, name: 'phone', id: 'phone', type: 'tel' }] }),
+          fill: () => (fillError ? Promise.reject(fillError) : Promise.resolve()),
+        }),
+      }),
+    };
+    const recorder = {
+      site: 'http://localhost',
+      setIdentity: () => undefined,
+      beginStep: () => record,
+      endStep: () => undefined,
+      checkpoint: () => Promise.resolve(),
+      context: { pages: () => [page] },
+    };
+    const yaml = 'start: /\nsteps:\n  - fill:\n      "#phone": { value: phone, optional: true }\noptions: { optionalTimeout: 300ms }\n';
+    return { record, done: playScenario(recorder as never, parseScenario(yaml), { seed: 1 }) };
+  };
+
+  test('an absent optional field is skipped and recorded', async () => {
+    const { record, done } = play(false);
+    await done;
+    expect(record.skippedFields).toEqual(['#phone']);
+  });
+
+  test('a present but disabled optional field still fails and is not recorded as skipped', async () => {
+    const { record, done } = play(true, new Error('element is not enabled'));
+    await expect(done).rejects.toThrow(/not enabled/);
+    expect(record.skippedFields).toBeUndefined();
+  });
+});
+
 describe('select and locator steps on a fake page', () => {
   const options = [
     { value: '', label: 'Choose' },

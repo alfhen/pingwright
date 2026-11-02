@@ -32,11 +32,12 @@
   var region = (navigator.language.split('-')[1] || 'US').toUpperCase();
   var select = document.getElementById('country');
   if (select.querySelector('option[value="' + region + '"]')) select.value = region;
+  if (new URLSearchParams(location.search).get('phone') === 'off') document.getElementById('phone').closest('label').remove();
   document.getElementById('identity-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var ids = ['email', 'first-name', 'last-name', 'phone', 'address1', 'city', 'zip', 'country'];
     var data = {};
-    ids.forEach(function (id) { data[id] = document.getElementById(id).value; });
+    ids.forEach(function (id) { var el = document.getElementById(id); data[id] = el ? el.value : ''; });
     sessionStorage.setItem('pw_checkout', JSON.stringify(data));
     var pattern = new URLSearchParams(location.search).get('pattern');
     if (pattern === '1' || pattern === 'sgtm') sessionStorage.setItem('pw_pattern', pattern);

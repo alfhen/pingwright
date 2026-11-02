@@ -1,0 +1,11 @@
+start: /checkout
+identity:
+  country: DK
+steps:
+  - fill:
+      "#email": email
+      "#phone": phone
+      "#country": NO
+  - click: "#continue"
+    label: continue
+options: { seed: 1, allowUnknownDestination: true }

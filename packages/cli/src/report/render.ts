@@ -96,6 +96,14 @@ export function fields(model: ReportModel): string {
   return `<ul class="fields">${items}</ul>`;
 }
 
+export function skippedFields(model: ReportModel, level: 'h2' | 'h4'): string {
+  if (model.skippedFields.length === 0) return '';
+  const items = model.skippedFields
+    .map((f) => `<li>${escapeHtml(f.step)}: SKIPPED FIELD <code>${escapeHtml(f.selector)}</code> (not present)</li>`)
+    .join('');
+  return `\n<${level}>Skipped fields</${level}>\n<ul class="fields">${items}</ul>`;
+}
+
 export const STYLE = `
 :root{color-scheme:light dark;--bg:#fff;--fg:#1b1f24;--muted:#57606a;--line:#d0d7de;--card:#f6f8fa;--full:#1a7f37;--ping:#9a6700;--nothing:#6e7781;--leak:#cf222e;--unchecked:#8250df;--mixed:#bc4c00;--early:#0969da}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8d96a0;--line:#30363d;--card:#161b22;--full:#3fb950;--ping:#d29922;--nothing:#8b949e;--leak:#ff7b72;--unchecked:#d2a8ff;--mixed:#ffa657;--early:#58a6ff}}
@@ -158,7 +166,7 @@ ${expectations(model)}
 <${level}>Flags</${level}>
 ${flags(model)}
 <${level}>Fields seen while a signal was denied</${level}>
-${fields(model)}`;
+${fields(model)}${skippedFields(model, level)}`;
 }
 
 export function page(body: string, title: string): string {

@@ -159,6 +159,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
       netLog: spec.netLog,
       autoconsent: spec.autoconsentRules.length ? { ruleFiles: spec.autoconsentRules } : undefined,
       gtmOverride,
+      warn: (text) => io.stderr(`Warning: ${text}\n`),
       trackerList: spec.trackers,
       userAgentOverride: process.env.PINGWRIGHT_TEST_USER_AGENT || undefined,
     });

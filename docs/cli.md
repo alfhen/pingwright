@@ -77,19 +77,25 @@ Locators: `click` and `wait` take a selector string, or a mapping:
 
 `wait` also takes a URL: `wait: { url: "/thank-you*" }` waits up to the step timeout for the top-level URL of a page to match. A string is a path glob (`*` is any run of characters), matched against the path and query. `{ url: { matches: "^https://.*/thank-you$" } }` is a regular expression matched against the whole URL.
 
+A `fill` entry can be optional: `"input[name=phone]": { value: phone, optional: true }`. If the field is not attached and visible within `options.optionalTimeout` (default 2s, from 100ms to 30s), the step skips it and goes on. The record lists the selectors in `Step.skippedFields`, never a value. The text summary prints `SKIPPED FIELD <selector> (not present)` under the step, and `--json` has `skippedFields`. A field that is present but cannot be filled (disabled, read-only, wrong type) still fails the step. Only `fill` has the optional form.
+
 `select` chooses an option of a `<select>`: `select: { "select[name=countryCode]": DE }`. It matches the option value first, then the option label. Quote a number (`"01"`), because YAML drops leading zeros and the step is refused otherwise. After the change it reads the select back. If the option is not selected, the step fails with `value not applied (still: <option label>)`. A select that is a card field (for example `autocomplete=cc-exp-month`) fails with the same handoff message as `fill` on a site that is not on this machine. The chosen option value and label join the run identity as extra values under the rule below, so a hashed country can match in `identity.hashesMatch`. `fill` on a select still works as before.
 
 Run identity: a run has a seeded fake identity (name, email, phone, address). In `fill`, a value that is an identity field name (`email`, `firstName`, `lastName`, `phone`, `address1`, `city`, `zip`, `country`) types the generated value. Any other value is typed as written, and it joins the run identity as an extra value. Its hash is then not reported as `possibleRealData`, and it can match a hashed name or address value in `identity.hashesMatch`, for example a city such as `Berlin` that the generated address cannot replace. An extra value never matches a hashed email or phone. A value joins the run identity only after it is typed into a field that is not a card or password field, whatever the selector: Pingwright checks the field when it fills it. If the run stops before that, the value is not in the run record. A scenario can also set identity fields itself with a top-level `identity` key. It replaces the generated value, so `fill` and `identity.hashesMatch` use it:
 
 ```yaml
 identity:
+  country: SE
   phone: "+46701740620"
 ```
 
-Use fictional numbers and `example.com` emails only. A phone number inside one of these ranges set aside for fiction gets no warning, and any other number does:
+`identity.country` picks the format of the generated name, address, zip and phone. A two-letter value is upper-cased. US, SE, GB and DE have a format. Any other country keeps US-shaped data under its label, and the run prints `Warning: identity.country DK has no local format; name, address, zip and phone are US-shaped`. Zips come from Faker patterns (GB from a UK postcode pattern) and can be real postcodes. A postcode alone is not personal data.
+
+Use fictional numbers and `example.com` emails only. A phone number inside one of these ranges set aside for fiction gets no warning, and any other number does. The warning says why the number looks real and which range to use for the country, for example `looks like a real phone (it is not in a fictional range and its mobile prefix is a real one for DE); use +49 30 23125000 to 23125999`. The warning never fails a run:
 
 - US: 555-0100 to 555-0199, from [NANPA](https://www.nationalnanpa.com/).
 - Sweden: 070-174 06 05 to 070-174 06 99, from [PTS](https://pts.se/).
+- Germany: 030 23125 000 to 999, from the [Bundesnetzagentur drama numbers](https://www.bundesnetzagentur.de/DE/Fachthemen/Telekommunikation/Nummerierung/DramaNumbers/artikel.html).
 - UK, from the [Ofcom drama numbers](https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbers-for-drama): 07700 900000 to 900999, 020 7946 0000 to 0999, 01632 960000 to 960999, and 0xxx 496 0000 to 0999 for Leeds, Sheffield, Nottingham, Leicester, Bristol, Reading, Birmingham, Edinburgh, Glasgow, Liverpool and Manchester.
 
 The warning covers numbers written as `+` and digits, and the common US shapes. Values that a person types during a `handoff` step are unknown to Pingwright. To have them count as the run identity, declare the same value under `identity`, or the run reports their hashes as `possibleRealData`.
