@@ -170,6 +170,7 @@ export class Recorder {
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
   private readonly handedToChromium = new Set<string>();
+  private readonly redirectHeaderWithoutRedirect = new Set<string>();
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
@@ -448,6 +449,7 @@ export class Recorder {
     if (this.stubRecorded.has(record.id)) return;
     let setCookieNames: string[] = [];
     try {
+      if (response.status() !== 201 && (response.status() < 300 || response.status() >= 400) && (await response.headerValue('location')) !== null) this.redirectHeaderWithoutRedirect.add(record.id);
       setCookieNames = (await response.headerValues('set-cookie')).flatMap(setCookieNameOf);
     } catch {
       // The page closed before the headers arrived.
@@ -812,6 +814,7 @@ export class Recorder {
       routedRequestIds: this.routed,
       responses: this.responses,
       handedToChromium: this.handedToChromium,
+      redirectHeaderWithoutRedirect: this.redirectHeaderWithoutRedirect,
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));

@@ -12,6 +12,7 @@ let server: Server;
 let port: number;
 let outDir: string;
 let serverSaw: string[] = [];
+let hopAllowsCors = false;
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -20,7 +21,7 @@ beforeAll(async () => {
     if (path === '/') res.writeHead(200, { 'content-type': 'text/html' }).end('<iframe src="/child"></iframe>');
     else if (path === '/child') res.writeHead(200, { 'content-type': 'text/html' }).end(`<script>fetch('/r');</script>`);
     else if (path === '/r') res.writeHead(302, { location: `http://127.0.0.1:${port}/g/collect?v=2&tid=G-PWTEST0001&cid=1.2&en=hop` }).end();
-    else res.writeHead(204).end();
+    else res.writeHead(204, hopAllowsCors ? { 'access-control-allow-origin': '*' } : {}).end();
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
@@ -38,9 +39,10 @@ afterAll(async () => {
 });
 
 // Playwright sometimes reports neither the redirect nor the hop that Chromium follows from a child frame (#180).
-// The first request then fails with no response. What must hold in every run where the server saw the hop:
+// The first request then fails with ERR_FAILED, or, when the hop allows CORS, carries the hop's response. What must hold in every run where the server saw the hop:
 // the hop is flagged stubBypass, or the first request carries possibleRedirectHop.
-test(`every redirect hop the server saw is flagged, or its first request is flagged possibleRedirectHop, in ${RUNS} runs`, { timeout: RUNS * 10_000 }, async () => {
+test.each([false, true])(`every redirect hop the server saw is flagged, or its first request is flagged possibleRedirectHop, in ${RUNS} runs (hop sends CORS headers: %s)`, { timeout: RUNS * 10_000 }, async (cors) => {
+  hopAllowsCors = cors;
   const unexplained: number[] = [];
   for (let run = 0; run < RUNS; run++) {
     serverSaw = [];

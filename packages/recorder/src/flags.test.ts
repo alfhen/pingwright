@@ -307,6 +307,15 @@ describe('possibleRedirectHop', () => {
     expect(flags[0]?.detail).toContain('may have');
   });
 
+  test('a request answered with a Location header but no redirect status is flagged', () => {
+    const request = req('http://localhost:3000/r', { resourceType: 'fetch', outcome: 'passed' });
+    const flags = redirectFlags(request, { redirectHeaderWithoutRedirect: new Set([request.id]) });
+    expect(flags).toHaveLength(1);
+    expect(flags[0]?.detail).toContain('Location header');
+    expect(redirectFlags(request, { redirectHeaderWithoutRedirect: new Set([request.id]), networkMode: 'live' })).toEqual([]);
+    expect(redirectFlags(request, { redirectHeaderWithoutRedirect: new Set([request.id]), handedToChromium: new Set() })).toEqual([]);
+  });
+
   test('a response, another failure, a recorder-made failure or live mode is not flagged', () => {
     const request = failed();
     const response = { type: 'response', id: newId('response'), requestId: request.id, status: 302, setCookieNames: [] } as Response;

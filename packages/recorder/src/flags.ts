@@ -71,9 +71,11 @@ export interface FlagInput {
   responses?: readonly Response[];
   /** Ids of requests the recorder let Chromium send itself (`route.continue()`), not fulfilled or aborted. */
   handedToChromium?: ReadonlySet<string>;
+  /** Ids of requests whose response has a Location header but a status that is not a redirect: Playwright took the status from a later hop. */
+  redirectHeaderWithoutRedirect?: ReadonlySet<string>;
 }
 
-export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, requests, hits, identity, routedRequestIds, responses = [], handedToChromium = new Set() }: FlagInput): Flag[] {
+export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, requests, hits, identity, routedRequestIds, responses = [], handedToChromium = new Set(), redirectHeaderWithoutRedirect = new Set() }: FlagInput): Flag[] {
   const answered = new Set(responses.map((r) => r.requestId));
   const scope = { siteHost: parse(siteUrl)?.hostname ?? '', firstPartyHosts };
   const flags: Flag[] = [];
@@ -88,9 +90,14 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, track
       flags.push(flag(runId, 'stubBypass', [req.id], `${why}, so it was not stubbed: ${req.url}`));
     }
     // Playwright sometimes reports neither the redirect response nor the hop Chromium follows (#180). The first
-    // request then fails with ERR_FAILED and no response, and a later hop may have reached the network unrecorded.
-    if (networkMode !== 'live' && handedToChromium.has(req.id) && req.outcome === 'failed' && req.failure === 'net::ERR_FAILED' && !answered.has(req.id)) {
-      flags.push(flag(runId, 'possibleRedirectHop', [req.id], `It failed with no response; Chromium may have followed a redirect that was not recorded and not stubbed: ${req.url}`));
+    // request then fails with ERR_FAILED and no response, or, when the hop allows CORS, carries the hop's response.
+    // Either way a later hop may have reached the network unrecorded.
+    if (networkMode !== 'live' && handedToChromium.has(req.id)) {
+      const failedUnanswered = req.outcome === 'failed' && req.failure === 'net::ERR_FAILED' && !answered.has(req.id);
+      if (failedUnanswered || redirectHeaderWithoutRedirect.has(req.id)) {
+        const why = failedUnanswered ? 'It failed with no response' : 'Its response carries a Location header but is not a redirect';
+        flags.push(flag(runId, 'possibleRedirectHop', [req.id], `${why}; Chromium may have followed a redirect that was not recorded and not stubbed: ${req.url}`));
+      }
     }
   }
   for (const hit of hits) {
