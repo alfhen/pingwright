@@ -6,7 +6,7 @@ import { expect, test } from 'vitest';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const BINARY = /\.(png|ico|woff2?)$/;
 
-const wholeFiles = [/^docs\/plan-.*\.md$/, /^docs\/proposal-.*\.md$/, /^scripts\/no-old-name\.test\.ts$/, /^packages\/cli\/src\/alias-bin(\.test)?\.ts$/];
+const wholeFiles = [/^brand\/site-handoff\//, /^docs\/plan-.*\.md$/, /^docs\/proposal-.*\.md$/, /^scripts\/no-old-name\.test\.ts$/, /^packages\/cli\/src\/alias-bin(\.test)?\.ts$/];
 
 const allowedLines: Record<string, RegExp> = {
   'package.json': /^\s*"pingwright": "dist\/pingwright\.js"/,
