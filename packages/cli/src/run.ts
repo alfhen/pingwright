@@ -20,7 +20,7 @@ import {
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
 import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
-import { checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
+import { acceptsDeclaration, checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
 
 export interface Io {
   stdout: (text: string) => void;
@@ -147,10 +147,15 @@ function markerNotDetected(message: string): boolean {
   return /test mode not detected(?! \()/.test(message);
 }
 
-function declarationHint(spec: RunSpec): string | undefined {
-  const step = spec.parsed.steps.find((s) => s.kind === 'payment');
-  if (!spec.testPayment || step?.kind !== 'payment') return undefined;
-  return `Declare it in ${testPaymentHostsPath()} with { "host": "${spec.testPayment.host}", "testMode": "${step.value.provider}" } if this store is in test mode.`;
+function declarationHint(spec: RunSpec, label: string | undefined): string | undefined {
+  if (!spec.testPayment) return undefined;
+  const payments = spec.parsed.steps.flatMap((s) => (s.kind === 'payment' ? [s] : []));
+  const failed = label === undefined ? undefined : payments.find((s) => s.label === label);
+  const providers = failed ? [failed.value.provider] : [...new Set(payments.map((s) => s.value.provider))];
+  const host = spec.testPayment.host;
+  const hints = providers.filter((provider) => acceptsDeclaration(host, provider)).map((provider) => `{ "host": "${host}", "testMode": "${provider}" }`);
+  if (hints.length === 0) return undefined;
+  return `Declare it in ${testPaymentHostsPath()} with ${hints.join(' or ')} if this store is in test mode.`;
 }
 
 export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> {
@@ -195,7 +200,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
     const message = error instanceof Error ? error.message : String(error);
     if (MISSING_BROWSER.test(message)) return failed('Chromium is not installed. Run `tagreeve install-browser`.\n');
     let text = `Run failed: ${error instanceof GtmOverrideFailure ? `GTM override: ${message}` : message}\n`;
-    const declareHint = spec.testPayment && markerNotDetected(message) && declarationHint(spec);
+    const declareHint = spec.testPayment && markerNotDetected(message) && declarationHint(spec, error instanceof StepError ? error.label : undefined);
     if (declareHint) text += `${declareHint}\n`;
     const written = (error instanceof StepError || error instanceof GtmOverrideFailure) && error.run ? error.run.path : undefined;
     if (written) {

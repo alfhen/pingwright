@@ -4,7 +4,7 @@
 
 <!-- P02 -->
 
-<!-- P03 -->
+- The declaration hint after `test mode not detected` names the provider of the `payment` step that failed. It appears only when the allowlist file would accept the entry, so it no longer suggests the `fixture` provider on a hosted host or a loopback host without the test seam. The declared-payment e2e now checks that a run prints no email, email hash or cookie value. (#646, #647, #649)
 
 ## 0.4.0-rc.2
 

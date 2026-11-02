@@ -19,6 +19,13 @@ export interface AllowlistEntry {
   testMode?: string;
 }
 
+/** Whether the allowlist file accepts this host and provider pair. */
+export function acceptsDeclaration(host: string, testMode: string, loopbackHosted: boolean = loopbackIsHostedForTests()): boolean {
+  const loopback = isLoopbackHost(normalizeHost(host));
+  if (testMode === 'fixture') return loopback && loopbackHosted;
+  return !loopback;
+}
+
 function entryError(path: string, index: number, reason: string): Error {
   return new Error(`${path}: entry ${index} ${reason}.`);
 }
@@ -32,8 +39,7 @@ function parseEntry(path: string, entry: unknown, index: number, loopbackHosted:
   }
   const normalized = normalizeHost(host);
   if (!findPaymentProvider(testMode)) throw entryError(path, index, 'names a testMode that is not a payment provider');
-  const testOnly = testMode === 'fixture' && isLoopbackHost(normalized) && loopbackHosted;
-  if (!testOnly && (testMode === 'fixture' || isLoopbackHost(normalized))) {
+  if (!acceptsDeclaration(normalized, testMode, loopbackHosted)) {
     throw entryError(path, index, 'declares a loopback host or the fixture provider, which only tests may do');
   }
   return { host: normalized, testMode };

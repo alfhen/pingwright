@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, expect, test } from 'vitest';
+import { readRun, type RunRecords } from '../packages/core/src/index.ts';
 import { run, runCli, scenario, site, outDir } from './cli-helpers.ts';
 
 const CARD = '4242424242424242';
@@ -79,3 +81,35 @@ test('without the test seam the fixture declaration is refused', async () => {
   expect(r.stderr).toContain('entry 0');
   expect(site.cardSubmits).toEqual([]);
 }, 60_000);
+
+const HASH = createHash('sha256').update(EMAIL).digest('hex');
+const COOKIE_VALUE = 'pw-fixture-cookie-value';
+const LEAKS = [EMAIL, encodeURIComponent(EMAIL), HASH, COOKIE_VALUE, CARD];
+
+function requestUrls(records: RunRecords): string {
+  return records.requests.map((r) => r.url).join('\n');
+}
+
+test('a declared run prints no email, hash or cookie value that the run recorded', async () => {
+  const r = await run('test-payment-declared-leak', allow, await config(['localhost', DECLARATION]));
+  expect(r.code, r.failed.join('; ')).toBe(0);
+  const urls = requestUrls(r.records!);
+  for (const value of [EMAIL, HASH, COOKIE_VALUE]) expect(urls).toContain(value);
+  for (const value of LEAKS) {
+    expect(r.stdout).not.toContain(value);
+    expect(r.stderr).not.toContain(value);
+  }
+}, 120_000);
+
+test('a run without a declaration prints no email, hash or cookie value either', async () => {
+  const r = await run('test-payment-declared-leak', allow, await config(['localhost']));
+  expect(r.code).toBe(2);
+  expect(r.stdout).toBe('');
+  expect(r.stderr).toContain('test mode not detected');
+  const recordPath = /^Record: (.+)$/m.exec(r.stderr)?.[1];
+  expect(recordPath).toBeDefined();
+  const urls = requestUrls(await readRun(recordPath!));
+  for (const value of [EMAIL, HASH, COOKIE_VALUE]) expect(urls).toContain(value);
+  for (const value of LEAKS) expect(r.stderr).not.toContain(value);
+  expect(site.cardSubmits).toEqual([]);
+}, 120_000);

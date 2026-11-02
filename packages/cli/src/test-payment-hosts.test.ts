@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseScenario } from '@tagreeve/expect';
 import { expect, test } from 'vitest';
-import { checkTestPaymentGates, readTestPaymentHosts, testPaymentHostsPath } from './test-payment-hosts.ts';
+import { acceptsDeclaration, checkTestPaymentGates, readTestPaymentHosts, testPaymentHostsPath } from './test-payment-hosts.ts';
 
 const scenario = (provider = 'shopify-bogus') =>
   parseScenario(`start: /\nsteps:\n  - payment: { provider: ${provider}, card: "${provider === 'shopify-bogus' ? '1' : '4242424242424242'}" }\n`);
@@ -135,4 +135,14 @@ test('a declaration for the host is enough to be listed, and the flag must still
   expect((await checkTestPaymentGates(scenario(), 'https://shop.example.com', 'shop.example.com', env)).ok).toBe(true);
   const other = await checkTestPaymentGates(scenario(), 'https://shop.example.com', 'other.example.com', env);
   expect(other.ok ? '' : other.error).toContain('must name the --site host');
+});
+
+test('the allowlist file accepts a hosted host with a real provider, and a loopback host with fixture only under the seam', () => {
+  expect(acceptsDeclaration('shop.example.com', 'shopify-test', false)).toBe(true);
+  expect(acceptsDeclaration('shop.example.com', 'fixture', false)).toBe(false);
+  expect(acceptsDeclaration('shop.example.com', 'fixture', true)).toBe(false);
+  expect(acceptsDeclaration('localhost', 'fixture', false)).toBe(false);
+  expect(acceptsDeclaration('localhost', 'fixture', true)).toBe(true);
+  expect(acceptsDeclaration('127.0.0.1', 'shopify-test', true)).toBe(false);
+  expect(acceptsDeclaration('Shop.Example.com', 'shopify-test', false)).toBe(true);
 });
