@@ -268,7 +268,7 @@ Drift is a key or tuple that is on one side only. A changed consent field or ID 
 
 `baseline` and `diff` answer different questions. `diff` pairs the hits of a key in order and reports each one. A baseline compares sets of tuples, so a reordering of hits is not drift and a new tuple inside a key is.
 
-### `tagreeve suite <dir> --site <url>`
+### `tagreeve suite <dir> (--site <url> | --stores <stores.json>)`
 
 Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
 
@@ -279,7 +279,8 @@ tagreeve suite scenarios/ --site https://staging.example.com \
 
 | Option | Meaning |
 | --- | --- |
-| `--site <url>` | The site to test. Required. |
+| `--site <url>` | The site to test. Give `--site` or `--stores`, never both. |
+| `--stores <file>` | A stores file: run every scenario against each store. See "Several stores". |
 | `--variant <name[=file]>` | A GTM build to test. Can be repeated. `published` means no override and takes no file. `name=file` serves an override file in the `--gtm-override` format. The name matches `^[a-z0-9][a-z0-9_-]*$`, and a name given twice exits 2. Default: `published`. |
 | `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
 | `--with-test-payment` | Also runs scenarios that have a `payment` step. It needs `--allow-test-payment <host>` too, as in `run`. Without both they are `SKIPPED`, which counts as a pass. With both, a failed gate exits 2 before any run. |
@@ -299,6 +300,28 @@ checkout-pay    SKIPPED     SKIPPED
 
 A difference between variants is not a failure. Your rules decide. A run that exits 2 (for example, the banner was not shown) shows `ERROR (exit 2)` and does not stop the suite. A failed or warned cell says what failed: `FAIL: 5 rules, deniedIdentifiers` counts the failed rules and names the failed built-in checks, and `WARN: 1 rule` does the same for warnings. It never prints a rule or a message. The report uses the same text. The suite's exit code is the worst cell, in this order: 2, then 1, then 0. With `--json`, stdout is the manifest instead of the table.
 
+#### Several stores
+
+`--stores` runs the same scenarios against more than one storefront, such as one store per market. The file is JSON:
+
+```json
+{
+  "storesSchemaVersion": 1,
+  "stores": [
+    { "name": "us", "site": "https://shop.example.com" },
+    { "name": "se", "site": "https://shop.example.se", "country": "SE", "vars": { "product": "tee-se" }, "autoconsentRules": "rules-se.json" }
+  ]
+}
+```
+
+A file holds 1 to 50 stores. `name` matches `^[a-z0-9][a-z0-9_-]*$` and is unique. `site` is an http or https URL. `vars` override the vars a scenario declares, and `--var` overrides both. A store var that no scenario declares exits 2 and names the store and the var. `country` sets `identity.country`. A scenario that sets another country gets a warning, and the store's country is used. `autoconsentRules` is a path relative to the stores file, added to `--autoconsent-rules` for that store. An error names the file and the store index, never a value.
+
+Every scenario runs once per store and variant, with one seed. Records are named `<scenario>.<store>.<variant>.jsonl`. Each cell has `labels: { "store": "<name>" }`. The table gets a `store` column after `scenario`, with one row per scenario and store. Diffs compare the variants within one store. Tagreeve does not compare stores with each other.
+
+`--allow-test-payment <host>` still names one host. A payment scenario runs only for the store whose host equals it, and its cells for the other stores are `SKIPPED`.
+
+`suite.json` has `suiteSchemaVersion: 2` and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
+
 ### `tagreeve report <run.jsonl | suite dir> --html <out.html>`
 
 Writes one HTML file that people can read without knowing JSONL. It opens no browser and reads no network. `--html` is required, and the command refuses to overwrite its own input. A missing file, or a file that is not a run record, exits 2, as `diff` does.
@@ -314,7 +337,7 @@ A run report has these parts:
 - **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, up to five evidence IDs and, on a failed or warned result, `on failure: fail` or `on failure: warn`. A passing result shows no severity.
 - **Flags** and **fields.** The flag kinds with counts and hosts, and the field names seen on denied hits.
 
-A suite report has these parts, in this order: a title such as `Tagreeve suite: published vs workspace on shop.example.com, 2026-10-31`, a header with the suite ID, the variants and the exit code, a verdict per variant, which adds the number of runs to a built-in check (`built-in check sandboxPageUrl failed in 4 runs`), a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`.
+A suite report has these parts, in this order: a title such as `Tagreeve suite: published vs workspace on shop.example.com, 2026-10-31`, a header with the suite ID, the variants and the exit code, a verdict per variant, which adds the number of runs to a built-in check (`built-in check sandboxPageUrl failed in 4 runs`), a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`. `report` reads suite manifests of version 1 and 2. For a suite with stores, the results table has a Store column and a row per scenario and store, the run sections are headed `<scenario> on <store>, <variant>`, the verdict has one line per store and variant, and each diff section names its store.
 
 The marks, worst first:
 

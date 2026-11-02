@@ -1,0 +1,7 @@
+start: /container/direct
+steps:
+  - wait: 6s
+expect:
+  mustNot:
+    - { vendor: meta, event: Purchase }
+options: { allowUnknownDestination: true }

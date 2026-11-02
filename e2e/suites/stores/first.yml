@@ -1,0 +1,7 @@
+start: /container/direct
+steps:
+  - wait: 6s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { allowUnknownDestination: true }
