@@ -1,5 +1,4 @@
-import { looksLikeValueToken, platformHostFor, stripSandboxPrefix } from '@tagreeve/decoders';
-import { valueKinds } from '@tagreeve/core';
+import { guardFieldName, platformHostFor } from '@tagreeve/decoders';
 import type { Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
 import { isServerHit, judgeIndex, viaHitOf } from '@tagreeve/expect';
 import { NOTE_TEXT } from './report/model.ts';
@@ -163,37 +162,22 @@ function formatFlags(flags: Summary['flags']): string[] {
 const URL_TOKEN = /[a-z][a-z0-9+.-]*:\/\/\S+/gi;
 const URL_PARTS = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)([^?#]*)(?:\?([^#]*))?(?:#.*)?$/i;
 
-// Same test as isValueSegment in packages/expect/src/diff.ts, which does not export it.
-function looksLikeValue(text: string): boolean {
-  if (looksLikeValueToken(text) || looksLikeValueToken(text.replaceAll('-', ''))) return true;
-  if (text.includes('@') || /%[0-9a-fA-F]{2}/.test(text)) return true;
-  return valueKinds(text).size > 0;
-}
-
 function queryName(pair: string): string {
   const raw = pair.split('=')[0]!;
-  let name = raw;
   try {
-    name = decodeURIComponent(raw);
+    return guardFieldName(decodeURIComponent(raw));
   } catch {
-    // Keep the raw text for the value test.
+    return guardFieldName(raw);
   }
-  return looksLikeValue(raw) || looksLikeValue(name) ? '<value>' : raw;
 }
 
-function maskPath(path: string): string {
-  const rest = stripSandboxPrefix(path);
-  const prefix = rest !== path && path.endsWith(rest) ? path.slice(0, path.length - rest.length) : '';
-  return prefix + rest.split('/').map((segment) => (segment !== '*' && looksLikeValue(segment) ? '*' : segment)).join('/');
-}
-
-/** `scheme://host/path?name&name`: no credentials, query values or fragment, and value-like path segments and query names masked. */
+/** `scheme://host/path?name&name`: no credentials, query values or fragment, and value-like query names shown as `(other)`. */
 function redactUrl(token: string): string {
   const parts = URL_PARTS.exec(token);
   if (!parts) return token.split(/[?#]/)[0]!;
   const [, scheme, authority, path, query] = parts;
   const names = new Set((query ?? '').split('&').filter(Boolean).map(queryName));
-  return `${scheme}${authority!.slice(authority!.lastIndexOf('@') + 1)}${maskPath(path!)}${names.size > 0 ? `?${[...names].join('&')}` : ''}`;
+  return `${scheme}${authority!.slice(authority!.lastIndexOf('@') + 1)}${path}${names.size > 0 ? `?${[...names].join('&')}` : ''}`;
 }
 
 /** Replaces each URL in a flag detail and keeps the words around it, so the host parsers still match. */

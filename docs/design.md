@@ -422,7 +422,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 **Other rules**
 
 - Playwright traces, HAR files and screenshots are off by default. When turned on, the report states that they are unfiltered.
-- CLI `--json` output goes to the agent's model provider. With fake identities this is acceptable. A flagged `possibleRealData` value is never printed: the output holds the name, the request and the step only. A flag detail in the text or `--json` summary shows the request as `METHOD scheme://host/path` with query names only (`?a&b`), never values; a value-like name or path segment is masked. The record keeps the full detail, except the `sandboxPageUrl` message, which names the page by host and path.
+- CLI `--json` output goes to the agent's model provider. With fake identities this is acceptable. A flagged `possibleRealData` value is never printed: the output holds the name, the request and the step only. A flag detail in the text or `--json` summary shows the request as `METHOD scheme://host/path` with query names only (`?a&b`), never values; a value-like query name reads `(other)`. Path segments are not masked. The record keeps the full detail, except the `sandboxPageUrl` message, which names the page by host and path.
 - Tagreeve never enters a password on a hosted site. Log-ins are handoff steps. Payments are handoff steps too, except the opt-in test payment, which types only a provider's documented test card after the three gates in §5.4 hold. The third gate is the user's declaration for the host, or a marker inside the card container. Loopback hosts are exempt as before (§5.4).
 - Tagreeve never takes a target address from incoming traffic.
 
