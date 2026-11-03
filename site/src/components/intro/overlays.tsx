@@ -8,7 +8,7 @@ export function Notifications({ shown }: { shown: number }) {
         <div
           key={i}
           data-intro-notification
-          style={`position:absolute;z-index:4;left:${m.x};top:${m.y};--r:${m.rotate};width:330px;animation:intro-toast-in .3s cubic-bezier(.2,.8,.2,1) both;background:rgba(246,246,248,.86);backdrop-filter:blur(30px) saturate(180%);color:#1d1d1f;border-radius:18px;padding:12px 13px;box-shadow:0 14px 34px -8px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.06);display:flex;gap:10px;font-family:${SYSTEM_FONT};pointer-events:none`}
+          style={`position:absolute;z-index:${m.stacked ? 5 : 4};left:${m.x};top:${m.y};--r:${m.rotate};width:330px;animation:intro-toast-in .3s cubic-bezier(.2,.8,.2,1) both;background:rgba(246,246,248,.86);backdrop-filter:blur(30px) saturate(180%);color:#1d1d1f;border-radius:18px;padding:12px 13px;box-shadow:0 14px 34px -8px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.06);display:flex;gap:10px;font-family:${SYSTEM_FONT};pointer-events:none`}
         >
           <span style={`width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;background:${m.color}`}>
             {m.initial}

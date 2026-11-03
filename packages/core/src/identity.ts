@@ -194,17 +194,18 @@ const EDGE = 4;
 const MIN_BYTES_FOR_EDGES = 12;
 
 /**
- * The share of UTF-16 units that are U+FFFD, C0 controls other than tab, LF and CR, or 0x7f. Callers pick their own
+ * The share of code points that are U+FFFD, C0 controls other than tab, LF and CR, or 0x7f. Callers pick their own
  * threshold.
  */
 export function binaryShare(text: string): number {
-  if (text.length === 0) return 0;
+  let total = 0;
   let binary = 0;
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
+  for (const ch of text) {
+    total++;
+    const c = ch.codePointAt(0)!;
     if (c === 0xfffd || (c < 0x20 && c !== 9 && c !== 10 && c !== 13) || c === 0x7f) binary++;
   }
-  return binary / text.length;
+  return total === 0 ? 0 : binary / total;
 }
 
 // Random bytes seldom decode to mostly valid text, so this keeps ULIDs and hashes out. Junk glued to either

@@ -25,6 +25,8 @@ test('a cookie that was already set is not reported as stored, and the rule stil
   const early = records.checkpoints.find((c) => c.label === 'early')!;
   expect(early.cookies.map((c) => c.name)).toContain('_pwalready');
 
+  const setter = records.requests.find((q) => q.url.endsWith('/session/already'))!;
+  expect(records.responses.find((x) => x.requestId === setter.id)!.setCookieNames).toEqual(['_pwalready']);
   expect((await fetch(`${site.url}/session/already`)).headers.get('set-cookie')).toContain('pw-fixture-cookie-value');
   expect(r.stdout + r.stderr + JSON.stringify(records.results)).not.toContain('pw-fixture-cookie-value');
   expect(await renderReport(summary.path, 'cookie-already-set.html')).not.toContain('pw-fixture-cookie-value');

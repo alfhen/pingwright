@@ -28,6 +28,8 @@ All servers listen on port 0 (random).
 
 `/`, `/products/fake-tee`, `/collections/all`, `/cart`, `/checkout`, `/checkout/payment`, `/thank-you`. Every page loads `/fixture-config.js` and `/assets/site.js`.
 
+`/sgtm-plain` posts a `lead` body to `sgtmUrl` `/data` with the phone typed in the checkout form in national form (`0XX XXX XXXX`) and the typed zip, both in plain text, as `user_data.phone_number` and `user_data.postal_code`. Visit it after the identity form was submitted.
+
 `/server-container` sends a Meta pixel `Purchase` hit with an event ID and a `POST /capi` to `sgtmUrl`. `?email=` is the email in that body. `?extra=1` adds a `POST /capi` with an unrelated event ID and a fake email, and a `POST /data`, a path no decoder knows. With `--server-container`, the stand-in container answers these instead of `sgtmUrl`.
 
 ## Element IDs
@@ -201,7 +203,8 @@ For a stub-mode run, `/pwcookie` is a Stape loader request, so stub mode answers
 `standInContainerPath` (from `@tagreeve/fixture-site`) is the absolute path of `src/stand-in-container.ts`, an executable Node script that stands in for the server container image. A test sets `TAGREEVE_TEST_SERVER_CONTAINER_CMD` to it. The runner then starts it in place of `docker run`, with `PORT`, `HTTP_PROXY` and `NODE_EXTRA_CA_CERTS`. It needs no Docker and no network.
 
 - It listens on `127.0.0.1:$PORT`. `GET /healthz` answers `200` once its two start-up fetches are done.
-- At start it fetches `https://www.googletagmanager.com/server.js?id=GTM-PWTEST1&gtm_auth=pw-fixture-auth` and `/s/gtag/destination` through the proxy, and logs the first URL in full to stderr.
+- At start it fetches `https://www.googletagmanager.com/server.js?id=GTM-PWTEST1&gtm_auth=pw-fixture-auth` and `/s/gtag/destination` through the proxy, and logs each start-up URL in full to stderr, then the status it got. The first URL carries the fake `gtm_auth`.
+- Like a careless container, it also logs the fixture config, its `HTTP_PROXY` and each vendor call URL, so the leak checks have something to find. It reads its CA once at start, and `close()` waits for calls under way.
 - A `POST` to `/g/collect`, `/pixel` or `/capi` is answered `200`. Then it makes three vendor calls: a GA4 `POST` to `www.google-analytics.com/g/collect`, a Google Ads `GET` to `www.googleadservices.com/pagead/conversion/000000001/`, and a Conversions API `POST` to `graph.facebook.com/v21.0/100000000000001/events?access_token=pw-fixture-access-token`. The event name, event ID and email come from the query or a JSON or form body. The email is hashed with SHA-256 unless it already is a hash.
 - `delayMs` (0 to 5000, default 0) on the triggering request delays the vendor calls by that long after the answer.
 - Like the real image it reads only the upper-case `HTTP_PROXY`, tunnels with `CONNECT`, and trusts only the CA in `NODE_EXTRA_CA_CERTS`. It never opens a direct connection: with no proxy it sends nothing.

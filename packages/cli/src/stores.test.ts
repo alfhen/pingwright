@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -16,6 +16,8 @@ const file = (stores: unknown[]) => ({ storesSchemaVersion: 1, stores });
 
 test('reads stores with vars, country and a rules path relative to the file', async () => {
   const path = await write(file([store({ vars: { product: 'tee' }, country: 'SE', autoconsentRules: 'rules/a.json' }), store({ name: 'b-2' })]));
+  await mkdir(join(path, '..', 'rules'));
+  await writeFile(join(path, '..', 'rules', 'a.json'), '{}');
   const stores = await readStores(path);
   expect(stores).toHaveLength(2);
   expect(stores[0]).toMatchObject({ name: 'a', site: 'https://shop.example.com', vars: { product: 'tee' }, country: 'SE' });
@@ -55,4 +57,18 @@ test('invalid JSON and a missing file are errors that hold no content', async ()
   const bad = await write(`{ "storesSchemaVersion": 1, "x": "${SECRET}"`);
   await expect(readStores(bad)).rejects.toThrow(`${bad} is not valid JSON.`);
   await expect(readStores(join(bad, '..', 'nope.json'))).rejects.toThrow(/Cannot read .*: ENOENT/);
+});
+
+test('a missing autoconsentRules file is an error that names the file and the store, not the path', async () => {
+  const path = await write(file([store(), store({ name: 'b', autoconsentRules: 'missing-rules.json' })]));
+  const error = (await readStores(path).catch((e: unknown) => e)) as Error;
+  expect(error).toBeInstanceOf(StoresError);
+  expect(error.message).toContain(path);
+  expect(error.message).toContain('store 1 has autoconsentRules');
+  expect(error.message).not.toContain('missing-rules.json');
+});
+
+test('an autoconsentRules path that is a directory is an error', async () => {
+  const path = await write(file([store({ autoconsentRules: '.' })]));
+  await expect(readStores(path)).rejects.toThrow('store 0 has autoconsentRules');
 });
