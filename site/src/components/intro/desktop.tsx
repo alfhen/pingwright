@@ -7,9 +7,20 @@ interface MenuBarProps {
   unread: number;
   shown: number;
   onSkip: () => void;
+  skipHidden?: boolean;
 }
 
-export function MenuBar({ app, unread, shown, onSkip }: MenuBarProps) {
+const SKIP_STYLE = `font:600 12px ${SYSTEM_FONT};background:rgba(255,255,255,.28);color:#fff;border:0;border-radius:999px;padding:3px 10px;cursor:pointer;flex:none`;
+
+export function SkipButton({ onSkip, style = '' }: { onSkip: () => void; style?: string }) {
+  return (
+    <button type="button" onClick={onSkip} style={SKIP_STYLE + ';' + style}>
+      Skip intro →
+    </button>
+  );
+}
+
+export function MenuBar({ app, unread, shown, onSkip, skipHidden }: MenuBarProps) {
   return (
     <div style="position:absolute;left:0;right:0;top:0;height:28px;background:rgba(255,255,255,.22);backdrop-filter:blur(30px) saturate(180%);color:#fff;display:flex;align-items:center;gap:20px;padding:0 16px;font-size:13px;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,.15)">
       <span style="width:12px;height:12px;border-radius:50%;background:#fff;display:inline-block;flex:none"></span>
@@ -31,13 +42,7 @@ export function MenuBar({ app, unread, shown, onSkip }: MenuBarProps) {
         <span style={`position:absolute;left:1px;top:1px;bottom:1px;width:${battery(shown)};background:#fff;border-radius:1px`}></span>
       </span>
       <span style="font-variant-numeric:tabular-nums;flex:none">{deskClock(shown)}</span>
-      <button
-        type="button"
-        onClick={onSkip}
-        style={`font:600 12px ${SYSTEM_FONT};background:rgba(255,255,255,.28);color:#fff;border:0;border-radius:999px;padding:3px 10px;cursor:pointer;flex:none`}
-      >
-        Skip intro →
-      </button>
+      <SkipButton onSkip={onSkip} style={skipHidden ? 'visibility:hidden' : ''} />
     </div>
   );
 }

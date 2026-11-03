@@ -29,17 +29,22 @@ export function Notifications({ shown }: { shown: number }) {
 }
 
 export function Wasted() {
+  const line = wastedLine();
   return (
     <>
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.05),rgba(0,0,0,.65));pointer-events:none"></div>
-      <div style="position:absolute;left:0;right:0;top:50%;height:170px;margin-top:-85px;background:linear-gradient(transparent,rgba(0,0,0,.72) 25%,rgba(0,0,0,.72) 75%,transparent);animation:intro-band-in .5s .2s cubic-bezier(.2,.8,.2,1) both;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+      <div style="position:absolute;left:0;right:0;top:50%;height:260px;margin-top:-130px;background:linear-gradient(transparent,rgba(0,0,0,.84) 18%,rgba(0,0,0,.84) 82%,transparent);backdrop-filter:blur(6px);animation:intro-band-in .5s .2s cubic-bezier(.2,.8,.2,1) both;display:flex;flex-direction:column;align-items:center;justify-content:center">
         <div
           data-intro-wasted
-          style="font-family:Anton,Impact,sans-serif;font-size:clamp(72px,11vw,150px);line-height:1;color:oklch(0.62 0.22 25);text-shadow:3px 3px 0 #000,-1px -1px 0 #000,0 0 40px rgba(0,0,0,.6);animation:intro-wasted-in 1.1s .35s cubic-bezier(.2,.8,.2,1) both"
+          style="margin-bottom:6px;font-family:Anton,Impact,sans-serif;font-size:clamp(72px,11vw,150px);line-height:1;color:oklch(0.62 0.22 25);text-shadow:3px 3px 0 #000,-1px -1px 0 #000,0 0 40px rgba(0,0,0,.6);animation:intro-wasted-in 1.1s .35s cubic-bezier(.2,.8,.2,1) both"
         >
           wasted
         </div>
-        <div style="font:500 14px 'Geist Mono',monospace;color:#E8EEEC;animation:intro-ask-in .5s 1.3s both;text-align:center">{wastedLine()}</div>
+        <div data-intro-wasted-time style="font:500 28px/1.2 'Geist Mono',monospace;color:#FFFFFF;font-variant-numeric:tabular-nums;letter-spacing:-0.01em;text-align:center;animation:intro-line-in .4s .9s both">
+          <span style="font-weight:600">{line.time}</span>
+          {line.rest}
+        </div>
+        <div data-intro-wasted-finding style="font:500 21px/1.3 Geist,sans-serif;color:#F4CFC6;text-align:center;animation:intro-line-in .4s 1.5s both">{line.finding}</div>
       </div>
     </>
   );

@@ -29,6 +29,7 @@ The handoff is final for look, copy and motion. Where it conflicts with a rule i
 | "Make the demo real: record against Tagreeve's test shop" | Record against `fixtures/site` in `stub` mode | The fixture site is the test shop. No real store is used. |
 | Design system page (optional) | Not built | The handoff says it is internal. |
 | Safe by default: the heading "Point it at production. Nothing leaks." and the stub mode card "Nothing reaches the vendor" | The heading "Known vendor hits stay local." and the stub mode card "Known endpoints stay local", which says that an unknown destination fails the run but its request can still reach the vendor | Stub mode lets hits to unknown destinations through (design §5.3). The handoff's copy promised more than Tagreeve does. |
+| The line under "wasted" is one 14 px line, shown fully for about 0.6 s (hold 2.4 s) | The line is split in two, set larger (28 px mono and 21 px sans), and held 4.8 s | At 14 px for 0.6 s it could not be read. |
 
 ## Order and waves
 

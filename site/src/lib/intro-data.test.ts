@@ -13,6 +13,7 @@ import {
   mailList,
   placeNotifications,
   timeSpent,
+  WASTED_HOLD_MS,
   wastedLine,
 } from './intro-data.ts';
 
@@ -55,7 +56,8 @@ describe('intro data', () => {
     expect([deskClock(0), deskClock(4), deskClock(13)]).toEqual(['Thu 16:47', 'Thu 17:05', 'Thu 20:01']);
     expect([battery(0), battery(13), battery(30)]).toEqual(['80%', '28%', '8%']);
     expect([timeSpent(0), timeSpent(6), timeSpent(13)]).toEqual(['5m', '46m', '3h 19m']);
-    expect(wastedLine()).toBe('3h 19m in the tag manager. Meta still fires before consent.');
+    expect(wastedLine()).toEqual({ time: '3h 19m', rest: ' in the tag manager.', finding: 'Meta still fires before consent.' });
+    expect(WASTED_HOLD_MS).toBe(4800);
   });
 });
 
