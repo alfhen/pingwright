@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunCa } from '../../../packages/recorder/src/server-container/ca.ts';
 import type { RunCa } from '../../../packages/recorder/src/server-container/ca.ts';
 import { createRecordingProxy } from '../../../packages/recorder/src/server-container/proxy.ts';
@@ -120,9 +120,11 @@ describe('stand-in container', () => {
   it('rejects a certificate from another CA', async () => {
     const other = createRunCa(root);
     try {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
       const origin = await start({ NODE_EXTRA_CA_CERTS: other.certPath });
       await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
-      await new Promise((r) => setTimeout(r, 300));
+      await until(() => logged.mock.calls.filter(([line]) => String(line).startsWith('Vendor call failed')).length === 3);
+      logged.mockRestore();
       expect(answered).toEqual([]);
     } finally {
       other.close();
