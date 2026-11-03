@@ -1,0 +1,40 @@
+---
+const history = [
+  { era: 'Old English', word: 'scīr + gerēfa', muted: true },
+  { era: 'Middle English', word: 'shire reeve', muted: true },
+  { era: 'Today', word: 'sheriff', muted: false },
+];
+const row = 'grid grid-cols-[110px_minmax(0,1fr)] items-baseline gap-4';
+const paragraph = 'm-0 text-[17px] leading-[1.6] text-pretty text-dim';
+const term = 'font-semibold text-fg';
+---
+
+<section aria-labelledby="why-tagreeve" class="mx-auto max-w-[1280px] px-7 pt-[70px] pb-[60px] leading-[normal]">
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,460px),1fr))] overflow-hidden rounded-[18px] border border-rule">
+    <div class="flex flex-col gap-4 bg-panel p-11">
+      <span class="font-mono text-[12px] font-medium text-mint">// why "tagreeve"</span>
+      <h2 id="why-tagreeve" class="m-0 text-[48px] leading-none font-semibold tracking-[-0.045em] text-balance">There's a new sheriff in tag town.</h2>
+      <p class={paragraph}>
+        In Anglo-Saxon England, a <b class={term}>reeve</b> was the official who kept order for the king. The reeve of a whole county was the <b class={term}>shire reeve</b>. Say it fast for a few hundred years and you get <b class={term}>sheriff</b>.
+      </p>
+      <p class={paragraph}>
+        Tagreeve does the same job for your tags. It walks the beat as a visitor, writes down every hit, and when a pixel fires before consent, it doesn't argue. It brings evidence.
+      </p>
+    </div>
+    <div class="flex flex-col justify-center border-l border-rule bg-void-2 p-11 font-mono">
+      {
+        history.map(({ era, word, muted }) => (
+          <div class={`${row} border-b border-dashed border-rule py-4`}>
+            <span class="text-[12px] text-dim">{era}</span>
+            <span class:list={['text-[clamp(22px,2.4vw,30px)] tracking-[-0.02em]', { 'text-dim': muted }]}>{word}</span>
+          </div>
+        ))
+      }
+      <div class={`${row} pt-5 pb-1`}>
+        <span class="text-[12px] text-mint">Your stack</span>
+        <span class="text-[clamp(30px,3.4vw,44px)] font-semibold tracking-[-0.04em]">tag<span class="text-mint">reeve</span></span>
+      </div>
+      <span class="pt-1.5 font-sans text-[13px] text-dim">Pronounced like "tag reeve". Formerly Pingwright.</span>
+    </div>
+  </div>
+</section>

@@ -14,6 +14,7 @@ const allowedLines: Record<string, RegExp> = {
   '.github/workflows/ci.yml': /bin\/pingwright" --version/,
   '.github/workflows/release-tag.yml': /bin\/pingwright" --version/,
   'README.md': /^> \*\*Pingwright is now Tagreeve/,
+  'site/src/components/home/WhyName.astro': /^\s*<span[^>]*>Pronounced like "tag reeve"\. Formerly Pingwright\.<\/span>$/,
 };
 
 const changelogHistory = (text: string): number => {
@@ -84,4 +85,13 @@ test('the old name in the 0.4.0-rc.1 notes outside the rename block is reported'
 test('the old name in a bullet right after the rename block is reported when no heading follows', () => {
   const changelog = ['## 0.4.0-rc.1', '', '### Pingwright is now Tagreeve', '', 'pingwright', '', '### Changes', '', '- A Pingwright bullet. (#1)', '', '## 0.3.0', 'Pingwright'].join('\n');
   expect(oldNameHits({ 'CHANGELOG.md': changelog })).toEqual(['CHANGELOG.md:9']);
+});
+
+test('the home page keeps its one "Formerly Pingwright." line, and a second Pingwright in that file is reported', () => {
+  const file = 'site/src/components/home/WhyName.astro';
+  const text = readFileSync(`${root}${file}`, 'utf8');
+  expect(text).toContain('Formerly Pingwright.');
+  expect(oldNameHits({ [file]: text })).toEqual([]);
+  expect(oldNameHits({ [file]: `${text}<p>Pingwright</p>\n` })).toEqual([`${file}:${text.split('\n').length}`]);
+  expect(oldNameHits({ [file]: text.replace('Formerly Pingwright.', 'Formerly Pingwright. Pingwright.') })).toHaveLength(1);
 });

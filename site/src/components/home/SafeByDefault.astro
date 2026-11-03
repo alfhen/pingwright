@@ -1,0 +1,26 @@
+---
+const safety = [
+  { code: 'stub mode', title: 'Nothing reaches the vendor', body: 'Known collection endpoints are recorded and answered locally. Unknown destinations fail the run.' },
+  { code: 'fake identity', title: 'Fake people only', body: 'Every run invents a visitor. Any other email, phone or hash in the record is flagged.' },
+  { code: 'handoff', title: 'No log-ins, no real payments', body: 'A person does those steps. Test cards only, opt-in, with three checks before anything is paid.' },
+  { code: 'runs/*.jsonl', title: 'Your data stays yours', body: 'No hosted service, no account. Records are JSONL on your machine.' },
+];
+---
+
+<section aria-labelledby="safe-by-default" class="mx-auto flex max-w-[1280px] flex-col gap-[22px] px-7 pt-[70px] pb-5 leading-[normal]">
+  <div class="flex max-w-[720px] flex-col gap-3">
+    <span class="font-mono text-[12px] font-medium text-mint">// safe by default</span>
+    <h2 id="safe-by-default" class="m-0 text-[48px] leading-none font-semibold tracking-[-0.045em] text-balance">Point it at production. Nothing leaks.</h2>
+  </div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-px overflow-hidden rounded-[14px] border border-rule bg-rule">
+    {
+      safety.map(({ code, title, body }) => (
+        <div class="flex flex-col gap-2 bg-panel p-6">
+          <span class="font-mono text-[12px] font-medium text-mint">{code}</span>
+          <b class="text-[18px] font-semibold tracking-[-0.02em]">{title}</b>
+          <span class="text-[14px] leading-[1.5] text-dim">{body}</span>
+        </div>
+      ))
+    }
+  </div>
+</section>
