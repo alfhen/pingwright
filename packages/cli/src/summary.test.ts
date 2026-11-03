@@ -99,7 +99,7 @@ test('main prints the version and exits 2 on a usage error', async () => {
   const io = { stdout: (t: string) => void out.push(t), stderr: (t: string) => void err.push(t) };
   expect(await main(['--version'], io)).toBe(0);
   expect(out.join('')).toBe(`${readVersion()}\n`);
-  expect(readVersion()).toBe('0.4.0-rc.3');
+  expect(readVersion()).toBe('0.5.0-rc.1');
   out.length = 0;
   expect(await main(['run', '--help'], io)).toBe(0);
   expect(out.join('')).toContain('Usage: tagreeve run <scenario.yml>');
