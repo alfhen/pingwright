@@ -1,12 +1,12 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { standInContainerPath } from '../fixtures/site/src/index.ts';
 import { DOCKERFILE } from '../packages/recorder/src/server-container/image.ts';
 import { createFakeDocker } from '../packages/recorder/src/server-container/fake-docker.test-helper.ts';
@@ -27,19 +27,28 @@ let work: string;
 let ca: RunCa;
 let proxy: RecordingProxy;
 let container: ServerContainer;
-let upstream: http.Server;
-let upstreamTouched = 0;
+const dials: unknown[] = [];
+const allowedPorts = new Set<number>();
+let recordDials: () => void = () => {};
 const answered: ProxyRequest[] = [];
 const forwarded: ProxyRequest[] = [];
 
 beforeAll(async () => {
   work = mkdtempSync(join(tmpdir(), 'tagreeve-runner-e2e-'));
   ca = createRunCa(work);
-  upstream = http.createServer((_req, res) => {
-    upstreamTouched += 1;
-    res.writeHead(500).end();
-  });
-  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const connectSpy = vi.spyOn(net.Socket.prototype, 'connect');
+  const tlsSpy = vi.spyOn(tls, 'connect');
+  recordDials = () => {
+    for (const call of connectSpy.mock.calls) {
+      const raw = call[0] as unknown;
+      const first = Array.isArray(raw) ? (raw[0] as unknown) : raw;
+      const port = typeof first === 'object' && first !== null ? (first as { port?: number }).port : first;
+      if (!allowedPorts.has(Number(port))) dials.push(first);
+    }
+    for (const call of tlsSpy.mock.calls) {
+      if (!(call[0] as { socket?: unknown }).socket) dials.push(call[0]);
+    }
+  };
   proxy = await createRecordingProxy({
     host: '127.0.0.1',
     port: 0,
@@ -63,12 +72,14 @@ beforeAll(async () => {
     serverHosts: ['127.0.0.1'],
     env: { PATH: process.env.PATH ?? '', TAGREEVE_TEST_SERVER_CONTAINER_CMD: standInContainerPath, TAGREEVE_SERVER_CONTAINER_CONFIG: CONFIG },
   });
+  allowedPorts.add(proxy.port);
+  allowedPorts.add(Number(new URL(container.origin).port));
 });
 
 afterAll(async () => {
+  vi.restoreAllMocks();
   await container?.stop();
   await proxy?.close();
-  await new Promise<void>((resolve) => upstream.close(() => resolve()));
   ca?.close();
   rmSync(work, { recursive: true, force: true });
 });
@@ -103,9 +114,10 @@ describe('the stand-in server container through the seam', () => {
     expect(answered.some((request) => new URL(request.url).hostname === 'www.googletagmanager.com')).toBe(false);
   });
 
-  test('the fake upstream was never touched', () => {
-    expect(upstreamTouched).toBe(0);
-    expect((upstream.address() as AddressInfo).port).toBeGreaterThan(0);
+  test('the test process dialled nothing but the proxy and the stand-in', () => {
+    recordDials();
+    expect(answered).toHaveLength(3);
+    expect(dials).toEqual([]);
   });
 
   test('the proxy refused no one', () => {
