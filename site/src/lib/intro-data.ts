@@ -10,7 +10,7 @@ export type IntroStage = 'ask' | 'mess' | 'wasted' | 'shrink' | 'fly';
 /** Each notification arrives this many ms after the one before it. */
 export const MDELAYS = [1300, 1100, 950, 800, 650, 520, 420, 340, 270, 220, 180, 150, 130];
 export const WASTED_AFTER_MS = 600;
-export const WASTED_HOLD_MS = 2400;
+export const WASTED_HOLD_MS = 4800;
 export const SHRINK_MS = 750;
 export const FLY_MS = 1150;
 /** The window shakes from this notification on. */
@@ -142,9 +142,9 @@ export function timeSpent(shown: number): string {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
-export function wastedLine(): string {
+export function wastedLine(): { time: string; rest: string; finding: string } {
   const m = 5 + minutesAfter(MDELAYS.length);
-  return `${Math.floor(m / 60)}h ${m % 60}m in the tag manager. Meta still fires before consent.`;
+  return { time: `${Math.floor(m / 60)}h ${m % 60}m`, rest: ' in the tag manager.', finding: 'Meta still fires before consent.' };
 }
 
 export interface BrowserTab {

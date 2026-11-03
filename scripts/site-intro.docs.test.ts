@@ -263,7 +263,8 @@ test('the run from Reply to the end of fly plays every stage, then unmounts the 
   expect(await page.locator('[data-intro-notification]').count()).toBe(13);
   expect(await page.locator('[data-intro-unread]').textContent()).toBe('14');
   expect(await page.locator('[data-intro-time]').textContent()).toBe('3h 19m');
-  await page.getByText('3h 19m in the tag manager. Meta still fires before consent.').waitFor();
+  await page.locator('[data-intro-wasted-time]').filter({ hasText: '3h 19m in the tag manager.' }).waitFor();
+  await page.getByText('Meta still fires before consent.').waitFor();
   expect(await page.evaluate(() => document.fonts.check('1em Anton', 'wasted'))).toBe(true);
   expect(await introSeen(page)).toBe(null);
   await expect.poll(() => introSeen(page), { timeout: 5000 }).toBe('1');
@@ -273,6 +274,42 @@ test('the run from Reply to the end of fly plays every stage, then unmounts the 
   expect(await mainInert(page)).toBe(false);
   await context.close();
   expect(outside).toEqual([]);
+});
+
+test('both lines under "wasted" are fully visible for at least 2.5 s, inside the band and clear of the title, at 1440x900', async () => {
+  const context = await firstVisitContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await openHome(page);
+  await page.getByRole('button', { name: 'Reply: "Sure, I\'ll take a look"' }).click();
+  await expect.poll(() => stage(page), { timeout: 10_000 }).toBe('wasted');
+  const samples: { at: number; visible: boolean; problems: string[] }[] = [];
+  const start = Date.now();
+  while ((await stage(page)) === 'wasted') {
+    const sample = await page.evaluate(() => {
+      const title = document.querySelector('[data-intro-wasted]');
+      const time = document.querySelector('[data-intro-wasted-time]');
+      const finding = document.querySelector('[data-intro-wasted-finding]');
+      if (!title || !time || !finding) return { visible: false, problems: ['missing element'] };
+      const band = title.parentElement!.getBoundingClientRect();
+      const t = title.getBoundingClientRect();
+      const visible = [time, finding].every((el) => getComputedStyle(el).opacity === '1');
+      const problems: string[] = [];
+      for (const [name, el] of [['time', time], ['finding', finding]] as const) {
+        const r = el.getBoundingClientRect();
+        if (r.top < band.top || r.bottom > band.bottom || r.left < band.left || r.right > band.right) problems.push(`${name} outside band`);
+        if (r.top < t.bottom && r.bottom > t.top) problems.push(`${name} overlaps title`);
+      }
+      return { visible, problems };
+    });
+    samples.push({ at: Date.now() - start, ...sample });
+    await page.waitForTimeout(100);
+  }
+  const visible = samples.filter((s) => s.visible);
+  expect(visible.length, 'both lines reach opacity 1').toBeGreaterThan(0);
+  expect(visible.at(-1)!.at - visible[0]!.at, 'ms both lines stay at opacity 1').toBeGreaterThanOrEqual(2500);
+  expect(samples.every((s) => s.at < visible[0]!.at || s.visible), 'opacity stays at 1 once reached').toBe(true);
+  expect(visible.flatMap((s) => s.problems)).toEqual([]);
+  await context.close();
 });
 
 for (const viewport of [
