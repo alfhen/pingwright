@@ -26,7 +26,7 @@ import {
   binaryShare,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -767,16 +767,6 @@ function joinLabels(labels: Set<string>): string {
 const PLAIN_ADDRESS_PARAMS = new Set(['user_data.city', 'user_data.postal_code', 'user_data.country']);
 // Only these vendors document plain city, postal code and country. The Conversions API requires them hashed.
 const PLAIN_ADDRESS_VENDORS = new Set(['sgtm']);
-// The hit params a Conversions API field is read from; further values of the field are indexed (`hashedEmail.1`).
-const CAPI_FIELD_PARAMS: Record<string, string> = {
-  em: 'hashedEmail',
-  ph: 'hashedPhone',
-  fn: 'user_data.first_name',
-  ln: 'user_data.last_name',
-  ct: 'user_data.city',
-  zp: 'user_data.postal_code',
-  country: 'user_data.country',
-};
 const DIGEST_SHAPE = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/i;
 
 function allForms(h: HashForms): string[] {
@@ -794,7 +784,8 @@ function hashJudge(identity: Identity): (vendor: string, name: string, value: st
   // A literal fill value stands in for a field the checkout would not take as generated, such as a German city,
   // so it can match a name or address hash. An email or phone must still be the identity's own.
   const extra = identity.extra ?? [];
-  return (vendor, name, value) => {
+  return (vendor, rawName, value) => {
+    const name = vendor === 'meta-capi' ? metaCapiBaseParam(rawName) : rawName;
     const field = FIELD_PARAMS[name]?.(identity);
     const accepted = field === undefined ? [] : [field, ...extra];
     const known = EMAIL_PARAM.test(name)
@@ -814,11 +805,11 @@ function hashJudge(identity: Identity): (vendor: string, name: string, value: st
 
 /** Whether every value of a Conversions API field matches the run identity. Null when none can be checked. */
 function capiMatchesIdentity(hit: Hit, field: string, identity: Identity | undefined): boolean | null {
-  const base = Object.hasOwn(CAPI_FIELD_PARAMS, field) ? CAPI_FIELD_PARAMS[field] : undefined;
+  const base = Object.hasOwn(META_CAPI_PARAM_NAMES, field) ? META_CAPI_PARAM_NAMES[field] : undefined;
   if (hit.vendor !== 'meta-capi' || !identity || !base) return null;
   const judge = hashJudge(identity);
   const verdicts = Object.entries(hit.params)
-    .filter(([name]) => name === base || (name.startsWith(`${base}.`) && /^\d+$/.test(name.slice(base.length + 1))))
+    .filter(([name]) => metaCapiBaseParam(name) === base)
     .map(([name, value]) => judge(hit.vendor, name, value))
     .filter((v) => v !== undefined);
   return verdicts.length === 0 ? null : verdicts.every((v) => v === 'match');

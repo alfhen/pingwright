@@ -6,7 +6,7 @@ type Json = Record<string, unknown>;
 
 const HASH_FIELDS = ['em', 'ph', 'fn', 'ln', 'ct', 'zp', 'country', 'external_id'];
 // The names the hashesMatch rule reads from `params`.
-const PARAM_NAMES: Record<string, string> = {
+export const META_CAPI_PARAM_NAMES: Record<string, string> = {
   em: 'hashedEmail',
   ph: 'hashedPhone',
   fn: 'user_data.first_name',
@@ -15,6 +15,11 @@ const PARAM_NAMES: Record<string, string> = {
   zp: 'user_data.postal_code',
   country: 'user_data.country',
 };
+/** Strips the index of a further value (`user_data.city.1` is `user_data.city`). */
+export function metaCapiBaseParam(name: string): string {
+  return name.replace(/\.\d+$/, '');
+}
+
 const PRESENCE_FIELDS = ['fbp', 'fbc'];
 const EVENTS_PATH = /^\/v\d+(?:\.\d+)?\/(\d+)\/events\/?$/;
 
@@ -70,7 +75,7 @@ function decodeItem(item: Json, req: Request, pixel: string, newHitId: NewHitId,
     const values = strs(userData[field]);
     if (values.length === 0) continue;
     hashes[field] = { present: true, matchesIdentity: null };
-    const param = PARAM_NAMES[field];
+    const param = META_CAPI_PARAM_NAMES[field];
     // The first value keeps the plain name; the others are indexed (`hashedEmail.1`), so hashesMatch checks each.
     if (param) values.forEach((value, i) => (params[i === 0 ? param : `${param}.${i}`] = value));
   }

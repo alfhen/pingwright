@@ -86,3 +86,14 @@ test('identity.hashesMatch fails a plain ct, zp or country on a Conversions API 
   expect(plain.message).toContain('unhashed city');
   expect(run([capiHit(good, { zp: ['00000'] })], rule).pass).toBe(false);
 });
+
+test('identity.hashesMatch checks the second value of ct and fn', () => {
+  const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
+  const good = sha(identity.email);
+  const city = sha(identity.city.toLowerCase());
+  expect(run([capiHit(good, { ct: [city, city] })], rule).pass).toBe(true);
+  expect(run([capiHit(good, { ct: [city, identity.city] })], rule).pass).toBe(false);
+  expect(run([capiHit(good, { fn: [sha(identity.firstName.toLowerCase()), 'c'.repeat(64)] })], rule).pass).toBe(false);
+  const filtered = run([capiHit(good, { ct: [city, identity.city] })], '{ vendor: meta-capi, ids.hashes.ct.matchesIdentity: true }');
+  expect(filtered.pass).toBe(false);
+});
