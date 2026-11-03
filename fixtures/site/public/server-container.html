@@ -10,16 +10,17 @@
 </head>
 <body>
 <h1>Server container</h1>
-<p>Sends a Meta pixel <code>Purchase</code> hit with an event ID, then a hit to the mock server container host, which <code>--server-container</code> sends to the local container instead. <code>?email=</code> is the email of the first hit. <code>?extra=1</code> adds a hit with an unrelated event ID and a fake email, and a hit to <code>/data</code>, a path no decoder knows. <code>?delayMs=</code> loads the consent banner, sends the hits once, when the first consent answer is given, and asks the stand-in container to wait that long before it sends on.</p>
+<p>Sends a Meta pixel <code>Purchase</code> hit with an event ID, then a hit to the mock server container host, which <code>--server-container</code> sends to the local container instead. <code>?email=</code> is the email of the first hit. <code>?extra=1</code> adds a hit with an unrelated event ID and a fake email, and a hit to <code>/data</code>, a path no decoder knows. <code>?cookie=1</code> sets a fake cookie on the page and sends it with the calls to the container. <code>?delayMs=</code> loads the consent banner, sends the hits once, when the first consent answer is given, and asks the stand-in container to wait that long before it sends on.</p>
 <script>
 (function () {
   var query = new URLSearchParams(location.search);
   var eventId = 'pw-event-0001';
   var email = query.get('email');
   var delayMs = query.get('delayMs');
+  if (query.get('cookie') === '1') document.cookie = 'pw_fixture_session=pw-fixture-cookie-value; path=/; max-age=3600; SameSite=Lax';
   function send(path, body) {
     var url = window.__PW_FIXTURE.sgtmUrl + path + (path === '/capi' && delayMs ? '?delayMs=' + encodeURIComponent(delayMs) : '');
-    return fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }).catch(function () {});
+    return fetch(url, { method: 'POST', mode: 'no-cors', credentials: 'include', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }).catch(function () {});
   }
   function sendAll() {
     var pixel = new Image();

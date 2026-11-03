@@ -160,6 +160,20 @@ describe('rules on a server hit', () => {
     expect(rule('  must:\n    - { vendor: meta-capi, in: epoch(denied) }', [via, sent])).toMatchObject({ pass: true, note: 'serverSendProbableLink' });
   });
 
+  test('a probable link does not soften a verdict that does not depend on time', () => {
+    const via = browser(500);
+    const sent = capi(1500, link(via, 'probable'), { page: 'https://shop.example/web-pixels@abc/sandbox/modern/' });
+    const flag = { type: 'flag', id: newId('flag'), runId, kind: 'possibleRealData', recordIds: [sent.req.id, sent.hit.id], detail: 'a foreign email' };
+    const results = run('expect:\n  mustNot:\n    - { vendor: meta-capi }', [via, sent], [flag]);
+    expect(results[0]).toMatchObject({ pass: false });
+    expect(results[0]!.severity).toBeUndefined();
+    expect(results[0]!.note).toBeUndefined();
+    expect(check(results, 'possibleRealData')).toMatchObject({ pass: false, severity: 'fail' });
+    expect(check(results, 'possibleRealData').note).toBeUndefined();
+    expect(check(results, 'sandboxPageUrl')).toMatchObject({ pass: false, severity: 'fail' });
+    expect(check(results, 'sandboxPageUrl').note).toBeUndefined();
+  });
+
   test('a consent-scoped rule that meets an unlinked hit cannot be judged', () => {
     const sent = capi(1500, undefined);
     expect(rule('  mustNot:\n    - { vendor: meta-capi, in: epoch(denied) }', [sent])).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked', evidence: [sent.hit.id] });

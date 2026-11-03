@@ -80,8 +80,8 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
   };
 
   const results: Result[] = [];
-  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) => {
-    const settled = settleServerSends(pass, evidence, severity, note, ctx);
+  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote, timeJudged = false) => {
+    const settled = settleServerSends(pass, evidence, severity, note, timeJudged, ctx);
     results.push({
       type: 'result',
       id: newId('result'),
@@ -98,7 +98,7 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
   for (const kind of ['mustNot', 'must'] as const)
     for (const rule of scenario.expect[kind]) {
       const { pass, evidence, message, note } = evaluateRule(rule, ctx);
-      add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note);
+      add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note, isScoped(rule));
     }
 
   builtInChecks(records, scenario, ctx, add);
@@ -602,20 +602,26 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
 }
 
 function onlyProbableServerHits(evidence: readonly string[], ctx: Context): boolean {
-  const hits = evidence.map((id) => ctx.index.hits.get(id)).filter((h): h is Hit => h !== undefined);
-  return hits.length > 0 && hits.every((h) => h.via?.confidence === 'probable' && viaHitOf(h, ctx.index) !== undefined);
+  return (
+    evidence.length > 0 &&
+    evidence.every((id) => {
+      const hit = ctx.index.hits.get(id);
+      return hit?.via?.confidence === 'probable' && viaHitOf(hit, ctx.index) !== undefined;
+    })
+  );
 }
 
-/** Only an exact link can fail a run. A result that rests on a probable link says so. */
+/** Only an exact link can fail a run on time or consent. `timeJudged` marks results whose verdict depends on `judgedAt`; others keep their severity. */
 function settleServerSends(
   pass: boolean,
   evidence: readonly string[],
   severity: Severity | undefined,
   note: ResultNote | undefined,
+  timeJudged: boolean,
   ctx: Context,
 ): { severity: Severity | undefined; note: ResultNote | undefined } {
   if (!pass && note === 'serverSendUnlinked') return { severity: 'warn', note };
-  if (note || !onlyProbableServerHits(evidence, ctx)) return { severity, note };
+  if (note || !timeJudged || !onlyProbableServerHits(evidence, ctx)) return { severity, note };
   return { severity: pass ? severity : 'warn', note: 'serverSendProbableLink' };
 }
 
@@ -852,10 +858,18 @@ function builtInChecks(
   records: readonly Input[],
   scenario: Scenario,
   ctx: Context,
-  addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) => void,
+  addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote, timeJudged?: boolean) => void,
 ) {
   const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote) =>
-    addResult(`builtin: ${name}`, pass, evidence, message, scenario.options.builtins?.[name] ?? DEFAULT_SEVERITY[name] ?? 'fail', note);
+    addResult(
+      `builtin: ${name}`,
+      pass,
+      evidence,
+      message,
+      scenario.options.builtins?.[name] ?? DEFAULT_SEVERITY[name] ?? 'fail',
+      note,
+      name === 'deniedIdentifiers' || name === 'earlyIdentifiers',
+    );
   const flags = records.filter((r) => r.type === 'flag');
 
   const unknown = flags.filter((f) => f.kind === 'unknownDestination');

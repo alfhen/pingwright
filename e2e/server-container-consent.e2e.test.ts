@@ -16,6 +16,8 @@ const CONFIG = Buffer.from(`id=GTM-PWTEST1&env=1&auth=${AUTH}`).toString('base64
 const IDENTITY_EMAIL = createIdentity(1).email;
 const EMAIL_HASH = createHash('sha256').update(IDENTITY_EMAIL).digest('hex');
 const OTHER_EMAIL = 'pw-fixture@example.com';
+const COOKIE_NAME = 'pw_fixture_session';
+const COOKIE_VALUE = 'pw-fixture-cookie-value';
 
 let upstream: http.Server;
 let env: Record<string, string>;
@@ -56,12 +58,22 @@ function placeHits(records: RunRecords): Placed {
   return { pixel, capi, viaEpoch: epochForHit(epochs, pixel.t)?.label, ownEpoch: epochForHit(epochs, capi.t)?.label };
 }
 
-async function expectClean(r: CliRun, name: string): Promise<void> {
+function expectFed(records: RunRecords, withOther: boolean): void {
+  const raw = JSON.stringify(records);
+  expect(raw).toContain(EMAIL_HASH);
+  expect(records.checkpoints.flatMap((c) => c.cookies.map((k) => k.name))).toContain(COOKIE_NAME);
+  expect(raw).toContain('access_token=[redacted]');
+  expect(raw).not.toContain(ACCESS_TOKEN);
+  if (withOther) expect(raw).toContain(OTHER_EMAIL);
+}
+
+async function expectClean(r: CliRun, name: string, withOther = false): Promise<void> {
+  expectFed(r.records!, withOther);
   const path = (JSON.parse(r.stdout) as { path: string }).path;
   const out = join(outDir, `${name}.html`);
   expect(await renderHtml(path, out)).toBe(0);
   const text = [r.stdout, r.stderr, await readFile(out, 'utf8')].join('\n');
-  for (const secret of [ACCESS_TOKEN, CONFIG, AUTH, IDENTITY_EMAIL, EMAIL_HASH, encodeURIComponent(IDENTITY_EMAIL), OTHER_EMAIL]) expect(text).not.toContain(secret);
+  for (const secret of [ACCESS_TOKEN, CONFIG, AUTH, IDENTITY_EMAIL, EMAIL_HASH, encodeURIComponent(IDENTITY_EMAIL), OTHER_EMAIL, COOKIE_VALUE]) expect(text).not.toContain(secret);
 }
 
 function summaryOf(r: CliRun): { serverContainer: Record<string, number>; results: { expectation: string; pass: boolean; severity: string; evidence: string[] }[] } {
@@ -71,10 +83,12 @@ function summaryOf(r: CliRun): { serverContainer: Record<string, number>; result
 describe('a server hit is judged by the browser hit it came from', () => {
   let denied: CliRun;
   let late: CliRun;
+  let extra: CliRun;
 
   beforeAll(async () => {
     denied = await run('server-container-denied', ['--server-container', '--var', `email=${IDENTITY_EMAIL}`], env);
     late = await run('server-container-late-accept', ['--server-container', '--var', `email=${IDENTITY_EMAIL}`], env);
+    extra = await run('server-container-denied', ['--server-container', '--var', `email=${IDENTITY_EMAIL}`, '--var', 'extra=1'], env);
   }, 180_000);
 
   test('accept, send, withdraw: the hit sent in the denied epoch is linked to the granted one and passes', () => {
@@ -111,6 +125,7 @@ describe('a server hit is judged by the browser hit it came from', () => {
   test('the report shows the server vendors as their own rows, and no run leaks a secret or the identity', async () => {
     await expectClean(denied, 'server-container-denied');
     await expectClean(late, 'server-container-late-accept');
+    await expectClean(extra, 'server-container-extra', true);
     const html = await readFile(join(outDir, 'server-container-late-accept.html'), 'utf8');
     expect(html).toContain('Meta Conversions API (meta-capi), sent by the server container');
   });

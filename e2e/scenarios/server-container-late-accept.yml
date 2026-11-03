@@ -1,5 +1,5 @@
-start: /server-container?email={email}&delayMs=1500
-vars: { email: '' }
+start: /server-container?email={email}&extra={extra}&cookie=1&delayMs=1500
+vars: { email: '', extra: '' }
 steps:
   - consent: reject
   - click: "#pw-cookie-settings"
