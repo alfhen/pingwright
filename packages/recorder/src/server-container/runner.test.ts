@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFakeDocker } from './fake-docker.test-helper.ts';
 import type { FakeDocker, FakeDockerCall, FakeDockerScript } from './fake-docker.test-helper.ts';
 import { NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL } from './image.ts';
-import { ServerContainerError, ServerContainerUsageError, createLogScrubber, loadContainerConfig, pickFreePort, resolveStandInCommand, startServerContainer, sweepOrphans } from './runner.ts';
+import { ServerContainerError, ServerContainerUsageError, checkServerContainerHost, createLogScrubber, loadContainerConfig, pickFreePort, resolveStandInCommand, startServerContainer, sweepOrphans } from './runner.ts';
 import type { StartOptions } from './runner.ts';
 
 const AUTH = 'pw-fixture-auth';
@@ -182,6 +182,19 @@ describe('startServerContainer', () => {
   it('classifies a missing docker command', async () => {
     const error = (await startServerContainer({ ...options(), env: { PATH: work, TAGREEVE_SERVER_CONTAINER_CONFIG: CONFIG } }).catch((e: unknown) => e)) as ServerContainerError;
     expect(error.errorClass).toBe('dockerMissing');
+  });
+
+  it('classifies a docker whose version command fails as missing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tagreeve-down-docker-'));
+    writeFileSync(join(dir, 'docker'), '#!/bin/sh\nexit 1\n');
+    chmodSync(join(dir, 'docker'), 0o755);
+    try {
+      const error = (await checkServerContainerHost({ image: 'tagreeve-sgtm:1.0.0', env: { PATH: `${dir}:/usr/bin:/bin` } }).catch((e: unknown) => e)) as ServerContainerError;
+      expect(error.errorClass).toBe('dockerMissing');
+      expect(error.message).toBe('Docker is needed for --server-container. Install it from https://docs.docker.com/get-docker/');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('classifies a rejected config before any docker command', async () => {

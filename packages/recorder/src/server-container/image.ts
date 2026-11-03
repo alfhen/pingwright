@@ -109,6 +109,16 @@ export function runDocker(args: readonly string[], options: DockerOptions = {}):
   });
 }
 
+export const DOCKER_INSTALL_URL = 'https://docs.docker.com/get-docker/';
+export const DOCKER_NEEDED_MESSAGE = `Docker is needed for --server-container. Install it from ${DOCKER_INSTALL_URL}`;
+
+/** Asks the Docker engine for its version. `ok` is false when the command is missing or the daemon does not answer. */
+export async function checkDockerPresent(env: NodeJS.ProcessEnv): Promise<{ readonly ok: boolean; readonly serverVersion: string }> {
+  const version = await runDocker(['version', '--format', '{{.Server.Version}}'], { env, timeoutMs: 30_000 });
+  const ok = !version.missing && version.code === 0;
+  return { ok, serverVersion: ok ? version.stdout.trim() : '' };
+}
+
 export function imageTag(version: string): string {
   return `${IMAGE_REPOSITORY}:${version}`;
 }
@@ -124,7 +134,7 @@ export function baseImage(env: NodeJS.ProcessEnv): string {
 export type BuildResult =
   | { readonly status: 'built'; readonly tag: string; readonly imageId: string }
   | { readonly status: 'not-needed'; readonly image: string }
-  | { readonly status: 'dockerMissing' }
+  | { readonly status: 'dockerMissing'; readonly message: string }
   | { readonly status: 'failed'; readonly message: string };
 
 export interface BuildOptions {
@@ -139,12 +149,13 @@ export async function buildImage(options: BuildOptions): Promise<BuildResult> {
   const env = options.env ?? process.env;
   const base = baseImage(env);
   if ((options.arch ?? process.arch) !== 'arm64') return { status: 'not-needed', image: base };
+  if (!(await checkDockerPresent(env)).ok) return { status: 'dockerMissing', message: DOCKER_NEEDED_MESSAGE };
   const tag = imageTag(options.version);
   const dir = await mkdtemp(join(options.tempRoot ?? tmpdir(), 'tagreeve-image-'));
   try {
     await writeFile(join(dir, 'Dockerfile'), DOCKERFILE);
     const built = await runDocker(['build', '--platform', 'linux/arm64', '--build-arg', `GOOGLE_IMAGE=${base}`, '--tag', tag, dir], { env });
-    if (built.missing) return { status: 'dockerMissing' };
+    if (built.missing) return { status: 'dockerMissing', message: DOCKER_NEEDED_MESSAGE };
     if (built.code !== 0) return { status: 'failed', message: built.stderr.trim().split('\n').slice(-10).join('\n') };
     const inspected = await runDocker(['image', 'inspect', '--format', '{{.Id}}', tag], { env });
     return { status: 'built', tag, imageId: inspected.code === 0 ? inspected.stdout.trim() : tag };

@@ -140,6 +140,18 @@ const GA4_ALIASES: Readonly<Record<string, string>> = {
   search_submitted: 'search',
 };
 
+/** `id` names a frame document and is null when the request has no Frame object (net log); then the URLs are compared. */
+export interface FrameRef {
+  id: string | null;
+  url: string | null;
+}
+
+function sameFrame(a: FrameRef, b: FrameRef | null | undefined): boolean {
+  if (!b) return false;
+  if (a.id !== null && b.id !== null) return a.id === b.id;
+  return a.url !== null && a.url === b.url;
+}
+
 export interface UnloadGapInput {
   runId: Id<'run'>;
   networkMode?: NetworkMode;
@@ -150,10 +162,10 @@ export interface UnloadGapInput {
   navigations: readonly number[];
   /** When the run ended. It is an unload point after the last navigation. */
   runEnd?: number;
-  /** Frame URL of each embedded push, by event id. */
-  eventFrames?: ReadonlyMap<string, string>;
-  /** Frame URL of each request, by request id. */
-  requestFrames?: ReadonlyMap<string, string | null>;
+  /** Frame of each embedded push, by event id. */
+  eventFrames?: ReadonlyMap<string, FrameRef>;
+  /** Frame of each request, by request id. */
+  requestFrames?: ReadonlyMap<string, FrameRef | null>;
   /** Event names or `*` globs that are never reported. */
   ignore?: readonly string[];
 }
@@ -169,7 +181,7 @@ function unloadGapAdvice(networkMode: NetworkMode | undefined): string {
  * while unloading. Chromium does not report those requests to the browser context.
  * Only events that look like tracking events are checked: some vendor sent a hit of that name, or the name is a GA4
  * recommended event. GA4 is expected when the run has any GA4 hit or the name is a GA4 event. An alias in `GA4_ALIASES` (`product_added_to_cart` for `add_to_cart`) only lets a GA4 hit of the mapped name cover the event: the gates use the literal name. Another vendor's hit
- * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it. A GA4 hit sent from the same frame as the push covers it whatever its name.
+ * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it. A GA4 hit sent from the same frame document as the push covers it whatever its name.
  */
 export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigations, runEnd, eventFrames, requestFrames, ignore = [] }: UnloadGapInput): Flag[] {
   const ignored = ignore.map(globToRegExp);
@@ -190,7 +202,7 @@ export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigati
     if (ga4Hits.length === 0 && hits.some(covered)) continue;
     if (ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event !== null && (h.event === name || h.event === expected || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
     const eventFrame = eventFrames?.get(event.id);
-    if (eventFrame !== undefined && ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && requestFrames?.get(h.requestId) === eventFrame)) continue;
+    if (eventFrame !== undefined && ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && sameFrame(eventFrame, requestFrames?.get(h.requestId)))) continue;
     const seconds = ((navigation - event.t) / 1000).toFixed(1);
     const unload = navigation === runEnd && !navigations.includes(navigation) ? 'the run ended' : 'the page navigated';
     flags.push(

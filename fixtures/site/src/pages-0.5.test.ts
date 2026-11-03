@@ -32,6 +32,18 @@ describe('/unload-gap', () => {
   });
 });
 
+describe('/unload-gap-checkout', () => {
+  test('a sandboxed srcdoc frame pushes checkout_completed and sends the sgtm hit', async () => {
+    const html = await page('/unload-gap-checkout');
+    expect(html).toContain('sandbox="allow-scripts"');
+    expect(html).toContain('srcdoc=');
+    expect(html).toContain("event: 'checkout_completed'");
+    expect(html).toContain('en=checkout_completed');
+    expect(html).toContain('en=purchase');
+    expect(html).not.toContain('allow-same-origin');
+  });
+});
+
 describe('Shopify-shaped card documents', () => {
   const doc = async (name: string) => (await fetch(`${site.paymentFrameUrl}/build/pwtest0/${name}`)).text();
 

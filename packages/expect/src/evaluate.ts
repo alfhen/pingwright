@@ -113,7 +113,19 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
 
 type RuleOutcome = { pass: boolean; evidence: string[]; message: string; note?: ResultNote };
 
-const isScoped = (rule: Rule) => Boolean(rule.before || rule.inEpoch || rule.after || consentFields.some((f) => rule.filter.consent[f]));
+const isScoped = (rule: Rule) => Boolean(rule.before || rule.inEpoch || rule.after || rule.from || consentFields.some((f) => rule.filter.consent[f]));
+
+/** `after:` opens at the labelled step's end, `from:` at its start, so a visit's own page-load hits count only for `from:`. */
+function ruleWindowStart(rule: Rule, ctx: Context): { at: number; text: string } | RuleOutcome | undefined {
+  const label = rule.from ?? rule.after;
+  if (!label) return undefined;
+  const step = ctx.steps.find((s) => s.label === label);
+  if (!step) {
+    const known = ctx.steps.map((s) => s.label).join(', ') || 'none';
+    return { pass: false, evidence: [], message: `Expected a step labelled "${label}", but the run has steps: ${known}.` };
+  }
+  return rule.from ? { at: step.startedAt, text: `from ${label}` } : { at: step.endedAt ?? step.startedAt, text: `after ${label}` };
+}
 
 function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
   const outcome = evaluateRuleHits(rule, ctx);
@@ -177,19 +189,16 @@ function evaluateRuleHits(rule: Rule, ctx: Context): RuleOutcome {
     hits = hits.filter((h) => anywhere(h) || inEpoch(h, selector, ctx));
     narrowed.push(`in epoch(${selector})`);
   }
-  if (rule.after) {
-    const step = ctx.steps.find((s) => s.label === rule.after);
-    if (!step) {
-      const known = ctx.steps.map((s) => s.label).join(', ') || 'none';
-      return { pass: false, evidence: [], message: `Expected a step labelled "${rule.after}", but the run has steps: ${known}.` };
-    }
-    const from = step.endedAt ?? step.startedAt;
+  const windowStart = ruleWindowStart(rule, ctx);
+  if (windowStart && 'message' in windowStart) return windowStart;
+  if (windowStart) {
+    const { at: start, text } = windowStart;
     hits = hits.filter((h) => {
       if (anywhere(h)) return true;
       const at = judgedAt(h, ctx.index);
-      return at !== undefined && at >= from;
+      return at !== undefined && at >= start;
     });
-    narrowed.push(`after ${rule.after}`);
+    narrowed.push(text);
   }
 
   const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
@@ -329,16 +338,9 @@ function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleO
   let sightings = cookieSightings(patterns.map((p) => globToRegExp(p)), ctx);
   const total = sightings.length;
   const narrowed: string[] = [];
-  let from: number | undefined;
-  if (rule.after) {
-    const step = ctx.steps.find((s) => s.label === rule.after);
-    if (!step) {
-      const known = ctx.steps.map((s) => s.label).join(', ') || 'none';
-      return { pass: false, evidence: [], message: `Expected a step labelled "${rule.after}", but the run has steps: ${known}.` };
-    }
-    from = step.endedAt ?? step.startedAt;
-  }
-  const timed = rule.before || rule.inEpoch || from !== undefined;
+  const windowStart = ruleWindowStart(rule, ctx);
+  if (windowStart && 'message' in windowStart) return windowStart;
+  const timed = rule.before || rule.inEpoch || windowStart !== undefined;
   const unplaced = timed ? sightings.filter((s) => s.t === undefined) : [];
   if (timed) sightings = sightings.filter((s) => s.t !== undefined);
   const keep = (test: (t: number) => boolean) => {
@@ -353,9 +355,9 @@ function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleO
     keep((t) => inEpochAt(t, selector, ctx));
     narrowed.push(`in epoch(${selector})`);
   }
-  if (from !== undefined) {
-    keep((t) => t >= from);
-    narrowed.push(`after ${rule.after}`);
+  if (windowStart) {
+    keep((t) => t >= windowStart.at);
+    narrowed.push(windowStart.text);
   }
 
   const where = narrowed.length ? ` ${narrowed.join(', ')}` : '';
@@ -911,6 +913,16 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
 
+function pageWithoutQuery(page: string | null): string {
+  if (!page) return '';
+  try {
+    const url = new URL(page);
+    return `${url.host}${url.pathname}`;
+  } catch {
+    return page.split(/[?#]/)[0]!;
+  }
+}
+
 function flagHost(flag: Flag, ctx: Context): string {
   const urls = [ctx.requests.get(flag.recordIds[0] ?? '')?.url, /\s(\S+)$/.exec(flag.detail)?.[1]];
   for (const url of urls) {
@@ -977,7 +989,7 @@ function builtInChecks(
     sandboxed.map((h) => h.id),
     sandboxed.length === 0
       ? 'Expected no hit to carry a sandbox URL as its page, found none.'
-      : `Expected no hit to carry a sandbox URL as its page, found ${sandboxed.length}: ${sandboxed[0]!.page}.`,
+      : `Expected no hit to carry a sandbox URL as its page, found ${sandboxed.length}: ${pageWithoutQuery(sandboxed[0]!.page)}.`,
   );
 
   for (const check of [deniedIdentifiersCheck, earlyIdentifiersCheck]) {

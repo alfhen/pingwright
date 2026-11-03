@@ -28,11 +28,19 @@
 
 <!-- H04 -->
 
+- Fix: the text and `--json` summaries show a flag's request with query names only, never values (`?a&b`). A query name that looks like a value reads `(other)`. The `sandboxPageUrl` message names the page by host and path. Records keep the full flag detail otherwise. Path segments are not masked yet. (#679, #801)
+
 <!-- L04 -->
+
+- `unloadGap` now matches a GA4 hit to a push by frame document, not by frame URL. Two `about:srcdoc` frames, or two frames with one URL, no longer cover each other (#723, #722, #724, #725).
 
 <!-- S04 -->
 
+- The recording proxy refuses every spelling of the unspecified address (`::0`, `0`, `0:0:0:0:0:0:0:0`), and checks the address it bound. `tagreeve server-container build` on arm64 now says Docker is needed when the Docker daemon does not answer (#718, #791).
+
 <!-- F04 -->
+
+- Adds `from: <step label>` to hit and cookie rules. The window starts at the labelled step's start, so a visit step's own page-load hits count. `after:` still starts at the step's end. A rule with both is a scenario error. (#789, #806)
 
 ## 0.5.0-rc.1
 

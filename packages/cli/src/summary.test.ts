@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { newId } from '@tagreeve/core';
-import { applyBaseline, buildSummary, countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
+import { applyBaseline, buildSummary, redactFlagDetail, countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
 import { runCommand } from './run.ts';
 import { readVersion } from './version.ts';
@@ -291,7 +291,7 @@ test('lists platform hosts in one line per platform', () => {
   ];
   const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
   expect(text).toContain('platformHost: shopify, 2 requests to 1 host (cdn 2)');
-  expect(text).toContain('platformHost: GET https://unlisted.example.invalid/b?x=1');
+  expect(text).toContain('platformHost: GET https://unlisted.example.invalid/b?x');
 });
 
 test('platformHost summary lines hold names and counts only', () => {
@@ -358,4 +358,44 @@ test('a run without a container has no serverContainer field and no line', () =>
 test('the summary line holds no config, container ID or host', () => {
   const text = formatSummary(buildSummary(serverRecords(), [], 'run.jsonl'));
   for (const bad of ['GTM-', 'auth=', 'sha256', 'http']) expect(text).not.toContain(bad);
+});
+
+const EMAIL = 'pw-test.user%40example.test';
+const HASH = 'a'.repeat(64);
+
+test.each([
+  ['unknownDestination', `GET https://t.example.net/px/a?email=${EMAIL}&h=${HASH}&x=1#top`, 'GET https://t.example.net/px/a?email&h&x'],
+  ['firstPartySubdomain', `POST https://sgtm.example.com/collect?em=${EMAIL}&em=2`, 'POST https://sgtm.example.com/collect?em'],
+  ['platformHost', 'GET https://www.googletagmanager.com/gtag/js?id=G-PWTEST0001', 'GET https://www.googletagmanager.com/gtag/js?id'],
+  ['unknownDestination', `from the server container: POST https://s.example.net/g/collect?cid=1.2&e=${EMAIL}`, 'from the server container: POST https://s.example.net/g/collect?cid&e'],
+  ['stubBypass', `It was not routed, so it was not stubbed: https://px.example.net/c?u=${EMAIL}`, 'It was not routed, so it was not stubbed: https://px.example.net/c?u'],
+  ['possibleRedirectHop', 'It failed with no response; Chromium may have followed a redirect that was not recorded and not stubbed: https://px.example.net/r?to=https%3A%2F%2Fa.test', 'It failed with no response; Chromium may have followed a redirect that was not recorded and not stubbed: https://px.example.net/r?to'],
+  ['sandboxPageUrl', `ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/?email=${EMAIL} as the page`, 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/?email as the page'],
+])('buildSummary shows %s with query names only', (kind, detail, shown) => {
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [{ kind, detail }], steps: [] } as unknown as RunRecords;
+  const summary = buildSummary(records, [], 'p');
+  expect(summary.flags).toEqual([{ kind, detail: shown }]);
+  expect(JSON.stringify(summary)).not.toMatch(/example\.test|pw-test|aaaaaaaa|G-PWTEST/);
+});
+
+test('a value-like query name is shown as (other)', () => {
+  expect(redactFlagDetail(`GET https://t.example.net/u/a?${EMAIL}=1&${HASH}&ok=2`)).toBe('GET https://t.example.net/u/a?(other)&ok');
+  expect(redactFlagDetail('GET https://user:secret@t.example.net/a')).toBe('GET https://t.example.net/a');
+});
+
+test('redacting twice changes nothing', () => {
+  const once = redactFlagDetail(`GET https://t.example.net/a?${HASH}&x=${EMAIL}`);
+  expect(redactFlagDetail(once)).toBe(once);
+});
+
+test('the text summary redacts an ungrouped flag detail and keeps the grouped lines', () => {
+  const flags = [
+    { kind: 'stubBypass', detail: `It was not routed, so it was not stubbed: https://px.example.net/c?u=${EMAIL}` },
+    { kind: 'unknownDestination', detail: `GET https://t.example.net/a?email=${EMAIL}` },
+    { kind: 'platformHost', detail: `GET https://www.googletagmanager.com/gtag/js?id=${EMAIL}` },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('stubBypass: It was not routed, so it was not stubbed: https://px.example.net/c?u');
+  expect(text).toContain('unknownDestination: t.example.net x1 (/a)');
+  expect(text).not.toMatch(/example\.test|pw-test/);
 });

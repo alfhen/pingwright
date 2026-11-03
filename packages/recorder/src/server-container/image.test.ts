@@ -1,9 +1,9 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeDocker } from './fake-docker.test-helper.ts';
-import { BASE_ENV, DISTROLESS_IMAGE, DOCKERFILE, GOOGLE_IMAGE, NODE_BUILD_IMAGE, baseImage, buildImage, imageTag, isDigestReference, PROBE_HOST, PROBE_SCRIPT } from './image.ts';
+import { BASE_ENV, DOCKER_NEEDED_MESSAGE, DISTROLESS_IMAGE, DOCKERFILE, GOOGLE_IMAGE, NODE_BUILD_IMAGE, baseImage, buildImage, imageTag, isDigestReference, PROBE_HOST, PROBE_SCRIPT } from './image.ts';
 
 const DIGEST = `gcr.io/example/image@sha256:${'b'.repeat(64)}`;
 const cleanup: string[] = [];
@@ -76,7 +76,19 @@ describe('buildImage', () => {
   it('reports a missing docker command', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'tagreeve-no-docker-'));
     cleanup.push(empty);
-    expect(await buildImage({ version: '1.0.0', arch: 'arm64', env: { PATH: empty } })).toEqual({ status: 'dockerMissing' });
+    expect(await buildImage({ version: '1.0.0', arch: 'arm64', env: { PATH: empty } })).toEqual({ status: 'dockerMissing', message: DOCKER_NEEDED_MESSAGE });
+  });
+
+  it('says Docker is needed when the daemon does not answer, and starts no build', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tagreeve-down-docker-'));
+    cleanup.push(dir);
+    const log = join(dir, 'calls.log');
+    writeFileSync(join(dir, 'docker'), `#!/bin/sh\necho "$1" >> "${log}"\necho "Cannot connect to the Docker daemon" >&2\nexit 1\n`);
+    chmodSync(join(dir, 'docker'), 0o755);
+    const result = await buildImage({ version: '1.0.0', arch: 'arm64', env: { PATH: `${dir}:/usr/bin:/bin` } });
+    expect(result).toEqual({ status: 'dockerMissing', message: DOCKER_NEEDED_MESSAGE });
+    expect(DOCKER_NEEDED_MESSAGE).toBe('Docker is needed for --server-container. Install it from https://docs.docker.com/get-docker/');
+    expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(['version']);
   });
 
   it('reports a failed build with the last lines of its error', async () => {
