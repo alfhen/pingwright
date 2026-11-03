@@ -34,16 +34,22 @@ Issues still open that you can meet:
 
 - `--server-container` needs Docker. The container downloads its configuration from Google at every start, so a run needs the network for three Google paths, and Google sees the container's request with your `gtm_auth`.
 - The Meta Conversions API, Pinterest and Criteo template tags are not yet proven to reach the recording proxy. Check C0, items 1 to 3, runs in the rc.2 field test.
-- Link rule 2 (a link by client ID and event name) is not built. Links between container calls and browser hits are exact by event ID only (#783).
+- Link rule 2 (a link by client ID and event name) is not built. Links between container calls and browser hits are exact by event ID only. A leak through a container call with no event ID, such as the built-in GA4 tag, links at best as probable, so it is only a warning (#783).
 - The Shopify platform-host list holds only `cdn.shopify.com` and `monorail-edge.shopifysvc.com`. Other Shopify telemetry, checkout and payments hosts stay `unknownDestination` (#585).
 - The fix for the Shopify card fields (#788) is not yet confirmed on a real checkout. The rc.2 field test confirms it. If it fails, the error names the frame path and the inputs' attributes.
 - The payment step checks the card host before each short fill try. That narrows the window in #691 but cannot close it, because Playwright cannot check the host and type in one step (#845).
-- A flag's detail keeps query values in records. The text and `--json` summaries show query names only (#679, #782). Path segments are not masked in flag detail (#871).
+- A flag's detail keeps query values in records. The text and `--json` summaries show query names only, except a `sandboxPageUrl` page that is not an absolute URL, which keeps its query (#679, #782, #870). Path segments are not masked in flag detail (#871).
 - A bare query item with no `=` is shown as a name unless it looks like a value (#869).
 - A hit from a redirect hop has no frame id and still matches by frame URL (#879).
 - The suite verdict can hide a check's failure in a run with no leak when another run named a leak (#822).
 - Stape-only features do not exist in the local container, which is Google's image: the custom loader and its domain features, Cookie Keeper, the geo and bot headers Stape adds, store ID headers, request logs and the CDN. Unpublished server workspaces are not available either.
 - `earlyIdentifiers` is `warn` by default.
+- Playwright's request interception sometimes misses a redirect hop. The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
+- With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload`.
+- `unloadGap` compares dataLayer event names to hit names literally, apart from the GA4 aliases.
+- `--viewport` takes `<W>x<H>` only. A `mobile` preset is not built.
+- `identity.country` has local formats for US, SE, GB and DE. Other countries keep US-shaped data and the run warns.
+- The tag-firing reporter templates, `expectedTags` and `tagreeve init` are planned for 0.6.0.
 - The node-forge bump waits until the release is two weeks old, on 2026-11-10 (#719).
 
 The other open `review-minor` issues are in the 0.5.0 milestone.
