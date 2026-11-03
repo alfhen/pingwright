@@ -58,16 +58,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
           reject(new Error(`the proxy answered ${response.statusCode}`));
           return;
         }
-        let ca: string;
-        try {
-          ca = readFileSync(env.NODE_EXTRA_CA_CERTS!, 'utf8');
-        } catch (error) {
-          // The CA file can be gone when the stand-in is closed while a start-up fetch is in flight.
-          socket.destroy();
-          reject(error);
-          return;
-        }
-        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca });
+        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca: readFileSync(env.NODE_EXTRA_CA_CERTS!, 'utf8') });
         secure.on('error', reject);
         const headers: Record<string, string | number> = body === undefined ? {} : { 'content-type': 'text/plain', 'content-length': Buffer.byteLength(body) };
         // The agent hands out only the tunnel, and the lookup fails, so a request can never open a direct connection.
