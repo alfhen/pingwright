@@ -4,7 +4,7 @@ A run gives you two things: a text summary on screen and a record file. The reco
 
 ## The text summary
 
-```text
+```text annotated
 Hits
   ga4: page_view x3
   sgtm: (no event) x1
