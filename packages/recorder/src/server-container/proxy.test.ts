@@ -301,10 +301,15 @@ describe('recording proxy', () => {
     await new Promise<void>((resolve) => socket.once('close', () => resolve()));
   });
 
-  it('refuses a wildcard address', async () => {
+  it.each(['0.0.0.0', '0', '::', '::0', '[::]', '0:0:0:0:0:0:0:0', '0000::', '::ffff:0.0.0.0', ''])('refuses the unspecified address %j', async (host) => {
     await expect(
-      createRecordingProxy({ host: '0.0.0.0', port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }),
+      createRecordingProxy({ host, port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }),
     ).rejects.toThrow(/wildcard/);
+  });
+
+  it('accepts loopback spellings', async () => {
+    proxy = await createRecordingProxy({ host: '127.0.0.1', port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) });
+    expect(proxy.port).toBeGreaterThan(0);
   });
 
   it('removes the CA directory on ca.close() and holds no key in it', () => {

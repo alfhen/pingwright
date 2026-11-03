@@ -32,6 +32,8 @@
 
 <!-- S04 -->
 
+- The recording proxy refuses every spelling of the unspecified address (`::0`, `0`, `0:0:0:0:0:0:0:0`), and checks the address it bound. `tagreeve server-container build` on arm64 now says Docker is needed when the Docker daemon does not answer (#718, #791).
+
 <!-- F04 -->
 
 ## 0.5.0-rc.1
