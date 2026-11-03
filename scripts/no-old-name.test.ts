@@ -26,8 +26,10 @@ export function oldNameHits(files: Record<string, string>): string[] {
     const lines = text.replaceAll('pingwrightVersion', '').split('\n');
     const from = file === 'CHANGELOG.md' ? changelogHistory(text) : lines.length;
     const allowed = allowedLines[file];
+    let allowedSeen = 0;
     lines.forEach((line, index) => {
-      if (index >= from || !/pingwright/i.test(line) || allowed?.test(line)) return;
+      if (index >= from || !/pingwright/i.test(line)) return;
+      if (allowed?.test(line) && allowedSeen++ === 0) return;
       if (file === 'CHANGELOG.md' && inRenameBlock(text, index)) return;
       hits.push(`${file}:${index + 1}`);
     });
@@ -93,4 +95,10 @@ test('the home page keeps its one "Formerly Pingwright." line, and a second Ping
   expect(oldNameHits({ [file]: text })).toEqual([]);
   expect(oldNameHits({ [file]: `${text}<p>Pingwright</p>\n` })).toEqual([`${file}:${text.split('\n').length}`]);
   expect(oldNameHits({ [file]: text.replace('Formerly Pingwright.', 'Formerly Pingwright. Pingwright.') })).toHaveLength(1);
+});
+
+test('an identical copy of the "Formerly Pingwright." line is reported', () => {
+  const file = 'site/src/components/home/WhyName.astro';
+  const line = '<span class="x">Pronounced like "tag reeve". Formerly Pingwright.</span>';
+  expect(oldNameHits({ [file]: `${line}\n${line}\n` })).toEqual([`${file}:2`]);
 });

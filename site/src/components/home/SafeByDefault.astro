@@ -1,6 +1,6 @@
 ---
 const safety = [
-  { code: 'stub mode', title: 'Nothing reaches the vendor', body: 'Known collection endpoints are recorded and answered locally. Unknown destinations fail the run.' },
+  { code: 'stub mode', title: 'Known endpoints stay local', body: 'Known collection endpoints are recorded and answered locally. An unknown destination fails the run, but its request can still reach the vendor.' },
   { code: 'fake identity', title: 'Fake people only', body: 'Every run invents a visitor. Any other email, phone or hash in the record is flagged.' },
   { code: 'handoff', title: 'No log-ins, no real payments', body: 'A person does those steps. Test cards only, opt-in, with three checks before anything is paid.' },
   { code: 'runs/*.jsonl', title: 'Your data stays yours', body: 'No hosted service, no account. Records are JSONL on your machine.' },
@@ -10,7 +10,7 @@ const safety = [
 <section aria-labelledby="safe-by-default" class="mx-auto flex max-w-[1280px] flex-col gap-[22px] px-7 pt-[70px] pb-5 leading-[normal]">
   <div class="flex max-w-[720px] flex-col gap-3">
     <span class="font-mono text-[12px] font-medium text-mint">// safe by default</span>
-    <h2 id="safe-by-default" class="m-0 text-[48px] leading-none font-semibold tracking-[-0.045em] text-balance">Point it at production. Nothing leaks.</h2>
+    <h2 id="safe-by-default" class="m-0 text-[48px] leading-none font-semibold tracking-[-0.045em] text-balance">Known vendor hits stay local.</h2>
   </div>
   <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-px overflow-hidden rounded-[14px] border border-rule bg-rule">
     {
