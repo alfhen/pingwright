@@ -188,7 +188,7 @@ Compares the hits of two run records. It exits 0 whether or not they differ.
 
 Options:
   --by-page                  Add the page path to each key
-  --all-flags                Show every flag, not only the ones that changed
+  --all-flags                Also show flag count changes for hosts allowed by allowUnknownDestination (hidden by default)
   --json                     Print the full diff result as JSON
   -h, --help                 Show this help
 `;
@@ -289,17 +289,20 @@ const OPTIONS = {
 
 function commandOf(argv: string[]): HelpTopic | undefined {
   const { tokens } = parseArgs({ args: argv, allowPositionals: true, strict: false, options: OPTIONS, tokens: true });
-  // An unknown option takes the word after it as its value, so that word is not the command.
+  // An unknown option may take the next word as its value, so that word is a command only when no other word is.
+  const isCommand = (word: string): boolean => (COMMANDS as readonly string[]).includes(word);
   let skip = false;
+  let skipped: string | undefined;
   for (const token of tokens) {
     if (token.kind === 'option') {
       skip = !(token.name in OPTIONS) && token.value === undefined;
     } else if (token.kind === 'positional') {
-      if (!skip) return (COMMANDS as readonly string[]).includes(token.value) ? (token.value as HelpTopic) : undefined;
+      if (!skip) return isCommand(token.value) ? (token.value as HelpTopic) : skipped as HelpTopic | undefined;
+      if (skipped === undefined && isCommand(token.value)) skipped = token.value;
       skip = false;
     }
   }
-  return undefined;
+  return skipped as HelpTopic | undefined;
 }
 
 export function parseCli(argv: string[]): Command {

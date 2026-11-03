@@ -129,6 +129,7 @@ test.each([
   [['--out', 'report', 'run'], 'run'],
   [['diff', 'a'], 'diff'],
   [['--sitee', 'http://x', 'run', 's.yml'], 'run'],
+  [['--jsno', 'run', 's.yml', '--site', 'http://x'], 'run'],
 ])('usage error for %j carries command %s', (argv, command) => {
   let error: unknown;
   try {
