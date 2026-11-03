@@ -30,6 +30,8 @@
 
 <!-- L04 -->
 
+- `unloadGap` now matches a GA4 hit to a push by frame document, not by frame URL. Two `about:srcdoc` frames, or two frames with one URL, no longer cover each other (#723, #722, #724, #725).
+
 <!-- S04 -->
 
 <!-- F04 -->

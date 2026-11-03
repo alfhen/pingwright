@@ -40,6 +40,7 @@ import {
   type Browser,
   type BrowserContext,
   type Page,
+  type Frame,
   type Request as PwRequest,
   type Response as PwResponse,
   type Route,
@@ -47,7 +48,7 @@ import {
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
-import { buildFlags, buildUnloadGapFlags } from './flags.ts';
+import { buildFlags, buildUnloadGapFlags, type FrameRef } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
@@ -200,7 +201,12 @@ export class Recorder {
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
   private readonly mainFrameEventIds = new Set<string>();
-  private readonly eventFrames = new Map<string, string>();
+  private readonly eventFrames = new Map<string, FrameRef>();
+  private readonly frameNumbers = new WeakMap<Frame, number>();
+  private readonly frameNavigations = new WeakMap<Frame, number>();
+  private frameCount = 0;
+  private readonly navigationSeen = new WeakSet<PwRequest>();
+  private readonly requestFrameIds = new Map<string, string>();
   private readonly collectorReports: (CollectorReport | InvalidReport)[] = [];
   private readonly pending = new Set<Promise<unknown>>();
   private readonly steps: Step[] = [];
@@ -331,12 +337,12 @@ export class Recorder {
       if (!event) return;
       this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
       if (source.frame === source.page.mainFrame()) this.mainFrameEventIds.add(event.id);
-      else this.eventFrames.set(event.id, source.frame.url());
+      else this.eventFrames.set(event.id, { id: this.frameDocumentId(source.frame), url: source.frame.url() });
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
     if (this.options.networkMode !== 'live') {
-      await context.exposeBinding(UNLOAD_BINDING, (_source, payload: UnloadSendPayload) => this.recordUnloadSend(payload));
+      await context.exposeBinding(UNLOAD_BINDING, (source, payload: UnloadSendPayload) => this.recordUnloadSend(payload, this.frameDocumentId(source.frame)));
       await context.addInitScript(unloadInitScript);
     }
     if (this.options.handoffOverlay) {
@@ -435,10 +441,40 @@ export class Recorder {
     void promise.finally(() => this.pending.delete(promise));
   }
 
+  /** A frame document is the frame plus how many navigation requests the frame has started. Held in memory only. */
+  private frameDocumentId(frame: Frame): string {
+    let number = this.frameNumbers.get(frame);
+    if (number === undefined) {
+      number = this.frameCount++;
+      this.frameNumbers.set(frame, number);
+    }
+    return `${number}.${this.frameNavigations.get(frame) ?? 0}`;
+  }
+
+  private countNavigation(request: PwRequest): void {
+    if (this.navigationSeen.has(request) || !request.isNavigationRequest()) return;
+    this.navigationSeen.add(request);
+    try {
+      const frame = request.frame();
+      this.frameNavigations.set(frame, (this.frameNavigations.get(frame) ?? 0) + 1);
+    } catch {
+      // Requests from workers have no frame.
+    }
+  }
+
+  private requestFrameId(request: PwRequest): string | null {
+    try {
+      return this.frameDocumentId(request.frame());
+    } catch {
+      return null;
+    }
+  }
+
   /** Created on first sight, from either the request event or the route handler, whichever comes first. */
   private recordFor(request: PwRequest): Request | undefined {
     const existing = this.requests.get(request);
     if (existing) return existing;
+    this.countNavigation(request);
     const url = request.url();
     // The collector and self-test origins are Tagreeve's own channel, not site traffic.
     if (!/^https?:/.test(url) || url.startsWith(COLLECTOR_ORIGIN) || url.startsWith(SELFTEST_ORIGIN)) return undefined;
@@ -460,6 +496,8 @@ export class Recorder {
     };
     record = this.redactForHandoff(record);
     this.requests.set(request, record);
+    const frameId = this.requestFrameId(request);
+    if (frameId !== null) this.requestFrameIds.set(record.id, frameId);
     if (request.isNavigationRequest() && isTopLevelFrameRequest(request)) {
       this.navigationWindows.start(request, record.t);
       this.navigations.push(record.t);
@@ -499,7 +537,7 @@ export class Recorder {
     this.handoffWindows.push({ from: Date.now(), to: null, hold: true });
   }
 
-  private recordUnloadSend(payload: UnloadSendPayload): void {
+  private recordUnloadSend(payload: UnloadSendPayload, frameId: string): void {
     if (this.closed || this.unloadKeys.has(payload.key)) return;
     this.unloadKeys.add(payload.key);
     let record: Request = {
@@ -518,6 +556,7 @@ export class Recorder {
       outcome: 'stubbed',
     };
     record = this.redactForHandoff(record, payload.queuedAt);
+    this.requestFrameIds.set(record.id, frameId);
     this.routed.add(record.id);
     this.extraRequests.push(record);
     this.responses.push({ type: 'response', id: newId('response'), requestId: record.id, status: 204, setCookieNames: [] });
@@ -990,7 +1029,7 @@ export class Recorder {
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
-      flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, runEnd: closeStartedAt, eventFrames: this.eventFrames, requestFrames: new Map(requests.map((r) => [r.id, r.frameUrl])), ignore: this.options.unloadGapIgnore }));
+      flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, runEnd: closeStartedAt, eventFrames: this.eventFrames, requestFrames: new Map(requests.map((r) => [r.id, { id: this.requestFrameIds.get(r.id) ?? null, url: r.frameUrl }])), ignore: this.options.unloadGapIgnore }));
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }

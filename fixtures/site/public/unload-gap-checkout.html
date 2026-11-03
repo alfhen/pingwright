@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unload gap checkout</title>
+<script src="/fixture-config.js"></script>
+<script src="/assets/site.js"></script>
+</head>
+<body>
+<nav><a href="/">Home</a></nav>
+<h1>Unload gap checkout</h1>
+<iframe id="pw-checkout-pixel" sandbox="allow-scripts" style="width:0;height:0;border:0" srcdoc="<script>
+  window.dataLayer = window.dataLayer || [];
+  var hit = function (path, query) { return 'https://sgtm.tagreeve.invalid' + path + '?v=2&amp;tid=G-PWTEST0001&amp;cid=3333333333.4444444444&amp;gcs=G100&amp;' + query; };
+  setTimeout(function () {
+    window.dataLayer.push({ event: 'checkout_completed', value: 19, currency: 'USD' });
+    fetch(hit('/data', 'en=checkout_completed'), { method: 'POST', mode: 'no-cors', body: '{}' }).catch(function () {});
+  }, 1800);
+  window.addEventListener('pagehide', function () {
+    navigator.sendBeacon(hit('/g/collect', 'en=purchase&amp;ep.via=beacon'), '');
+  });
+</script>"></iframe>
+</body>
+</html>
