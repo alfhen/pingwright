@@ -19,7 +19,7 @@ function isOlder(a: Version, b: Version): boolean {
 }
 
 export function markerProblems(text: string, packageVersion: string): string[] {
-  const lines = text.split('\n');
+  const lines = text.split(/\r?\n/);
   const start = lines.findIndex((line) => line.startsWith('## '));
   if (start === -1) return ['no ## version heading'];
   const heading = versionHeading.exec(lines[start]!);
@@ -77,6 +77,11 @@ describe('markerProblems', () => {
 
   it('flags a changelog with no ## heading', () => {
     expect(markerProblems('# Changelog\n\n- A.\n', v)).toHaveLength(1);
+  });
+
+  it('reads CRLF line endings', () => {
+    expect(markerProblems('## 1.0.0\r\n\r\n<!-- A01 -->\r\n\r\n- A.\r\n', v)).toEqual([]);
+    expect(markerProblems('## 1.0.0\r\n\r\n<!-- A01 -->\r\n- A.\r\n', v)).toHaveLength(1);
   });
 
   it('ignores markers in older sections', () => {
