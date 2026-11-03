@@ -28,10 +28,10 @@ your-repo/
 
 ## What stays outside the repo
 
-A GTM override file holds the `gtmAuth` value of a workspace. A server container config is a secret too. Keep both files outside the repo, for example in your home folder, and give them mode 0600:
+A GTM override file holds the `gtmAuth` value of a workspace. A server container config is a secret too. Keep both files outside the repo, for example in `~/.config/tagreeve/`, and give them mode 0600. The [server container guide](server-container.md) shows how to save the config:
 
 ```bash
-chmod 600 ~/secrets/workspace-override.json
+chmod 600 ~/.config/tagreeve/workspace-override.json
 ```
 
 Tagreeve never prints either value or writes it to a record.
@@ -54,4 +54,4 @@ Use `<date>-<ticket or topic>-<target>`. The date is the day of the run. The tar
 
 ## Suite reads one level
 
-`tagreeve suite tagreeve/scenarios/` runs the `*.yml` and `*.yaml` files at the top level of the folder. It does not look into subfolders. Put scenarios that need a server container, or a person at a handoff, in a subfolder such as `server/` and run them with `tagreeve run`. They are skipped by the suite without a message.
+`tagreeve suite tagreeve/scenarios/` runs the `*.yml` and `*.yaml` files at the top level of the folder. It does not look into subfolders. Put scenarios that need a server container in a subfolder such as `server/` and run them with `tagreeve run`. The suite skips the subfolder without a message. Scenarios with a handoff step can stay at the top level: the suite shows them as SKIPPED, and runs them with `--with-handoff`.
