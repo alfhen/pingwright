@@ -164,6 +164,20 @@ test('Escape skips the intro', async () => {
   await context.close();
 });
 
+test('a mouse click on "Skip intro →" lands late in the wasted hold at 1440x900', async () => {
+  const context = await firstVisitContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await openHome(page);
+  await page.getByRole('button', { name: 'Reply: "Sure, I\'ll take a look"' }).click();
+  await expect.poll(() => stage(page), { timeout: 10_000 }).toBe('wasted');
+  await page.waitForTimeout(3500);
+  expect(await stage(page)).toBe('wasted');
+  await page.getByRole('button', { name: 'Skip intro →' }).click({ timeout: 1000 });
+  expect(await introSeen(page)).toBe('1');
+  await expect.poll(() => page.locator(overlay).count(), { timeout: 5000 }).toBe(0);
+  await context.close();
+});
+
 test('the footer replay link opens the intro again with the flag set', async () => {
   const context = await newDocsContext(browser!, { viewport: wide });
   const page = await context.newPage();

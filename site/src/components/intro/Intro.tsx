@@ -11,7 +11,7 @@ import {
   introFits,
   type IntroStage,
 } from '../../lib/intro-data.ts';
-import { Dock, MenuBar, SYSTEM_FONT } from './desktop.tsx';
+import { Dock, MenuBar, SkipButton, SYSTEM_FONT } from './desktop.tsx';
 import { MailWindow } from './mail.tsx';
 import { Notifications, Wasted } from './overlays.tsx';
 import { TagManagerWindow } from './tag-manager.tsx';
@@ -177,7 +177,7 @@ export default function FirstVisitIntro() {
         class="intro-wallpaper"
         style={`position:absolute;inset:0;transition:filter 1.2s;filter:${wastedShowing ? 'grayscale(1) contrast(1.15) brightness(.8)' : 'none'};animation:${wastedShowing ? 'intro-slow-zoom 4s ease-out both' : 'none'};transform-origin:60% 40%;font-family:${SYSTEM_FONT}`}
       >
-        <MenuBar app={stage === 'ask' ? 'Mail' : 'TagMangler Pro'} unread={1 + shown} shown={shown} onSkip={fly} />
+        <MenuBar app={stage === 'ask' ? 'Mail' : 'TagMangler Pro'} unread={1 + shown} shown={shown} onSkip={fly} skipHidden={stage === 'wasted'} />
         <Dock browserOpen={stage !== 'ask'} />
         <MailWindow asking={stage === 'ask'} shown={shown} unread={1 + shown} onReply={startMess} onSkip={fly} />
         {messShowing && (
@@ -196,6 +196,7 @@ export default function FirstVisitIntro() {
         <Notifications shown={shown} />
       </div>
       {wastedShowing && <Wasted />}
+      {stage === 'wasted' && <SkipButton onSkip={fly} style="position:absolute;top:3px;right:16px;z-index:5" />}
     </div>
   );
 }
