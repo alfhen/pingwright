@@ -1,0 +1,4 @@
+start: /flag-detail?email=pw-flag.user%40example.test&h=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&sid=pwfake-cookie-value-0001
+steps:
+  - wait: 3s
+options: { seed: 1 }
