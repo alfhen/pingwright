@@ -297,7 +297,14 @@ export interface Result {
   note?: ResultNote;
 }
 
-export type ResultNote = 'stubNoCookies' | 'cannotEvaluateBody' | 'fieldsNotRecorded' | 'cookieNotStored' | 'nestedNameOnly';
+export type ResultNote =
+  | 'stubNoCookies'
+  | 'cannotEvaluateBody'
+  | 'fieldsNotRecorded'
+  | 'cookieNotStored'
+  | 'nestedNameOnly'
+  | 'serverSendProbableLink'
+  | 'serverSendUnlinked';
 
 export type Severity = 'fail' | 'warn';
 

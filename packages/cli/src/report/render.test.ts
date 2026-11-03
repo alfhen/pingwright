@@ -296,3 +296,20 @@ test('platformHost report cell holds host names and counts, not request values',
   expect(cell).toContain('cdn.shopify.com: 1');
   for (const v of values) expect(cell).not.toContain(v);
 });
+
+test('a server container row is labelled, marks probable links and carries the caveat', () => {
+  const via = { type: 'hit' as const, id: newId('hit'), runId, stepId: null, requestId: newId('request'), t: 500, vendor: 'meta', event: 'Purchase', consent: { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied', raw: {} }, ids: {}, page: null, transport: 'image', params: {}, fields: [], idFields: [], fieldsComplete: true };
+  const request = { type: 'request' as const, id: newId('request'), runId, captured: 'serverContainer' } as unknown as RunRecords['requests'][number];
+  const sent = { ...via, id: newId('hit'), requestId: request.id, vendor: 'meta-capi', t: 9000, via: { hitId: via.id, by: 'eventId' as const, confidence: 'probable' as const } };
+  const base = records();
+  const html = renderReport(buildReportModel({ ...base, hits: [via, sent], requests: [request], results: [] } as RunRecords));
+  expect(html).toContain('Meta Conversions API (meta-capi), sent by the server container');
+  expect(html).toContain('1 hit, 1 by probable link');
+  expect(html).toContain('Stape-only features');
+  expect(html).toContain('Verdict: no leaks; 1 server container hit placed by a probable link');
+  expect(html).not.toContain('sent by the server container</th><td class="m-nothing"><svg class="glyph" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><circle');
+});
+
+test('a report of a run with no server hit has no caveat', () => {
+  expect(renderReport(buildReportModel(records()))).not.toContain('Stape-only');
+});

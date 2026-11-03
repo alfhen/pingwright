@@ -408,3 +408,29 @@ test('another vendor in the same epochs is compared as before', () => {
   const b = [shapeKey('granted', [tuple(1)]), shapeKey('undecided', [tuple(1)], 'ga4')];
   expect(diffShapes(a, b, order)).toMatchObject({ drift: false, moved: [{ vendor: 'meta' }] });
 });
+
+function addServerHit(run: RunRecords, over: Partial<Hit>): Hit {
+  const hit = addHit(run, { vendor: 'meta-capi', event: 'Purchase', ...over }, 'graph.facebook.com');
+  run.requests.find((r) => r.id === hit.requestId)!.captured = 'serverContainer';
+  return hit;
+}
+
+function serverRun(serverT: number, linked: boolean): RunRecords {
+  const run = makeRun();
+  run.consentEpochs = [epoch(run.run.id, 'undecided', 0), epoch(run.run.id, 'granted', 100), epoch(run.run.id, 'denied', 200)];
+  const pixel = addHit(run, { vendor: 'meta', event: 'Purchase', t: 120 });
+  addServerHit(run, { t: serverT, ...(linked && { via: { hitId: pixel.id, by: 'eventId', confidence: 'exact' } }) });
+  return run;
+}
+
+test('hitShape puts a linked server hit in the epoch of its via hit and an unlinked one under server', () => {
+  const linked = serverRun(250, true);
+  expect(linked.consentEpochs.find((e) => e.startT === 200)!.label).toBe('denied');
+  expect(hitShape(linked).map((k) => `${k.key.epoch}/${k.key.vendor}`)).toEqual(['granted/meta', 'granted/meta-capi']);
+  expect(hitShape(serverRun(250, false)).map((k) => `${k.key.epoch}/${k.key.vendor}`)).toEqual(['granted/meta', 'server/meta-capi']);
+});
+
+test('the time of a linked server hit within its via epoch does not change the shape', () => {
+  expect(hitShape(serverRun(250, true))).toEqual(hitShape(serverRun(900, true)));
+  expect(diffRuns(serverRun(250, true), serverRun(900, true))).toEqual({ warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] });
+});

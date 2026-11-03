@@ -23,7 +23,7 @@
 
 - Adds `--server-container` and `--server-container-config` to `run` and `suite`. Tagreeve runs your own server container in Docker, sends the non-load requests to your `serverHosts` to it, and records every call it makes to a vendor. The calls are decoded and checked like browser hits and answered locally. Nothing is sent on, except three Google requests the container needs to load its configuration. A hit from the container links to a browser hit with `Hit.via`. Record schema version 3. Part of #358.
 
-<!-- K04 -->
+- A hit that the server container sent on is judged by the browser hit it links to, for `before`, `in: epoch(...)`, `after`, `deniedIdentifiers` and `earlyIdentifiers`, and in `diff` and `baseline`. Only an exact link can fail a run: a failure that rests on a probable link is a warning with the note `serverSendProbableLink`, and a hit with no link is `cannot evaluate` with the note `serverSendUnlinked`. The summary has a `Server container` line and `--json` has `serverContainer`. The report shows server vendors as their own rows. Part of #358.
 
 ## 0.4.0-rc.3
 

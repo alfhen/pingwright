@@ -74,7 +74,7 @@ Every record has a stable `id` with a type prefix and a sortable unique suffix (
 | `TagReport` | `id` (`tag_…`), `runId`, `stepId`, `container`, `side` (`web` or `server`), `event`, `gtmUniqueEventId`, `tags[]` (`id`, `name` or `null`, `status`, `executionTime`) |
 | `ConsentEpoch` | `id` (`cep_…`), `runId`, `startT`, `endT`, `source`, `state` (§7.3), `label` (`undecided`, `granted`, `denied`, `mixed` or `withdrawn`), `outcome` (optional: `granted`, `denied` or `mixed`; on a withdrawn epoch, the label it had before) |
 | `Checkpoint` | `id` (`ckp_…`), `runId`, `stepId`, `label`, `t`, `consentState` (per probe), `cookies[]` (`name`, `domain`, `expires`, `firstParty`) |
-| `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `severity` (optional: `fail` or `warn`; absent means `fail`), `evidence[]` (record IDs), `note` (optional: `stubNoCookies`, `cannotEvaluateBody`, `fieldsNotRecorded`, `cookieNotStored` or `nestedNameOnly`) |
+| `Result` | `id` (`rsl_…`), `runId`, `expectation`, `pass`, `severity` (optional: `fail` or `warn`; absent means `fail`), `evidence[]` (record IDs), `note` (optional: `stubNoCookies`, `cannotEvaluateBody`, `fieldsNotRecorded`, `cookieNotStored`, `nestedNameOnly`, `serverSendProbableLink` or `serverSendUnlinked`; the last two are §11) |
 
 `recordSchemaVersion` on a `Run` is an integer. Version 1 is the 0.2.0 record shape, including fields added before 0.2.0 ships. Do not bump it within 0.2. A reader treats a record with no version as version 0, and warns when the version is newer than it knows.
 
@@ -297,7 +297,7 @@ A server-side tag template with the same job. The server-side `addEventCallback`
 - **Gating.** The server container is public, so a header alone is not enough: anyone could send it. The recorder sends a run token: run ID, timestamp, and a signature of both under a secret held in a template field. The template recomputes the signature and drops requests that do not match or are older than a few minutes. Signature method: HMAC-SHA256 if the server template APIs offer it **(verify)**, otherwise SHA-256 over secret, run ID and timestamp. Not tested in 0.1.
 - **Target.** It posts only to the sink address in its template field. It never takes an address from the incoming request. Its `send_http` permission is limited to that address.
 - **What it sends.** Run ID, event name, client name, tag statuses and the consent state the server saw. Never the event payload.
-- **Not visible.** The server container's own outgoing requests, for example to Meta's Conversions API, are not recorded. The reporter shows only whether those tags succeeded.
+- **Not visible.** The reporter does not show the server container's own outgoing requests, for example to Meta's Conversions API. It shows only whether those tags succeeded. A run with `--server-container` records those requests from the recording proxy instead (§8.5).
 - **The sink** authenticates the template (for example with a Cloudflare Access service token), accepts only run IDs Tagreeve issued, and rate-limits writes.
 
 ### 8.4 The sink
@@ -320,23 +320,23 @@ A server container receives a hit from the browser and may send it on to vendors
 | --- | --- | --- |
 | Browser to server container | Yes | Recorded and decoded (`sgtm-data-client`, `stape-custom-loader`). |
 | Server container's answer | Yes, in `server` mode | Status and `Set-Cookie` names for hosts in `serverHosts`. Not for `pagehide` and `visibilitychange` sends, which the page answers (§15.3). |
-| Server container to vendors | No, not from the browser | Needs an endpoint the user runs (below). |
+| Server container to vendors | Yes, with `--server-container` | For the container's own tags, built-in and template. The recording proxy records and answers each call (below). Without the flag, no: it needs an endpoint the user runs. |
 | Server preview data | No | Only a signed-in person in the GTM UI sees it. |
 
 ```mermaid
 flowchart LR
-  B[Test browser] -->|recorded| S[Server container]
-  S -->|not visible| V[Vendors]
-  S -.->|reporter or test sink| K[User-run sink]
-  K -.->|sink reader, not built| P[Tagreeve]
+  B[Test browser] -->|recorded| S[Local server container]
+  S -->|recorded and answered| X[Recording proxy]
+  X -->|hits with via| R[Run record]
+  S -.->|without the flag: not visible| V[Vendors]
 ```
 
-The browser sees the first hop only. Two dotted paths can show the second, and the user runs the endpoint in both.
+With `--server-container`, the container runs on the user's machine and every vendor call goes through the recording proxy, which records it and answers it. The call never reaches the vendor. Without the flag the browser sees the first hop only, and the user runs an endpoint to see the second, by one of two paths.
 
 - **Server tag-firing reporter (§8.3).** A template in the server container reports tag status per event to the sink.
 - **Test sink as the vendor endpoint.** In a test workspace, the server container's vendor tags point at an endpoint the user runs. It records what the server container sent on. The local server container needs no such workspace: it runs on the user's machine, and its vendor calls are answered by Tagreeve's recording proxy and never forwarded. Real vendors receive nothing from that workspace only if every vendor tag in it points at the sink. The sink receives full vendor payloads, so runs that use it use the §13 test identities, and the sink reader applies the same value rules as recorded hits.
 
-Tagreeve reads either one only through the sink reader (§9). The sink reader is not built. Until it is, a run cannot say what the server container sent on, and the report must not imply it can.
+Tagreeve reads either one only through the sink reader (§9). The sink reader is not built. A run with `--server-container` shows what the local container sent on, in the summary and the report. A run without it cannot say what the server container sent on, and the report must not imply it can. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched (flagged unknown).
 
 **Server preview.** `X-Gtm-Server-Preview` puts the traffic in the server container's preview. Only a signed-in person in the GTM UI sees the preview data. Tagreeve cannot read it without the GTM API, which it never calls. The header value is a secret like `gtmAuth`. It must not appear in a record, a log line, an error message or test output. In 0.3 and 0.4 the recorder does not send the header (§15.3).
 
@@ -383,6 +383,8 @@ Scenario files are YAML. An expectation is a filter over records, plus a rule.
 | `after: <step>` | Only after a named step |
 | `tags.mustFire`, `tags.mustNotFire` | Over tag reports, by tag ID or name pattern. An unknown name is "cannot evaluate", not a pass or fail. |
 | `identity.hashesMatch` | Hashed identity fields sent to a vendor match the run's fake identity (§13) |
+
+**Server hits.** A hit that the local server container sent on (§8.5) has its own time, which is when the container sent it, often after the visitor changed their answer. Rules judge it by the time of the browser hit it links to (`Hit.via`), and it takes that hit's consent signals. `before`, `in: epoch(...)`, `after`, `deniedIdentifiers`, `earlyIdentifiers`, `diff` and `baseline` all use that time. Only an `exact` link can fail a run. A result whose failing evidence holds only server hits on a `probable` link is written with `severity: warn` and the note `serverSendProbableLink`. A pass that rests on a probable link carries the same note. A hit with no link has no time to judge by. A rule or identifier check that depends on consent or time cannot evaluate it: that part is `cannot evaluate` at `severity: warn` with the note `serverSendUnlinked`. In a baseline, an unlinked hit sits under the epoch key `server`.
 
 Every run also gets built-in checks. `unknownDestination` fails the run when a request goes to a host that is not first party and that no decoder or tracker-list entry matches (§5.3). `options.firstPartyHosts` lists more first-party hosts or `*.domain` wildcards. `options.allowUnknownDestination` is `true` for all, or a host list for only those hosts (§15.1). `options.builtins` sets the severity of each built-in check (`unknownDestination`, `sandboxPageUrl`, `possibleRealData`, from 0.3 `deniedIdentifiers`, and from 0.4 `earlyIdentifiers`, see §15.3) to `fail` or `warn`. The default is `fail`, except for `earlyIdentifiers`, which is `warn`. A warned check still runs and is recorded as a `result` with its evidence and `severity: warn`. It shows as `WARN` and does not change the exit code. There is no `off`: a check that is hidden cannot be audited, and `warn` keeps the evidence.
 

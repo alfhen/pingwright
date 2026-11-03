@@ -12,13 +12,18 @@ export interface Findings {
   failedChecks: Map<string, number>;
   warnedChecks: Map<string, number>;
   unchecked: number;
+  /** Server container hits with no link to a browser hit, and hits that rest on a probable link. */
+  unlinkedServerHits: number;
+  probableServerHits: number;
 }
 
 export function emptyFindings(): Findings {
-  return { hits: new Map(), identifiers: new Map(), failed: 0, warned: 0, failedChecks: new Map(), warnedChecks: new Map(), unchecked: 0 };
+  return { hits: new Map(), identifiers: new Map(), failed: 0, warned: 0, failedChecks: new Map(), warnedChecks: new Map(), unchecked: 0, unlinkedServerHits: 0, probableServerHits: 0 };
 }
 
 export function addFindings(into: Findings, model: ReportModel): void {
+  into.unlinkedServerHits += model.serverContainer?.unlinked ?? 0;
+  into.probableServerHits += model.serverContainer?.probable ?? 0;
   for (const row of model.rows) {
     row.segments.forEach((segment, i) => {
       if (segment.mark !== 'leak') return;
@@ -73,6 +78,8 @@ export function findingsSentence(f: Findings, inRuns = false): string {
   if (f.unchecked > 0) parts.push(`${plural(f.unchecked, 'expectation')} could not be checked`);
   if (f.warned > 0) parts.push(`${plural(f.warned, 'rule')} warned`);
   parts.push(...checkParts(shown(f.warnedChecks), 'warned', inRuns));
+  if (f.unlinkedServerHits > 0) parts.push(`${plural(f.unlinkedServerHits, 'server container hit')} could not be linked to a browser hit`);
+  if (f.probableServerHits > 0) parts.push(`${plural(f.probableServerHits, 'server container hit')} placed by a probable link`);
   return parts.join('; ');
 }
 

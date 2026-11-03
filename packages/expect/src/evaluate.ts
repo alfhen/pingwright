@@ -49,6 +49,7 @@ type Input = TagreeveRecord | EvalEpoch;
 interface Context {
   hits: Hit[];
   requests: Map<string, Request>;
+  index: JudgeIndex;
   epochs: EvalEpoch[];
   steps: Step[];
   responses: Response[];
@@ -61,9 +62,12 @@ interface Context {
 export function evaluate(records: readonly Input[], scenario: Scenario, options: EvaluateOptions = {}): Result[] {
   const runRecord = records.find((r): r is Run => r.type === 'run');
   const runId = runRecord?.id ?? records.find((r) => 'runId' in r)?.runId ?? newId('run');
+  const allHits = records.filter((r): r is Hit => r.type === 'hit');
+  const allRequests = new Map(records.filter((r): r is Request => r.type === 'request').map((r) => [r.id, r]));
   const ctx: Context = {
-    hits: records.filter((r): r is Hit => r.type === 'hit'),
-    requests: new Map(records.filter((r): r is Request => r.type === 'request').map((r) => [r.id, r])),
+    hits: allHits,
+    requests: allRequests,
+    index: judgeIndex(allHits, allRequests),
     epochs: records
       .filter((r): r is EvalEpoch => r.type === 'consentEpoch')
       .sort((a, b) => a.startT - b.startT),
@@ -76,8 +80,20 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
   };
 
   const results: Result[] = [];
-  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) =>
-    results.push({ type: 'result', id: newId('result'), runId, expectation, pass, evidence, message, ...(severity && { severity }), ...(note && { note }) });
+  const add = (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote) => {
+    const settled = settleServerSends(pass, evidence, severity, note, ctx);
+    results.push({
+      type: 'result',
+      id: newId('result'),
+      runId,
+      expectation,
+      pass,
+      evidence,
+      message,
+      ...(settled.severity && { severity: settled.severity }),
+      ...(settled.note && { note: settled.note }),
+    });
+  };
 
   for (const kind of ['mustNot', 'must'] as const)
     for (const rule of scenario.expect[kind]) {
@@ -91,7 +107,22 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
 
 type RuleOutcome = { pass: boolean; evidence: string[]; message: string; note?: ResultNote };
 
+const isScoped = (rule: Rule) => Boolean(rule.before || rule.inEpoch || rule.after || consentFields.some((f) => rule.filter.consent[f]));
+
 function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
+  const outcome = evaluateRuleHits(rule, ctx);
+  if (rule.cookie || !isScoped(rule)) return outcome;
+  const unjudged = ctx.hits.filter((h) => isUnlinkedServerHit(h, ctx.index) && matchesFilter(h, { ...rule.filter, consent: {} }, ctx));
+  if (unjudged.length === 0 || (!outcome.pass && rule.kind === 'mustNot') || (outcome.pass && rule.kind === 'must')) return outcome;
+  return {
+    pass: false,
+    evidence: [...outcome.evidence, ...unjudged.map((h) => h.id)],
+    message: `${outcome.message} Cannot evaluate: ${unjudged.length} server container hit${unjudged.length === 1 ? ' has' : 's have'} no link to a browser hit, so no consent state or time applies to ${unjudged.length === 1 ? 'it' : 'them'}.`,
+    note: 'serverSendUnlinked',
+  };
+}
+
+function evaluateRuleHits(rule: Rule, ctx: Context): RuleOutcome {
   if (rule.cookie) return evaluateCookieRule(rule, rule.cookie, ctx);
   let hits = ctx.hits.filter((h) => matchesFilter(h, rule.filter, ctx));
   const total = hits.length;
@@ -113,7 +144,10 @@ function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
       return { pass: false, evidence: [], message: `Expected a step labelled "${rule.after}", but the run has steps: ${known}.` };
     }
     const from = step.endedAt ?? step.startedAt;
-    hits = hits.filter((h) => h.t >= from);
+    hits = hits.filter((h) => {
+      const at = judgedAt(h, ctx.index);
+      return at !== undefined && at >= from;
+    });
     narrowed.push(`after ${rule.after}`);
   }
 
@@ -525,8 +559,64 @@ export function epochForHit<E extends Placeable>(epochs: readonly E[], t: number
   return found;
 }
 
+export interface JudgeIndex {
+  hits: ReadonlyMap<string, Hit>;
+  requests: ReadonlyMap<string, Request>;
+}
+
+export function judgeIndex(hits: readonly Hit[], requests: ReadonlyMap<string, Request> | readonly Request[]): JudgeIndex {
+  return {
+    hits: new Map(hits.map((h) => [h.id as string, h])),
+    requests: requests instanceof Map ? requests : new Map((requests as readonly Request[]).map((r) => [r.id as string, r])),
+  };
+}
+
+export function isServerHit(hit: Hit, index: JudgeIndex): boolean {
+  return index.requests.get(hit.requestId)?.captured === 'serverContainer';
+}
+
+/** The browser hit a linked server hit takes its time and consent from. */
+export function viaHitOf(hit: Hit, index: JudgeIndex): Hit | undefined {
+  if (!hit.via || !isServerHit(hit, index)) return undefined;
+  const via = index.hits.get(hit.via.hitId);
+  return via && !isServerHit(via, index) ? via : undefined;
+}
+
+export function isUnlinkedServerHit(hit: Hit, index: JudgeIndex): boolean {
+  return isServerHit(hit, index) && !viaHitOf(hit, index);
+}
+
+/**
+ * The time a hit is placed by in consent epochs and time filters. A server container hit is placed
+ * by the browser hit it came from, since its own time is when the container sent it on, which can
+ * be after the visitor changed their answer. An unlinked server hit has none.
+ */
+export function judgedAt(hit: Hit, index: JudgeIndex): number | undefined {
+  if (!isServerHit(hit, index)) return hit.t;
+  return viaHitOf(hit, index)?.t;
+}
+
 function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
-  return epochForHit(ctx.epochs, hit.t, ctx.grace);
+  const t = judgedAt(hit, ctx.index);
+  return t === undefined ? undefined : epochForHit(ctx.epochs, t, ctx.grace);
+}
+
+function onlyProbableServerHits(evidence: readonly string[], ctx: Context): boolean {
+  const hits = evidence.map((id) => ctx.index.hits.get(id)).filter((h): h is Hit => h !== undefined);
+  return hits.length > 0 && hits.every((h) => h.via?.confidence === 'probable' && viaHitOf(h, ctx.index) !== undefined);
+}
+
+/** Only an exact link can fail a run. A result that rests on a probable link says so. */
+function settleServerSends(
+  pass: boolean,
+  evidence: readonly string[],
+  severity: Severity | undefined,
+  note: ResultNote | undefined,
+  ctx: Context,
+): { severity: Severity | undefined; note: ResultNote | undefined } {
+  if (!pass && note === 'serverSendUnlinked') return { severity: 'warn', note };
+  if (note || !onlyProbableServerHits(evidence, ctx)) return { severity, note };
+  return { severity: pass ? severity : 'warn', note: 'serverSendProbableLink' };
 }
 
 /**
@@ -534,15 +624,19 @@ function epochOf(hit: Hit, ctx: Context): EvalEpoch | undefined {
  * unknown. Every other hit takes the state of the epoch it falls in.
  */
 function effectiveConsent(hit: Hit, ctx: Context): ConsentState {
-  return effectiveConsentAt(hit, ctx.epochs, ctx.grace);
+  return effectiveConsentAt(hit, ctx.epochs, ctx.grace, ctx.index);
 }
 
-/** The consent state the evaluator uses for a hit. `epochs` must be sorted by `startT`. */
-export function effectiveConsentAt(hit: Hit, epochs: readonly EvalEpoch[], graceMs: number): ConsentState {
-  const base = epochForHit(epochs, hit.t, graceMs)?.state;
-  const own = GOOGLE_VENDORS.has(hit.vendor) && consentFields.some((f) => hit.consent[f] !== 'unknown');
+/** The consent state the evaluator uses for a hit. `epochs` must be sorted by `startT`. A server hit needs `index` and takes its via hit's state. */
+export function effectiveConsentAt(hit: Hit, epochs: readonly EvalEpoch[], graceMs: number, index?: JudgeIndex): ConsentState {
+  const t = index ? judgedAt(hit, index) : hit.t;
+  if (t === undefined) return { analytics: 'unknown', ads: 'unknown', adUserData: 'unknown', adPersonalization: 'unknown' };
+  // A linked server hit has the consent signals of its via hit, placed at the time `judgedAt` gives.
+  const source = (index && viaHitOf(hit, index)) || hit;
+  const base = epochForHit(epochs, t, graceMs)?.state;
+  const own = GOOGLE_VENDORS.has(source.vendor) && consentFields.some((f) => source.consent[f] !== 'unknown');
   const pick = (f: ConsentField): ConsentValue => {
-    if (own) return hit.consent[f];
+    if (own) return source.consent[f];
     return base ? base[f] : 'unknown';
   };
   return {
@@ -565,16 +659,19 @@ function stateMatches(state: ConsentState, selector: string): boolean {
 
 /** Timing decides this for every vendor: what a hit carries cannot show that the visitor had not yet answered. */
 function inUndecidedEpoch(hit: Hit, ctx: Context): boolean {
+  if (isUnlinkedServerHit(hit, ctx.index)) return false;
   const epoch = epochOf(hit, ctx);
   return !epoch || epoch.label === 'undecided';
 }
 
 function isBeforeConsent(hit: Hit, ctx: Context): boolean {
+  if (isUnlinkedServerHit(hit, ctx.index)) return false;
   const epoch = epochOf(hit, ctx);
   return !epoch || (epoch === ctx.epochs[0] && epoch.label === 'undecided');
 }
 
 function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
+  if (isUnlinkedServerHit(hit, ctx.index)) return false;
   if (selector === 'undecided') return inUndecidedEpoch(hit, ctx);
   if (selector.startsWith('label=')) return epochOf(hit, ctx)?.label === selector.slice('label='.length);
   if ((selector === 'granted' || selector === 'denied') && !GOOGLE_VENDORS.has(hit.vendor)) {
@@ -820,6 +917,19 @@ function builtInChecks(
 
 const DENIABLE = ['analytics', 'ads', 'adUserData'] as const;
 
+/** Unlinked server hits that carry identifiers, or whose identifiers cannot be read. No consent state applies to them. */
+function unjudgedIdentifiers(ctx: Context): Hit[] {
+  return ctx.hits.filter((h) => isUnlinkedServerHit(h, ctx.index) && (!h.idFields || !h.fields || h.idFields.length > 0 || h.fieldsComplete === false));
+}
+
+function cannotJudgeUnlinked(hits: readonly Hit[], when: string): { evidence: string[]; message: string } {
+  const n = hits.length;
+  return {
+    evidence: hits.map((h) => h.id),
+    message: `Cannot evaluate: ${n} server container hit${n === 1 ? ' has' : 's have'} no link to a browser hit and carr${n === 1 ? 'ies' : 'y'} identifiers, so no consent state applies to ${n === 1 ? 'it' : 'them'} ${when}.`,
+  };
+}
+
 function identifierClasses(idFields: readonly string[], fields: readonly string[], extra: readonly RegExp[]): Map<string, IdentifierClass> {
   const classes = new Map<string, IdentifierClass>(idFields.map((n) => [n, identifierClass(n)]));
   for (const n of fields) if (!classes.has(n) && extra.some((re) => re.test(n))) classes.set(n, 'analytics');
@@ -868,6 +978,10 @@ function deniedIdentifiersCheck(
       leaking.map((h) => h.id),
       `${leaking.length} hit${leaking.length === 1 ? ' carries' : 's carry'} identifiers while consent is denied: ${shown}${more}.${cut}`,
     );
+  } else if (unjudgedIdentifiers(ctx).length > 0) {
+    const unjudged = unjudgedIdentifiers(ctx);
+    const { evidence, message } = cannotJudgeUnlinked(unjudged, 'for denied consent');
+    add('deniedIdentifiers', false, evidence, message, 'serverSendUnlinked');
   } else if (unreadable.length > 0) {
     const notRecorded = unreadable.some((h) => !h.idFields || !h.fields);
     add(
@@ -925,6 +1039,10 @@ function earlyIdentifiersCheck(
       early.map((h) => h.id),
       `${early.length} ${hitsWord(early.length)} ${early.length === 1 ? 'carries' : 'carry'} identifiers before the consent answer: ${shown}${more}.${cut}`,
     );
+  } else if (unjudgedIdentifiers(ctx).length > 0) {
+    const unjudged = unjudgedIdentifiers(ctx);
+    const { evidence, message } = cannotJudgeUnlinked(unjudged, 'before the consent answer');
+    add('earlyIdentifiers', false, evidence, message, 'serverSendUnlinked');
   } else if (unreadable.length > 0) {
     const notRecorded = unreadable.some((h) => !h.idFields || !h.fields);
     add(
@@ -1246,7 +1364,12 @@ export function placeHitsInEpochs(
   hits: readonly Hit[],
   epochs: readonly ConsentEpoch[],
   graceMs = DEFAULT_GRACE_MS,
+  index?: JudgeIndex,
 ): Map<Hit, ConsentEpoch | undefined> {
   const sorted = [...epochs].sort((a, b) => a.startT - b.startT);
-  return new Map(hits.filter((h) => !GOOGLE_VENDORS.has(h.vendor)).map((h) => [h, epochForHit(sorted, h.t, graceMs)]));
+  const placed = (h: Hit) => {
+    const t = index ? judgedAt(h, index) : h.t;
+    return t === undefined ? undefined : epochForHit(sorted, t, graceMs);
+  };
+  return new Map(hits.filter((h) => !GOOGLE_VENDORS.has(h.vendor) || (index && isServerHit(h, index))).map((h) => [h, placed(h)]));
 }
