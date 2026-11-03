@@ -9,7 +9,7 @@ Use a test store or a store with test payments on, a test card and a test accoun
 3. Checkout: `visit: /checkout`, labelled `checkout`.
 4. Fill the identity: `fill` with fake identity names (`email`, `firstName`, ...).
 5. Delivery country: set it explicitly. Shopify guesses the country from the machine's location.
-6. Payment: a `handoff` step. The person enters the test card and submits.
+6. Payment: a `handoff` step. The person enters the test card, ticks the terms checkbox if the store shows one, and submits. Some stores need a checkbox such as "I agree to the terms and conditions" ticked before Pay. Tagreeve never ticks it by itself.
 7. Thank-you: a `wait` for the order page, labelled `thank-you`. Purchase hits fire when the order page loads, while the person is still in the handoff. A handoff step ends only when the person clicks Done or presses Enter, so a rule with `after: pay` would miss them. Anchor purchase rules on `after: checkout`, a step that ends before the handoff starts.
 8. Hashes: `identity.hashesMatch` on the purchase hits.
 
@@ -31,7 +31,7 @@ steps:
       "input[name=postalCode]": zip
       "input[name=phone]": phone
       "select[name=countryCode]": SE
-  - handoff: "Enter the test card and pay, then wait for the order page."
+  - handoff: "Enter the test card, tick the terms checkbox if the checkout shows one, pay, then wait for the order page."
     label: pay
   - wait: 10s
     label: thank-you
@@ -63,12 +63,15 @@ steps:
       "input[name=postalCode]": zip
       "select[name=countryCode]": SE
   - payment: { provider: shopify-bogus, card: "1" }
+  - click: { role: checkbox, name: "I agree to the terms and conditions" }
   - click: { role: button, name: "Pay now" }
   - wait: { url: "*/thank-you*" }
 expect:
   must:
     - { vendor: ga4, event: purchase, after: checkout }
 ```
+
+If your store shows no terms checkbox, leave that click out. Tagreeve does not tick it for you, so a store that needs it fails at Pay without the click. The checkbox name differs per store.
 
 Wallets (Shop Pay, Google Pay, PayPal), live payment methods and 3-D Secure challenges stay handoff steps. The delivery country is set explicitly, as above.
 

@@ -26,8 +26,9 @@ Expectations
        Expected no hit to carry a sandbox URL as its page, found 1: http://localhost:57308/web-pixels@0.0.0-fixture/sandbox/modern/.
        evidence: hit_01M66G9M2S992B5DF1MZ15ZQ07
   PASS builtin: deniedIdentifiers
+  PASS builtin: earlyIdentifiers
   PASS builtin: possibleRealData
-Result: fail (3 of 5)
+Result: fail (3 of 6)
 Record: runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
@@ -54,7 +55,7 @@ This is the full output. It is not shortened. Here is how to read the less obvio
 
 With `--server-container`, the summary has a `Server container` line, and the report shows the vendors that your server container sent on in their own rows. Each such hit is judged by the browser hit it came from, not by the time the container sent it. The container may send a call after the visitor changed their answer, and the answer that counts is the one the browser hit was sent under.
 
-Only an exact link can fail a run on time or consent. When a failure rests on a link by a shared value (`probable`), it shows as `WARN` with a note. If the same run also has an exact leak, it still fails. A hit with no link cannot be judged for consent. Checks that need its consent state show `WARN` and `cannot evaluate`, also when a probable leak sits next to the unlinked hit. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched.
+Only an exact link can fail a run on time or consent. When a failure rests on a link by a shared value (`probable`), it shows as `WARN` with a note. If the same run also has an exact leak, it still fails. A hit with no link cannot be judged for consent. Checks that need its consent state show `WARN` and `cannot evaluate`, also when a probable leak sits next to the unlinked hit. That note, `serverSendUnlinked`, belongs to the identifier checks. A `mustNot` rule that already fails on a probable link keeps the note `serverSendProbableLink`. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched.
 
 ## Consent epochs
 
@@ -82,9 +83,10 @@ An expectation is a rule from your scenario. `must` needs at least one matching 
 Built-in checks run on every run. You do not write them:
 
 - `unknownDestination` fails if a request went to a host that is not your site and that Tagreeve does not know. The scenario can allow a host with `options.allowUnknownDestination`.
+  A request to a known Shopify platform host is not an unknown destination. It gets the flag `platformHost`, which is listed in the summary, never fails a run, and can be turned off with `options.platformHosts: false`.
 - `sandboxPageUrl` fails if a vendor received the address of a sandboxed iframe as the page address. The vendor then reports the wrong page. Shopify custom pixels run in such an iframe.
-- `deniedIdentifiers` fails if a hit carries an identifier, such as a user ID or a hashed email, while the matching consent signal is denied. See [deniedIdentifiers](../cli.md#deniedidentifiers).
-- `earlyIdentifiers` warns if a hit sent before the first consent answer carries an identifier and its consent signal is unknown. It does not change the exit code unless you set it to `fail`. See [earlyIdentifiers](../cli.md#earlyidentifiers).
+- `deniedIdentifiers` fails if a hit carries an identifier, such as a user ID or a hashed email, while the matching consent signal is denied. See [deniedIdentifiers](../cli.md#deniedidentifiers). It reads the fields of hits, not the `Cookie` header of a request.
+- `earlyIdentifiers` warns if a hit sent before the first consent answer carries an identifier and its consent signal is unknown. It reads hit fields only, so an identifier that goes out only in a `Cookie` header is left to the cookie rules. It does not change the exit code unless you set it to `fail`. See [earlyIdentifiers](../cli.md#earlyidentifiers).
 - `possibleRealData` fails if the record holds an email address, a phone number or a hash that does not belong to the fake identity. A hash is a fixed code made from a value, such as an email address.
 
 The [CLI page](../cli.md) lists the options that change these checks. One of them, `options.builtins`, sets a check to `warn`. The summary then shows `WARN` for it and the exit code stays 0.

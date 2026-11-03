@@ -82,6 +82,16 @@ test('non-YAML files are ignored and subdirectories are not scanned', async () =
   expect(fake.specs.map((s) => s.scenarioName)).toEqual(['a', 'b']);
 });
 
+test('a server subfolder is skipped, even with scenarios that would fail to parse', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  await mkdir(join(dir, 'server'));
+  await writeFile(join(dir, 'server', 's.yml'), VALID);
+  await writeFile(join(dir, 'server', 'broken.yml'), 'not: [a scenario');
+  const fake = recorder();
+  expect(await suiteCommand(args(dir, out), capture().io, fake)).toBe(0);
+  expect(fake.specs.map((s) => s.scenarioName)).toEqual(['a']);
+});
+
 test('one invalid scenario exits 2 before any run and lists every problem', async () => {
   const { dir, out } = await workDir({ 'a.yml': VALID, 'bad.yml': 'steps: nope\n', 'worse.yaml': 'start: 3\nbogus: 1\n' });
   const fake = recorder();

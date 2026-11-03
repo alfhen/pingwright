@@ -10,6 +10,7 @@ describe('findPages', () => {
       'docs/cli.md',
       'docs/design.md',
       'docs/guide/first-run.md',
+      'docs/guide/project-layout.md',
       'docs/guide/reading-results.md',
       'docs/guide/server-container.md',
       'docs/guide/what-it-checks.md',
