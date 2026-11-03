@@ -108,6 +108,22 @@ describe('deniedIdentifiers on a server hit', () => {
     expect(check(results, 'deniedIdentifiers')).toMatchObject({ pass: false, severity: 'fail' });
   });
 
+  test('a probable leak next to an unlinked hit with identifiers warns with serverSendUnlinked', () => {
+    const via = browser(500);
+    const probable = capi(1200, link(via, 'probable'));
+    const unlinked = capi(1300, undefined);
+    const result = check(run('', [via, probable, unlinked]), 'deniedIdentifiers');
+    expect(result).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked' });
+    expect(result.evidence).toEqual(expect.arrayContaining([probable.hit.id, unlinked.hit.id]));
+    expect(result.message).toContain('Cannot evaluate');
+  });
+
+  test('an exact leak next to a probable one and an unlinked hit still fails', () => {
+    const via = browser(500);
+    const results = run('', [via, capi(1200, link(via, 'probable')), capi(1250, link(via, 'exact')), capi(1300, undefined)]);
+    expect(check(results, 'deniedIdentifiers')).toMatchObject({ pass: false, severity: 'fail' });
+  });
+
   test('a link to a hit in the granted epoch passes, though the server hit was sent in the denied one', () => {
     const via = browser(1200);
     const sent = capi(500, link(via, 'exact'));

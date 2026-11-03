@@ -662,7 +662,13 @@ function settleServerSends(
   ctx: Context,
 ): { severity: Severity | undefined; note: ResultNote | undefined } {
   if (!pass && note === 'serverSendUnlinked') return { severity: 'warn', note };
-  if (note || !timeJudged || !onlyProbableServerHits(evidence, ctx)) return { severity, note };
+  if (note || !timeJudged) return { severity, note };
+  const judged = evidence.filter((id) => {
+    const hit = ctx.index.hits.get(id);
+    return !hit || !isUnlinkedServerHit(hit, ctx.index);
+  });
+  if (!onlyProbableServerHits(judged, ctx)) return { severity, note };
+  if (judged.length < evidence.length && !pass) return { severity: 'warn', note: 'serverSendUnlinked' };
   return { severity: pass ? severity : 'warn', note: 'serverSendProbableLink' };
 }
 
@@ -943,7 +949,7 @@ function builtInChecks(
   for (const check of [deniedIdentifiersCheck, earlyIdentifiersCheck]) {
     const passes = (c: Context) => {
       let pass = true;
-      check(scenario, c, (_name, p) => void (pass = p));
+      check(scenario, c, (_name, p, _evidence, _message, note) => void (pass = p || note === 'serverSendUnlinked'));
       return pass;
     };
     check(scenario, ctx, (name, pass, evidence, message, note) =>
@@ -1035,11 +1041,12 @@ function deniedIdentifiersCheck(
     const shown = groups.slice(0, MAX_LISTED).join(', ');
     const more = groups.length > MAX_LISTED ? `, and ${groups.length - MAX_LISTED} more` : '';
     const cut = unreadable.length > 0 ? ` ${unreadable.length} more hit${unreadable.length === 1 ? '' : 's'} could not be read.` : '';
+    const unjudged = unjudgedIdentifiers(ctx);
     add(
       'deniedIdentifiers',
       false,
-      leaking.map((h) => h.id),
-      `${leaking.length} hit${leaking.length === 1 ? ' carries' : 's carry'} identifiers while consent is denied: ${shown}${more}.${cut}`,
+      [...leaking.map((h) => h.id), ...unjudged.map((h) => h.id)],
+      `${leaking.length} hit${leaking.length === 1 ? ' carries' : 's carry'} identifiers while consent is denied: ${shown}${more}.${cut}${unjudged.length > 0 ? ` ${cannotJudgeUnlinked(unjudged, 'for denied consent').message}` : ''}`,
     );
   } else if (unreadable.length > 0) {
     const unjudged = unjudgedIdentifiers(ctx);
@@ -1097,11 +1104,12 @@ function earlyIdentifiersCheck(
     const shown = groups.slice(0, MAX_LISTED).join(', ');
     const more = groups.length > MAX_LISTED ? `, and ${groups.length - MAX_LISTED} more` : '';
     const cut = unreadable.length > 0 ? ` ${unreadable.length} more ${hitsWord(unreadable.length)} could not be read.` : '';
+    const unjudged = unjudgedIdentifiers(ctx);
     add(
       'earlyIdentifiers',
       false,
-      early.map((h) => h.id),
-      `${early.length} ${hitsWord(early.length)} ${early.length === 1 ? 'carries' : 'carry'} identifiers before the consent answer: ${shown}${more}.${cut}`,
+      [...early.map((h) => h.id), ...unjudged.map((h) => h.id)],
+      `${early.length} ${hitsWord(early.length)} ${early.length === 1 ? 'carries' : 'carry'} identifiers before the consent answer: ${shown}${more}.${cut}${unjudged.length > 0 ? ` ${cannotJudgeUnlinked(unjudged, 'before the consent answer').message}` : ''}`,
     );
   } else if (unreadable.length > 0) {
     const unjudged = unjudgedIdentifiers(ctx);
