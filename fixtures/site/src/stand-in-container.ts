@@ -35,7 +35,6 @@ interface HitFields {
 export function createStandIn(env: StandInEnv): { listen(): Promise<number>; close(): Promise<void> } {
   const proxyUrl = env.HTTP_PROXY ? new URL(env.HTTP_PROXY) : undefined;
   let ready = false;
-  const pending = new Set<NodeJS.Timeout>();
 
   function viaProxy(method: string, target: string, body?: string): Promise<Reply> {
     return new Promise((resolve, reject) => {
@@ -43,8 +42,6 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
         reject(new Error('HTTP_PROXY and NODE_EXTRA_CA_CERTS are needed'));
         return;
       }
-      // Read here, not in the connect handler: a throw there is uncaught, and the CA file can go away while a call is in flight.
-      const ca = readFileSync(env.NODE_EXTRA_CA_CERTS, 'utf8');
       const url = new URL(target);
       const auth = Buffer.from(`${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`).toString('base64');
       const connect = http.request({
@@ -61,7 +58,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
           reject(new Error(`the proxy answered ${response.statusCode}`));
           return;
         }
-        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca });
+        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca: readFileSync(env.NODE_EXTRA_CA_CERTS!, 'utf8') });
         secure.on('error', reject);
         const headers: Record<string, string | number> = body === undefined ? {} : { 'content-type': 'text/plain', 'content-length': Buffer.byteLength(body) };
         // The agent hands out only the tunnel, and the lookup fails, so a request can never open a direct connection.
@@ -159,11 +156,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
       const asked = Number(url.searchParams.get('delayMs') ?? 0);
       const delay = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 0), MAX_DELAY_MS) : 0;
       const fields = fieldsOf(url, Buffer.concat(chunks).toString('utf8'));
-      const timer = setTimeout(() => {
-        pending.delete(timer);
-        void sendVendorCalls(fields);
-      }, delay);
-      pending.add(timer);
+      setTimeout(() => void sendVendorCalls(fields), delay);
     });
   });
 
@@ -179,8 +172,6 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
       }),
     close: () =>
       new Promise((resolve) => {
-        for (const timer of pending) clearTimeout(timer);
-        pending.clear();
         server.close(() => resolve());
         server.closeAllConnections();
       }),
