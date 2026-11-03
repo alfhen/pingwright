@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { DemoData, Line, ScenarioKey, Tone } from '../../lib/demo-data.ts';
 import { frameAt, SEND_AT, TICK, totalOf } from './timeline.ts';
 
-const MINT = 'oklch(0.82 0.12 175)';
-const FAIL = 'oklch(0.72 0.16 25)';
-const TERM_TONE: Record<Tone, string> = { fg: '#D9E2DF', dim: '#8A9794', faint: '#5B6865', mint: MINT, fail: FAIL, warn: 'oklch(0.84 0.13 85)' };
+const MINT = 'var(--ad-mint)';
+const FAIL = 'var(--ad-fail)';
+const TERM_TONE: Record<Tone, string> = { fg: 'var(--code-ink)', dim: 'var(--ad-muted)', faint: '#5B6865', mint: MINT, fail: FAIL, warn: 'var(--ad-warn)' };
 
 interface Props {
   data: DemoData;
@@ -88,13 +88,13 @@ export default function AgentDemo({ data }: Props) {
         {f.idle && (
           <div class="ad-idle" data-demo="idle">
             <div class="ad-ask">
-              <span style={{ fontSize: '11px', color: '#8A9794' }}>~/northwind — your coding agent</span>
+              <span style={{ fontSize: '11px', color: 'var(--ad-muted)' }}>~/northwind — your coding agent</span>
               <div style={{ display: 'flex', gap: '10px', fontSize: '14px', lineHeight: 1.55 }}>
-                <span style={{ color: '#9A9DA2' }}>&gt;</span>
+                <span style={{ color: 'var(--term-dim)' }}>&gt;</span>
                 <span style={{ flex: 1 }}>{data.userPrompt}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '11.5px', color: '#8A9794' }}>Mads's question. The agent will run Tagreeve to answer it.</span>
+                <span style={{ fontSize: '11.5px', color: 'var(--ad-muted)' }}>Mads's question. The agent will run Tagreeve to answer it.</span>
                 <button type="button" class="ad-ask-button" data-demo="ask" onClick={start}>
                   Ask the agent ⏎
                 </button>
@@ -112,13 +112,13 @@ export default function AgentDemo({ data }: Props) {
           <div class="ad-scroll">
             <div class="ad-fade" />
             <div class="ad-log">
-              <div style={{ border: '1px solid #3A3C40', borderRadius: '6px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '2px', color: '#9A9DA2' }}>
+              <div style={{ border: '1px solid var(--term-frame)', borderRadius: '6px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '2px', color: 'var(--term-dim)' }}>
                 <span style={{ color: '#E6E6E2' }}>Coding agent</span>
                 <span>cwd: ~/northwind</span>
                 <span>tools: Bash, Read, Edit</span>
               </div>
               {f.showUserMsg && (
-                <div class="ad-in" style={{ display: 'flex', gap: '8px', color: '#9A9DA2' }}>
+                <div class="ad-in" style={{ display: 'flex', gap: '8px', color: 'var(--term-dim)' }}>
                   <span>&gt;</span>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{data.userPrompt}</span>
                 </div>
@@ -132,10 +132,10 @@ export default function AgentDemo({ data }: Props) {
               {f.showTool && (
                 <div class="ad-in" style={{ display: 'flex', flexDirection: 'column', gap: '1px' }} data-demo="tool">
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <span style={{ color: f.toolDone ? (sc.exitCode ? FAIL : MINT) : f.toolBlink ? '#D9E2DF' : '#5B6865' }}>●</span>
+                    <span style={{ color: f.toolDone ? (sc.exitCode ? FAIL : MINT) : f.toolBlink ? 'var(--code-ink)' : '#5B6865' }}>●</span>
                     <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                       <b style={{ fontWeight: 600, color: '#E6E6E2' }}>Bash</b>
-                      <span style={{ color: '#9A9DA2' }}>
+                      <span style={{ color: 'var(--term-dim)' }}>
                         (tagreeve run tagreeve/{sc.file} --site {host})
                       </span>
                     </span>
@@ -164,7 +164,7 @@ export default function AgentDemo({ data }: Props) {
                 <div class="ad-in" style={{ display: 'flex', flexDirection: 'column', gap: '1px' }} data-demo="send">
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <span style={{ color: '#E6E6E2' }}>●</span>
-                    <span style={{ fontFamily: 'Geist, ui-sans-serif, sans-serif', fontSize: '13px', color: '#E6E6E2' }}>
+                    <span style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: '#E6E6E2' }}>
                       Want me to reply to Mads with this? <span class="ad-mono" style={{ color: '#6C6F74', fontSize: '11.5px' }}>(y/n)</span>{' '}
                       <span class="ad-mono" style={{ color: MINT }}>
                         {f.sendAnswer}
@@ -180,7 +180,7 @@ export default function AgentDemo({ data }: Props) {
                 </div>
               )}
               {f.working && (
-                <div style={{ display: 'flex', gap: '8px', color: '#C9A86A' }}>
+                <div style={{ display: 'flex', gap: '8px', color: 'var(--term-spinner)' }}>
                   <span>{f.spinGlyph}</span>
                   <span>
                     {f.spinWord}… <span style={{ color: '#6C6F74' }}>({f.spinSecs}s · esc to interrupt)</span>
@@ -191,7 +191,7 @@ export default function AgentDemo({ data }: Props) {
           </div>
           <div style={{ flex: 'none', padding: '6px 14px 10px' }}>
             <div class="ad-input">
-              <span style={{ color: '#9A9DA2' }}>&gt;</span>
+              <span style={{ color: 'var(--term-dim)' }}>&gt;</span>
               <span style={{ whiteSpace: 'pre-wrap', flex: 1 }}>
                 {f.inputText}
                 {f.inputCursor && <span class="ad-cursor" />}

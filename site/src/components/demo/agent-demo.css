@@ -28,10 +28,10 @@
 @keyframes ad-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 oklch(0.82 0.12 175 / 0.5);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--ad-mint) 50%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px oklch(0.82 0.12 175 / 0);
+    box-shadow: 0 0 0 6px color-mix(in oklch, var(--ad-mint) 0%, transparent);
   }
 }
 
@@ -55,7 +55,7 @@
 }
 
 .ad-mono {
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .ad-toolbar {
@@ -66,7 +66,7 @@
   border-bottom: 1px solid var(--line);
   background: var(--bg2);
   flex-wrap: wrap;
-  font: 500 12px 'Geist Mono', ui-monospace, monospace;
+  font: 500 12px var(--font-mono);
   color: var(--muted);
 }
 
@@ -80,7 +80,7 @@
 }
 
 .ad-picker button {
-  font: 500 12px 'Geist Mono', ui-monospace, monospace;
+  font: 500 12px var(--font-mono);
   border: 0;
   border-radius: 6px;
   padding: 6px 10px;
@@ -99,7 +99,7 @@
 }
 
 .ad-replay {
-  font: 500 12px 'Geist Mono', ui-monospace, monospace;
+  font: 500 12px var(--font-mono);
   background: transparent;
   border: 1px solid var(--line);
   color: var(--ink);
@@ -165,25 +165,25 @@
 
 .ad-ask {
   width: min(620px, 100%);
-  background: #0c0d0e;
-  border: 1px solid oklch(0.82 0.12 175);
+  background: var(--term-bg);
+  border: 1px solid var(--ad-mint);
   border-radius: 12px;
   box-shadow:
-    0 0 0 4px oklch(0.82 0.12 175 / 0.15),
+    0 0 0 4px color-mix(in oklch, var(--ad-mint) 15%, transparent),
     0 30px 60px -20px rgba(0, 0, 0, 0.7);
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--font-mono);
   color: #e6e6e2;
   animation: ad-ask-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .ad-ask-button {
-  font: 600 14px Geist, ui-sans-serif, sans-serif;
-  background: oklch(0.82 0.12 175);
-  color: #06201c;
+  font: 600 14px var(--font-sans);
+  background: var(--ad-mint);
+  color: var(--ad-onmint);
   border: 0;
   border-radius: 8px;
   padding: 9px 16px;
@@ -192,9 +192,9 @@
 }
 
 .ad-term {
-  background: #0c0d0e;
-  color: #d6d6d2;
-  font: 11.5px/1.6 'Geist Mono', ui-monospace, monospace;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font: 11.5px/1.6 var(--font-mono);
   border-right: 1px solid var(--line);
   overflow: hidden;
   display: flex;
@@ -220,7 +220,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #3a3c40;
+  background: var(--term-frame);
 }
 
 .ad-scroll {
@@ -239,7 +239,7 @@
   right: 0;
   top: 0;
   height: 36px;
-  background: linear-gradient(#0c0d0e, transparent);
+  background: linear-gradient(var(--term-bg), transparent);
   z-index: 1;
 }
 
@@ -258,13 +258,13 @@
 .ad-prose {
   white-space: pre-wrap;
   color: #e6e6e2;
-  font-family: Geist, ui-sans-serif, sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .ad-input {
-  border: 1px solid #3a3c40;
+  border: 1px solid var(--term-frame);
   border-radius: 6px;
   padding: 7px 10px;
   display: flex;
@@ -278,7 +278,7 @@
   display: inline-block;
   width: 7px;
   height: 13px;
-  background: #d6d6d2;
+  background: var(--term-ink);
   vertical-align: -2px;
   animation: ad-blink 1s steps(1) infinite;
 }
@@ -298,7 +298,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 500 11px 'Geist Mono', ui-monospace, monospace;
+  font: 500 11px var(--font-mono);
   color: var(--muted);
 }
 
@@ -341,7 +341,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font: 11px 'Geist Mono', ui-monospace, monospace;
+  font: 11px var(--font-mono);
   color: var(--muted);
 }
 
@@ -403,7 +403,7 @@
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel);
-  font: 12px 'Geist Mono', ui-monospace, monospace;
+  font: 12px var(--font-mono);
   flex: none;
 }
 

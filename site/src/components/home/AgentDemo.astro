@@ -3,6 +3,7 @@ import { root } from 'astro:config/server';
 import { fileURLToPath } from 'node:url';
 import AgentDemoIsland from '../demo/AgentDemo.tsx';
 import { loadDemo } from '../../lib/demo-data.ts';
+import '../demo/term-accents.css';
 import '../demo/agent-demo.css';
 
 const data = await loadDemo(fileURLToPath(new URL('demo/', root)));
