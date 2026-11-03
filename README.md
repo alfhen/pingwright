@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-> **Pingwright is now Tagreeve.** The command `pingwright` still works until 0.5.0. Versions up to 0.3.0 are on npm as `pingwright`, and `tagreeve` starts at 0.4.0-rc.1. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
+> **Pingwright is now Tagreeve.** Versions up to 0.3.0 are on npm as `pingwright`, and `tagreeve` starts at 0.4.0-rc.1. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
 
 Agent-first testing for tags and consent. Tagreeve plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 

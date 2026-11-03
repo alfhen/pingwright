@@ -2,7 +2,8 @@
 
 ## 0.5.0-rc.1
 
-<!-- A01 -->
+- Removed the old command alias. Use `tagreeve`. (#546)
+- The release workflow test is stricter: it checks job permissions, publish lines, `github.token` and docker pushes. (#546)
 
 - Fixed: `unloadGap` now also warns when an embedded frame pushed a tracking event shortly before the run ended (browser close), not only before a navigation (#261, #550).
 - Fixed: a GA4 hit sent from the same frame as the push now covers the event, whatever its custom name, so custom event names no longer give a false `unloadGap` (#261, #550).
