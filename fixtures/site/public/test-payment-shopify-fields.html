@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Test payment, Shopify-shaped card documents</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Test payment, Shopify-shaped card documents</h1>
+<p>Fake form. No real payment happens.</p>
+<form id="payment-form">
+  <div id="card-container">
+    <div class="field"><iframe id="card-frame-number" title="Card number" data-doc="number-ltr.html" style="width:420px;height:200px"></iframe></div>
+    <div class="field"><iframe id="card-frame-exp" title="Expiration date" data-doc="expiry-ltr.html" style="width:320px;height:48px"></iframe></div>
+    <div class="field"><iframe id="card-frame-csc" title="Security code" data-doc="verification_value-ltr.html" style="width:320px;height:48px"></iframe></div>
+    <p id="pw-test-mode">Test mode</p>
+  </div>
+  <button id="pay" type="submit">Pay</button>
+</form>
+<script>
+(function () {
+  var number = document.getElementById('card-frame-number');
+  var frames = document.querySelectorAll('#card-container iframe');
+  for (var i = 0; i < frames.length; i++) frames[i].src = window.__PW_FIXTURE.paymentFrameUrl + '/build/pwtest0/' + frames[i].getAttribute('data-doc');
+  window.addEventListener('message', function (e) {
+    if (e.source === number.contentWindow && e.data === 'pw-card-submitted') location.href = '/thank-you-late';
+  });
+  document.getElementById('payment-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    for (var i = 0; i < frames.length; i++) frames[i].contentWindow.postMessage('pw-pay', '*');
+  });
+})();
+</script>
+</body>
+</html>

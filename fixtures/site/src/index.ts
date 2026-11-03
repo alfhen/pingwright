@@ -33,6 +33,8 @@ const pages: Record<string, string> = {
   '/checkout/test-payment-dup-input': 'test-payment-dup-input.html',
   '/checkout/test-payment-split-inside': 'test-payment-split-inside.html',
   '/checkout/test-payment-split-outside': 'test-payment-split-outside.html',
+  '/checkout/test-payment-shopify-fields': 'test-payment-shopify-fields.html',
+  '/checkout/test-payment-shopify-decoy': 'test-payment-shopify-decoy.html',
   '/thank-you': 'thank-you.html',
   '/thank-you-late': 'thank-you-late.html',
   '/handoff/until': 'handoff-until.html',
@@ -220,11 +222,22 @@ function thirdPartyHandler(_req: IncomingMessage, res: ServerResponse): void {
 
 const cardFrames = ['card-frame', 'card-frame-extra-input', 'card-frame-number', 'card-frame-exp', 'card-frame-csc'];
 
+// Documents served under a build path, as Shopify's card host does.
+const buildDocs = new Map([
+  ['/build/pwtest0/number-ltr.html', 'shopify-number-ltr.html'],
+  ['/build/pwtest0/expiry-ltr.html', 'shopify-expiry-ltr.html'],
+  ['/build/pwtest0/verification_value-ltr.html', 'shopify-verification_value-ltr.html'],
+  ['/build/pwtest0/decoy.html', 'shopify-decoy.html'],
+]);
+
 function paymentFrameHandler(submits: string[], extras: string[]) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
     const frameName = req.method === 'GET' ? cardFrames.find((name) => path === `/${name}`) : undefined;
-    if (frameName) {
+    const buildDoc = req.method === 'GET' ? buildDocs.get(path) : undefined;
+    if (buildDoc) {
+      await sendFile(res, buildDoc);
+    } else if (frameName) {
       await sendFile(res, `${frameName}.html`);
     } else if (req.method === 'POST' && path === '/card-submit') {
       const chunks: Buffer[] = [];

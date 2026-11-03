@@ -12,6 +12,8 @@ interface CardField {
   frame: string;
   /** The input inside that iframe. */
   input: string;
+  /** The URL path the frame's document must have. */
+  path: RegExp;
 }
 
 interface ProviderRuntime {
@@ -24,12 +26,18 @@ interface ProviderRuntime {
 
 const SHOPIFY_CARD_HOST = 'checkout.pci.shopifyinc.com';
 
+const documentPath = (name: string): RegExp => new RegExp(`/${name}-(ltr|rtl)\\.html$`);
+
+// Only number-ltr.html is confirmed on a real store (#788); the other suffixes follow the field names.
 const shopifyFields: CardField[] = [
-  { kind: 'number', frame: 'iframe[title*="Card number" i]', input: 'input' },
-  { kind: 'expiry', frame: 'iframe[title*="Expiration" i]', input: 'input' },
-  { kind: 'cvc', frame: 'iframe[title*="Security code" i]', input: 'input' },
-  { kind: 'name', frame: 'iframe[title*="Name on card" i]', input: 'input' },
+  { kind: 'number', frame: 'iframe[title*="Card number" i]', input: 'input[autocomplete="cc-number"], input[name="number"]', path: documentPath('number') },
+  { kind: 'expiry', frame: 'iframe[title*="Expiration" i]', input: 'input[autocomplete="cc-exp"], input[name="expiry"]', path: documentPath('expiry') },
+  { kind: 'cvc', frame: 'iframe[title*="Security code" i]', input: 'input[autocomplete="cc-csc"], input[name="verification_value"]', path: documentPath('verification_value') },
+  { kind: 'name', frame: 'iframe[title*="Name on card" i]', input: 'input[autocomplete="cc-name"], input[name="name"]', path: documentPath('name') },
 ];
+
+/** The fixture's older single-document and split pages, and Shopify-shaped documents. */
+const fixturePath = (legacy: string, shopify: string): RegExp => new RegExp(`^/card-frame(-${legacy}|-extra-input)?$|/${shopify}-(ltr|rtl)\\.html$`);
 
 const RUNTIME: Record<string, ProviderRuntime> = {
   'shopify-bogus': { marker: 'text=Bogus Gateway', cardHost: SHOPIFY_CARD_HOST, fields: shopifyFields },
@@ -38,9 +46,9 @@ const RUNTIME: Record<string, ProviderRuntime> = {
     marker: '#pw-test-mode',
     cardHost: '127.0.0.1',
     fields: [
-      { kind: 'number', frame: '#card-frame, #card-frame-number', input: '#cc-number' },
-      { kind: 'expiry', frame: '#card-frame, #card-frame-exp', input: '#cc-exp' },
-      { kind: 'cvc', frame: '#card-frame, #card-frame-csc', input: '#cc-csc' },
+      { kind: 'number', frame: '#card-frame, #card-frame-number', input: 'input[autocomplete="cc-number"], input[name="number"]', path: fixturePath('number', 'number') },
+      { kind: 'expiry', frame: '#card-frame, #card-frame-exp', input: 'input[autocomplete="cc-exp"], input[name="expiry"]', path: fixturePath('exp', 'expiry') },
+      { kind: 'cvc', frame: '#card-frame, #card-frame-csc', input: 'input[autocomplete="cc-csc"], input[name="verification_value"]', path: fixturePath('csc', 'verification_value') },
     ],
   },
 };
@@ -77,27 +85,41 @@ function hostOf(url: string): string {
   }
 }
 
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return '';
+  }
+}
+
 interface CardFrame {
   element: ElementHandle;
   frame: Frame;
 }
 
-/** The first matching iframe that is visible and whose document is served from the card host, or the reason there is none. */
+/** The first matching iframe that is visible and whose document is served from the card host at the field's path, or the reason there is none. */
 async function cardFrameServed(page: Page, field: CardField, cardHost: string, deadline: number): Promise<CardFrame | string> {
   let reason = 'not found';
   for (;;) {
     try {
       let hidden = false;
       let elsewhere = false;
+      let otherPath: string | undefined;
       for (const element of await page.locator(field.frame).elementHandles()) {
         const frame = await element.contentFrame();
         if (!frame) continue;
-        const served = hostOf(frame.url()) === cardHost;
-        if (served && (await element.isVisible())) return { element, frame };
-        if (served) hidden = true;
-        else elsewhere = true;
+        if (hostOf(frame.url()) !== cardHost) {
+          elsewhere = true;
+        } else if (!field.path.test(pathOf(frame.url()))) {
+          otherPath = pathOf(frame.url());
+        } else if (await element.isVisible()) {
+          return { element, frame };
+        } else {
+          hidden = true;
+        }
       }
-      reason = hidden ? 'not visible' : elsewhere ? 'served from another host' : 'not found';
+      reason = hidden ? 'not visible' : otherPath !== undefined ? `served from another path: ${otherPath}` : elsewhere ? 'served from another host' : 'not found';
     } catch {
       return reason;
     }
@@ -180,27 +202,57 @@ export async function runPayment(
   }
 }
 
-async function frameStillServed(element: ElementHandle, cardHost: string): Promise<Frame> {
+async function frameStillServed(element: ElementHandle, cardHost: string, field: CardField): Promise<Frame> {
   const frame = await element.contentFrame();
-  if (!frame || hostOf(frame.url()) !== cardHost) throw new OwnReason('the card frame is gone or not served from the card host');
+  if (!frame || hostOf(frame.url()) !== cardHost || !field.path.test(pathOf(frame.url()))) {
+    throw new OwnReason('the card frame is gone or not served from the card host');
+  }
   return frame;
 }
 
-/** Types into the one visible input of the frame that the frame check verified, and checks that frame's host again right before the fill. */
+const FILL_TRY_MS = 500;
+
+/**
+ * Types into the one visible input of the frame that the frame check verified.
+ * Locator.fill waits for the input to be actionable, and a Frame object stays the same when its iframe navigates.
+ * So each fill is a short try inside the poll loop, and the host and path are checked again before every try.
+ * One long fill would type into a document that arrived during the wait.
+ */
 async function fillVerified(element: ElementHandle, field: CardField, cardHost: string, value: string, timeout: number): Promise<void> {
   const deadline = Date.now() + timeout;
   for (;;) {
-    const frame = await frameStillServed(element, cardHost);
+    const frame = await frameStillServed(element, cardHost, field);
     const inputs = frame.locator(field.input).filter({ visible: true });
     const count = await inputs.count();
     if (count === 1) {
-      await frameStillServed(element, cardHost);
-      await inputs.fill(value, { timeout: Math.max(1, deadline - Date.now()) });
-      return;
+      await frameStillServed(element, cardHost, field);
+      try {
+        await inputs.fill(value, { timeout: Math.max(1, Math.min(FILL_TRY_MS, deadline - Date.now())) });
+        return;
+      } catch (error) {
+        if (!(error instanceof Error && error.name === 'TimeoutError') || Date.now() >= deadline) throw error;
+        continue;
+      }
     }
-    if (Date.now() >= deadline) throw new OwnReason(`${count} visible inputs match`);
+    if (Date.now() >= deadline) throw new OwnReason(await countReason(frame, count));
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+}
+
+/** The frame's path and the name, autocomplete and type of each visible input. Never a value, a placeholder or a label. */
+async function countReason(frame: Frame, count: number): Promise<string> {
+  const attribute = (v: string | null): string => (v ?? '').replace(/\s+/g, ' ').slice(0, 40);
+  let inputs = ' none visible';
+  try {
+    const seen = await frame
+      .locator('input')
+      .filter({ visible: true })
+      .evaluateAll((all) => all.map((e) => ({ name: e.getAttribute('name'), autocomplete: e.getAttribute('autocomplete'), type: e.getAttribute('type') })));
+    if (seen.length > 0) inputs = seen.map((i) => ` [name=${attribute(i.name)} autocomplete=${attribute(i.autocomplete)} type=${attribute(i.type)}]`).join('');
+  } catch {
+    inputs = ' inputs not readable';
+  }
+  return `${count} visible inputs match in ${pathOf(frame.url())}:${inputs}`;
 }
 
 function typedValues(provider: PaymentProvider, card: string, identity: Identity): string[] {

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card number document with autofill inputs</title>
+</head>
+<body>
+<input name="autofill-name" autocomplete="cc-name" type="text" aria-label="Autofill name">
+<input name="autofill-given" autocomplete="cc-given-name" type="text" aria-label="Autofill given name">
+<input name="autofill-family" autocomplete="cc-family-name" type="text" aria-label="Autofill family name">
+<input name="autofill-type" autocomplete="cc-type" type="text" aria-label="Autofill type">
+<input name="autofill-month" autocomplete="cc-exp-month" type="text" aria-label="Autofill month">
+<input name="autofill-year" autocomplete="cc-exp-year" type="text" aria-label="Autofill year">
+<input name="autofill-email" autocomplete="email" type="text" aria-label="Autofill email">
+<input name="autofill-tel" autocomplete="tel" type="text" aria-label="Autofill phone">
+<label>Card number <input name="number" autocomplete="cc-number" inputmode="numeric" type="text"></label>
+<script>
+window.addEventListener('message', function (e) {
+  if (e.data !== 'pw-pay') return;
+  var autofill = Array.prototype.map.call(document.querySelectorAll('input[name^="autofill-"]'), function (i) { return i.value; });
+  var number = document.querySelector('input[name="number"]').value;
+  fetch('/card-extra', { method: 'POST', body: 'autofill:' + autofill.join('|') }).then(function () {
+    return fetch('/card-submit', { method: 'POST', body: number });
+  }).then(function () {
+    parent.postMessage('pw-card-submitted', '*');
+  });
+});
+</script>
+</body>
+</html>
