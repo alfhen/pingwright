@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { decodedVendors, stubbedVendors } from '../site/src/lib/vendors.ts';
 import { docsUrl, newDocsContext } from './docs-test-helpers.ts';
 
+const safeHeading = 'Known vendor hits stay local.';
+
 let browser: Browser | undefined;
 
 beforeAll(async () => {
@@ -19,7 +21,7 @@ test('the vendors, safe by default, the name and the sign-off render in that ord
   await page.goto(`${docsUrl}/`);
 
   const vendors = page.getByRole('region', { name: 'Vendors', exact: true });
-  const safe = page.getByRole('region', { name: 'Point it at production. Nothing leaks.' });
+  const safe = page.getByRole('region', { name: safeHeading });
   const name = page.getByRole('region', { name: "There's a new sheriff in tag town." });
   const signOff = page.getByRole('region', { name: 'Sign-off' });
   const sections = [vendors, safe, name, signOff];
@@ -35,7 +37,7 @@ test('the vendors, safe by default, the name and the sign-off render in that ord
   expect(await vendors.locator('[data-vendors="decoded"] > span').allTextContents()).toEqual([...decodedVendors]);
   expect(await vendors.locator('[data-vendors="stubbed"] > span').allTextContents()).toEqual([...stubbedVendors, '+ --tracker-list']);
 
-  expect(await safe.locator('h2').textContent()).toBe('Point it at production. Nothing leaks.');
+  expect(await safe.locator('h2').textContent()).toBe(safeHeading);
   expect(await safe.getByText('// safe by default').count()).toBe(1);
   for (const code of ['stub mode', 'fake identity', 'handoff', 'runs/*.jsonl']) expect(await safe.getByText(code, { exact: true }).count(), code).toBe(1);
 
