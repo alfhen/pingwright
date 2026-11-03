@@ -46,6 +46,16 @@ describe('checkReply', () => {
     expect(() => checkReply(`Evidence: ${full}.`, reject, 1, 'reject.reply.md')).toThrow(full);
   });
 
+  test('throws on a real hit that is not the evidence of a failed rule', async () => {
+    const reject = await records('reject');
+    const passing = 'hit_01M6FCPCWWB6RJ46R07RPRZ6CB';
+    expect(reject.hits.map((h) => h.id)).toContain(passing);
+    expect(() => checkReply('Evidence: hit_…Z6CB.', reject, 1, 'reject.reply.md')).toThrow(/hit_…Z6CB is not the evidence of a failed rule/);
+    expect(() => checkReply(`Evidence: ${passing}.`, reject, 1, 'reject.reply.md')).toThrow(passing);
+    const warned = reject.results.find((r) => !r.pass && r.severity === 'warn')!.evidence[0]!;
+    expect(() => checkReply(`Evidence: ${warned}.`, reject, 1, 'reject.reply.md')).toThrow(warned);
+  });
+
   test('throws on a number that is not in the record, and names it', async () => {
     const reject = await records('reject');
     expect(() => checkReply('Meta fires before the answer (9999 hits).', reject, 1, 'reject.reply.md')).toThrow(/number 9999/);

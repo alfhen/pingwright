@@ -3,8 +3,11 @@ import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildSummary } from '../packages/cli/src/summary.ts';
 import { createIdentity, hashEmail, hashPhone, normalizePhone } from '../packages/core/src/identity.ts';
 import type { Hit, Request, Run, TagreeveRecord } from '../packages/core/src/records.ts';
+import { readRun, type RunRecords } from '../packages/core/src/store.ts';
+import { STORY_HOST } from '../site/src/lib/demo-data.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export const demoDir = join(root, 'site/demo');
@@ -14,9 +17,9 @@ export type DemoScenario = (typeof demoScenarios)[number];
 /** The `--seed` of every recorded run, so a test can rebuild each fake identity. `suite` is the seed of the suite. */
 export const demoSeeds = { undecided: 7101, accept: 7102, reject: 7103, suite: 7105 } as const;
 
-/** The host each fixture server has in the demo files. `url` must stay the story host that `demo-data.ts` checks for. */
+/** The host each fixture server has in the demo files. */
 export const demoHosts = {
-  url: 'staging.northwind.example',
+  url: STORY_HOST,
   sgtmUrl: 'sgtm.northwind.example',
   thirdPartyUrl: 'pixel.adnetwork.example',
   containerUrl: 'gtm.northwind.example',
@@ -168,6 +171,13 @@ async function readRecords(path: string): Promise<TagreeveRecord[]> {
 
 const toJsonl = (records: TagreeveRecord[]) => records.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
+/** The first result of the summary that `tagreeve run --json` prints for this record, as `jq '.results[0]'` shows it. */
+export function firstJsonResult(records: RunRecords, path: string): string {
+  const first = buildSummary(records, records.results, path).results[0];
+  if (!first) throw new Error(`${records.run.id}: the record has no results`);
+  return JSON.stringify(first, null, 2) + '\n';
+}
+
 async function record(): Promise<void> {
   if (!existsSync(join(root, 'dist/cli.js'))) throw new Error('dist/cli.js is missing. Run pnpm build first.');
   const { startFixtureSite } = await import('../fixtures/site/src/index.ts');
@@ -197,6 +207,7 @@ async function record(): Promise<void> {
       await writeFile(join(clean, 'runs', `${runId}.jsonl`), scrubbed);
       written.set(`${s}.jsonl`, scrubbed);
       written.set(`${s}.txt`, rewriteHosts(result.stdout, site));
+      if (s === 'reject') written.set('reject.json', rewriteHosts(firstJsonResult(await readRun(join(work, path)), path), site));
     }
 
     const diff = check('diff', await cli(['diff', `runs/${runIds.get('reject')}.jsonl`, `runs/${runIds.get('accept')}.jsonl`], clean));
@@ -218,6 +229,8 @@ async function record(): Promise<void> {
   }
 }
 
+// buildSummary and readRun load class parameter properties, which strip-only Node cannot run:
+// pnpm build && node --experimental-transform-types scripts/record-site-demo.ts
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   record().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);

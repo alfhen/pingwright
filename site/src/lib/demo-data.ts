@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildSummary } from '../../../packages/cli/src/summary.ts';
 import { readRun, type Hit, type RunRecords } from '../../../packages/core/src/index.ts';
 
 export const STORY_HOST = 'staging.northwind.example';
@@ -121,14 +120,18 @@ export function recordNumbers(records: RunRecords, exitCode: number): Set<string
   return numbers;
 }
 
-/** Throws, naming the value, when the reply uses an evidence ID or a number that the record does not hold. */
+/**
+ * Throws, naming the value, when the reply uses a number that the record does not hold, or an evidence ID that is not
+ * the evidence of a failed rule in the record. A shortened ID (`hit_…6CA`) must match exactly one such ID.
+ */
 export function checkReply(text: string, records: RunRecords, exitCode: number, name: string): void {
-  const ids = records.hits.map((h) => h.id as string);
+  // Hit IDs in one run are monotonic, so an edited ID usually names another real hit: only rule evidence counts.
+  const ids = [...failedEvidence(records)];
   for (const token of text.match(EVIDENCE) ?? []) {
     const tail = token.replace(/^hit_(?:…|\.\.\.)?/, '');
     const matches = token.startsWith('hit_…') || token.startsWith('hit_...') ? ids.filter((id) => id.endsWith(tail)) : ids.filter((id) => id === token);
     if (matches.length !== 1) {
-      throw new Error(`${name}: evidence ID ${token} ${matches.length ? 'matches more than one hit' : 'is not a hit'} in the record of ${records.run.id}`);
+      throw new Error(`${name}: evidence ID ${token} ${matches.length ? 'matches more than one' : 'is not the evidence of a failed rule'} in the record of ${records.run.id}`);
     }
   }
   const numbers = recordNumbers(records, exitCode);
@@ -213,13 +216,14 @@ export function shortenOutput(stdout: string, exitCode: number): Line[] {
   ];
 }
 
-/** The first result of the summary that `tagreeve run --json` prints for this record. */
-function jsonLines(records: RunRecords, stdout: string, name: string): Line[] {
-  const path = /^Record: (\S+)$/m.exec(stdout)?.[1];
-  if (!path) throw new Error(`${name}: no "Record:" line`);
-  const first = buildSummary(records, records.results, path).results[0];
-  if (!first) throw new Error(`${name}: the record has no results`);
-  return linesOf(JSON.stringify(first, null, 2)).map((text) => ({ text, tone: /^ {2}"pass": false/.test(text) ? 'fail' : 'fg' }));
+/** The recorded `--json` result. Throws when it is not the first result of the record it was taken from. */
+function jsonLines(json: string, records: RunRecords, name: string): Line[] {
+  const recorded = JSON.parse(json) as { expectation?: string; evidence?: string[] };
+  const first = records.results[0];
+  if (!first || recorded.expectation !== first.expectation || JSON.stringify(recorded.evidence) !== JSON.stringify(first.evidence)) {
+    throw new Error(`${name}: not the first result of the record of ${records.run.id}`);
+  }
+  return linesOf(json).map((text) => ({ text, tone: /^ {2}"pass": false/.test(text) ? 'fail' : 'fg' }));
 }
 
 function diffLines(stdout: string): Line[] {
@@ -276,7 +280,7 @@ export async function loadDemo(dir: string): Promise<DemoData> {
     { key: 'run', name: 'tagreeve run', desc: 'Play one scenario. Exit 0, 1 or 2.', lines: [command(`tagreeve run reject.yml ${site}`), ...toLines(linesOf(reject.stdout))] },
     { key: 'diff', name: 'tagreeve diff', desc: 'Compare two records, e.g. published vs. workspace.', lines: [command(`tagreeve diff ${a} ${b}`), ...diffLines(diff)] },
     { key: 'suite', name: 'tagreeve suite', desc: 'A folder of scenarios × several GTM builds, for CI.', lines: [command(`tagreeve suite tagreeve/ ${site}`), ...toLines(linesOf(read(dir, 'suite.txt')))] },
-    { key: 'json', name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [command(`tagreeve run reject.yml --site … --json | jq '.results[0]'`), ...jsonLines(reject.records, reject.stdout, 'site/demo/reject.txt')] },
+    { key: 'json', name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [command(`tagreeve run reject.yml --site … --json | jq '.results[0]'`), ...jsonLines(read(dir, 'reject.json'), reject.records, 'site/demo/reject.json')] },
   ];
   return { storyHost: STORY_HOST, userPrompt: USER_PROMPT, scenarios, commands };
 }
