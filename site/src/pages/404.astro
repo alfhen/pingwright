@@ -1,0 +1,18 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { getCollection } from 'astro:content';
+
+const pages = (await getCollection('docs')).map((entry) => `/${entry.id}`);
+---
+
+<StarlightPage frontmatter={{ title: 'Page not found' }}>
+  <p class="not-found-text">
+    There is no page at this address. Check the URL, or start from <a href="/docs/guide/what-it-checks">the guides</a> or <a href="/">the home page</a>.
+  </p>
+  {/* GitHub Pages serves docs/cli.html at /docs/cli only, and this page for /docs/cli/. Only known pages are
+      followed: /docs/guide redirects to /docs/guide/ on GitHub Pages, so any other path could loop. */}
+  <script is:inline define:vars={{ pages }}>
+    const path = location.pathname.replace(/\/+$/, '');
+    if (path !== location.pathname && pages.includes(path)) location.replace(path + location.search + location.hash);
+  </script>
+</StarlightPage>

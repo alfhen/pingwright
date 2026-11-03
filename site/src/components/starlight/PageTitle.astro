@@ -5,4 +5,13 @@ const { entry } = Astro.locals.starlightRoute;
 ---
 
 {/* The README brings its own <h1>, the lockup. The anchor keeps Starlight's skip link target. */}
-{entry.id === 'readme' ? <span id="_top"></span> : <Default />}
+{
+  entry.id === 'readme' ? (
+    <span id="_top" class="page-anchor" />
+  ) : (
+    <>
+      <span class="docs-path">{entry.id}</span>
+      <Default />
+    </>
+  )
+}

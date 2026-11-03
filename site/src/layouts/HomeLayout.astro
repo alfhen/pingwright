@@ -8,6 +8,7 @@ import '@fontsource/geist-mono/500.css';
 import '@fontsource/geist-mono/600.css';
 import '../styles/site.css';
 import SiteHeader from '../components/SiteHeader.astro';
+import { cleanUrl } from '../plugins/clean-urls.ts';
 import { themeInitScript } from '../lib/theme.ts';
 
 interface Props {
@@ -25,7 +26,7 @@ const { title, description } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="canonical" href={new URL(cleanUrl(Astro.url.pathname), Astro.site)} />
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
     <link rel="icon" href="/favicon-16.svg" type="image/svg+xml" sizes="16x16" />
     <link rel="icon" href="/favicon-32.svg" type="image/svg+xml" sizes="32x32" />
