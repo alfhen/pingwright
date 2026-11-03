@@ -2,28 +2,68 @@
 
 ## 0.5.0-rc.1
 
-- Removed the old command alias. Use `tagreeve`. (#546)
-- The release workflow test is stricter: it checks job permissions, publish lines, `github.token` and docker pushes. (#546)
+Release candidate. Install it with `npm i -g tagreeve@next`.
 
-- Fixed: `unloadGap` now also warns when an embedded frame pushed a tracking event shortly before the run ended (browser close), not only before a navigation (#261, #550).
-- Fixed: a GA4 hit sent from the same frame as the push now covers the event, whatever its custom name, so custom event names no longer give a false `unloadGap` (#261, #550).
-- Fixed: the `/unload-gap?mode=` fixture page writes the mode into the iframe `src` on the server (#552).
-
-- `--by-page` keys now replace path segments that look like a value, such as a checkout token, with `*`. A `--by-page` baseline saved on a page with a token drifts once. Save it again.
+### Added
 
 - Adds a `meta-capi` decoder for Meta Conversions API calls (`graph.facebook.com/v<n>/<id>/events`). One hit for each event in `data`. In `stub` mode the endpoint is answered with a success body. Part of #358.
 
 - `tagreeve suite <dir> --stores <stores.json>` runs each scenario against several stores. Cells carry `labels.store`, records are named `<scenario>.<store>.<variant>.jsonl`, and diffs compare variants within a store. `suite.json` is now version 2 and adds `stores` and `SuiteDiff.store`. `report` reads version 1 and 2. A payment scenario runs only for the store that `--allow-test-payment` names. (#360)
 
-- Requests to `cdn.shopify.com` and `monorail-edge.shopifysvc.com` are flagged `platformHost` instead of `unknownDestination`, so they no longer fail the `unknownDestination` check. They are still listed in the summary and the report. Set `options.platformHosts: false` to restore the old behaviour.
+- Requests to `cdn.shopify.com` and `monorail-edge.shopifysvc.com` are flagged `platformHost` instead of `unknownDestination`, so they no longer fail the `unknownDestination` check. They are still listed in the summary and the report. Set `options.platformHosts: false` to restore the old behaviour. (#585)
 
 - Adds `tagreeve server-container build`, which builds the Docker image for the coming server container feature (arm64 builds locally from Google's image, pinned by digest; amd64 needs no build). Adds the runner, the per-run `--internal` network, the relay and egress probe, the owner-labelled sweep and a stand-in container for tests. Tagreeve never pushes an image. Part of #358.
-
-<!-- K02 -->
 
 - Adds `--server-container` and `--server-container-config` to `run` and `suite`. Tagreeve runs your own server container in Docker, sends the non-load requests to your `serverHosts` to it, and records every call it makes to a vendor. The calls are decoded and checked like browser hits and answered locally. Nothing is sent on, except three Google requests the container needs to load its configuration. A hit from the container links to a browser hit with `Hit.via`. Record schema version 3. Part of #358.
 
 <!-- K04 -->
+
+### Changed
+
+- The release workflow test is stricter: it checks job permissions, publish lines, `github.token` and docker pushes. (#546)
+
+- `--by-page` keys now replace path segments that look like a value, such as a checkout token, with `*`. A `--by-page` baseline saved on a page with a token drifts once. Save it again.
+
+### Fixed
+
+- `unloadGap` now also warns when an embedded frame pushed a tracking event shortly before the run ended (browser close), not only before a navigation (#261, #550).
+- A GA4 hit sent from the same frame as the push now covers the event, whatever its custom name, so custom event names no longer give a false `unloadGap` (#261, #550).
+- The `/unload-gap?mode=` fixture page writes the mode into the iframe `src` on the server (#552).
+
+### Removed
+
+- The old command alias. Use `tagreeve`. (#546)
+
+### Known in 0.5.0-rc.1
+
+Issues still open that you can meet:
+
+- `--server-container` needs Docker. The container downloads its configuration from Google at every start, so a run needs the network for three Google paths, and Google sees the container's request with your `gtm_auth`. That is what your container does in production too.
+- The Meta Conversions API, Pinterest and Criteo template tags are not yet proven to reach the recording proxy, and links between container calls and browser hits are exact by event ID only. The rc.1 field test runs these checks (Check C0, items 1 to 3).
+- The Shopify platform-host list holds only the hosts that a Shopify docs page names, so far `cdn.shopify.com` and `monorail-edge.shopifysvc.com`. Other Shopify telemetry, checkout and payments hosts stay `unknownDestination` (#585).
+- Stape-only features do not exist in the local container, which is Google's image: the custom loader and its domain features, Cookie Keeper, the geo and bot headers Stape adds, store ID headers, request logs and the CDN. Unpublished server workspaces are not available either. The container loads a published version or a named environment.
+- A container call forwarded just after a handoff closes is not redacted (#772). The container gets all request headers, not only `Cookie` (#769), and an empty `Cookie` header when the browser has none (#768).
+- `platformHost` flags are not allowed in `diff`, so `diff` and `suite` show more noise than `run` (#743).
+- `--allow-test-payment` with a host that matches no store skips every payment cell without a message (#735).
+- A missing `autoconsentRules` file is found only when each run starts (#737).
+- Only the first value of a multi-value `em` or `ph` on a Conversions API event is kept and checked (#712). Plaintext `ct`, `zp` and `country` on such an event pass `identity.hashesMatch` (#715), and `ids.hashes.<f>.matchesIdentity` is always null on `meta-capi` hits (#714).
+- `--by-page` keys keep email-shaped and percent-encoded value segments (#705).
+- A frame URL is not a frame identity, so a hit from another frame with the same URL can cover a push (#723).
+- The Shopify payment runtime is not yet checked on a real checkout. The test-mode marker, the card input selector and the expiry format are unconfirmed (#695, #648). A supervised field test runs it with a declared host. If a value does not match, the step fails closed and says why.
+- `earlyIdentifiers` is `warn` by default.
+- The `--json` summary flags (`unknownDestination`, `firstPartySubdomain`, `stubBypass`, `possibleRedirectHop`) carry the full request URL, including query values. Do not share the summary from a page that sends an identifier in a query (#679).
+- The verdict can hide a failed `deniedIdentifiers` when only early identifiers are named (#663).
+- A text part of a multipart body that is typed as binary is reported `in the body`, not by its field name (#669).
+- A mistyped option before the command loses the command name in the usage hint (#657), and the hint can name the wrong command (#644). Most per-command `--help` prints the general usage (#641). The unknown-option line is very long (#640).
+- The possible-real-data check merges two different emails or two different phones when one contains the other, so the count and the place are wrong (#667). A number prefix in a JSON path can be flagged as a phone (#668). The binary-share check counts UTF-16 units, not code points (#673). A body with about 100k or more leaf texts overflows the stack (#670).
+- Playwright's request interception sometimes misses a redirect hop (#180). The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
+- With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload` (#256).
+- `unloadGap` compares dataLayer event names to hit names literally.
+- `--viewport` takes `<W>x<H>` only. A `mobile` preset is not built (#514).
+- `identity.country` has local formats for US, SE, GB and DE. Other countries keep US-shaped data and the run warns.
+- The tag-firing reporter templates, `expectedTags` and `tagreeve init` are planned for 0.6.0.
+
+Other open `review-minor` issues are test gaps, wording, or edge cases with no effect on a normal run. They carry the `review-minor` label.
 
 ## 0.4.0-rc.3
 

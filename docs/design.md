@@ -1,6 +1,6 @@
 # Tagreeve design
 
-Status: revision 9, for release 0.4.0-rc.3. Milestones 0.1, 0.2, 0.3 and 0.4 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0.
+Status: revision 10, for release 0.5.0-rc.1. Milestones 0.1, 0.2, 0.3, 0.4 and 0.5 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0. Revision 10 adds §15.5, the differences in 0.5, and rewrites the 0.5 item of §15 to what was built.
 
 ## 1. Problem
 
@@ -446,9 +446,10 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 2. **0.2 (built, `0.2.0`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3 (built, `0.3.0`):** rules on payload fields (`body.has`, `body.only`) and cookies, the `deniedIdentifiers` check, `suite`, an HTML `report` for one run and for a suite, the Done control for handoff steps, role and `any` locators, a `select` step, a minimal `server` network mode (`serverHosts`), record schema version 2. See docs/plan-0.3.md.
 4. **0.4 (built, `0.4.0-rc.3`):** handoff steps that end by themselves, an opt-in test payment step, baselines for drift checks, a `<W>x<H>` viewport, fake identities by country, server-container visibility described in §8.5, the `possibleRedirectHop` flag, a WebKit probe, the release workflow and the rename to Tagreeve. See docs/plan-0.4.md.
-5. **0.5 (planned):** server tag reporter, sink reader, server workspace preview header, several stores in one suite (#360), `unloadGap` at the end of a run (#261), platform infrastructure hosts in `unknownDestination` (#585), the web tag-firing reporter template and expected tag lists, a full `microsoft-uet` decoder, the Shopify custom pixel bridge, the collector origin bridge, a `mobile` viewport preset (#514) and server-to-vendor visibility (the rest of #358). The `server` network mode itself is built in 0.3 in its minimal form.
+5. **0.5 (built, `0.5.0-rc.1`):** the local server container (`--server-container`, `server-container build`, the recording proxy and the container calls as decoded hits, #358), the Conversions API decoder, several stores in one suite (#360), `unloadGap` at the end of a run (#261), platform hosts for Shopify (#585, partly), masked page paths in `--by-page` keys and the removal of the old command alias. See docs/plan-0.5.md.
+6. **Later:** the server tag reporter, the server workspace preview header, the web tag-firing reporter template and expected tag lists (goal 2), `tagreeve init` (goal 8), a full `microsoft-uet` decoder, the Shopify custom pixel bridge, the collector origin bridge and a `mobile` viewport preset (#514).
 
-Deferred: terminal, JSON and JUnit output for `report`, sink setup commands, a replay page.
+Deferred: terminal, JSON and JUnit output for `report`, a replay page.
 
 ### 15.1 Differences in 0.1
 
@@ -518,6 +519,20 @@ Where the code in 0.4 differs from the design above. Sections 15.1 to 15.3 still
 - **`earlyIdentifiers` is a built-in check with severity `warn` by default.** It flags a hit in the undecided epoch that carries an identifier field whose consent signal is unknown, with the same field classes as `deniedIdentifiers`. A denied signal is left to `deniedIdentifiers`.
 - **The report and the identity evidence** show `mixed` for a segment with early, granted and denied hits, and `possibleRealData` names where the foreign value was found.
 - **Still not built:** an MCP server (dropped, the tool is CLI only), several stores in one suite, `unloadGap` at the end of a run, evaluation of `expectedTags`, the server tag reporter, the Shopify bridge and a full `microsoft-uet` decoder.
+
+### 15.5 Differences in 0.5
+
+Where the code in 0.5 differs from the design above. Sections 15.1 to 15.4 still apply, except where noted.
+
+- **`--server-container` runs the user's own container.** It needs Docker. Tagreeve never publishes an image that holds Google's files. The container downloads its configuration from Google at every start. Only three Google request kinds leave the machine through the recording proxy; every other call is recorded and answered locally.
+- **A container call is a hit.** It is decoded and checked like a browser hit and links to a browser hit by event ID with `Hit.via`. Record schema version is 3.
+- **Not proven:** that the Meta CAPI, Pinterest and Criteo template tags reach the proxy, and the in-flight window for a second link rule. The 0.5.0-rc.1 field test runs these (Check C0 items 1 to 3).
+- **Not available locally:** Stape-only hosting features and unpublished server workspaces.
+- **`suite --stores`** runs each scenario against several stores. `suite.json` is version 2.
+- **`platformHost`** flags requests to listed Shopify infrastructure hosts instead of `unknownDestination`. The list holds only hosts that a Shopify docs page names, so most Shopify telemetry, checkout and payments hosts are still `unknownDestination`.
+- **`meta-capi`** decodes Conversions API calls. In `stub` mode the endpoint is answered with a success body.
+- **`unloadGap`** also covers an embedded frame's push shortly before the run ends.
+- **Still not built:** the server tag reporter, the server preview header, the web tag reporter and `expectedTags`, `tagreeve init`, the Shopify bridge, a full `microsoft-uet` decoder, the collector origin bridge and a `mobile` preset.
 
 ## 16. Related tools
 
