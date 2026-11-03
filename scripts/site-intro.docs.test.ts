@@ -177,6 +177,26 @@ test('the footer replay link opens the intro again with the flag set', async () 
   await context.close();
 });
 
+for (const [name, options] of [
+  ['with reduced motion', { viewport: wide, reducedMotion: 'reduce' }],
+  ['at 390 px', { viewport: { width: 390, height: 844 } }],
+] as const) {
+  test(`replay does not open the intro ${name}, and the replay link is hidden`, async () => {
+    const context = await newDocsContext(browser!, options);
+    const page = await context.newPage();
+    await openHome(page);
+    expect(await page.getByText('replay the 5-minute ticket').isHidden()).toBe(true);
+    await page.evaluate(async () => {
+      window.dispatchEvent(new Event('tagreeve:replay-intro'));
+      for (let frame = 0; frame < 2; frame++) await new Promise(requestAnimationFrame);
+    });
+    expect(await page.locator(overlay).count()).toBe(0);
+    expect(await bodyOverflow(page)).not.toBe('hidden');
+    expect(await mainInert(page)).toBe(false);
+    await context.close();
+  });
+}
+
 test('no element inside the intro uses either theme mint, at any stage', async () => {
   for (const theme of ['dark', 'light']) {
     const context = await firstVisitContext();

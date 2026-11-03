@@ -8,6 +8,7 @@ import {
   TAGS,
   battery,
   deskClock,
+  introFits,
   introGateScript,
   mailList,
   placeNotifications,
@@ -54,6 +55,10 @@ describe('intro data', () => {
   });
 });
 
+function fakeWindow(width: number, reduce: boolean) {
+  return { innerWidth: width, matchMedia: (q: string) => ({ matches: reduce && q === '(prefers-reduced-motion: reduce)' }) as MediaQueryList };
+}
+
 describe('the gate script', () => {
   interface Env {
     stored?: string | null;
@@ -71,7 +76,7 @@ describe('the gate script', () => {
         return key === INTRO_SEEN_KEY ? stored : null;
       },
     };
-    const window = { innerWidth: width, matchMedia: (q: string) => ({ matches: reduce && q === '(prefers-reduced-motion: reduce)' }) };
+    const window = fakeWindow(width, reduce);
     const document = { documentElement: { dataset } };
     const setTimeout = (fn: () => void) => timeouts.push(fn);
     new Function('localStorage', 'window', 'document', 'setTimeout', introGateScript)(localStorage, window, document, setTimeout);
@@ -88,6 +93,17 @@ describe('the gate script', () => {
     expect(runGate({ reduce: true }).pending).toBe(false);
     expect(runGate({ storageThrows: true }).pending).toBe(false);
     expect(runGate({ stored: '0', width: 860 }).pending).toBe(true);
+  });
+
+  test('applies the same width and motion rule that replay checks with introFits', () => {
+    for (const width of [390, 859, 860, 1280]) {
+      for (const reduce of [false, true]) {
+        expect(runGate({ width, reduce }).pending, `${width}px, reduce ${reduce}`).toBe(introFits(fakeWindow(width, reduce)));
+      }
+    }
+    expect(introFits(fakeWindow(860, false))).toBe(true);
+    expect(introFits(fakeWindow(859, false))).toBe(false);
+    expect(introFits(fakeWindow(1280, true))).toBe(false);
   });
 
   test('clears a pending mark the island never took over', () => {

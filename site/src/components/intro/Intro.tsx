@@ -8,6 +8,7 @@ import {
   SHRINK_MS,
   WASTED_AFTER_MS,
   WASTED_HOLD_MS,
+  introFits,
   type IntroStage,
 } from '../../lib/intro-data.ts';
 import { Dock, MenuBar, SYSTEM_FONT } from './desktop.tsx';
@@ -115,10 +116,13 @@ export default function FirstVisitIntro() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') fly();
     };
-    window.addEventListener(REPLAY_EVENT, open);
+    const onReplay = () => {
+      if (introFits()) open();
+    };
+    window.addEventListener(REPLAY_EVENT, onReplay);
     window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener(REPLAY_EVENT, open);
+      window.removeEventListener(REPLAY_EVENT, onReplay);
       window.removeEventListener('keydown', onKey);
       clearTimers();
       document.body.style.overflow = '';

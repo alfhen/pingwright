@@ -21,6 +21,13 @@ html[data-intro='pending'] body::after {
     #3b4a7a;
 }
 
+/* Keep in step with introFits in intro-data.ts: where the intro cannot play, the replay link would do nothing. */
+@media (width < 860px), (prefers-reduced-motion: reduce) {
+  [data-replay-intro] {
+    display: none;
+  }
+}
+
 /* The handoff's sizes assume browser defaults, not Tailwind's preflight. */
 .intro-root,
 .intro-root * {

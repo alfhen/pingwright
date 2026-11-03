@@ -2,6 +2,7 @@
 
 export const INTRO_SEEN_KEY = 'tagreeve.introSeen';
 export const INTRO_MIN_WIDTH = 860;
+export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 export const REPLAY_EVENT = 'tagreeve:replay-intro';
 
 export type IntroStage = 'ask' | 'mess' | 'wasted' | 'shrink' | 'fly';
@@ -180,16 +181,24 @@ export const TAGS: readonly Tag[] = [
   { name: 'Reddit pixel test', type: 'Custom HTML', trig: 'All Pages', ago: '7 mo', consent: 'Not set', note: '' },
 ];
 
+/** Whether this window may play the intro, on the first visit and on replay alike. */
+export function introFits(win: Pick<Window, 'innerWidth' | 'matchMedia'> = window): boolean {
+  return win.innerWidth >= INTRO_MIN_WIDTH && !win.matchMedia(REDUCED_MOTION_QUERY).matches;
+}
+
+/** The same rule as `introFits`, for the inline gate script, which cannot import it. */
+const introFitsSource = `window.innerWidth >= ${INTRO_MIN_WIDTH} && !window.matchMedia(${JSON.stringify(REDUCED_MOTION_QUERY)}).matches`;
+
 /**
  * Runs inline in the page before the first paint. It marks `<html data-intro="pending">` when the intro
  * should open on this visit, which covers the page until the island takes over. The island opens the
- * intro on load only when it finds that mark, so this script is the one place that decides. A storage
+ * intro on load only when it finds that mark, so on load this script is the one place that decides. A storage
  * error counts as seen. The mark clears itself if the island never loads.
  */
 export const introGateScript = `(() => {
   let seen = true;
   try { seen = localStorage.getItem(${JSON.stringify(INTRO_SEEN_KEY)}) === '1'; } catch {}
-  if (seen || window.innerWidth < ${INTRO_MIN_WIDTH} || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (seen || !(${introFitsSource})) return;
   const root = document.documentElement;
   root.dataset.intro = 'pending';
   setTimeout(() => { if (root.dataset.intro === 'pending') delete root.dataset.intro; }, 4000);
