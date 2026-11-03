@@ -1,0 +1,30 @@
+---
+import { decodedVendors, stubbedVendors } from '../../lib/vendors.ts';
+
+const cell = 'flex flex-col gap-2.5 bg-panel p-[26px]';
+const label = 'font-mono text-[12px] font-medium text-dim';
+const chips = 'flex flex-wrap gap-1.5 font-mono text-[13px] font-medium';
+const chip = 'rounded-md px-[9px] py-[5px]';
+---
+
+<section aria-label="Vendors" class="mx-auto max-w-[1280px] px-7 py-[60px] leading-[normal]">
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-px overflow-hidden rounded-[14px] border border-rule bg-rule">
+    <div class={cell}>
+      <span class={label}>decoded</span>
+      <div class={chips} data-vendors="decoded">
+        {decodedVendors.map((vendor) => <span class={`${chip} bg-mintdim text-mint`}>{vendor}</span>)}
+      </div>
+    </div>
+    <div class={cell}>
+      <span class={label}>stubbed &amp; recorded</span>
+      <div class={chips} data-vendors="stubbed">
+        {stubbedVendors.map((vendor) => <span class={`${chip} border border-rule`}>{vendor}</span>)}
+        <span class={`${chip} border border-dashed border-rule text-dim`}>+ --tracker-list</span>
+      </div>
+    </div>
+    <div class={cell}>
+      <span class={label}>on the way</span>
+      <span class="text-[14px] leading-[1.5] text-dim">Tag-firing reports, Firefox and WebKit, a mobile viewport preset, a Shopify bridge.</span>
+    </div>
+  </div>
+</section>

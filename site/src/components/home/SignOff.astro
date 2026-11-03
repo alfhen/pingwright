@@ -1,0 +1,30 @@
+---
+const LETTERS: Record<string, string[]> = {
+  T: ['█████', '  █  ', '  █  ', '  █  ', '  █  '],
+  A: [' ███ ', '█   █', '█████', '█   █', '█   █'],
+  G: [' ████', '█    ', '█  ██', '█   █', ' ████'],
+  R: ['████ ', '█   █', '████ ', '█  █ ', '█   █'],
+  E: ['█████', '█    ', '████ ', '█    ', '█████'],
+  V: ['█   █', '█   █', '█   █', ' █ █ ', '  █  '],
+};
+const MARK = [
+  ['█▀▀▀     ▀▀▀█', '', ''],
+  ['█      ', '██', '   █'],
+  ['       ', '██', '    '],
+  ['█           █', '', ''],
+  ['█▄▄▄     ▄▄▄█', '', ''],
+];
+const word = (letters: string, i: number) => [...letters].map((l) => LETTERS[l]![i]).join(' ');
+const BANNER = MARK.map(([m1, mpx, m2], i) => ({ m1, mpx, m2: `${m2}    `, w1: `${word('TAG', i)} `, w2: word('REEVE', i) }));
+---
+
+<section aria-label="Sign-off" class="mx-auto flex max-w-[1280px] flex-col items-center gap-4 overflow-hidden px-7 pb-20 leading-[normal]">
+  <div role="img" aria-label="TAGREEVE" data-banner class="font-mono text-[clamp(6px,1.25vw,15px)] leading-[1.05] text-dim">
+    {
+      BANNER.map((r) => (
+        <div class="whitespace-pre"><span>{r.m1}</span><span class="text-mint">{r.mpx}</span><span>{r.m2}</span><span class="text-fg">{r.w1}</span><span class="text-mint">{r.w2}</span></div>
+      ))
+    }
+  </div>
+  <span class="font-mono text-[12px] font-medium text-dim">the new tag sheriff in town</span>
+</section>
