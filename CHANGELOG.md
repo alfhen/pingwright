@@ -8,7 +8,7 @@
 
 <!-- E04 -->
 
-<!-- U04 -->
+- An unknown option now prints one line, `Unknown option --bogus.`. `tagreeve <command> --help` prints the options of that command for every command. A mistyped option before the command keeps the command name in the usage hint.
 
 <!-- V04 -->
 

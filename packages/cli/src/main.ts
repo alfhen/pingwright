@@ -1,5 +1,5 @@
 import { buildImage } from '@tagreeve/recorder';
-import { parseCli, RUN_USAGE, UsageError, USAGE, usageHint } from './args.ts';
+import { helpText, parseCli, UsageError, usageHint } from './args.ts';
 import { baselineCommand } from './baseline.ts';
 import { diffCommand } from './diff.ts';
 import { installBrowser } from './install-browser.ts';
@@ -40,7 +40,7 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         io.stdout(`${readVersion()}\n`);
         return 0;
       case 'help':
-        io.stdout(command.topic === 'run' ? RUN_USAGE : USAGE);
+        io.stdout(helpText(command.topic));
         return 0;
       case 'install-browser':
         return (await installBrowser()) === 0 ? 0 : 2;
