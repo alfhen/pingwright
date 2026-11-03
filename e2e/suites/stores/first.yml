@@ -1,0 +1,12 @@
+start: /container/direct
+steps:
+  - wait: 6s
+  - visit: /checkout?pattern=1
+  - fill:
+      "#email": email
+  - evaluate: "(async () => { var em = document.querySelector('#email').value; var b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(em)); var hex = Array.from(new Uint8Array(b)).map(function (x) { return x.toString(16).padStart(2, '0'); }).join(''); document.cookie = '_pwfake=pwfake-0001; path=/'; new Image().src = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view&ep.em=' + encodeURIComponent(em) + '&ep.hex=' + hex + '&ep.ck=' + encodeURIComponent(document.cookie); return true; })()"
+  - wait: 1s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true, builtins: { possibleRealData: warn, sandboxPageUrl: warn, deniedIdentifiers: warn } }
