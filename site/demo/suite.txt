@@ -1,0 +1,14 @@
+Running accept (published)
+Running reject (published)
+Running undecided (published)
+scenario    published
+accept      FAIL: 1 rule
+reject      FAIL: 2 rules
+undecided   FAIL: 1 rule
+
+Records
+  accept published: runs/suite_01M6FCPNSKCKD4HYYCKTW87RCZ/accept.published.jsonl
+  reject published: runs/suite_01M6FCPNSKCKD4HYYCKTW87RCZ/reject.published.jsonl
+  undecided published: runs/suite_01M6FCPNSKCKD4HYYCKTW87RCZ/undecided.published.jsonl
+
+Manifest: runs/suite_01M6FCPNSKCKD4HYYCKTW87RCZ/suite.json
