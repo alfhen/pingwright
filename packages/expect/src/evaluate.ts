@@ -97,7 +97,9 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
 
   for (const kind of ['mustNot', 'must'] as const)
     for (const rule of scenario.expect[kind]) {
-      const { pass, evidence, message, note } = evaluateRule(rule, ctx);
+      const outcome = evaluateRule(rule, ctx);
+      const { pass, evidence, message } = outcome;
+      const note = outcome.note ?? (pass && isScoped(rule) && passRestsOnProbableLink(ctx, (c) => evaluateRuleHits(rule, c).pass) ? 'serverSendProbableLink' : undefined);
       add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note, isScoped(rule));
     }
 
@@ -111,15 +113,36 @@ const isScoped = (rule: Rule) => Boolean(rule.before || rule.inEpoch || rule.aft
 
 function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
   const outcome = evaluateRuleHits(rule, ctx);
-  if (rule.cookie || !isScoped(rule)) return outcome;
+  if (rule.cookie || !isScoped(rule) || outcome.pass === (rule.kind === 'must')) return outcome;
   const unjudged = ctx.hits.filter((h) => isUnlinkedServerHit(h, ctx.index) && matchesFilter(h, { ...rule.filter, consent: {} }, ctx));
-  if (unjudged.length === 0 || (!outcome.pass && rule.kind === 'mustNot') || (outcome.pass && rule.kind === 'must')) return outcome;
+  if (unjudged.length === 0) return outcome;
+  // A failing `must` stays as it is unless the unlinked hits could make it hold.
+  if (rule.kind === 'must' && !evaluateRuleHits(rule, asBrowserHits(ctx, unjudged)).pass) return outcome;
   return {
     pass: false,
     evidence: [...outcome.evidence, ...unjudged.map((h) => h.id)],
     message: `${outcome.message} Cannot evaluate: ${unjudged.length} server container hit${unjudged.length === 1 ? ' has' : 's have'} no link to a browser hit, so no consent state or time applies to ${unjudged.length === 1 ? 'it' : 'them'}.`,
     note: 'serverSendUnlinked',
   };
+}
+
+/** The context with the given server hits placed by their own time, as if the browser had sent them. */
+function asBrowserHits(ctx: Context, hits: readonly Hit[]): Context {
+  const requests = new Map(ctx.requests);
+  for (const h of hits) {
+    const request = requests.get(h.requestId);
+    if (!request) continue;
+    const own = { ...request };
+    delete own.captured;
+    requests.set(h.requestId, own);
+  }
+  return { ...ctx, requests, index: judgeIndex(ctx.hits, requests) };
+}
+
+/** True when the verdict `passes` gives would change if the probable-linked server hits were placed by their own time. */
+function passRestsOnProbableLink(ctx: Context, passes: (ctx: Context) => boolean): boolean {
+  const probable = ctx.hits.filter((h) => h.via?.confidence === 'probable' && viaHitOf(h, ctx.index) !== undefined);
+  return probable.length > 0 && !passes(asBrowserHits(ctx, probable));
 }
 
 function evaluateRuleHits(rule: Rule, ctx: Context): RuleOutcome {
@@ -899,8 +922,16 @@ function builtInChecks(
       : `Expected no hit to carry a sandbox URL as its page, found ${sandboxed.length}: ${sandboxed[0]!.page}.`,
   );
 
-  deniedIdentifiersCheck(scenario, ctx, add);
-  earlyIdentifiersCheck(scenario, ctx, add);
+  for (const check of [deniedIdentifiersCheck, earlyIdentifiersCheck]) {
+    const passes = (c: Context) => {
+      let pass = true;
+      check(scenario, c, (_name, p) => void (pass = p));
+      return pass;
+    };
+    check(scenario, ctx, (name, pass, evidence, message, note) =>
+      add(name, pass, evidence, message, note ?? (pass && passRestsOnProbableLink(ctx, passes) ? 'serverSendProbableLink' : undefined)),
+    );
+  }
 
   const real = flags.filter((f) => f.kind === 'possibleRealData');
   // Flags from the recorder come from the raw records. Scanning again only adds requests the recorder did not flag.
@@ -992,19 +1023,20 @@ function deniedIdentifiersCheck(
       leaking.map((h) => h.id),
       `${leaking.length} hit${leaking.length === 1 ? ' carries' : 's carry'} identifiers while consent is denied: ${shown}${more}.${cut}`,
     );
-  } else if (unjudgedIdentifiers(ctx).length > 0) {
-    const unjudged = unjudgedIdentifiers(ctx);
-    const { evidence, message } = cannotJudgeUnlinked(unjudged, 'for denied consent');
-    add('deniedIdentifiers', false, evidence, message, 'serverSendUnlinked');
   } else if (unreadable.length > 0) {
+    const unjudged = unjudgedIdentifiers(ctx);
     const notRecorded = unreadable.some((h) => !h.idFields || !h.fields);
     add(
       'deniedIdentifiers',
       false,
-      unreadable.map((h) => h.id),
-      `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} hit${unreadable.length === 1 ? '' : 's'} sent while consent is denied.`,
+      [...unreadable.map((h) => h.id), ...unjudged.map((h) => h.id)],
+      `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} hit${unreadable.length === 1 ? '' : 's'} sent while consent is denied.${unjudged.length > 0 ? ` ${cannotJudgeUnlinked(unjudged, 'for denied consent').message}` : ''}`,
       notRecorded ? 'fieldsNotRecorded' : 'cannotEvaluateBody',
     );
+  } else if (unjudgedIdentifiers(ctx).length > 0) {
+    const unjudged = unjudgedIdentifiers(ctx);
+    const { evidence, message } = cannotJudgeUnlinked(unjudged, 'for denied consent');
+    add('deniedIdentifiers', false, evidence, message, 'serverSendUnlinked');
   } else {
     add('deniedIdentifiers', true, [], 'Expected no identifiers on hits sent while consent is denied, found none.');
   }
@@ -1053,19 +1085,20 @@ function earlyIdentifiersCheck(
       early.map((h) => h.id),
       `${early.length} ${hitsWord(early.length)} ${early.length === 1 ? 'carries' : 'carry'} identifiers before the consent answer: ${shown}${more}.${cut}`,
     );
-  } else if (unjudgedIdentifiers(ctx).length > 0) {
-    const unjudged = unjudgedIdentifiers(ctx);
-    const { evidence, message } = cannotJudgeUnlinked(unjudged, 'before the consent answer');
-    add('earlyIdentifiers', false, evidence, message, 'serverSendUnlinked');
   } else if (unreadable.length > 0) {
+    const unjudged = unjudgedIdentifiers(ctx);
     const notRecorded = unreadable.some((h) => !h.idFields || !h.fields);
     add(
       'earlyIdentifiers',
       false,
-      unreadable.map((h) => h.id),
-      `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} ${hitsWord(unreadable.length)} sent before the consent answer.`,
+      [...unreadable.map((h) => h.id), ...unjudged.map((h) => h.id)],
+      `${notRecorded ? NOT_RECORDED : BODY_CUT}: ${unreadable.length} ${hitsWord(unreadable.length)} sent before the consent answer.${unjudged.length > 0 ? ` ${cannotJudgeUnlinked(unjudged, 'before the consent answer').message}` : ''}`,
       notRecorded ? 'fieldsNotRecorded' : 'cannotEvaluateBody',
     );
+  } else if (unjudgedIdentifiers(ctx).length > 0) {
+    const unjudged = unjudgedIdentifiers(ctx);
+    const { evidence, message } = cannotJudgeUnlinked(unjudged, 'before the consent answer');
+    add('earlyIdentifiers', false, evidence, message, 'serverSendUnlinked');
   } else {
     add('earlyIdentifiers', true, [], 'Expected no identifiers on hits sent before the consent answer, found none.');
   }

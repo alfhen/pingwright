@@ -125,6 +125,23 @@ describe('deniedIdentifiers on a server hit', () => {
     }
   });
 
+  test('an unreadable browser hit keeps its result and severity next to an unlinked server hit', () => {
+    const cut = browser(500, { vendor: 'meta', fieldsComplete: false, fields: ['ev'], idFields: [] });
+    const unlinked = capi(600, undefined);
+    const result = check(run('', [cut, unlinked]), 'deniedIdentifiers');
+    expect(result).toMatchObject({ pass: false, severity: 'fail', note: 'cannotEvaluateBody' });
+    expect(result.evidence).toEqual(expect.arrayContaining([cut.hit.id, unlinked.hit.id]));
+  });
+
+  test('a pass that rests on a probable link carries the note', () => {
+    const via = browser(1200);
+    const sent = capi(500, link(via, 'probable'));
+    const results = run('', [via, sent]);
+    expect(check(results, 'deniedIdentifiers')).toMatchObject({ pass: true, note: 'serverSendProbableLink' });
+    const exact = run('', [via, capi(500, link(via, 'exact'))]);
+    expect(check(exact, 'deniedIdentifiers').note).toBeUndefined();
+  });
+
   test('an unlinked hit with no identifiers leaves the checks alone', () => {
     const quiet = capi(500, undefined, { fields: ['event_name'], idFields: [] });
     const results = run('', [quiet]);
@@ -178,6 +195,25 @@ describe('rules on a server hit', () => {
     const sent = capi(1500, undefined);
     expect(rule('  mustNot:\n    - { vendor: meta-capi, in: epoch(denied) }', [sent])).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked', evidence: [sent.hit.id] });
     expect(rule('  must:\n    - { vendor: meta-capi, consent.adUserData: granted }', [sent])).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked' });
+  });
+
+  test('a scoped mustNot that passes on a probable link carries the note', () => {
+    const via = browser(1200);
+    const sent = capi(500, link(via, 'probable'));
+    expect(rule('  mustNot:\n    - { vendor: meta-capi, in: epoch(denied) }', [via, sent])).toMatchObject({ pass: true, note: 'serverSendProbableLink' });
+  });
+
+  test('a failing must stays as it is when an unlinked hit could not change it', () => {
+    const unlinked = capi(1500, undefined);
+    const wrong = browser(1200, { vendor: 'meta-capi', params: { em: 'a'.repeat(64) }, fields: ['em'], idFields: ['em'] });
+    const hashes = rule('  must:\n    - { vendor: meta-capi, in: epoch(granted), identity.hashesMatch: true }', [wrong, unlinked]);
+    expect(hashes.pass).toBe(false);
+    expect(hashes.note).toBeUndefined();
+    expect(hashes.severity).toBeUndefined();
+    const overflow = rule('  must:\n    - { vendor: meta-capi, in: epoch(granted), count: 0 }', [browser(1100, { vendor: 'meta-capi' }), unlinked]);
+    expect(overflow.pass).toBe(false);
+    expect(overflow.note).toBeUndefined();
+    expect(overflow.severity).toBeUndefined();
   });
 
   test('a rule without a consent scope counts an unlinked hit as it does any other', () => {

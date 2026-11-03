@@ -16,6 +16,7 @@ const CONFIG = Buffer.from(`id=GTM-PWTEST1&env=1&auth=${AUTH}`).toString('base64
 const IDENTITY_EMAIL = createIdentity(1).email;
 const EMAIL_HASH = createHash('sha256').update(IDENTITY_EMAIL).digest('hex');
 const OTHER_EMAIL = 'pw-fixture@example.com';
+const OTHER_HASH = createHash('sha256').update(OTHER_EMAIL).digest('hex');
 const COOKIE_NAME = 'pw_fixture_session';
 const COOKIE_VALUE = 'pw-fixture-cookie-value';
 
@@ -61,10 +62,16 @@ function placeHits(records: RunRecords): Placed {
 function expectFed(records: RunRecords, withOther: boolean): void {
   const raw = JSON.stringify(records);
   expect(raw).toContain(EMAIL_HASH);
+  expect(raw).toContain(COOKIE_VALUE);
+  expect(raw).toContain(IDENTITY_EMAIL);
+  expect(raw).toContain(encodeURIComponent(IDENTITY_EMAIL));
   expect(records.checkpoints.flatMap((c) => c.cookies.map((k) => k.name))).toContain(COOKIE_NAME);
   expect(raw).toContain('access_token=[redacted]');
   expect(raw).not.toContain(ACCESS_TOKEN);
-  if (withOther) expect(raw).toContain(OTHER_EMAIL);
+  if (withOther) {
+    expect(raw).toContain(OTHER_EMAIL);
+    expect(raw).toContain(OTHER_HASH);
+  }
 }
 
 async function expectClean(r: CliRun, name: string, withOther = false): Promise<void> {
@@ -73,7 +80,7 @@ async function expectClean(r: CliRun, name: string, withOther = false): Promise<
   const out = join(outDir, `${name}.html`);
   expect(await renderHtml(path, out)).toBe(0);
   const text = [r.stdout, r.stderr, await readFile(out, 'utf8')].join('\n');
-  for (const secret of [ACCESS_TOKEN, CONFIG, AUTH, IDENTITY_EMAIL, EMAIL_HASH, encodeURIComponent(IDENTITY_EMAIL), OTHER_EMAIL, COOKIE_VALUE]) expect(text).not.toContain(secret);
+  for (const secret of [ACCESS_TOKEN, CONFIG, AUTH, IDENTITY_EMAIL, EMAIL_HASH, encodeURIComponent(IDENTITY_EMAIL), OTHER_EMAIL, OTHER_HASH, COOKIE_VALUE]) expect(text).not.toContain(secret);
 }
 
 function summaryOf(r: CliRun): { serverContainer: Record<string, number>; results: { expectation: string; pass: boolean; severity: string; evidence: string[] }[] } {
