@@ -1,5 +1,5 @@
 import { looksLikeValueToken, stripSandboxPrefix } from '@tagreeve/decoders';
-import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@tagreeve/core';
+import { valueKinds, type ConsentEpoch, type Hit, type HitIds, type RunRecords } from '@tagreeve/core';
 import { consentFields } from './scenario.ts';
 import { epochForHit, judgeIndex, judgedAt } from './evaluate.ts';
 
@@ -321,8 +321,11 @@ function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
 }
 
 // A UUID has dashes, so the hex test also runs on the segment without them.
-const isValueSegment = (segment: string): boolean =>
-  looksLikeValueToken(segment) || looksLikeValueToken(segment.replaceAll('-', ''));
+function isValueSegment(segment: string): boolean {
+  if (looksLikeValueToken(segment) || looksLikeValueToken(segment.replaceAll('-', ''))) return true;
+  if (segment.includes('@') || /%[0-9a-fA-F]{2}/.test(segment)) return true;
+  return valueKinds(segment).size > 0;
+}
 
 function pagePath(page: string | null): string {
   if (page === null) return '';
@@ -382,11 +385,13 @@ function hostOf(url: string): string {
 
 /** The built-in check lists only the blocked flags as evidence when it fails, and every unknown flag when it passes. */
 function allowedFlagIds(run: RunRecords): Set<string> {
+  // A platformHost flag never fails a run, so it counts as allowed whatever the built-in check says.
+  const platform = run.flags.filter((f) => f.kind === 'platformHost').map((f) => f.id as string);
   const check = run.results.find((r) => r.expectation === 'builtin: unknownDestination');
-  if (!check) return new Set();
+  if (!check) return new Set(platform);
   const unknown = run.flags.filter((f) => f.kind === 'unknownDestination').map((f) => f.id as string);
   const blocked = new Set(check.pass ? [] : check.evidence);
-  return new Set(unknown.filter((id) => !blocked.has(id)));
+  return new Set([...platform, ...unknown.filter((id) => !blocked.has(id))]);
 }
 
 interface FlagCount {

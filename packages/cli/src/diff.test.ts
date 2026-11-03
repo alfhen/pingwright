@@ -127,7 +127,7 @@ describe('flag changes', () => {
     const text = formatDiff(result, 'a', 'b');
     expect(text).not.toContain('allowed.example.com');
     expect(text).toContain('other.example.com');
-    expect(text).toContain('1 flag count change for hosts allowed by allowUnknownDestination not shown (use --all-flags)');
+    expect(text).toContain('1 flag count change for hosts allowed by allowUnknownDestination or platform hosts not shown (use --all-flags)');
   });
 
   test('shows them with allFlags', () => {
