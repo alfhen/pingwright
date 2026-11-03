@@ -318,11 +318,11 @@ A difference between variants is not a failure. Your rules decide. A run that ex
 }
 ```
 
-A file holds 1 to 50 stores. `name` matches `^[a-z0-9][a-z0-9_-]*$` and is unique. `site` is an http or https URL. `vars` override the vars a scenario declares, and `--var` overrides both. A store var that no scenario declares exits 2 and names the store and the var. `country` sets `identity.country`. A scenario that sets another country gets a warning, and the store's country is used. `autoconsentRules` is a path relative to the stores file, added to `--autoconsent-rules` for that store. An error names the file and the store index, never a value.
+A file holds 1 to 50 stores. `name` matches `^[a-z0-9][a-z0-9_-]*$` and is unique. `site` is an http or https URL. `vars` override the vars a scenario declares, and `--var` overrides both. A store var that no scenario declares exits 2 and names the store and the var. `country` sets `identity.country`. A scenario that sets another country gets a warning, and the store's country is used. `autoconsentRules` is a path relative to the stores file, added to `--autoconsent-rules` for that store. A file that is missing or not a file is an error when the stores file is read, before any run. An error names the file and the store index, never a value.
 
 Every scenario runs once per store and variant, with one seed. Records are named `<scenario>.<store>.<variant>.jsonl`. Each cell has `labels: { "store": "<name>" }`. The table gets a `store` column after `scenario`, with one row per scenario and store. Diffs compare the variants within one store. Tagreeve does not compare stores with each other.
 
-`--allow-test-payment <host>` still names one host. A payment scenario runs only for the store whose host equals it, and its cells for the other stores are `SKIPPED`.
+`--allow-test-payment <host>` still names one host. A payment scenario runs only for the store whose host equals it, and its cells for the other stores are `SKIPPED`. If no store has that host and a payment scenario would run, `suite` exits 2 and the message names the flag.
 
 `suite.json` has `suiteSchemaVersion: 2` and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
 
