@@ -4,8 +4,8 @@ import { parse } from 'yaml';
 
 interface Workflow {
   on: { push: { tags: string[] } };
-  permissions?: Record<string, string>;
-  jobs: Record<string, { permissions?: Record<string, string> | string; steps: { run?: string; uses?: string }[] }>;
+  permissions?: Record<string, string> | string;
+  jobs: Record<string, { permissions?: Record<string, string> | string; uses?: string; steps?: { run?: string; uses?: string }[] }>;
 }
 
 const path = new URL('../.github/workflows/release-tag.yml', import.meta.url);
@@ -14,13 +14,15 @@ const workflow = parse(text) as Workflow;
 
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
-    .flatMap((job) => job.steps)
-    .flatMap((step) => (step.run ?? '').split('\n'));
+    .flatMap((job) => job.steps ?? [])
+    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n\s*/g, ' ').split('\n'));
 
 const runLines = runLinesOf(workflow);
 
 const isReadOnly = (permissions: Record<string, string> | string | undefined): boolean =>
-  permissions === undefined || (typeof permissions === 'object' && Object.values(permissions).every((level) => level !== 'write'));
+  permissions === undefined ||
+  permissions === 'read-all' ||
+  (typeof permissions === 'object' && Object.values(permissions).every((level) => level !== 'write'));
 
 export function workflowProblems(source: string): string[] {
   const wf = parse(source) as Workflow;
@@ -28,8 +30,9 @@ export function workflowProblems(source: string): string[] {
   if (!isReadOnly(wf.permissions)) problems.push('top-level permissions are not read-only');
   for (const [name, job] of Object.entries(wf.jobs)) {
     if (!isReadOnly(job.permissions)) problems.push(`job ${name} permissions are not read-only`);
-    for (const step of job.steps) {
-      if (step.uses && /publish|release/i.test(step.uses)) problems.push(`uses ${step.uses}`);
+    const uses = [job.uses, ...(job.steps ?? []).map((step) => step.uses)];
+    for (const use of uses) {
+      if (use && /publish|release/i.test(use)) problems.push(`uses ${use}`);
     }
   }
   if (/github\.token/i.test(source)) problems.push('github.token');
@@ -121,6 +124,38 @@ describe('workflow rules', () => {
   it('fails a uses value that publishes or releases', () => {
     expect(workflowProblems(base(`${good}      - uses: softprops/action-gh-release@v2\n`))).toEqual(['uses softprops/action-gh-release@v2']);
     expect(workflowProblems(base(`${good}      - uses: JS-DevTools/npm-publish@v3\n`))).toEqual(['uses JS-DevTools/npm-publish@v3']);
+  });
+
+  it('accepts read-all at the top level and on a job', () => {
+    expect(workflowProblems(base(good, 'permissions: read-all\n'))).toEqual([]);
+    const wf = `${base(good)}  b:\n    runs-on: ubuntu-24.04\n    permissions: read-all\n    steps:\n${good}`;
+    expect(workflowProblems(wf)).toEqual([]);
+  });
+
+  it('fails write-all at the top level', () => {
+    expect(workflowProblems(base(good, 'permissions: write-all\n'))).toEqual(['top-level permissions are not read-only']);
+  });
+
+  it('does not crash on a reusable-workflow job', () => {
+    const wf = `${base(good)}  b:\n    uses: ./.github/workflows/build.yml\n`;
+    expect(workflowProblems(wf)).toEqual([]);
+  });
+
+  it('checks the uses of a reusable-workflow job', () => {
+    const wf = `${base(good)}  b:\n    uses: org/repo/.github/workflows/publish.yml@v1\n`;
+    expect(workflowProblems(wf)).toEqual(['uses org/repo/.github/workflows/publish.yml@v1']);
+  });
+
+  it('joins backslash continuations before checking a publish', () => {
+    const wf = base('      - run: |\n          npm publish \\\n            --tag "$dist_tag"\n');
+    const problems = workflowProblems(wf);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('without --dry-run');
+  });
+
+  it('accepts a continued publish that has the flags', () => {
+    const wf = base('      - run: |\n          npm publish \\\n            --dry-run \\\n            --tag "$dist_tag"\n');
+    expect(workflowProblems(wf)).toEqual([]);
   });
 
   it('fails github.token', () => {
