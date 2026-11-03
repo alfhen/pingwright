@@ -276,6 +276,7 @@ test('the run from Reply to the end of fly plays every stage, then unmounts the 
 });
 
 for (const viewport of [
+  { width: 860, height: 500 },
   { width: 860, height: 700 },
   { width: 1024, height: 768 },
   { width: 1440, height: 900 },
@@ -305,6 +306,59 @@ for (const viewport of [
       await page.waitForTimeout(100);
     }
     expect(outside).toEqual([]);
+    await context.close();
+  });
+}
+
+async function allNotifications(page: Page, viewport: { width: number; height: number }): Promise<void> {
+  await page.setViewportSize(viewport);
+  await openHome(page);
+  await page.getByRole('button', { name: 'Reply: "Sure, I\'ll take a look"' }).click();
+  await expect.poll(() => page.locator('[data-intro-notification]').count(), { timeout: 10_000 }).toBe(13);
+  // The last card's own entrance animation runs 300 ms.
+  await page.waitForTimeout(400);
+}
+
+for (const viewport of [
+  { width: 860, height: 500 },
+  { width: 860, height: 700 },
+  { width: 1440, height: 900 },
+]) {
+  test(`the four stacked notifications stay on top of the scattered ones at ${viewport.width}x${viewport.height}`, async () => {
+    const context = await firstVisitContext();
+    const page = await context.newPage();
+    await allNotifications(page, viewport);
+    // Hit testing skips elements without pointer events, and the cards have none.
+    await page.addStyleTag({ content: '[data-intro-notification] { pointer-events: auto !important; }' });
+    const covered = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-intro-notification]')].slice(0, 4).flatMap((card, i) => {
+        const r = card.getBoundingClientRect();
+        const points = [0.1, 0.5, 0.9].flatMap((fx) => [0.2, 0.5, 0.8].map((fy) => [r.left + fx * r.width, r.top + fy * r.height] as const));
+        return points.flatMap(([x, y]) => {
+          const top = document.elementFromPoint(x, y)?.closest('[data-intro-notification]');
+          return top === card ? [] : [`stack card ${i} is covered at ${Math.round(x)},${Math.round(y)}`];
+        });
+      }),
+    );
+    expect(covered).toEqual([]);
+    await context.close();
+  });
+
+  test(`every notification keeps 12 px inside the screen at the end of the wasted zoom at ${viewport.width}x${viewport.height}`, async () => {
+    const context = await firstVisitContext();
+    const page = await context.newPage();
+    await allNotifications(page, viewport);
+    await expect.poll(() => stage(page), { timeout: 10_000 }).toBe('wasted');
+    const margins = await page.evaluate(() => {
+      const zoom = document.getAnimations().find((a) => (a as CSSAnimation).animationName === 'intro-slow-zoom')!;
+      zoom.pause();
+      zoom.currentTime = Number(zoom.effect!.getComputedTiming().endTime);
+      return [...document.querySelectorAll('[data-intro-notification]')].map((el) => {
+        const r = el.getBoundingClientRect();
+        return Math.round(Math.min(r.left, r.top, innerWidth - r.right, innerHeight - r.bottom));
+      });
+    });
+    expect(margins.filter((m) => m < 12), `margins ${margins.join(' ')}`).toEqual([]);
     await context.close();
   });
 }

@@ -6,10 +6,12 @@ import net from 'node:net';
 import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 
-const CONTAINER_URL = 'https://www.googletagmanager.com/server.js?id=GTM-PWTEST1&gtm_auth=pw-fixture-auth';
+export const FIXTURE_AUTH = 'pw-fixture-auth';
+const CONTAINER_URL = `https://www.googletagmanager.com/server.js?id=GTM-PWTEST1&gtm_auth=${FIXTURE_AUTH}`;
 const DESTINATION_URL = 'https://www.googletagmanager.com/s/gtag/destination?id=G-PWTEST0001';
 const TRIGGER_PATHS = new Set(['/g/collect', '/pixel', '/capi']);
 const MAX_DELAY_MS = 5000;
+export const FIXTURE_CONFIG = Buffer.from(`id=GTM-PWTEST1&env=1&auth=${FIXTURE_AUTH}`).toString('base64');
 
 export interface StandInEnv {
   readonly HTTP_PROXY?: string;
@@ -35,15 +37,26 @@ interface HitFields {
 export function createStandIn(env: StandInEnv): { listen(): Promise<number>; close(): Promise<void> } {
   const proxyUrl = env.HTTP_PROXY ? new URL(env.HTTP_PROXY) : undefined;
   let ready = false;
+  const pending = new Set<Promise<unknown>>();
+  const timers = new Set<NodeJS.Timeout>();
+  let ca: string | undefined;
+
+  function track<T>(work: Promise<T>): Promise<T> {
+    pending.add(work);
+    void work.then(
+      () => pending.delete(work),
+      () => pending.delete(work),
+    );
+    return work;
+  }
 
   function viaProxy(method: string, target: string, body?: string): Promise<Reply> {
     return new Promise((resolve, reject) => {
-      if (!proxyUrl || !env.NODE_EXTRA_CA_CERTS) {
+      if (!proxyUrl || ca === undefined) {
         reject(new Error('HTTP_PROXY and NODE_EXTRA_CA_CERTS are needed'));
         return;
       }
       const url = new URL(target);
-      const trusted = readFileSync(env.NODE_EXTRA_CA_CERTS, 'utf8');
       const auth = Buffer.from(`${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`).toString('base64');
       const connect = http.request({
         host: proxyUrl.hostname,
@@ -59,7 +72,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
           reject(new Error(`the proxy answered ${response.statusCode}`));
           return;
         }
-        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca: trusted });
+        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca });
         secure.on('error', reject);
         const headers: Record<string, string | number> = body === undefined ? {} : { 'content-type': 'text/plain', 'content-length': Buffer.byteLength(body) };
         // The agent hands out only the tunnel, and the lookup fails, so a request can never open a direct connection.
@@ -85,6 +98,9 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
   }
 
   async function startUp(): Promise<void> {
+    // These lines are what a careless container would log; the runner's scrub has to remove them.
+    console.error(`Config ${FIXTURE_CONFIG}`);
+    console.error(`Proxy ${env.HTTP_PROXY ?? 'none'}`);
     for (const url of [CONTAINER_URL, DESTINATION_URL]) {
       console.error(`Fetching ${url}`);
       try {
@@ -134,6 +150,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
       ['POST', 'https://graph.facebook.com/v21.0/100000000000001/events?access_token=pw-fixture-access-token', capi],
     ];
     for (const [method, url, body] of calls) {
+      console.error(`Calling ${url}`);
       await viaProxy(method, url, body).catch((error: unknown) => {
         console.error(`Vendor call failed: ${error instanceof Error ? error.message : String(error)}`);
       });
@@ -157,7 +174,11 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
       const asked = Number(url.searchParams.get('delayMs') ?? 0);
       const delay = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 0), MAX_DELAY_MS) : 0;
       const fields = fieldsOf(url, Buffer.concat(chunks).toString('utf8'));
-      setTimeout(() => void sendVendorCalls(fields), delay);
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        void track(sendVendorCalls(fields));
+      }, delay);
+      timers.add(timer);
     });
   });
 
@@ -168,14 +189,25 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
         server.listen(Number(env.PORT ?? 0), '127.0.0.1', () => {
           const address = server.address();
           resolve(typeof address === 'object' && address ? address.port : 0);
-          void startUp();
+          if (env.NODE_EXTRA_CA_CERTS) {
+            try {
+              ca = readFileSync(env.NODE_EXTRA_CA_CERTS, 'utf8');
+            } catch (error) {
+              console.error(`The CA file could not be read: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+          void track(startUp());
         });
       }),
-    close: () =>
-      new Promise((resolve) => {
+    close: async () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      while (pending.size > 0) await Promise.allSettled([...pending]);
+      await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
-      }),
+      });
+    },
   };
 }
 

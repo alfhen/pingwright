@@ -10,11 +10,13 @@
 
 <!-- U04 -->
 
-<!-- V04 -->
+- `suite --stores` now exits 2 when `--allow-test-payment` matches no store and a payment scenario would run. A stores file whose `autoconsentRules` file is missing is rejected when the file is read.
 
 <!-- B04 -->
 
 <!-- Y04 -->
+
+- The verdict names a failed `deniedIdentifiers` check when only early identifiers are named, and an `earlyIdentifiers` warning when only denied identifiers are named. Each check is hidden only when its own findings are already in the sentence (#663, #805).
 
 <!-- H04 -->
 

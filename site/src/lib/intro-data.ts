@@ -77,23 +77,26 @@ export interface PlacedNotification extends Notification {
   x: string;
   y: string;
   rotate: string;
+  /** One of the first four, which stay on top of the scattered cards so their text stays readable. */
+  stacked: boolean;
 }
 
-/** The first four stack at the top right, the rest scatter. */
 /** Card box width: 330px content plus 13px padding each side. */
 const CARD_WIDTH = 356;
 /**
  * The wasted stage scales the wallpaper by 1.08 and tilts it 1deg around (60%, 40%).
- * These bounds keep a 12px margin at the end of that zoom, with room for a card's own rotation.
+ * These bounds keep the SCATTER cards 12px inside the screen at the end of that zoom, with their own rotation.
+ * scripts/site-intro.docs.test.ts measures that margin, so check it there after a change to SCATTER.
  */
-const clampX = (x: string): string => `clamp(calc(4.5% + 24px), ${x}, calc(97% - ${CARD_WIDTH + 24}px))`;
-const clampY = (y: string): string => `clamp(calc(3.2% + 36px), ${y}, calc(95.5% - 150px))`;
+const clampX = (x: string): string => `clamp(calc(4.5% + 12px), ${x}, calc(97% - ${CARD_WIDTH + 24}px))`;
+const clampY = (y: string): string => `clamp(calc(3.2% + 36px), ${y}, calc(95.5% - 100px))`;
 
+/** The first four stack at the top right, the rest scatter. */
 export function placeNotifications(shown: number): PlacedNotification[] {
   return NOTIFICATIONS.slice(0, shown).map((n, i) => {
-    if (i < 4) return { ...n, x: clampX(`calc(100% - ${CARD_WIDTH + 24}px)`), y: `calc(max(42px, 3.2% + 36px) + ${i * 88}px)`, rotate: '0deg' };
+    if (i < 4) return { ...n, x: clampX(`calc(100% - ${CARD_WIDTH + 24}px)`), y: `calc(max(42px, 3.2% + 36px) + ${i * 88}px)`, rotate: '0deg', stacked: true };
     const [x, y, rotate] = SCATTER[(i - 4) % SCATTER.length]!;
-    return { ...n, x: clampX(x), y: clampY(y), rotate };
+    return { ...n, x: clampX(x), y: clampY(y), rotate, stacked: false };
   });
 }
 

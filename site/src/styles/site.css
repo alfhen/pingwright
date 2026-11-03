@@ -2,13 +2,25 @@
 @import './tokens.css';
 @import './shared.css';
 
+/* The handoff sets sizes with the `font` shorthand, which resets line-height to normal.
+   This build only: markup the docs also render, such as SiteHeader, sets its own leading. */
+@theme {
+  --text-xs--line-height: normal;
+  --text-sm--line-height: normal;
+  --text-base--line-height: normal;
+}
+
 @layer base {
   body {
     margin: 0;
+    line-height: normal;
     background: var(--bg);
     color: var(--ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    transition:
+      background-color 0.3s,
+      color 0.3s;
   }
 
   a {
@@ -19,5 +31,30 @@
   a:hover {
     text-decoration: underline;
     text-underline-offset: 3px;
+  }
+}
+
+@keyframes hero-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-prompt[open] pre {
+  animation: hero-prompt-in 0.25s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+
+  .hero-prompt[open] pre {
+    animation: none;
   }
 }
