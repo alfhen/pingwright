@@ -18,12 +18,12 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 4. Save the config to a file that only you can read:
 
    ```bash
-   umask 077
-   printf '%s' '<container-config>' > sgtm-config.txt
-   chmod 600 sgtm-config.txt
+   (umask 077; cat > sgtm-config.txt)
    ```
 
-   Tagreeve refuses a config file that other users can read. You can also put the config in the environment variable `TAGREEVE_SERVER_CONTAINER_CONFIG`.
+   Paste the config, press Enter, then press Ctrl-D. On macOS, `(umask 077; pbpaste > sgtm-config.txt)` copies it from the clipboard. You can also save it from an editor and run `chmod 600 sgtm-config.txt`.
+
+   Do not put the config in a command line, and do not run `export TAGREEVE_SERVER_CONTAINER_CONFIG=...`. Your shell keeps both in its history. Tagreeve refuses a config file that other users can read. If you use the environment variable `TAGREEVE_SERVER_CONTAINER_CONFIG`, set it from a source that your shell history does not keep.
 5. In the scenario, use server mode and name your container's domain in `serverHosts`:
 
    ```yaml
