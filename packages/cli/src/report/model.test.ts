@@ -501,6 +501,15 @@ describe('server container hits', () => {
     expect(model.rows[0]!.segments.some((s) => s.mark === 'leak')).toBe(false);
   });
 
+  test('an unlinked hit named in the evidence of a failed exact leak is not marked as a leak', () => {
+    const sent = server('meta-capi', 500, undefined);
+    sent.hit.idFields = ['user_data.em[]'];
+    const failed = result('builtin: deniedIdentifiers', false, { evidence: [sent.hit.id] });
+    const model = buildReportModel(records({ hits: [sent.hit], requests: [sent.request], results: [failed] }));
+    expect(model.rows[0]!.segments.some((s) => s.mark === 'leak')).toBe(false);
+    expect(model.rows[0]!.segments.at(-1)).toMatchObject({ mark: 'unchecked' });
+  });
+
   test('a run with no server hit has no serverContainer field and no server row', () => {
     const model = buildReportModel(records({ hits: [via] }));
     expect(model).not.toHaveProperty('serverContainer');

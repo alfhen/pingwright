@@ -202,8 +202,6 @@ const NO_LINK = 'no link to a browser hit';
 
 function judge(hit: Hit, state: ConsentState, undecided: boolean, named: ReadonlyMap<string, string>, unlinked = false): Verdict {
   if (unlinked) {
-    const why = named.get(hit.id);
-    if (why) return { mark: 'leak', label: why };
     return hit.idFields === undefined || hit.idFields.length > 0 ? { mark: 'unchecked', label: `${NO_LINK}, consent state unknown` } : { mark: 'full', label: NO_LINK };
   }
   const known = CONSENT_FIELDS.map((f) => state[f]).filter((v) => v !== 'unknown');
