@@ -304,6 +304,10 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   const paymentKey = (scenario: string, store: Store | undefined) => JSON.stringify([scenario, store?.name]);
   const testPayments = new Map<string, TestPayment>();
   if (args.withTestPayment && args.allowTestPayment !== undefined) {
+    if (stores.length && scenarios.some((x) => x.payment) && !targets.some((t) => normalizeHost(new URL(t.site).hostname) === allowedHost)) {
+      io.stderr(`--allow-test-payment ${allowedHost}: no store in the stores file has that host.\n`);
+      return 2;
+    }
     for (const s of scenarios.filter((x) => x.payment)) {
       for (const { store, site } of targets) {
         if (store && normalizeHost(new URL(site).hostname) !== allowedHost) continue;

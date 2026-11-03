@@ -83,6 +83,20 @@ test('early identifiers go into the identifier sentence for the undecided state,
   expect(sentence([model([check('WARN', 'earlyIdentifiers')])], true)).toBe('no leaks; built-in check earlyIdentifiers warned in 1 run');
 });
 
+test('a failed deniedIdentifiers stays listed when only early identifiers are named', () => {
+  const early = [{ vendor: 'meta', label: IDENTIFIER_EARLY }];
+  expect(sentence([model([check('FAIL', 'deniedIdentifiers'), check('WARN', 'earlyIdentifiers')], early)], true)).toBe(
+    'identifiers go out to Meta in the denied state; built-in check deniedIdentifiers failed in 1 run',
+  );
+});
+
+test('an earlyIdentifiers warning stays listed when only denied identifiers are named', () => {
+  const denied = [{ vendor: 'meta', label: IDENTIFIER_LEAK }];
+  expect(sentence([model([check('WARN', 'earlyIdentifiers'), check('FAIL', 'deniedIdentifiers')], denied)], true)).toBe(
+    'identifiers go out to Meta in the denied state; built-in check earlyIdentifiers warned in 1 run',
+  );
+});
+
 test('server container hits that are unlinked or on a probable link are named', () => {
   const m = { ...model([]), serverContainer: { hits: 4, exact: 1, probable: 2, unlinked: 1 } };
   expect(sentence([m])).toBe('no leaks; 1 server container hit could not be linked to a browser hit; 2 server container hits placed by a probable link');
