@@ -285,6 +285,56 @@ test('unload gap: the advice depends on the network mode', () => {
   expect(gap({ ...input, networkMode: 'live' })[0]!.detail).toContain('not captured without --net-log');
 });
 
+describe('unload gap at run end and in the same frame', () => {
+  test('a push 3 s before the run ended is flagged with the run-end text', () => {
+    const flags = gap({ events: [pushed('add_to_cart', 1000)], runEnd: 4000 });
+    expect(flags).toHaveLength(1);
+    expect(flags[0]!.detail).toContain('3.0 s before the run ended');
+  });
+
+  test('a navigation keeps the navigation text', () => {
+    expect(gap({ events: [pushed('add_to_cart', 1000)], navigations: [4000], runEnd: 9000 })[0]!.detail).toContain('before the page navigated');
+  });
+
+  test('a covering GA4 hit before the run ended clears it', () => {
+    expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('add_to_cart', 2000)], runEnd: 4000 })).toEqual([]);
+  });
+
+  test('a push 12 s before the run ended is not flagged', () => {
+    expect(gap({ events: [pushed('add_to_cart', 1000)], runEnd: 13000 })).toEqual([]);
+  });
+
+  describe('same frame', () => {
+    const frameA = 'https://shop.example.com/sandbox/a/';
+    const frameB = 'https://shop.example.com/sandbox/b/';
+    const setup = (hitFrame: string) => {
+      const event = pushed('my_add', 1000);
+      const hits = [sgtmHit('my_add', 1100), ga4Hit('add_to_cart', 1200)];
+      const requestFrames = new Map([[hits[1]!.requestId as string, hitFrame]]);
+      return { events: [event], hits, runEnd: 4000, eventFrames: new Map([[event.id, frameA]]), requestFrames };
+    };
+
+    test('a custom name is covered by a GA4 hit from the same frame', () => {
+      expect(gap(setup(frameA))).toEqual([]);
+    });
+
+    test('a GA4 hit with a non-GA4 name from another frame does not cover it', () => {
+      const event = pushed('my_add', 1000);
+      const hits = [sgtmHit('my_add', 1100), ga4Hit('custom_ga', 1200)];
+      const input = { events: [event], hits, runEnd: 4000, eventFrames: new Map([[event.id, frameA]]) };
+      expect(gap({ ...input, requestFrames: new Map([[hits[1]!.requestId as string, frameB]]) })).toHaveLength(1);
+      expect(gap({ ...input, requestFrames: new Map([[hits[1]!.requestId as string, frameA]]) })).toEqual([]);
+    });
+
+    test('a same-frame hit sent before the push does not cover it', () => {
+      const event = pushed('add_to_cart', 1000);
+      const hit = ga4Hit('page_view', 500);
+      const flags = gap({ events: [event], hits: [hit], runEnd: 4000, eventFrames: new Map([[event.id, frameA]]), requestFrames: new Map([[hit.requestId as string, frameA]]) });
+      expect(flags).toHaveLength(1);
+    });
+  });
+});
+
 describe('possibleRedirectHop', () => {
   const failed = () => req('http://localhost:3000/r', { resourceType: 'fetch', outcome: 'failed', failure: 'net::ERR_FAILED' });
   const redirectFlags = (request: Request, over: Partial<Parameters<typeof buildFlags>[0]> = {}) =>

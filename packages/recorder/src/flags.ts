@@ -142,6 +142,12 @@ export interface UnloadGapInput {
   hits: readonly Hit[];
   /** Times at which the main frame started a navigation. */
   navigations: readonly number[];
+  /** When the run ended. It is an unload point after the last navigation. */
+  runEnd?: number;
+  /** Frame URL of each embedded push, by event id. */
+  eventFrames?: ReadonlyMap<string, string>;
+  /** Frame URL of each request, by request id. */
+  requestFrames?: ReadonlyMap<string, string | null>;
   /** Event names or `*` globs that are never reported. */
   ignore?: readonly string[];
 }
@@ -153,20 +159,21 @@ function unloadGapAdvice(networkMode: NetworkMode | undefined): string {
 }
 
 /**
- * An event pushed in an embedded frame shortly before the page navigated may have a GA4 hit that the frame flushed
+ * An event pushed in an embedded frame shortly before the page navigated, or the run ended, may have a GA4 hit that the frame flushed
  * while unloading. Chromium does not report those requests to the browser context.
  * Only events that look like tracking events are checked: some vendor sent a hit of that name, or the name is a GA4
  * recommended event. GA4 is expected when the run has any GA4 hit or the name is a GA4 event. An alias in `GA4_ALIASES` (`product_added_to_cart` for `add_to_cart`) only lets a GA4 hit of the mapped name cover the event: the gates use the literal name. Another vendor's hit
- * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it.
+ * does not cover it, except when the run has no GA4 hit at all: then a hit of any vendor with the same name covers it. For a name that is not a GA4 event, any later GA4 hit with a GA4 event name covers it. A GA4 hit sent from the same frame as the push covers it whatever its name.
  */
-export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigations, ignore = [] }: UnloadGapInput): Flag[] {
+export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigations, runEnd, eventFrames, requestFrames, ignore = [] }: UnloadGapInput): Flag[] {
   const ignored = ignore.map(globToRegExp);
   const ga4Hits = hits.filter((h) => h.vendor === 'ga4');
+  const unloadPoints = runEnd === undefined ? navigations : [...navigations, runEnd];
   const flags: Flag[] = [];
   for (const event of events) {
     const name = event.event;
     if (name === null || event.isConsentCommand || name.startsWith('gtm.') || ignored.some((re) => re.test(name))) continue;
-    const navigation = navigations.find((n) => n >= event.t);
+    const navigation = unloadPoints.find((n) => n >= event.t);
     if (navigation === undefined || navigation - event.t > UNLOAD_GAP_WINDOW_MS) continue;
     const expected = GA4_ALIASES[name] ?? name;
     const ga4Name = GA4_EVENTS.has(expected);
@@ -176,13 +183,16 @@ export function buildUnloadGapFlags({ runId, networkMode, events, hits, navigati
     const covered = (h: Hit) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event === name;
     if (ga4Hits.length === 0 && hits.some(covered)) continue;
     if (ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && h.event !== null && (h.event === name || h.event === expected || (!ga4Name && GA4_EVENTS.has(h.event))))) continue;
+    const eventFrame = eventFrames?.get(event.id);
+    if (eventFrame !== undefined && ga4Hits.some((h) => h.t >= event.t && h.t <= navigation + UNLOAD_GAP_SLACK_MS && requestFrames?.get(h.requestId) === eventFrame)) continue;
     const seconds = ((navigation - event.t) / 1000).toFixed(1);
+    const unload = navigation === runEnd && !navigations.includes(navigation) ? 'the run ended' : 'the page navigated';
     flags.push(
       flag(
         runId,
         'unloadGap',
         [event.id],
-        `A frame pushed "${name}" ${seconds} s before the page navigated and no ga4 hit for it was recorded after it. The frame may have sent the hit while unloading, ${unloadGapAdvice(networkMode)} (design §5.3).`,
+        `A frame pushed "${name}" ${seconds} s before ${unload} and no ga4 hit for it was recorded after it. The frame may have sent the hit while unloading, ${unloadGapAdvice(networkMode)} (design §5.3).`,
       ),
     );
   }

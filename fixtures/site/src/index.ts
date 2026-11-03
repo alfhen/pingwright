@@ -127,6 +127,15 @@ function shopHandler(config: string) {
       await sendFile(res, 'gap-pixel.html');
     } else if (path === containerScriptPixelPath) {
       await sendFile(res, 'container-frame-script.html');
+    } else if (path === '/unload-gap') {
+      const mode = new URL(req.url ?? '/', 'http://localhost').searchParams.get('mode');
+      await sendFile(res, page!, (html) =>
+        mode
+          ? html
+              .replace('src="/web-pixels@0.0.0-fixture/sandbox/gap/"', `src="/web-pixels@0.0.0-fixture/sandbox/gap/?mode=${encodeURIComponent(mode)}"`)
+              .replace(/<script>[\s\S]*?<\/script>\n/, '')
+          : html,
+      );
     } else if (path === '/checkout/test-payment') {
       const mode = new URL(req.url ?? '/', 'http://localhost').searchParams.get('marker');
       await sendFile(res, page!, (html) =>
