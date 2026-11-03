@@ -1,6 +1,7 @@
 start: /set-cookie-unstored
 steps:
   - wait: 1s
+  - evaluate: "fetch('/session/start?c=pw-fixture-cookie-value').then(() => true)"
   - checkpoint: later
   - consent: reject
   - wait: 1s

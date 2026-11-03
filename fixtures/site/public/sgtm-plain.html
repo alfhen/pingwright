@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server container plain phone and zip</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Server container plain phone and zip</h1>
+<p>Posts a <code>lead</code> body to the mock server container with the typed phone in national form (<code>0XX XXX XXXX</code>) and the typed zip, both in plain text. Visit it after the identity form was submitted.</p>
+<script>
+(function () {
+  var stored = JSON.parse(sessionStorage.getItem('pw_checkout') || '{}');
+  var digits = (stored.phone || '').replace(/\D/g, '');
+  var national = digits ? '0' + digits.slice(2) : '';
+  var phone = national.replace(/^(\d{3})(\d{3})(\d+)$/, '$1 $2 $3');
+  var body = { event_name: 'lead', page_location: location.href, user_data: { phone_number: phone, postal_code: stored.zip || '' } };
+  fetch(window.__PW_FIXTURE.sgtmUrl + '/data?v=2&event=lead', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }).catch(function () {});
+})();
+</script>
+</body>
+</html>
