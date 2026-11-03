@@ -16,6 +16,8 @@
 
 <!-- Y04 -->
 
+- The verdict names a failed `deniedIdentifiers` check when only early identifiers are named, and an `earlyIdentifiers` warning when only denied identifiers are named. Each check is hidden only when its own findings are already in the sentence (#663, #805).
+
 <!-- H04 -->
 
 <!-- L04 -->
