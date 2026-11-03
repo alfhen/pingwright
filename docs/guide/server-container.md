@@ -49,7 +49,7 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 
 ## What happens in a run
 
-Requests from the browser to a host in `serverHosts` go to the local container instead of your live one. Loads of scripts, such as `gtm.js`, are not sent to it. The container sends its own calls to vendors, for example GA4, Google Ads or the Meta Conversions API. Tagreeve's proxy records each call and answers it as `stub` mode would. The call is not sent on.
+Requests from the browser to a host in `serverHosts` go to the local container instead of your live one. Loads are not sent to it: scripts such as `gtm.js`, stylesheets, fonts and pages from those hosts use the network. The container sends its own calls to vendors, for example GA4, Google Ads or the Meta Conversions API. Tagreeve's proxy records each call and answers it as `stub` mode would. The call is not sent on.
 
 The run waits up to 5 seconds after the last step for late calls.
 
@@ -61,7 +61,7 @@ The container downloads its configuration from Google, as it always does. Tagree
 - `GET` or `HEAD` for `/server.js`
 - `GET` or `HEAD` for `/s/gtag/destination`
 
-Nothing else leaves the machine from the container. The browser's hits are stubbed as in any other run. Requests to a host in `serverHosts` that are not loads go to the local container and stay on your machine. Only script loads from those hosts, such as `gtm.js`, and the site's own pages use the network.
+Nothing else leaves the machine from the container. The browser's hits are stubbed as in any other run. Requests to a host in `serverHosts` go to the local container and stay on your machine, except loads: scripts such as `gtm.js`, stylesheets, fonts and pages from those hosts use the network. As in any stub run, the site's own requests and requests that are not tracking hits also use the network.
 
 ## Read the results
 
@@ -71,7 +71,7 @@ The summary has a `Server container` line. It shows whether the image started, h
 Server container: image ok; 7 vendor calls, 5 linked exactly, 1 probable, 1 unlinked; 3 requests forwarded to Google
 ```
 
-The report gives each server vendor its own row, for example `Google Ads conversion, sent by the server container`. A row sits in the consent epoch of the browser hit that led to it. Calls with no browser hit are in an unlinked column after the last epoch. Notes on a result tell you how far to trust that link:
+The report gives each server vendor its own row, for example `Google Ads (google-ads), sent by the server container`. Each call in a row is placed in the consent epoch of the browser hit it is linked to, so one row can span several epochs. Calls with no link are in an unlinked column after the last epoch. Notes on a result tell you how far to trust that link:
 
 - `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not by an event ID. A probable link can warn but cannot fail a run.
 - `serverSendUnlinked`: no browser hit was found for the call. A check that depends on consent cannot judge it, so that check warns.
