@@ -28,6 +28,8 @@ All servers listen on port 0 (random).
 
 `/`, `/products/fake-tee`, `/collections/all`, `/cart`, `/checkout`, `/checkout/payment`, `/thank-you`. Every page loads `/fixture-config.js` and `/assets/site.js`.
 
+`/sgtm-plain` posts a `lead` body to `sgtmUrl` `/data` with the phone typed in the checkout form in national form (`0XX XXX XXXX`) and the typed zip, both in plain text, as `user_data.phone_number` and `user_data.postal_code`. Visit it after the identity form was submitted.
+
 `/server-container` sends a Meta pixel `Purchase` hit with an event ID and a `POST /capi` to `sgtmUrl`. `?email=` is the email in that body. `?extra=1` adds a `POST /capi` with an unrelated event ID and a fake email, and a `POST /data`, a path no decoder knows. With `--server-container`, the stand-in container answers these instead of `sgtmUrl`.
 
 ## Element IDs
