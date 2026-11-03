@@ -8,6 +8,10 @@
 
 <!-- E04 -->
 
+- Fixes in the body scan: two different values no longer merge into one finding when one contains the other, a JSON path of digits is no longer read as a phone number, a part typed as binary in a text body is named by its field, and a body of over 100,000 values no longer overflows the stack. (#667, #668, #669, #670, #673)
+
+- `identity.hashesMatch` checks every value of a Conversions API `em` or `ph`. Further values are hit params `hashedEmail.1`, `hashedEmail.2` and so on. `ids.hashes.<field>.matchesIdentity` is now filled for `meta-capi` hits, and a plain `ct`, `zp` or `country` on a Conversions API event fails the check. (#712, #714, #715, #808)
+
 <!-- U04 -->
 
 <!-- V04 -->

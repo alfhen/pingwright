@@ -1,9 +1,15 @@
-import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, sha256, type Hit, type Request } from '@tagreeve/core';
+import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, scan, sha256, type Hit, type Request } from '@tagreeve/core';
 import { deflateRawSync, gzipSync } from 'node:zlib';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { decodeRequest } from '@tagreeve/decoders';
 import { evaluate, findForeignData } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
+
+// Scanning 100k texts takes minutes, so the stack test below turns the scan off for its one call.
+vi.mock('@tagreeve/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tagreeve/core')>();
+  return { ...actual, scan: vi.fn(actual.scan) };
+});
 
 const runId = newId('run');
 const identity = createIdentity(1);
@@ -243,6 +249,34 @@ test('possibleRealData names the key of a form body and finds a key that is the 
   expect(detail).toMatch(/carries 1 email value/);
   expect(detail).not.toContain(EMAIL);
 });
+
+test('possibleRealData keeps a URL email apart from a longer body email that contains it', () => {
+  const url = 'https://tracker.example.com/p?e=ann@shop.example';
+  const [leak] = findForeignData([rawRequest(url, 'note=joann@shop.example')], [], identity);
+  expect(leak!.detail).toContain('carries 2 email value(s)');
+  expect(leak!.detail).toMatch(/in note, the URL$/);
+});
+
+test('possibleRealData does not read the digits of a JSON path as a phone number', () => {
+  const body = JSON.stringify({ sizes: { 100: { 250: { 1000: { q: 1 } } } } });
+  expect(body).toContain('"1000"');
+  expect(detailsOf(rawRequest(REPLAY, body))).toEqual([]);
+});
+
+test('possibleRealData names a part typed as binary by its field in a text body', () => {
+  const body = `${part('payload', '{"x":"visitor@other-person.example"}', '\r\nContent-Type: application/octet-stream')}--XB--\r\n`;
+  const [detail] = detailsOf(withHeaders(body, MULTIPART));
+  expect(detail).toMatch(/carries 1 email value\(s\).* in payload$/);
+});
+
+test('possibleRealData reads a body of 130000 pairs without overflowing the stack', () => {
+  const scanOff = vi.mocked(scan).mockReturnValue([]);
+  try {
+    expect(() => findForeignData([rawRequest(REPLAY, 'a=1&'.repeat(130_000))], [], identity)).not.toThrow();
+  } finally {
+    scanOff.mockReset();
+  }
+}, 20_000);
 
 test('possibleRealData scans a name-only form body and a plain-text body as one text', () => {
   expect(new URLSearchParams(EMAIL).get(EMAIL)).toBe('');

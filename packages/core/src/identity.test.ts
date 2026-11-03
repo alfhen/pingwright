@@ -633,6 +633,18 @@ describe('binaryShare', () => {
     expect(binaryShare('a\u0001\u007f�')).toBe(0.75);
   });
 
+  it('counts an astral character once', () => {
+    expect(binaryShare('😀😀😀\u0001')).toBe(0.25);
+  });
+
+  it('decides a borderline base64 body by code points', () => {
+    const email = 'visitor@other-person.example';
+    const found = (junk: string) =>
+      scan(`k=${b64(`AAA ${junk}${email}${'😀'.repeat(6)} AAA`)}`, id).some((m) => m.kind === 'email' && m.value === email);
+    expect(found('\u0001')).toBe(true);
+    expect(found('\u0001\u0001')).toBe(false);
+  });
+
   it('does not count C1 characters', () => {
     expect(binaryShare('a\u0085\u009fb')).toBe(0);
     expect(binaryShare('a ÿb')).toBe(0);

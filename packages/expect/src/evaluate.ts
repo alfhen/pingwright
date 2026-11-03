@@ -525,7 +525,7 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
     if (want && effective[field] !== want) return false;
   }
   for (const [name, want] of Object.entries(f.ids)) {
-    const have = idValue(hit, name);
+    const have = idValue(hit, name, ctx);
     const compared = name.endsWith('.matchesIdentity');
     const present = compared ? have === true : have !== undefined && have !== false;
     const absent = compared ? have === false : !present;
@@ -551,7 +551,7 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
 }
 
 /** Reads `ids.<name>`, `ids.hashes` (any hash present), or `ids.hashes.<param>` and `ids.hashes.<param>.matchesIdentity` from the nested hashes. */
-function idValue(hit: Hit, name: string): boolean | null | undefined {
+function idValue(hit: Hit, name: string, ctx: Context): boolean | null | undefined {
   if (name === 'hashes') return Object.values(hit.ids.hashes ?? {}).some((h) => h.present);
   if (Object.hasOwn(hit.ids, name)) {
     const flat = hit.ids[name];
@@ -562,7 +562,7 @@ function idValue(hit: Hit, name: string): boolean | null | undefined {
   const hash = hit.ids.hashes && Object.hasOwn(hit.ids.hashes, field) ? hit.ids.hashes[field] : undefined;
   if (!hash) return undefined;
   if (prop === undefined) return hash.present;
-  return prop === 'matchesIdentity' ? hash.matchesIdentity : undefined;
+  return prop === 'matchesIdentity' ? (hash.matchesIdentity ?? capiMatchesIdentity(hit, field, ctx.identity)) : undefined;
 }
 
 /** A `host:` rule matches the host with its port (`127.0.0.1:4173`) or the bare hostname (`127.0.0.1`). An IPv6 host may be written with or without brackets (`::1`, `[::1]`). */
@@ -735,8 +735,8 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
 }
 
 const UNMATCHED_HEADLINE = 'Expected every hashed identity value to match the run identity.';
-const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address|user_data\.email_address)$/;
-const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number|user_data\.phone_number)$/;
+const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail(?:\.\d+)?|sha256_email_address|user_data\.email_address)$/;
+const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone(?:\.\d+)?|sha256_phone_number|user_data\.phone_number)$/;
 const FIELD_PARAMS: Record<string, (identity: Identity) => string> = {
   'user_data.first_name': (i) => i.firstName,
   'user_data.last_name': (i) => i.lastName,
@@ -765,10 +765,63 @@ function joinLabels(labels: Set<string>): string {
 }
 
 const PLAIN_ADDRESS_PARAMS = new Set(['user_data.city', 'user_data.postal_code', 'user_data.country']);
+// Only these vendors document plain city, postal code and country. The Conversions API requires them hashed.
+const PLAIN_ADDRESS_VENDORS = new Set(['sgtm']);
+// The hit params a Conversions API field is read from; further values of the field are indexed (`hashedEmail.1`).
+const CAPI_FIELD_PARAMS: Record<string, string> = {
+  em: 'hashedEmail',
+  ph: 'hashedPhone',
+  fn: 'user_data.first_name',
+  ln: 'user_data.last_name',
+  ct: 'user_data.city',
+  zp: 'user_data.postal_code',
+  country: 'user_data.country',
+};
 const DIGEST_SHAPE = /^(?:[0-9a-f]{64}|[A-Za-z0-9+/_-]{43}=?)$/i;
 
 function allForms(h: HashForms): string[] {
   return [h.hex, h.base64, h.base64url];
+}
+
+type HashVerdict = 'plain' | 'match' | 'unhashed' | 'wrong';
+
+/** Judges one hit param against the run identity. Undefined for a param that is not an identity field or is empty. */
+function hashJudge(identity: Identity): (vendor: string, name: string, value: string) => HashVerdict | undefined {
+  const emailHashes = new Set(allForms(hashEmail(identity.email)));
+  const phone = hashPhone(identity.phone);
+  const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
+  const plain = new Set([identity.email.toLowerCase(), identity.phone.toLowerCase(), identity.phone.replace(/\D/g, '')]);
+  // A literal fill value stands in for a field the checkout would not take as generated, such as a German city,
+  // so it can match a name or address hash. An email or phone must still be the identity's own.
+  const extra = identity.extra ?? [];
+  return (vendor, name, value) => {
+    const field = FIELD_PARAMS[name]?.(identity);
+    const accepted = field === undefined ? [] : [field, ...extra];
+    const known = EMAIL_PARAM.test(name)
+      ? emailHashes
+      : PHONE_PARAM.test(name)
+        ? phoneHashes
+        : field !== undefined
+          ? fieldHashes(...accepted)
+          : undefined;
+    if (!known || !value) return undefined;
+    if (PLAIN_ADDRESS_PARAMS.has(name) && PLAIN_ADDRESS_VENDORS.has(vendor) && !DIGEST_SHAPE.test(value)) return 'plain';
+    if (known.has(value)) return 'match';
+    const typed = value.trim().toLowerCase();
+    return plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed) ? 'unhashed' : 'wrong';
+  };
+}
+
+/** Whether every value of a Conversions API field matches the run identity. Null when none can be checked. */
+function capiMatchesIdentity(hit: Hit, field: string, identity: Identity | undefined): boolean | null {
+  const base = Object.hasOwn(CAPI_FIELD_PARAMS, field) ? CAPI_FIELD_PARAMS[field] : undefined;
+  if (hit.vendor !== 'meta-capi' || !identity || !base) return null;
+  const judge = hashJudge(identity);
+  const verdicts = Object.entries(hit.params)
+    .filter(([name]) => name === base || (name.startsWith(`${base}.`) && /^\d+$/.test(name.slice(base.length + 1))))
+    .map(([name, value]) => judge(hit.vendor, name, value))
+    .filter((v) => v !== undefined);
+  return verdicts.length === 0 ? null : verdicts.every((v) => v === 'match');
 }
 
 function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: string[]; message: string; headline?: string } {
@@ -781,13 +834,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       message: 'no run identity was given, so the hashes could not be checked.',
     };
   }
-  const emailHashes = new Set(allForms(hashEmail(identity.email)));
-  const phone = hashPhone(identity.phone);
-  const phoneHashes = new Set([...allForms(phone), ...allForms(sha256(identity.phone.replace(/\D/g, '')))]);
-  const plain = new Set([identity.email.toLowerCase(), identity.phone.toLowerCase(), identity.phone.replace(/\D/g, '')]);
-  // A literal fill value stands in for a field the checkout would not take as generated, such as a German city,
-  // so it can match a name or address hash. An email or phone must still be the identity's own.
-  const extra = identity.extra ?? [];
+  const judge = hashJudge(identity);
   const withHash: string[] = [];
   const wrong: string[] = [];
   const unhashed: string[] = [];
@@ -805,33 +852,24 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(guardFieldName(id));
     }
     for (const [name, value] of Object.entries(hit.params)) {
-      const field = FIELD_PARAMS[name]?.(identity);
-      const accepted = field === undefined ? [] : [field, ...extra];
-      const known = EMAIL_PARAM.test(name)
-        ? emailHashes
-        : PHONE_PARAM.test(name)
-          ? phoneHashes
-          : field !== undefined
-            ? fieldHashes(...accepted)
-            : undefined;
-      if (!known || !value) continue;
-      // Google's user data format sends city, postal code and country as plain text.
-      if (PLAIN_ADDRESS_PARAMS.has(name) && !DIGEST_SHAPE.test(value)) {
-        plainAddressFields.add(fieldLabel(name));
+      const verdict = judge(hit.vendor, name, value);
+      if (!verdict) continue;
+      const label = fieldLabel(name);
+      if (verdict === 'plain') {
+        plainAddressFields.add(label);
         continue;
       }
       seen = true;
-      if (known.has(value)) {
-        matchedFields.add(fieldLabel(name));
+      if (verdict === 'match') {
+        matchedFields.add(label);
         continue;
       }
       bad = true;
-      const typed = value.trim().toLowerCase();
-      if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) {
+      if (verdict === 'unhashed') {
         raw = true;
-        unhashedFields.add(fieldLabel(name));
+        unhashedFields.add(label);
       } else {
-        wrongFields.add(fieldLabel(name));
+        wrongFields.add(label);
         wrongParams.add(name);
       }
     }
@@ -1282,6 +1320,8 @@ interface ScanText {
   where: string;
   /** Marks a text named by a raw body path. A hit parameter path names the same value better. */
   leaf?: true;
+  /** A JSON path prefix. It names a key, so a phone-shaped run of digits in it is not a value. */
+  name?: true;
 }
 
 // A leaf is scanned as `name=value` so a key that holds an email is found.
@@ -1306,7 +1346,7 @@ function leafTexts(text: string): ScanText[] {
       const path = name.split('.');
       path[path.length - 1] = path[path.length - 1]!.replace(/\[\]/g, '');
       const where = guardFieldName(name);
-      if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where, leaf: true });
+      if (path.length > 1) out.push({ text: path.slice(0, -1).join('.'), where, leaf: true, name: true });
       out.push({ text: `${path[path.length - 1]}=${value}`, where, leaf: true });
     }
   }
@@ -1333,12 +1373,13 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
   if (body === '' || headersSayBinary(headers)) return [];
   const split = splitMultipart(body, headers);
   if (split?.parts.length) {
+    const wholeIsBinary = isBinaryText(body);
     const named = split.parts.flatMap((part) => {
       const name = multipartPartName(part);
-      if (isBinaryBody(part.headers, part.body)) return [];
+      if (wholeIsBinary && isBinaryBody(part.headers, part.body)) return [];
       return name === undefined ? leafTexts(part.body) : [{ text: `${name}=${part.body}`, where: guardFieldName(name), leaf: true as const }];
     });
-    return [{ text: withoutBinaryParts(split, isBinaryText(body)), where: 'the body' }, ...named];
+    return [{ text: withoutBinaryParts(split, wholeIsBinary), where: 'the body' }, ...named];
   }
   const isJson = /^\s*[{[]/.test(body) && bodyEntries({ postData: body }).parsed;
   if (!isJson && /[\r\n]/.test(body.trim())) {
@@ -1349,19 +1390,24 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 }
 
 // The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
-// merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost.
+// merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
+// merges, and only when it differs from the field's value by a few edge characters: a different value in the URL, or a longer
+// value elsewhere, keeps its own finding.
+const MAX_EDGE_SHIFT = 5;
+
+function isEdgeShift(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return long.length - short.length <= MAX_EDGE_SHIFT && long.includes(short);
+}
+
 function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>): void {
   const best = (f: { where: Map<string, number> }) => Math.min(...f.where.values());
   const valueOf = (key: string, kind: string) => key.slice(kind.length + 1);
   const fields = [...found].filter(([, f]) => best(f) < 2);
   for (const [key, f] of [...found]) {
-    if (best(f) < 2) continue;
+    if (best(f) < 2 || [...f.where.keys()].some((w) => w !== 'the body')) continue;
     const value = valueOf(key, f.kind);
-    const twin = fields.find(([k, other]) => {
-      if (other.kind !== f.kind) return false;
-      const v = valueOf(k, other.kind);
-      return v.includes(value) || value.includes(v);
-    });
+    const twin = fields.find(([k, other]) => other.kind === f.kind && isEdgeShift(valueOf(k, other.kind), value));
     if (!twin) continue;
     for (const [w, tier] of f.where) twin[1].where.set(w, Math.min(tier, twin[1].where.get(w) ?? tier));
     found.delete(key);
@@ -1390,7 +1436,7 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
     const url = scannedUrl(request, persisted.url, hitRequests.has(request.id));
     const texts = slot(request.id, request.stepId).texts;
     for (const text of [url, ...pathSegments(url)]) texts.push({ text, where: 'the URL' });
-    texts.push(...bodyTexts(request.headers, persisted.postData));
+    for (const text of bodyTexts(request.headers, persisted.postData)) texts.push(text);
   }
   for (const hit of hits) {
     const entry = slot(hit.requestId, hit.stepId);
@@ -1403,9 +1449,10 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
   const out: ForeignData[] = [];
   for (const [requestId, entry] of byRequest) {
     const found = new Map<string, { kind: string; where: Map<string, number> }>();
-    for (const { text, where, leaf } of entry.texts) {
+    for (const { text, where, leaf, name } of entry.texts) {
       const tier = where === 'the URL' || where === 'the body' ? 2 : leaf ? 1 : 0;
       for (const m of scan(text, identity, { stableHashes })) {
+        if (name && m.kind === 'phone') continue;
         const key = `${m.kind}:${m.value}`;
         const seen = found.get(key) ?? { kind: m.kind, where: new Map<string, number>() };
         seen.where.set(where, Math.min(tier, seen.where.get(where) ?? tier));

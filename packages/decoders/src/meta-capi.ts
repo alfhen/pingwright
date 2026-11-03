@@ -42,6 +42,13 @@ function str(v: unknown): string | undefined {
   return typeof first === 'number' ? String(first) : undefined;
 }
 
+function strs(v: unknown): string[] {
+  return (Array.isArray(v) ? v : [v]).flatMap((item: unknown) => {
+    if (typeof item === 'string') return item === '' ? [] : [item];
+    return typeof item === 'number' ? [String(item)] : [];
+  });
+}
+
 /** The `data` array of a JSON body, or of a form body whose `data` field is JSON. Undefined when there is none. */
 function eventItems(body: string | null): Json[] | undefined {
   if (!body) return undefined;
@@ -60,11 +67,12 @@ function decodeItem(item: Json, req: Request, pixel: string, newHitId: NewHitId,
   const hashes: Record<string, HashedId> = {};
   const params: Record<string, string> = { pixelId: pixel };
   for (const field of HASH_FIELDS) {
-    const value = str(userData[field]);
-    if (!value) continue;
+    const values = strs(userData[field]);
+    if (values.length === 0) continue;
     hashes[field] = { present: true, matchesIdentity: null };
     const param = PARAM_NAMES[field];
-    if (param) params[param] = value;
+    // The first value keeps the plain name; the others are indexed (`hashedEmail.1`), so hashesMatch checks each.
+    if (param) values.forEach((value, i) => (params[i === 0 ? param : `${param}.${i}`] = value));
   }
   if (Object.keys(hashes).length > 0) ids.hashes = hashes;
   for (const field of PRESENCE_FIELDS) if (str(userData[field])) ids[field] = true;
