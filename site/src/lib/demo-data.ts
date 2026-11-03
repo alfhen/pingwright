@@ -8,6 +8,10 @@ export const USER_PROMPT = `Meta numbers fell off a cliff after Tuesday's publis
 /** The demo's window for hits, in ms of the demo clock `t`: the first recorded hit lands at the start, the last at the end. */
 export const HIT_WINDOW = [1900, 4700] as const;
 
+/** When the banner answer lands on the demo clock. The button shows pressed for the 300 ms before it. */
+export const ANSWER_AT = 3300;
+const PRESS_MS = 300;
+
 export type ScenarioKey = 'undecided' | 'reject' | 'accept';
 export type Tone = 'fg' | 'dim' | 'faint' | 'mint' | 'fail' | 'warn';
 
@@ -29,7 +33,8 @@ export interface DemoHit {
 export interface DemoScenario {
   key: ScenarioKey;
   label: string;
-  file: string;
+  /** The `tagreeve run` command line the agent runs, without the `$ `. */
+  command: string;
   plan: string;
   reply: string[];
   verdict: { title: string; body: string; exit: string };
@@ -168,13 +173,27 @@ function tagOf(records: RunRecords, hit: Hit, fail: boolean): string {
   return label;
 }
 
-/** Maps a time on the record's clock to the demo clock, so the first hit lands at the start of the window and the last at its end. */
+const answerEpoch = (records: RunRecords) => [...records.consentEpochs].sort((a, b) => a.startT - b.startT)[1];
+
+function scale([a, b]: readonly [number, number], [from, to]: readonly [number, number]): (t: number) => number {
+  return (t) => Math.round(b > a ? from + ((t - a) / (b - a)) * (to - from) : from);
+}
+
+/**
+ * Maps a time on the record's clock to the demo clock, so the first hit lands at the start of the window and the last
+ * at its end. When the visitor answers the banner, the hits before the answer end where the press starts, and the
+ * answer lands at `ANSWER_AT`, so the hits after it get the rest of the window.
+ */
 export function demoClock(records: RunRecords): (t: number) => number {
   const times = records.hits.map((h) => h.t);
   const first = Math.min(...times);
-  const span = Math.max(...times) - first || 1;
-  const [from, to] = HIT_WINDOW;
-  return (t) => Math.round(from + ((t - first) / span) * (to - from));
+  const last = Math.max(...times);
+  const answer = answerEpoch(records)?.startT;
+  if (answer === undefined) return scale([first, last], HIT_WINDOW);
+  const lastBefore = Math.max(first, ...times.filter((t) => t < answer));
+  const before = scale([first, lastBefore], [HIT_WINDOW[0], ANSWER_AT - PRESS_MS]);
+  const after = scale([answer, last], [ANSWER_AT, HIT_WINDOW[1]]);
+  return (t) => (t < answer ? before(t) : after(t));
 }
 
 /** The record's hits, in record order, with their time on the demo clock and their tag. */
@@ -235,6 +254,8 @@ function diffLines(stdout: string): Line[] {
   return linesOf(stdout).map((text) => ({ text, tone: /^ +(added|removed|changed)\b/.test(text) ? 'mint' : 'fg' }));
 }
 
+const runCommand = (file: string) => `tagreeve run tagreeve/${file} --site https://${STORY_HOST}`;
+
 const read = (dir: string, file: string) => readFileSync(join(dir, file), 'utf8');
 
 interface Recorded {
@@ -254,17 +275,17 @@ function scenarioOf(dir: string, { records, stdout }: Recorded, key: ScenarioKey
   const exitCode = recordedExitCode(stdout, `site/demo/${key}.txt`);
   checkReply([reply.plan, reply.verdict.title, reply.verdict.body, ...reply.reply].join('\n'), records, exitCode, replyName);
   const clock = demoClock(records);
-  const answered = [...records.consentEpochs].sort((a, b) => a.startT - b.startT)[1];
+  const answered = answerEpoch(records);
   if (Boolean(action) !== Boolean(answered)) throw new Error(`site/demo/${key}.jsonl: the consent epochs do not fit a visitor who ${label}`);
   return {
     key,
     label,
-    file: `${key}.yml`,
+    command: runCommand(`${key}.yml`),
     plan: reply.plan,
     reply: reply.reply,
     verdict: { ...reply.verdict, exit: `exit ${exitCode}` },
     exitCode,
-    answer: action && answered ? { action, at: Math.max(clock(answered.startT), HIT_WINDOW[0] - 200), epoch: answered.label } : null,
+    answer: action && answered ? { action, at: clock(answered.startT), epoch: answered.label } : null,
     hits: demoHits(records),
     pages: demoPages(records),
     toolOut: shortenOutput(stdout, exitCode),
@@ -282,10 +303,10 @@ export async function loadDemo(dir: string): Promise<DemoData> {
   const site = `--site https://${STORY_HOST}`;
   const command = (text: string): Line => ({ text: `$ ${text}`, tone: 'dim' });
   const commands: DemoCommand[] = [
-    { key: 'run', name: 'tagreeve run', desc: 'Play one scenario. Exit 0, 1 or 2.', lines: [command(`tagreeve run reject.yml ${site}`), ...toLines(linesOf(reject.stdout))] },
+    { key: 'run', name: 'tagreeve run', desc: 'Play one scenario. Exit 0, 1 or 2.', lines: [command(runCommand('reject.yml')), ...toLines(linesOf(reject.stdout))] },
     { key: 'diff', name: 'tagreeve diff', desc: 'Compare two records, e.g. published vs. workspace.', lines: [command(`tagreeve diff ${a} ${b}`), ...diffLines(diff)] },
     { key: 'suite', name: 'tagreeve suite', desc: 'A folder of scenarios × several GTM builds, for CI.', lines: [command(`tagreeve suite tagreeve/ ${site}`), ...toLines(linesOf(read(dir, 'suite.txt')))] },
-    { key: 'json', name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [command(`tagreeve run reject.yml --site … --json | jq '.results[0]'`), ...jsonLines(read(dir, 'reject.json'), reject.records, 'site/demo/reject.json')] },
+    { key: 'json', name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [command(`tagreeve run tagreeve/reject.yml --site … --json | jq '.results[0]'`), ...jsonLines(read(dir, 'reject.json'), reject.records, 'site/demo/reject.json')] },
   ];
   return { storyHost: STORY_HOST, userPrompt: USER_PROMPT, scenarios, commands };
 }

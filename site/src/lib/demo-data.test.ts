@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { createIdentity, hashEmail, hashPhone, readRun, type TagreeveRecord } from '../../../packages/core/src/index.ts';
 import { demoDir, demoLeaks, demoScenarios, demoSeeds, rewriteHosts, scrubRecords } from '../../../scripts/record-site-demo.ts';
-import { checkReply, demoHits, failedResults, HIT_WINDOW, loadDemo, parseReply, recordedExitCode } from './demo-data.ts';
+import { ANSWER_AT, checkReply, demoHits, failedResults, HIT_WINDOW, loadDemo, parseReply, recordedExitCode } from './demo-data.ts';
 
 const dir = fileURLToPath(new URL('../../demo/', import.meta.url));
 const records = (s: string) => readRun(join(dir, `${s}.jsonl`));
@@ -24,6 +24,28 @@ test('the run and --json panels show the same reject run', async () => {
     expect(text('json')).toContain(`"${id}"`);
   }
   expect(text('json')).toContain(JSON.stringify(first.message));
+});
+
+test('the run panel shows the command the agent runs in the demo', async () => {
+  const demo = await loadDemo(dir);
+  const reject = demo.scenarios.find((s) => s.key === 'reject')!;
+  expect(reject.command).toBe('tagreeve run tagreeve/reject.yml --site https://staging.northwind.example');
+  expect(demo.commands.find((c) => c.key === 'run')!.lines[0]!.text).toBe(`$ ${reject.command}`);
+});
+
+test('the banner answer lands at ANSWER_AT, after the hits before it and before the hits after it', async () => {
+  const demo = await loadDemo(dir);
+  for (const s of demo.scenarios.filter((s) => s.answer)) {
+    const run = await records(s.key);
+    const answerT = [...run.consentEpochs].sort((a, b) => a.startT - b.startT)[1]!.startT;
+    expect(s.answer!.at, s.key).toBe(ANSWER_AT);
+    const recordT = new Map<string, number>(run.hits.map((h) => [h.id, h.t]));
+    const before = s.hits.filter((h) => recordT.get(h.id)! < answerT).map((h) => h.at);
+    const after = s.hits.filter((h) => recordT.get(h.id)! >= answerT).map((h) => h.at);
+    expect(Math.max(...before), s.key).toBe(ANSWER_AT - 300);
+    expect(Math.min(...after), s.key).toBeGreaterThanOrEqual(ANSWER_AT);
+    expect(Math.min(...after), s.key).toBeLessThan(ANSWER_AT + 200);
+  }
 });
 
 test('each exit code is the one the recorded "Result:" line reports', async () => {

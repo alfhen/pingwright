@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { loadDemo, type Tone } from '../../lib/demo-data.ts';
 
 const { commands } = await loadDemo(fileURLToPath(new URL('demo/', root)));
+// A long line wraps under its own indent instead of running past the panel.
+const indentOf = (text: string) => text.length - text.trimStart().length;
 const toneClass: Record<Tone, string> = {
   fg: 'text-code-ink',
   dim: 'text-code-comment',
@@ -14,7 +16,7 @@ const toneClass: Record<Tone, string> = {
 };
 ---
 
-<section class="mx-auto grid max-w-[1280px] grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-start gap-11 px-7 pt-[110px] pb-10" data-commands>
+<section class="mx-auto box-content grid max-w-[1280px] grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-start gap-11 px-7 pt-[110px] pb-10" data-commands>
   <div class="flex flex-col gap-4">
     <span class="font-mono text-xs font-medium text-mint">// for people, CI and agents</span>
     <h2 class="m-0 text-5xl leading-none font-semibold tracking-[-0.045em] text-balance">Test before you publish. Diff after.</h2>
@@ -47,9 +49,15 @@ const toneClass: Record<Tone, string> = {
         tabindex="0"
         role="region"
         aria-label={`${c.name} output`}
-        class="m-0 max-h-[640px] min-h-[380px] overflow-auto rounded-[14px] border border-rule bg-code px-[22px] py-5 font-mono text-[13px] leading-[1.7] whitespace-pre text-code-ink"
+        class="m-0 max-h-[640px] min-h-[380px] overflow-auto rounded-[14px] border border-rule bg-code px-[22px] py-5 font-mono text-[13px] leading-[1.7] text-code-ink"
       >
-        {c.lines.map((l) => <div class={toneClass[l.tone]}>{l.text || ' '}</div>)}
+        {
+          c.lines.map((l) => (
+            <div data-command-line class:list={[toneClass[l.tone], 'whitespace-pre-wrap [overflow-wrap:anywhere]']} style={`padding-left:${indentOf(l.text)}ch`}>
+              {l.text.trimStart() || ' '}
+            </div>
+          ))
+        }
       </div>
     ))
   }

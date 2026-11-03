@@ -18,7 +18,7 @@ const word = (letters: string, i: number) => [...letters].map((l) => LETTERS[l]!
 const BANNER = MARK.map(([m1, mpx, m2], i) => ({ m1, mpx, m2: `${m2}    `, w1: `${word('TAG', i)} `, w2: word('REEVE', i) }));
 ---
 
-<section aria-label="Sign-off" class="mx-auto flex max-w-[1280px] flex-col items-center gap-4 overflow-hidden px-7 pb-20 leading-[normal]">
+<section aria-label="Sign-off" class="mx-auto box-content flex max-w-[1280px] flex-col items-center gap-4 overflow-hidden px-7 pb-20 leading-[normal]">
   <div role="img" aria-label="TAGREEVE" data-banner class="font-mono text-[clamp(6px,1.25vw,15px)] leading-[1.05] text-dim">
     {
       BANNER.map((r) => (
