@@ -22,6 +22,7 @@ const sidebar = [
       { label: 'What Tagreeve checks', link: '/docs/guide/what-it-checks' },
       { label: 'Your first run', link: '/docs/guide/first-run' },
       { label: "Reading a run's results", link: '/docs/guide/reading-results' },
+      { label: 'Run your server container locally', link: '/docs/guide/server-container' },
     ],
   },
   {

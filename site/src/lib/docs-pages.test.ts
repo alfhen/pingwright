@@ -11,6 +11,7 @@ describe('findPages', () => {
       'docs/design.md',
       'docs/guide/first-run.md',
       'docs/guide/reading-results.md',
+      'docs/guide/server-container.md',
       'docs/guide/what-it-checks.md',
       'docs/shopify-checkout.md',
     ]);
