@@ -1,6 +1,6 @@
 import { newId, type DataLayerEvent, type Hit, type Request, type Response } from '@tagreeve/core';
 import { describe, expect, test } from 'vitest';
-import { buildFlags, buildUnloadGapFlags, isFirstPartySubdomain, isUnknownDestination } from './flags.ts';
+import { buildFlags, buildUnloadGapFlags, isFirstPartySubdomain, isUnknownDestination, type FrameRef } from './flags.ts';
 
 function req(url: string, over: Partial<Request> = {}): Request {
   return {
@@ -297,7 +297,10 @@ describe('unload gap at run end and in the same frame', () => {
   });
 
   test('a covering GA4 hit before the run ended clears it', () => {
-    expect(gap({ events: [pushed('add_to_cart', 1000)], hits: [ga4Hit('add_to_cart', 2000)], runEnd: 4000 })).toEqual([]);
+    const events = [pushed('add_to_cart', 1000)];
+    expect(gap({ events, runEnd: 4000 })).toHaveLength(1);
+    expect(gap({ events, hits: [ga4Hit('add_to_cart', 2000)], runEnd: 4000 })).toEqual([]);
+    expect(gap({ events, hits: [ga4Hit('add_to_cart', 5500)], runEnd: 4000 })).toHaveLength(1);
   });
 
   test('a push 12 s before the run ended is not flagged', () => {
@@ -305,25 +308,40 @@ describe('unload gap at run end and in the same frame', () => {
   });
 
   describe('same frame', () => {
-    const frameA = 'https://shop.example.com/sandbox/a/';
-    const frameB = 'https://shop.example.com/sandbox/b/';
-    const setup = (hitFrame: string) => {
+    const frameA = { id: '1.0', url: 'https://shop.example.com/sandbox/a/' };
+    const sameUrlOtherFrame = { id: '2.0', url: frameA.url };
+    const nextDocument = { id: '1.1', url: frameA.url };
+    const srcdocA = { id: '3.0', url: 'about:srcdoc' };
+    const srcdocB = { id: '4.0', url: 'about:srcdoc' };
+    const netLog = { id: null, url: frameA.url };
+
+    const run = (pushFrame: FrameRef, hitFrame: FrameRef | null, hitName = 'custom_ga') => {
       const event = pushed('my_add', 1000);
-      const hits = [sgtmHit('my_add', 1100), ga4Hit('add_to_cart', 1200)];
-      const requestFrames = new Map([[hits[1]!.requestId as string, hitFrame]]);
-      return { events: [event], hits, runEnd: 4000, eventFrames: new Map([[event.id, frameA]]), requestFrames };
+      const hits = [sgtmHit('my_add', 1100), ga4Hit(hitName, 1200)];
+      return gap({ events: [event], hits, runEnd: 4000, eventFrames: new Map([[event.id, pushFrame]]), requestFrames: new Map([[hits[1]!.requestId as string, hitFrame]]) });
     };
 
-    test('a custom name is covered by a GA4 hit from the same frame', () => {
-      expect(gap(setup(frameA))).toEqual([]);
+    test('a GA4 hit with a non-GA4 name from the same frame document covers a custom name', () => {
+      expect(run(frameA, frameA)).toEqual([]);
     });
 
     test('a GA4 hit with a non-GA4 name from another frame does not cover it', () => {
-      const event = pushed('my_add', 1000);
-      const hits = [sgtmHit('my_add', 1100), ga4Hit('custom_ga', 1200)];
-      const input = { events: [event], hits, runEnd: 4000, eventFrames: new Map([[event.id, frameA]]) };
-      expect(gap({ ...input, requestFrames: new Map([[hits[1]!.requestId as string, frameB]]) })).toHaveLength(1);
-      expect(gap({ ...input, requestFrames: new Map([[hits[1]!.requestId as string, frameA]]) })).toEqual([]);
+      expect(run(frameA, { id: '5.0', url: 'https://shop.example.com/sandbox/b/' })).toHaveLength(1);
+    });
+
+    test('two frames with the same URL do not cover each other', () => {
+      expect(run(frameA, sameUrlOtherFrame)).toHaveLength(1);
+      expect(run(srcdocA, srcdocB)).toHaveLength(1);
+    });
+
+    test('the same frame after a navigation is another document', () => {
+      expect(run(frameA, nextDocument)).toHaveLength(1);
+    });
+
+    test('a request without a Frame object falls back to the frame URL', () => {
+      expect(run(frameA, netLog)).toEqual([]);
+      expect(run(frameA, { id: null, url: 'https://shop.example.com/sandbox/b/' })).toHaveLength(1);
+      expect(run(frameA, null)).toHaveLength(1);
     });
 
     test('a same-frame hit sent before the push does not cover it', () => {

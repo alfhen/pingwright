@@ -199,6 +199,8 @@ For a stub-mode run, `/pwcookie` is a Stape loader request, so stub mode answers
 
 `/unload-gap` takes a `mode` switch that the gap frame reads. With a `mode`, the server writes it into the iframe `src` and leaves out the page's inline script. Without `mode` the page is as described above. `?mode=custom`: 1.8 s after load the frame pushes `custom_add`, sends a `/data` hit named `custom_add` and a GA4 `/g/collect` hit named `custom_add_ga` to `https://sgtm.tagreeve.invalid`, and sends nothing in `pagehide`. `?mode=close`: the frame pushes `add_to_cart` and holds the hit until `pagehide`. The scenario does not navigate, so the hit goes out only when the page closes.
 
+`/unload-gap-checkout` has the banner and a sandboxed `srcdoc` iframe. 1.8 s after it loads, the frame pushes `checkout_completed` (the Shopify name for `purchase`) and sends a `/data` hit named `checkout_completed` to `https://sgtm.tagreeve.invalid`. In `pagehide` it sends a GA4 `purchase` with `sendBeacon`, which stub mode does not capture. The scenario does not navigate, so the run end is the unload point.
+
 ## Stand-in server container
 
 `standInContainerPath` (from `@tagreeve/fixture-site`) is the absolute path of `src/stand-in-container.ts`, an executable Node script that stands in for the server container image. A test sets `TAGREEVE_TEST_SERVER_CONTAINER_CMD` to it. The runner then starts it in place of `docker run`, with `PORT`, `HTTP_PROXY` and `NODE_EXTRA_CA_CERTS`. It needs no Docker and no network.
