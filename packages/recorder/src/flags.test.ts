@@ -395,6 +395,12 @@ describe('platform hosts', () => {
     expect(build([r]).map((f) => [f.kind, f.detail])).toEqual([['platformHost', `GET ${r.url}`]]);
   });
 
+  test('a request to the Shopify telemetry host is a platformHost flag', () => {
+    const r = req('https://monorail-edge.shopifysvc.com/v1/produce?x=1', { resourceType: 'fetch', method: 'POST' });
+    expect(kinds([r])).toEqual(['platformHost']);
+    expect(kinds([r], false)).toEqual(['unknownDestination']);
+  });
+
   test('an unlisted Shopify subdomain and a third-party payment host stay unknown destinations', () => {
     const unlisted = req('https://unlisted.shopify.com/x?y=1');
     const stripe = req('https://js.stripe.com/v3/m?x=1');

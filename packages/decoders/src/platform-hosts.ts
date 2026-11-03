@@ -26,6 +26,12 @@ export const platformHosts: readonly PlatformHostEntry[] = [
     purpose: 'cdn',
     source: 'https://shopify.dev/docs/storefronts/headless/hydrogen/content-security-policy',
   },
+  {
+    platform: 'shopify',
+    host: 'monorail-edge.shopifysvc.com',
+    purpose: 'telemetry',
+    source: 'https://shopify.dev/docs/storefronts/headless/hydrogen/analytics/validation',
+  },
 ];
 
 function hostMatches(pattern: string, hostname: string): boolean {
