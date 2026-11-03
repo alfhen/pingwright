@@ -1,18 +1,22 @@
 import type { ConsentEpoch, ConsentState, Hit, Result, ResultNote, RunRecords } from '@tagreeve/core';
 import { guardFieldName, identifierClass, identifierSignal } from '@tagreeve/decoders';
-import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit } from '@tagreeve/expect';
+import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit, isServerHit, judgeIndex, judgedAt } from '@tagreeve/expect';
 
 export type Mark = 'full' | 'ping' | 'nothing' | 'leak' | 'unchecked' | 'mixed' | 'early';
-export type EpochLabel = ConsentEpoch['label'];
+export type EpochLabel = ConsentEpoch['label'] | 'unlinked';
 
 export interface Segment {
   mark: Mark;
   label: string;
   hits: number;
+  /** Server container hits in this segment that rest on a probable link. */
+  probable?: number;
 }
 
 export interface VendorRow {
   vendor: string;
+  /** True for the hits the server container sent on, shown apart from the browser's. */
+  server?: true;
   hits: number;
   segments: Segment[];
 }
@@ -64,6 +68,8 @@ export interface ReportModel {
   /** Undefined on a record that holds no field names (schema version below 2). */
   fields: FieldsView[] | undefined;
   skippedFields: { step: string; selector: string }[];
+  /** Set when the run has hits sent by a server container. */
+  serverContainer?: { hits: number; exact: number; probable: number; unlinked: number };
 }
 
 export const NOTE_TEXT: Record<ResultNote, string> = {
@@ -72,6 +78,8 @@ export const NOTE_TEXT: Record<ResultNote, string> = {
   fieldsNotRecorded: 'cannot evaluate: field names not recorded',
   cookieNotStored: 'the server set this cookie, but no later checkpoint shows the browser holding it',
   nestedNameOnly: 'a plain name matches a top-level field only; use **.name to match at any depth',
+  serverSendProbableLink: 'a server container hit is placed by a probable link to a browser hit, which cannot fail a run',
+  serverSendUnlinked: 'cannot evaluate: a server container hit has no link to a browser hit, so no consent state applies',
 };
 
 const WORST_FIRST: Mark[] = ['leak', 'unchecked', 'mixed', 'early', 'full', 'ping'];
@@ -148,7 +156,7 @@ function expectationView(result: Result): ExpectationView {
     kind = 'builtin';
     text = result.expectation;
   }
-  const cannot = !result.pass && (result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded');
+  const cannot = !result.pass && (result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded' || result.note === 'serverSendUnlinked');
   const status: ExpectationStatus = cannot ? 'CANNOT EVALUATE' : result.pass ? 'PASS' : severity === 'warn' ? 'WARN' : 'FAIL';
   return {
     status,
@@ -173,7 +181,7 @@ export const IDENTIFIER_EARLY = 'identifiers sent before an answer';
 function namedLeaks(results: readonly Result[]): Map<string, string> {
   const named = new Map<string, string>();
   for (const result of results) {
-    if (result.pass || result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded') continue;
+    if (result.pass || result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded' || result.note === 'serverSendUnlinked') continue;
     let label: string;
     if (result.expectation === 'builtin: deniedIdentifiers') label = IDENTIFIER_LEAK;
     else if (result.expectation === 'builtin: earlyIdentifiers') label = IDENTIFIER_EARLY;
@@ -190,7 +198,12 @@ function namedLeaks(results: readonly Result[]): Map<string, string> {
   return named;
 }
 
-function judge(hit: Hit, state: ConsentState, undecided: boolean, named: ReadonlyMap<string, string>): Verdict {
+const NO_LINK = 'no link to a browser hit';
+
+function judge(hit: Hit, state: ConsentState, undecided: boolean, named: ReadonlyMap<string, string>, unlinked = false): Verdict {
+  if (unlinked) {
+    return hit.idFields === undefined || hit.idFields.length > 0 ? { mark: 'unchecked', label: `${NO_LINK}, consent state unknown` } : { mark: 'full', label: NO_LINK };
+  }
   const known = CONSENT_FIELDS.map((f) => state[f]).filter((v) => v !== 'unknown');
   const denied = known.includes('denied');
   const granted = known.includes('granted');
@@ -271,29 +284,56 @@ export function buildReportModel(records: RunRecords): ReportModel {
   const epochs = [...records.consentEpochs].sort((a, b) => a.startT - b.startT);
   const named = namedLeaks(records.results);
 
+  const index = judgeIndex(records.hits, records.requests);
   const placed = records.hits.map((hit) => {
-    const epoch = epochForHit(epochs, hit.t, graceMs);
-    const state = effectiveConsentAt(hit, epochs, graceMs);
-    const column = epoch ? epochs.indexOf(epoch) : -1;
-    return { hit, state, column, verdict: judge(hit, state, !epoch || epoch.label === 'undecided', named) };
+    const server = isServerHit(hit, index);
+    const at = judgedAt(hit, index);
+    const unlinked = at === undefined;
+    const epoch = unlinked ? undefined : epochForHit(epochs, at, graceMs);
+    const state = effectiveConsentAt(hit, epochs, graceMs, index);
+    const column = unlinked ? epochs.length : epoch ? epochs.indexOf(epoch) : -1;
+    const probable = server && hit.via?.confidence === 'probable';
+    return { hit, state, column, server, unlinked, probable, verdict: judge(hit, state, !unlinked && (!epoch || epoch.label === 'undecided'), named, unlinked) };
   });
 
   const synthetic = epochs.length === 0 || placed.some((p) => p.column < 0);
   const offset = synthetic ? 1 : 0;
+  const hasUnlinked = placed.some((p) => p.unlinked);
   const columns: ReportModel['columns'] = [
     ...(synthetic ? [{ label: 'undecided' as EpochLabel, index: 0 }] : []),
-    ...epochs.map((e, i) => ({ label: e.label, index: i + offset })),
+    ...epochs.map((e, i) => ({ label: e.label as EpochLabel, index: i + offset })),
+    ...(hasUnlinked ? [{ label: 'unlinked' as EpochLabel, index: epochs.length + offset }] : []),
   ];
 
   const vendors = [...new Set(records.hits.map((h) => h.vendor))].sort();
-  const rows: VendorRow[] = vendors.map((vendor) => {
-    const own = placed.filter((p) => p.hit.vendor === vendor);
-    return {
-      vendor,
-      hits: own.length,
-      segments: columns.map((col) => segmentOf(own.filter((p) => p.column + offset === col.index).map((p) => p.verdict))),
-    };
-  });
+  const rows: VendorRow[] = vendors.flatMap((vendor) =>
+    [false, true].flatMap((server): VendorRow[] => {
+      const own = placed.filter((p) => p.hit.vendor === vendor && p.server === server);
+      if (own.length === 0) return [];
+      return [
+        {
+          vendor,
+          ...(server && { server: true as const }),
+          hits: own.length,
+          segments: columns.map((col) => {
+            const here = own.filter((p) => p.column + offset === col.index);
+            const segment = segmentOf(here.map((p) => p.verdict));
+            const probable = here.filter((p) => p.probable).length;
+            return probable > 0 ? { ...segment, probable } : segment;
+          }),
+        },
+      ];
+    }),
+  );
+  const serverHits = placed.filter((p) => p.server);
+  const serverContainer = serverHits.length
+    ? {
+        hits: serverHits.length,
+        exact: serverHits.filter((p) => !p.unlinked && !p.probable).length,
+        probable: serverHits.filter((p) => p.probable && !p.unlinked).length,
+        unlinked: serverHits.filter((p) => p.unlinked).length,
+      }
+    : undefined;
 
   const version = run.recordSchemaVersion ?? 0;
   let fields: FieldsView[] | undefined;
@@ -328,5 +368,6 @@ export function buildReportModel(records: RunRecords): ReportModel {
     flags: flagViews(records),
     fields,
     skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
+    ...(serverContainer && { serverContainer }),
   };
 }

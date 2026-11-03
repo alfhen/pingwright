@@ -50,6 +50,12 @@ This is the full output. It is not shortened. Here is how to read the less obvio
 - `(2 before narrowing)` is the number of hits that matched `vendor` in the whole run. Tagreeve then kept only the hits that `before: consent` selects. Here both hits stayed.
 - `evidence` lists the IDs of the records behind the failure.
 
+## Hits sent by the server container
+
+With `--server-container`, the summary has a `Server container` line, and the report shows the vendors that your server container sent on in their own rows. Each such hit is judged by the browser hit it came from, not by the time the container sent it. The container may send a call after the visitor changed their answer, and the answer that counts is the one the browser hit was sent under.
+
+Only an exact link can fail a run on time or consent. When a failure rests on a link by a shared value (`probable`), it shows as `WARN` with a note. If the same run also has an exact leak, it still fails. A hit with no link cannot be judged for consent. Checks that need its consent state show `WARN` and `cannot evaluate`, also when a probable leak sits next to the unlinked hit. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched.
+
 ## Consent epochs
 
 An epoch is a period with one consent state. The run above ends in one epoch, `undecided`, because the scenario never answered the banner. A scenario that rejects the banner has two epochs.

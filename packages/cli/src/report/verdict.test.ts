@@ -82,3 +82,9 @@ test('early identifiers go into the identifier sentence for the undecided state,
   expect(sentence([m], true)).toBe('identifiers go out to Meta in the undecided state');
   expect(sentence([model([check('WARN', 'earlyIdentifiers')])], true)).toBe('no leaks; built-in check earlyIdentifiers warned in 1 run');
 });
+
+test('server container hits that are unlinked or on a probable link are named', () => {
+  const m = { ...model([]), serverContainer: { hits: 4, exact: 1, probable: 2, unlinked: 1 } };
+  expect(sentence([m])).toBe('no leaks; 1 server container hit could not be linked to a browser hit; 2 server container hits placed by a probable link');
+  expect(sentence([model([])])).toBe('no leaks');
+});

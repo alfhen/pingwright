@@ -449,3 +449,70 @@ describe('deniedIdentifiers evidence', () => {
     expect(marksOf(model, 'sgtm')).toEqual(['nothing', 'ping', 'nothing']);
   });
 });
+
+describe('server container hits', () => {
+  function server(vendor: string, t: number, via: Hit | undefined, confidence: 'exact' | 'probable' = 'exact'): { hit: Hit; request: Request } {
+    const request = { type: 'request', id: newId('request'), runId, captured: 'serverContainer' } as unknown as Request;
+    return { request, hit: hit(vendor, t, { requestId: request.id, ...(via && { via: { hitId: via.id, by: 'eventId', confidence } }) }) };
+  }
+
+  const via = hit('meta', 500);
+
+  test('a linked server hit is placed in the epoch of its via hit and has its own row', () => {
+    const sent = server('meta-capi', 2500, via);
+    const model = buildReportModel(records({ hits: [via, sent.hit], requests: [sent.request] }));
+    expect(model.columns.map((c) => c.label)).toEqual(['undecided', 'denied', 'withdrawn']);
+    const row = model.rows.find((r) => r.vendor === 'meta-capi')!;
+    expect(row.server).toBe(true);
+    expect(row.segments.map((s) => s.hits)).toEqual([1, 0, 0]);
+    expect(model.rows.find((r) => r.vendor === 'meta')!.server).toBeUndefined();
+    expect(model.serverContainer).toEqual({ hits: 1, exact: 1, probable: 0, unlinked: 0 });
+  });
+
+  test('a probable link is counted in its segment', () => {
+    const sent = server('meta-capi', 2500, via, 'probable');
+    const model = buildReportModel(records({ hits: [via, sent.hit], requests: [sent.request] }));
+    expect(model.rows.find((r) => r.server)!.segments[0]).toMatchObject({ hits: 1, probable: 1 });
+    expect(model.serverContainer).toMatchObject({ probable: 1, exact: 0 });
+  });
+
+  test('an unlinked hit is in a column after the last epoch', () => {
+    const sent = server('meta-capi', 500, undefined);
+    const model = buildReportModel(records({ hits: [via, sent.hit], requests: [sent.request] }));
+    expect(model.columns.map((c) => c.label)).toEqual(['undecided', 'denied', 'withdrawn', 'unlinked']);
+    const segments = model.rows.find((r) => r.server)!.segments;
+    expect(segments.map((s) => s.hits)).toEqual([0, 0, 0, 1]);
+    expect(segments[3]).toMatchObject({ mark: 'full', label: 'no link to a browser hit' });
+    expect(model.serverContainer).toMatchObject({ unlinked: 1 });
+  });
+
+  test('an unlinked hit with identifier names cannot be called clean', () => {
+    const sent = server('meta-capi', 500, undefined);
+    sent.hit.idFields = ['user_data.em[]'];
+    const model = buildReportModel(records({ hits: [sent.hit], requests: [sent.request] }));
+    expect(model.rows[0]!.segments.at(-1)).toMatchObject({ mark: 'unchecked', label: 'no link to a browser hit, consent state unknown' });
+  });
+
+  test('a result that could not judge an unlinked hit is cannot evaluate and names no leak', () => {
+    const sent = server('meta-capi', 500, undefined);
+    const unjudged = result('builtin: deniedIdentifiers', false, { severity: 'warn', note: 'serverSendUnlinked', evidence: [sent.hit.id] });
+    const model = buildReportModel(records({ hits: [sent.hit], requests: [sent.request], results: [unjudged] }));
+    expect(model.expectations[0]).toMatchObject({ status: 'CANNOT EVALUATE' });
+    expect(model.rows[0]!.segments.some((s) => s.mark === 'leak')).toBe(false);
+  });
+
+  test('an unlinked hit named in the evidence of a failed exact leak is not marked as a leak', () => {
+    const sent = server('meta-capi', 500, undefined);
+    sent.hit.idFields = ['user_data.em[]'];
+    const failed = result('builtin: deniedIdentifiers', false, { evidence: [sent.hit.id] });
+    const model = buildReportModel(records({ hits: [sent.hit], requests: [sent.request], results: [failed] }));
+    expect(model.rows[0]!.segments.some((s) => s.mark === 'leak')).toBe(false);
+    expect(model.rows[0]!.segments.at(-1)).toMatchObject({ mark: 'unchecked' });
+  });
+
+  test('a run with no server hit has no serverContainer field and no server row', () => {
+    const model = buildReportModel(records({ hits: [via] }));
+    expect(model).not.toHaveProperty('serverContainer');
+    expect(model.rows.some((r) => r.server)).toBe(false);
+  });
+});

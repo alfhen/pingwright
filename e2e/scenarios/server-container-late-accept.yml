@@ -1,0 +1,10 @@
+start: /server-container?email={email}&extra={extra}&cookie=1&delayMs=1500
+vars: { email: '', extra: '' }
+steps:
+  - consent: reject
+  - click: "#pw-cookie-settings"
+  - consent: accept
+  - wait: 2s
+expect:
+  must: []
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true }

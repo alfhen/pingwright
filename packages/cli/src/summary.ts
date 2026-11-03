@@ -1,5 +1,6 @@
 import { platformHostFor } from '@tagreeve/decoders';
-import type { Result, ResultNote, RunRecords, Severity } from '@tagreeve/core';
+import type { Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
+import { isServerHit, judgeIndex, viaHitOf } from '@tagreeve/expect';
 import { NOTE_TEXT } from './report/model.ts';
 
 export interface BaselineSummary {
@@ -10,6 +11,18 @@ export interface BaselineSummary {
   countChanges: number;
   warnings: string[];
   changes: string[];
+}
+
+/** Counts only. Never the config, a container ID or a host name. */
+export interface ServerContainerSummary {
+  /** The vendor calls the container sent on, as hits. */
+  calls: number;
+  exact: number;
+  probable: number;
+  unlinked: number;
+  /** Requests the proxy forwarded to Google. */
+  forwarded: number;
+  error?: ServerContainerErrorClass;
 }
 
 export interface Summary {
@@ -29,6 +42,8 @@ export interface Summary {
   testPayment?: { provider: string; host: string; testMode: 'declared' | 'marker' };
   /** Set when a stand-in container of the test seam answered in place of a real server container. */
   testServerContainer?: true;
+  /** Set when the run used `--server-container`. */
+  serverContainer?: ServerContainerSummary;
   /** Set when the run was compared with a baseline. */
   baseline?: BaselineSummary;
 }
@@ -60,8 +75,26 @@ function testPaymentOf(records: RunRecords): Summary['testPayment'] {
   return payment && { provider: payment.provider, host: new URL(records.run.site).hostname, testMode: payment.testMode ?? 'marker' };
 }
 
+function serverContainerOf(records: RunRecords): ServerContainerSummary | undefined {
+  const container = records.run.serverContainer;
+  if (!container) return undefined;
+  const index = judgeIndex(records.hits, records.requests);
+  const sent = records.hits.filter((h) => isServerHit(h, index));
+  const linked = sent.filter((h) => viaHitOf(h, index));
+  const { serverjs, config, destination } = container.passThrough;
+  return {
+    calls: sent.length,
+    exact: linked.filter((h) => h.via?.confidence === 'exact').length,
+    probable: linked.filter((h) => h.via?.confidence === 'probable').length,
+    unlinked: sent.length - linked.length,
+    forwarded: serverjs + config + destination,
+    ...(container.error && { error: container.error }),
+  };
+}
+
 export function buildSummary(records: RunRecords, results: Result[], path: string): Summary {
   const testPayment = testPaymentOf(records);
+  const serverContainer = serverContainerOf(records);
   return {
     runId: records.run.id,
     path,
@@ -72,6 +105,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
     ...(testPayment && { testPayment }),
     ...(records.run.testServerContainer && { testServerContainer: true as const }),
+    ...(serverContainer && { serverContainer }),
     skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
     results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, ...(r.note && { note: r.note }), evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
@@ -151,13 +185,25 @@ export function formatDuration(ms: number): string {
   return rounded < 1000 ? `${rounded} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
+const SERVER_CONTAINER_LIMITS =
+  '  Not shown: Stape-only features, tags that need the hosting layer, unpublished workspaces, calls no decoder matched (flagged unknown)';
+
+function serverContainerLines(summary: Summary): string[] {
+  const { serverContainer: c, testServerContainer } = summary;
+  const head = testServerContainer ? 'stand-in container (test seam)' : c?.error ? `failed (${c.error})` : 'image ok';
+  if (!c) return testServerContainer ? [`Server container: ${head}`] : [];
+  const error = testServerContainer && c.error ? `, failed (${c.error})` : '';
+  const calls = `${c.calls} vendor call${c.calls === 1 ? '' : 's'}, ${c.exact} linked exactly, ${c.probable} probable, ${c.unlinked} unlinked`;
+  return [`Server container: ${head}${error}; ${calls}; ${c.forwarded} request${c.forwarded === 1 ? '' : 's'} forwarded to Google`, SERVER_CONTAINER_LIMITS];
+}
+
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
   if (summary.testPayment) {
     const { provider, host, testMode } = summary.testPayment;
     lines.push(`TEST PAYMENT: ${provider} on ${host} (test mode ${testMode === 'declared' ? 'declared' : 'on page'})`);
   }
-  if (summary.testServerContainer) lines.push('Server container: stand-in container (test seam)');
+  lines.push(...serverContainerLines(summary));
   lines.push('Hits');
   const vendors = Object.entries(summary.hits);
   if (vendors.length === 0) lines.push('  none');

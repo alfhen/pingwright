@@ -1,7 +1,7 @@
 import { looksLikeValueToken, stripSandboxPrefix } from '@tagreeve/decoders';
 import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@tagreeve/core';
 import { consentFields } from './scenario.ts';
-import { epochForHit } from './evaluate.ts';
+import { epochForHit, judgeIndex, judgedAt } from './evaluate.ts';
 
 export interface DiffOptions {
   /** Adds the page path to the match key, with the Shopify sandbox prefix stripped. */
@@ -62,6 +62,7 @@ export interface DiffResult {
 }
 
 const NO_EPOCH = 'none';
+const SERVER_UNLINKED = 'server';
 
 export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}): DiffResult {
   const result: DiffResult = { warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] };
@@ -300,10 +301,13 @@ interface Group {
 function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
   const epochs: ConsentEpoch[] = [...run.consentEpochs].sort((x, y) => x.startT - y.startT);
   const frames = new Map(run.requests.map((r) => [r.id as string, r.frameUrl]));
+  const index = judgeIndex(run.hits, run.requests);
+  const placedAt = new Map(run.hits.map((h) => [h, judgedAt(h, index)]));
   const groups = new Map<string, Group>();
-  for (const hit of [...run.hits].sort((x, y) => x.t - y.t)) {
+  for (const hit of [...run.hits].sort((x, y) => (placedAt.get(x) ?? Infinity) - (placedAt.get(y) ?? Infinity) || x.t - y.t)) {
+    const at = placedAt.get(hit);
     const key: DiffKey = {
-      epoch: epochForHit(epochs, hit.t)?.label ?? NO_EPOCH,
+      epoch: at === undefined ? SERVER_UNLINKED : (epochForHit(epochs, at)?.label ?? NO_EPOCH),
       vendor: hit.vendor,
       event: hit.event ?? '',
     };

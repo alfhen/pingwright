@@ -1,5 +1,5 @@
 import type { ExpectationView, Mark, ReportModel, Segment } from './model.ts';
-import { byVendorName, vendorLabel } from './names.ts';
+import { byVendorName, rowLabel, vendorLabel } from './names.ts';
 import { runVerdict } from './verdict.ts';
 
 export const CSP = "default-src 'none'; style-src 'unsafe-inline'";
@@ -46,21 +46,25 @@ function glyph(mark: Mark): string {
 
 function segmentCell(segment: Segment): string {
   const label = segment.label ? `<span class="why">${escapeHtml(segment.label)}</span>` : '';
-  const count = segment.hits ? `<span class="count">${segment.hits} hit${segment.hits === 1 ? '' : 's'}</span>` : '';
+  const count = segment.hits ? `<span class="count">${segment.hits} hit${segment.hits === 1 ? '' : 's'}${segment.probable ? `, ${segment.probable} by probable link` : ''}</span>` : '';
   return `<td class="m-${segment.mark}">${glyph(segment.mark)}<span class="name">${MARK_NAME[segment.mark]}</span>${count}${label}</td>`;
 }
+
+export const SERVER_CAVEAT =
+  'Server container rows show what the local container sent on. Stape-only features, tags that need the hosting layer, unpublished workspaces and calls that no decoder matched are not shown. Hits with no link to a browser hit are in the unlinked column.';
 
 export function timeline(model: ReportModel): string {
   if (model.rows.length === 0) return '<p class="empty">No vendor hits were recorded.</p>';
   const head = model.columns.map((c) => `<th scope="col">${escapeHtml(c.label)}</th>`).join('');
   const body = [...model.rows]
-    .sort((a, b) => byVendorName(a.vendor, b.vendor))
-    .map((row) => `<tr><th scope="row">${escapeHtml(vendorLabel(row.vendor))}</th>${row.segments.map(segmentCell).join('')}</tr>`)
+    .sort((a, b) => byVendorName(a.vendor, b.vendor) || Number(a.server ?? false) - Number(b.server ?? false))
+    .map((row) => `<tr><th scope="row">${escapeHtml(rowLabel(row))}</th>${row.segments.map(segmentCell).join('')}</tr>`)
     .join('');
   const legend = (Object.keys(LEGEND) as Mark[])
     .map((m) => `<li class="m-${m}">${glyph(m)}<strong>${m}</strong> ${escapeHtml(LEGEND[m])}</li>`)
     .join('');
-  return `<div class="scroll"><table class="timeline"><thead><tr><th scope="col">Vendor</th>${head}</tr></thead><tbody>${body}</tbody></table></div><ul class="legend">${legend}</ul>`;
+  const server = model.serverContainer ? `<p class="empty">${escapeHtml(SERVER_CAVEAT)}</p>` : '';
+  return `<div class="scroll"><table class="timeline"><thead><tr><th scope="col">Vendor</th>${head}</tr></thead><tbody>${body}</tbody></table></div><ul class="legend">${legend}</ul>${server}`;
 }
 
 function expectation(e: ExpectationView): string {

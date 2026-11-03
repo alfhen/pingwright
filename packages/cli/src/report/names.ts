@@ -21,3 +21,7 @@ export function vendorLabel(key: string): string {
 }
 
 export const byVendorName = (a: string, b: string): number => vendorName(a).localeCompare(vendorName(b)) || a.localeCompare(b);
+
+export function rowLabel(row: { vendor: string; server?: true }): string {
+  return row.server ? `${vendorLabel(row.vendor)}, sent by the server container` : vendorLabel(row.vendor);
+}

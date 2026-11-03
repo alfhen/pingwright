@@ -194,3 +194,19 @@ test('a changed total or a move across two answers is drift', () => {
   expect(skip.drift).toBe(true);
   expect(skip.warnings).toEqual([]);
 });
+
+test('a baseline does not drift when only the time of a linked server hit changes within its via epoch', () => {
+  const labels = ['undecided', 'granted', 'denied', 'undecided'];
+  const withServer = (serverT: number): RunRecords => {
+    const run = runWithEpochs([{ t: 150 }], labels);
+    const pixel = run.hits[0]!;
+    const request = { type: 'request', id: newId('request'), runId: run.run.id, captured: 'serverContainer' } as unknown as RunRecords['requests'][number];
+    run.requests = [request];
+    run.hits.push({ ...pixel, id: newId('hit'), requestId: request.id, vendor: 'meta-capi', t: serverT, via: { hitId: pixel.id, by: 'eventId', confidence: 'exact' } });
+    return run;
+  };
+  expect(withServer(350).consentEpochs.find((e) => e.startT === 300)!.label).toBe('undecided');
+  const result = compareBaseline(buildBaseline(withServer(160), false), withServer(350));
+  expect(result).toMatchObject({ drift: false, added: 0, removed: 0, countChanges: 0 });
+  expect(result.warnings).toEqual([]);
+});

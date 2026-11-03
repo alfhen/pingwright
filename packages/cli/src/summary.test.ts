@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
+import { newId } from '@tagreeve/core';
 import { applyBaseline, buildSummary, countHits, exitCodeFor, formatDuration, formatSummary, type Summary } from './summary.ts';
 import { main } from './main.ts';
 import { runCommand } from './run.ts';
@@ -312,4 +313,49 @@ test('a run from the stand-in container says so in the summary and in --json', (
   const plain = buildSummary({ ...records, run: { id: 'run_x' } } as unknown as RunRecords, [], 'run.jsonl');
   expect(plain).not.toHaveProperty('testServerContainer');
   expect(formatSummary(plain)).not.toContain('stand-in');
+});
+
+function serverRecords(error?: string): RunRecords {
+  const runId = newId('run');
+  const requests = [0, 1, 2, 3].map((i) => ({ type: 'request', id: newId('request'), runId, t: i, captured: 'serverContainer' }));
+  const browser = { type: 'hit', id: newId('hit'), runId, requestId: newId('request'), t: 0, vendor: 'meta', event: 'Purchase' };
+  const via = (confidence: string) => ({ hitId: browser.id, by: 'eventId', confidence });
+  const sent = (i: number, extra: object) => ({ type: 'hit', id: newId('hit'), runId, requestId: requests[i]!.id, t: 10 + i, vendor: 'ga4', event: 'purchase', ...extra });
+  const hits = [browser, sent(0, { via: via('exact') }), sent(1, { via: via('exact') }), sent(2, { via: via('probable') }), sent(3, {})];
+  return {
+    run: { id: runId, serverContainer: { image: 'tagreeve-sgtm:1@sha256:abc', startedAt: 0, requests: 4, refused: 0, unlinked: 1, passThrough: { serverjs: 1, config: 1, destination: 1 }, ...(error && { error }) } },
+    hits,
+    requests,
+    consentEpochs: [],
+    flags: [],
+    steps: [],
+  } as unknown as RunRecords;
+}
+
+test('the summary counts the server container calls by link, in the line and in --json', () => {
+  const summary = buildSummary(serverRecords(), [], 'run.jsonl');
+  expect(summary.serverContainer).toEqual({ calls: 4, exact: 2, probable: 1, unlinked: 1, forwarded: 3 });
+  const text = formatSummary(summary);
+  expect(text).toContain('Server container: image ok; 4 vendor calls, 2 linked exactly, 1 probable, 1 unlinked; 3 requests forwarded to Google');
+  expect(text).toContain('Not shown: Stape-only features');
+  expect(JSON.parse(JSON.stringify(summary)).serverContainer.calls).toBe(4);
+});
+
+test('a container that failed shows its error class, and the stand-in stays marked', () => {
+  const failed = formatSummary(buildSummary(serverRecords('exited'), [], 'run.jsonl'));
+  expect(failed).toContain('Server container: failed (exited); 4 vendor calls');
+  const records = serverRecords();
+  records.run.testServerContainer = true;
+  expect(formatSummary(buildSummary(records, [], 'run.jsonl'))).toContain('Server container: stand-in container (test seam); 4 vendor calls');
+});
+
+test('a run without a container has no serverContainer field and no line', () => {
+  const plain = buildSummary({ run: { id: 'run_x' }, hits: [], requests: [], consentEpochs: [], flags: [], steps: [] } as unknown as RunRecords, [], 'run.jsonl');
+  expect(plain).not.toHaveProperty('serverContainer');
+  expect(formatSummary(plain)).not.toContain('Server container');
+});
+
+test('the summary line holds no config, container ID or host', () => {
+  const text = formatSummary(buildSummary(serverRecords(), [], 'run.jsonl'));
+  for (const bad of ['GTM-', 'auth=', 'sha256', 'http']) expect(text).not.toContain(bad);
 });
