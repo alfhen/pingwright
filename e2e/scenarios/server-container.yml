@@ -1,0 +1,7 @@
+start: /server-container?email={email}&extra={extra}
+vars: { email: '', extra: '0' }
+steps:
+  - wait: 2s
+expect:
+  must: []
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true }

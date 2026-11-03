@@ -413,3 +413,47 @@ describe('platform hosts', () => {
     expect(kinds([r], true)).toEqual(['platformHost']);
   });
 });
+
+describe('requests from the server container', () => {
+  const input = (requests: Request[]) => ({
+    runId: newId('run'),
+    networkMode: 'server' as const,
+    siteUrl: `https://${HOST}/`,
+    requests,
+    hits: [],
+    routedRequestIds: new Set<string>(),
+  });
+  const fromContainer = (url: string, over: Partial<Request> = {}) =>
+    req(url, { resourceType: 'fetch', method: 'POST', initiator: 'serverContainer', outcome: 'stubbed', captured: 'serverContainer', ...over });
+
+  test('a call to a collection endpoint that is not in routedRequestIds is no stubBypass', () => {
+    const call = fromContainer('https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001');
+    expect(buildFlags(input([call])).map((f) => f.kind)).not.toContain('stubBypass');
+  });
+
+  test('the same request seen by the browser and not routed is a stubBypass', () => {
+    const browser = req('https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001', { resourceType: 'fetch', method: 'POST' });
+    expect(buildFlags(input([browser])).map((f) => f.kind)).toContain('stubBypass');
+  });
+
+  test('a call to a host no decoder knows is an unknownDestination from the server container, even with no query', () => {
+    const call = fromContainer('https://api.unknown-vendor.example/v1/events');
+    const flags = buildFlags(input([call]));
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toMatchObject({ kind: 'unknownDestination', recordIds: [call.id] });
+    expect(flags[0]!.detail).toBe(`from the server container: POST ${call.url}`);
+  });
+
+  test('a call to a platform host is still an unknownDestination', () => {
+    const url = 'https://monorail-edge.shopifysvc.com/unstable/produce_batch';
+    expect(buildFlags(input([req(url, { resourceType: 'fetch', method: 'POST' })])).map((f) => f.kind)).toEqual(['platformHost']);
+    expect(buildFlags(input([fromContainer(url)])).map((f) => f.kind)).toEqual(['unknownDestination']);
+  });
+
+  test('a call to a first-party subdomain is an unknownDestination flag, not firstPartySubdomain', () => {
+    const call = fromContainer(`https://sgtm.${HOST}/custom`);
+    const flags = buildFlags(input([call]));
+    expect(flags.map((f) => f.kind)).toEqual(['unknownDestination']);
+    expect(flags[0]!.detail).toContain('from the server container:');
+  });
+});

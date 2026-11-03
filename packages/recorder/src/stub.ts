@@ -74,18 +74,38 @@ export interface StubDecisionOptions {
   trackers: readonly TrackerEntry[];
 }
 
+const bareHost = (h: string) => h.replace(/^\[|\]$/g, '');
+
+/** True when the URL's host is one of `serverHosts`, with or without IPv6 brackets. An unparsable URL is on none. */
+export function isServerHostUrl(url: string, serverHosts: readonly string[]): boolean {
+  try {
+    return hostMatches(bareHost(new URL(url).hostname), serverHosts.map(bareHost));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A request to a `serverHosts` host that the local server container answers under `--server-container`:
+ * everything except library loads and script, stylesheet, font and document loads. It does not ask the decoders,
+ * because a first-party container often uses paths that none of them knows.
+ */
+export function isServerContainerRequest(req: Pick<Request, 'url' | 'resourceType'>, serverHosts: readonly string[]): boolean {
+  let url: URL;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/.test(url.protocol) || !isServerHostUrl(req.url, serverHosts)) return false;
+  return !isLibraryLoadPath(url.pathname) && !LOADS.has(req.resourceType);
+}
+
 /** A collection request that stub and `server` mode answer locally. `server` mode lets the hosts in `serverHosts` through. */
 export function isStubbedCollection(req: Request, options: StubDecisionOptions): boolean {
   if (!isCollectionEndpoint(req, options.trackers) && !isKnownVendorCollection(req)) return false;
   if (options.networkMode !== 'server') return true;
-  let host: string;
-  try {
-    host = new URL(req.url).hostname;
-  } catch {
-    return true;
-  }
-  const bare = (h: string) => h.replace(/^\[|\]$/g, '');
-  return !hostMatches(bare(host), (options.serverHosts ?? []).map(bare));
+  return !isServerHostUrl(req.url, options.serverHosts ?? []);
 }
 
 /** The names, never the values, of the cookies a header set carries. */

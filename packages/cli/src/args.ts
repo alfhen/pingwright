@@ -34,6 +34,8 @@ export interface RunArgs {
   gtmOverride: string | undefined;
   baseline: string | undefined;
   trackerList: string | undefined;
+  serverContainer?: boolean;
+  serverContainerConfig?: string;
   vars: Record<string, string>;
   json: boolean;
 }
@@ -82,6 +84,8 @@ export interface SuiteArgs {
   viewport?: Viewport;
   autoconsentRules: string[];
   trackerList: string | undefined;
+  serverContainer?: boolean;
+  serverContainerConfig?: string;
   vars: Record<string, string>;
   json: boolean;
 }
@@ -117,7 +121,7 @@ Options for suite:
   --with-handoff             Also run scenarios with handoff steps, last, headed
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
   --allow-test-payment <host> The host that may run test payments. It must equal the --site host and be in the test-payment-hosts.json allowlist
-  --network, --out, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --json work as in run
+  --network, --out, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --server-container, --server-container-config, --json work as in run
 
 Options for run:
   --site <url>               The site to test (required)
@@ -131,6 +135,8 @@ Options for run:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
+  --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
+  --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
   --baseline <file>          Compare the hits with a baseline file and fail on drift
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
@@ -153,6 +159,8 @@ Options:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
+  --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
+  --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
   --baseline <file>          Compare the hits with a baseline file made by "tagreeve baseline save" and fail on drift
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
@@ -193,6 +201,8 @@ const OPTIONS = {
   'autoconsent-rules': { type: 'string', multiple: true },
   'gtm-override': { type: 'string' },
   'tracker-list': { type: 'string' },
+  'server-container': { type: 'boolean' },
+  'server-container-config': { type: 'string' },
   baseline: { type: 'string' },
   variant: { type: 'string', multiple: true },
   'with-handoff': { type: 'boolean' },
@@ -289,6 +299,9 @@ function parseCommand(argv: string[]): Command {
     viewport = parseViewportText(values.viewport);
     if (!viewport) throw new UsageError(`--viewport must be ${VIEWPORT_HINT}, got "${values.viewport}"`);
   }
+  if (values['server-container-config'] !== undefined && !values['server-container']) {
+    throw new UsageError('--server-container-config needs --server-container');
+  }
   const vars: Record<string, string> = {};
   for (const entry of values.var ?? []) {
     const eq = entry.indexOf('=');
@@ -314,6 +327,8 @@ function parseCommand(argv: string[]): Command {
       ...(viewport && { viewport }),
       autoconsentRules: values['autoconsent-rules'] ?? [],
       trackerList: values['tracker-list'],
+      ...(values['server-container'] && { serverContainer: true }),
+      ...(values['server-container-config'] !== undefined && { serverContainerConfig: values['server-container-config'] }),
       vars,
       json: values.json ?? false,
     };
@@ -336,6 +351,8 @@ function parseCommand(argv: string[]): Command {
     gtmOverride: values['gtm-override'],
     trackerList: values['tracker-list'],
     baseline: values.baseline,
+    ...(values['server-container'] && { serverContainer: true }),
+    ...(values['server-container-config'] !== undefined && { serverContainerConfig: values['server-container-config'] }),
     vars,
     json: values.json ?? false,
   };

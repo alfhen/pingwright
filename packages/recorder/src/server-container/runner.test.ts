@@ -208,6 +208,19 @@ describe('startServerContainer', () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 
+  it('removes the container, the relay and the network when the start is aborted while waiting for the container', async () => {
+    const controller = new AbortController();
+    const watch = setInterval(() => {
+      if (runCalls(fake.calls()).length >= 3) controller.abort();
+    }, 20);
+    const error = (await startServerContainer(options({}, { signal: controller.signal, readyTimeoutMs: 20_000 })).catch((e: unknown) => e)) as ServerContainerError;
+    clearInterval(watch);
+    expect(error).toBeInstanceOf(ServerContainerError);
+    expect(error.message).toContain('cancelled');
+    const removed = fake.calls().filter((call) => call.argv[0] === 'rm' || (call.argv[0] === 'network' && call.argv[1] === 'rm'));
+    expect(removed).toHaveLength(3);
+  });
+
   it('sweeps stale objects before it creates anything', async () => {
     await startHealth();
     const container = await startServerContainer(options());
@@ -342,6 +355,20 @@ describe('the stand-in seam', () => {
       expect(seen.HTTP_PROXY).toBe(`http://tagreeve:${CREDENTIAL}@127.0.0.1:4321`);
       expect(seen.NODE_EXTRA_CA_CERTS).toBe('/run/ca/ca.pem');
       expect(JSON.stringify(seen)).not.toContain(CONFIG);
+    } finally {
+      await container.stop();
+    }
+  });
+
+  it('reports that a stand-in which dies after it was ready has exited', async () => {
+    const file = join(work, 'dying');
+    writeFileSync(file, `#!${process.execPath}\nrequire('node:http').createServer((req, res) => res.end('ok')).listen(Number(process.env.PORT), '127.0.0.1');\nsetTimeout(() => process.exit(1), 600);\n`);
+    chmodSync(file, 0o755);
+    const container = await startServerContainer({ ...options(), serverHosts: ['localhost'], env: { PATH: work, ...seam(file) }, pickPort: pickFreePort });
+    try {
+      expect(container.hasExited()).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      expect(container.hasExited()).toBe(true);
     } finally {
       await container.stop();
     }

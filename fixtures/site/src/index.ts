@@ -11,6 +11,8 @@ export interface FixtureSite {
   containerUrl: string;
   paymentFrameUrl: string;
   receivedGtmAuth: string[];
+  /** `METHOD /path` of each request the mock server container host (`sgtmUrl`) received, in order. */
+  sgtmRequests: string[];
   cardSubmits: string[];
   cardExtras: string[];
   close(): Promise<void>;
@@ -46,6 +48,7 @@ const pages: Record<string, string> = {
   '/stable-ids': 'stable-ids.html',
   '/shared-hashes': 'shared-hashes.html',
   '/sgtm-data-tag': 'sgtm-data-tag.html',
+  '/server-container': 'server-container.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
   '/delayed-hit': 'delayed-hit.html',
   '/sgtm-leak': 'sgtm-leak.html',
@@ -185,9 +188,10 @@ function deobfuscate(value: string | null): string {
   return value === null ? '' : [...value].reverse().join('');
 }
 
-function sgtmHandler(thirdPartyUrl: string, received: string[]) {
+function sgtmHandler(thirdPartyUrl: string, received: string[], requests: string[]) {
   return (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    requests.push(`${req.method ?? 'GET'} ${url.pathname}`);
     if (url.pathname === '/pwcookie') {
       res.writeHead(204, { 'set-cookie': '_pwdcid=pwfake-client.0001; Path=/; Max-Age=3600' }).end();
       return;
@@ -249,7 +253,8 @@ export async function startFixtureSite(): Promise<FixtureSite> {
   const received: string[] = [];
   const thirdParty = createServer(thirdPartyHandler);
   const thirdPartyUrl = `http://127.0.0.1:${await listen(thirdParty)}`;
-  const sgtm = createServer(sgtmHandler(thirdPartyUrl, received));
+  const sgtmRequests: string[] = [];
+  const sgtm = createServer(sgtmHandler(thirdPartyUrl, received, sgtmRequests));
   const sgtmUrl = `http://127.0.0.1:${await listen(sgtm)}`;
   const container = createServer(containerHandler(thirdPartyUrl, received));
   const containerUrl = `http://127.0.0.1:${await listen(container)}`;
@@ -268,6 +273,7 @@ export async function startFixtureSite(): Promise<FixtureSite> {
     containerUrl,
     paymentFrameUrl,
     receivedGtmAuth: received,
+    sgtmRequests,
     cardSubmits,
     cardExtras,
     close: async () => {

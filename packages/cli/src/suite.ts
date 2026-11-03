@@ -7,7 +7,7 @@ import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOr
 import type { Network, SuiteArgs } from './args.ts';
 import { readStores, StoresError, type Store } from './stores.ts';
 import { checkTestPaymentGates } from './test-payment-hosts.ts';
-import { executeRun, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';
+import { executeRun, prepareServerContainer, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';
 
 export type CellStatus = 'pass' | 'warn' | 'fail' | 'error' | 'skipped';
 
@@ -287,10 +287,13 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
 
   const networks = new Map<string, Network>();
   for (const s of scenarios) {
-    const network = resolveNetwork({ network: args.network, netLog: false }, s.parsed, io);
+    const network = resolveNetwork({ network: args.network, netLog: false, serverContainer: args.serverContainer }, s.parsed, io);
     if (!network) return 2;
     networks.set(s.name, network);
   }
+  const serverHosts = [...new Set(scenarios.flatMap((s) => s.parsed.options.serverHosts ?? []))];
+  const serverContainer = await prepareServerContainer(args, serverHosts, io);
+  if (serverContainer === undefined) return 2;
   const overrides = await readOverrides(args, io);
   if (!overrides) return 2;
   warnTestGtmOrigin(io);
@@ -352,6 +355,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
             autoconsentRules: [...args.autoconsentRules, ...(store?.autoconsentRules ? [store.autoconsentRules] : [])],
             trackers,
             gtmOverride: overrides.get(variant),
+            ...(serverContainer && { serverContainer }),
             ...(testPayments.has(key) && { testPayment: testPayments.get(key)! }),
             variant: { name: variant, fileStem: store ? `${s.name}.${store.name}` : s.name },
           },

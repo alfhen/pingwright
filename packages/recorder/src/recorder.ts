@@ -15,6 +15,7 @@ import {
   type CollectorReport,
   type ConsentEpoch,
   type DataLayerEvent,
+  type Flag,
   type Hit,
   type Id,
   type Identity,
@@ -24,6 +25,8 @@ import {
   type Response,
   type Run,
   type RunRecords,
+  type ServerContainerErrorClass,
+  type ServerContainerPassThrough,
   type Step,
 } from '@tagreeve/core';
 import { HANDOFF_DONE_BINDING, HANDOFF_STATE_BINDING, HandoffGate, handoffOverlayScript, type HandoffState } from './handoff-overlay.ts';
@@ -31,6 +34,8 @@ import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type
 import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@tagreeve/decoders';
 import {
   chromium,
+  request as playwrightRequest,
+  type APIRequestContext,
   type APIResponse,
   type Browser,
   type BrowserContext,
@@ -46,7 +51,11 @@ import { buildFlags, buildUnloadGapFlags } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
-import { isKnownVendorCollection, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
+import { isKnownVendorCollection, isServerContainerRequest, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
+import { startServerContainerSession, waitForQuiet, type ServerContainerSession } from './server-container/capture.ts';
+import { linkServerHits } from './server-container/link.ts';
+import { ServerContainerError, type ConfigSource } from './server-container/runner.ts';
+import { onTerminate } from './terminate.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
@@ -70,6 +79,12 @@ import { loopbackIsHostedForTests } from './guard.ts';
 export const TAGREEVE_VERSION = readVersion();
 const REDACTED_VALUE = '[redacted]';
 
+
+export interface ServerContainerOptions {
+  configSource: ConfigSource;
+  /** The image to run. Ignored by the stand-in of the test seam. */
+  image: string;
+}
 
 export interface RecorderOptions {
   networkMode: NetworkMode;
@@ -109,6 +124,11 @@ export interface RecorderOptions {
    * Needs `networkMode: 'live'`: in stub mode those sends would reach the network.
    */
   netLog?: boolean;
+  /**
+   * Runs the user's server container locally. Every non-load request to a `serverHosts` host goes to it, and the calls it
+   * makes to vendors are recorded and answered here, never sent on. Needs `networkMode: 'server'`.
+   */
+  serverContainer?: ServerContainerOptions;
 }
 
 export interface StepActivity {
@@ -197,6 +217,12 @@ export class Recorder {
   private readonly stubRecorded = new Set<string>();
   private readonly navigations: number[] = [];
   private readonly navigationWindows = new NavigationWindows<PwRequest>();
+  private session: ServerContainerSession | undefined;
+  private sessionStopped: Promise<void> | undefined;
+  private containerClient: Promise<APIRequestContext> | undefined;
+  private removeSignalHandlers: (() => void) | undefined;
+  /** Why the container did not start. Set by `launch`; `recordScenario` ends the run when it is. */
+  containerFailure: { errorClass: ServerContainerErrorClass; message: string } | undefined;
 
   private constructor(
     private readonly options: RecorderOptions,
@@ -216,6 +242,9 @@ export class Recorder {
     if (options.networkMode === 'server' && !options.serverHosts?.length) {
       throw new Error('networkMode "server" needs serverHosts: the hosts whose requests pass through.');
     }
+    if (options.serverContainer && options.networkMode !== 'server') {
+      throw new Error('serverContainer needs networkMode "server": the hits to the serverHosts are what the container receives.');
+    }
     if (options.netLog && options.networkMode !== 'live') {
       throw new Error('netLog needs networkMode "live": in stub mode the requests a frame sends while it unloads would leave the machine.');
     }
@@ -232,6 +261,8 @@ export class Recorder {
         channel: 'chromium',
         headless: !options.headed,
         ...(netLogPath ? { args: [`--log-net-log=${netLogPath}`] } : {}),
+        // Playwright's handlers exit the process once the browser is closed, before the containers are removed.
+        ...(options.serverContainer ? { handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false } : {}),
       });
     } catch (error) {
       removeNetLogDir?.();
@@ -245,6 +276,7 @@ export class Recorder {
       });
       const recorder = new Recorder(options, browser, context, gtmOverride, testGtmOrigin, netLogPath, removeNetLogDir);
       await recorder.init();
+      await recorder.startContainer();
       return recorder;
     } catch (error) {
       try {
@@ -325,6 +357,53 @@ export class Recorder {
       if (errorText) record.failure = errorText;
     });
     context.on('response', (response) => this.track(this.recordResponse(response)));
+  }
+
+  private async startContainer(): Promise<void> {
+    const { serverContainer } = this.options;
+    if (!serverContainer) return;
+    const abort = new AbortController();
+    const starting = startServerContainerSession({
+      configSource: serverContainer.configSource,
+      image: serverContainer.image,
+      serverHosts: this.options.serverHosts ?? [],
+      runId: this.runId,
+      signal: abort.signal,
+      currentStepId: () => this.currentStepId,
+      onCapture: (request, response) => {
+        this.extraRequests.push(this.redactForHandoff(request, request.t));
+        this.responses.push(response);
+      },
+    });
+    // Registered before the start, which is the slowest part: a signal then cancels it and removes what it started.
+    this.removeSignalHandlers = onTerminate(async () => {
+      abort.abort();
+      await this.browser.close().catch(() => undefined);
+      const started = await starting.catch(() => undefined);
+      if (started) this.session ??= started;
+      await this.stopSession();
+    });
+    try {
+      this.session = await starting;
+    } catch (error) {
+      this.removeSignalHandlers();
+      this.removeSignalHandlers = undefined;
+      if (!(error instanceof ServerContainerError)) throw error;
+      this.containerFailure = { errorClass: error.errorClass, message: error.message };
+      return;
+    }
+    if (this.session.standIn) this.run.testServerContainer = true;
+  }
+
+  /** Stops the container, the proxy and the CA once. Safe to call from `close` and from a signal. */
+  private stopSession(): Promise<void> {
+    this.removeSignalHandlers?.();
+    this.removeSignalHandlers = undefined;
+    this.sessionStopped ??= (async () => {
+      await this.containerClient?.then((client) => client.dispose()).catch(() => undefined);
+      await this.session?.stop();
+    })();
+    return this.sessionStopped;
   }
 
   private storeReport(parsed: ParsedReport, body: string, t: number): void {
@@ -482,6 +561,10 @@ export class Recorder {
     const record = this.recordFor(route.request());
     if (record) this.routed.add(record.id);
     if (record && (await this.routeGtm(route, record))) return;
+    if (record && this.session && isServerContainerRequest(record, this.options.serverHosts ?? [])) {
+      await this.routeToContainer(route, record, this.session.origin);
+      return;
+    }
     if (record && this.options.networkMode !== 'live' && this.isStubbedCollection(record)) {
       record.outcome = 'stubbed';
       const stub = stubResponse(record);
@@ -496,6 +579,36 @@ export class Recorder {
     }
     if (record) this.handedToChromium.add(record.id);
     await route.continue();
+  }
+
+  /** Answers a non-load request to a `serverHosts` host with the local container's response. It never reaches the remote host. */
+  private async routeToContainer(route: Route, record: Request, origin: string): Promise<void> {
+    const original = route.request();
+    const live = new URL(original.url());
+    // A separate client, so the container's loopback address never reads or writes the context cookie jar.
+    // allHeaders() holds the Cookie header Chromium would send, so SameSite and credentials mode already apply.
+    // The client falls back to its own jar when the header is absent, so an empty one is sent instead.
+    const { host: _host, ...sent } = await original.allHeaders();
+    void _host;
+    const headers = { cookie: '', ...sent };
+    record.outcome = 'stubbed';
+    this.stubRecorded.add(record.id);
+    try {
+      this.containerClient ??= playwrightRequest.newContext();
+      const client = await this.containerClient;
+      const response = await client.fetch(`${origin}${live.pathname}${live.search}`, {
+        method: original.method(),
+        headers,
+        data: original.postDataBuffer() ?? undefined,
+        maxRedirects: 0,
+      });
+      this.recordApiResponse(record, response);
+      await route.fulfill({ response });
+    } catch (error) {
+      record.outcome = 'failed';
+      record.failure = abortCode(error);
+      await route.abort(abortCode(error));
+    }
   }
 
   private isStubbedCollection(record: Request): boolean {
@@ -561,6 +674,30 @@ export class Recorder {
       return { response, matched };
     } catch {
       return undefined;
+    }
+  }
+
+  private recordServerContainer(
+    requests: readonly Request[],
+    hits: readonly Hit[],
+    counts: { passThrough: ServerContainerPassThrough; refused: number } | undefined,
+    flags: Flag[],
+  ): void {
+    const options = this.options.serverContainer;
+    if (!options) return;
+    const fromContainer = new Set(requests.filter((r) => r.captured === 'serverContainer').map((r) => r.id));
+    const failure = this.containerFailure;
+    this.run.serverContainer = {
+      image: this.session?.image ?? options.image,
+      startedAt: this.session?.startedAt ?? nodeNow(),
+      requests: fromContainer.size,
+      passThrough: counts?.passThrough ?? { serverjs: 0, config: 0, destination: 0 },
+      refused: counts?.refused ?? 0,
+      unlinked: hits.filter((h) => fromContainer.has(h.requestId) && h.via === undefined).length,
+      ...(failure ? { error: failure.errorClass } : {}),
+    };
+    if (failure) {
+      flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'serverContainerFailed', recordIds: [], detail: `The server container did not run: ${failure.errorClass}.` });
     }
   }
 
@@ -797,18 +934,34 @@ export class Recorder {
     await this.wait(50);
   }
 
+  private noteContainerExit(): void {
+    if (this.session?.containerExited() && !this.containerFailure) {
+      this.containerFailure = { errorClass: 'exited', message: 'The server container ended during the run.' };
+    }
+  }
+
   /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
   async close(): Promise<RunResult> {
     const closeStartedAt = nodeNow();
+    this.noteContainerExit();
     if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
+    if (this.session) {
+      const session = this.session;
+      await waitForQuiet(() => session.lastCallAt());
+      session.stopRecording();
+      this.noteContainerExit();
+    }
     this.closed = true;
     try {
       await this.browser.close();
     } catch (error) {
       this.removeNetLogDir?.();
+      await this.stopSession();
       throw error;
     }
     await Promise.allSettled([...this.pending]);
+    const containerCounts = this.session && { passThrough: this.session.passThrough(), refused: this.session.refused() };
+    await this.stopSession();
 
     const netLog = await this.readNetLog();
     if (netLog) {
@@ -817,7 +970,8 @@ export class Recorder {
       this.responses.push(...responses);
     }
     const requests = [...this.requests.values(), ...this.extraRequests];
-    const hits: Hit[] = requests.flatMap((r) => decodeRequest(r, undefined, this.trackers));
+    let hits: Hit[] = requests.flatMap((r) => decodeRequest(r, undefined, this.trackers));
+    if (this.session) hits = linkServerHits({ hits, requests, serverHosts: this.options.serverHosts ?? [], identity: this.run.identity });
     const flags = buildFlags({
       runId: this.runId,
       networkMode: this.options.networkMode,
@@ -839,6 +993,7 @@ export class Recorder {
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }
+    this.recordServerContainer(requests, hits, containerCounts, flags);
     const consentEpochs = this.buildConsentEpochs();
     let records: RunRecords = {
       run: this.run,

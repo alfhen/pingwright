@@ -21,7 +21,7 @@ async function openHome(options: BrowserContextOptions = {}): Promise<Page> {
   const context = await newDocsContext(browser!, { viewport: { width: 1440, height: 900 }, ...options });
   const page = await context.newPage();
   await page.goto(`${docsUrl}/`);
-  await page.locator('astro-island:not([ssr])').waitFor({ state: 'attached' });
+  await page.locator('astro-island[component-url*="AgentDemo"]:not([ssr])').waitFor({ state: 'attached' });
   await page.clock.install();
   return page;
 }

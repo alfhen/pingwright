@@ -7,14 +7,13 @@ import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 import { hostname } from 'node:os';
 import { isAbsolute } from 'node:path';
+import type { ServerContainerErrorClass } from '@tagreeve/core';
 import { isLoopbackHost } from '../guard.ts';
 import { Scrubber } from '../gtm-scrub.ts';
-import { NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
+import { baseImage, imageTag, isDigestReference, NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
 
 export const CONFIG_ENV = 'TAGREEVE_SERVER_CONTAINER_CONFIG';
 export const TEST_COMMAND_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_CMD';
-
-export type ServerContainerErrorClass = 'dockerMissing' | 'imageMissing' | 'configRejected' | 'egressOpen' | 'exited' | 'notReady';
 
 export class ServerContainerError extends Error {
   readonly errorClass: ServerContainerErrorClass;
@@ -138,6 +137,8 @@ export interface StartOptions {
   readonly pollMs?: number;
   /** Picks the loopback port the browser side is published on. */
   readonly pickPort?: () => Promise<number>;
+  /** Aborting stops the start at its next step and removes what it started. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ServerContainer {
@@ -145,6 +146,8 @@ export interface ServerContainer {
   readonly origin: string;
   /** The last scrubbed log lines. */
   logTail(): string[];
+  /** True once the container (or the stand-in) has ended. */
+  hasExited(): boolean;
   stop(): Promise<void>;
 }
 
@@ -259,6 +262,29 @@ function followOutput(child: ChildProcess, push: (line: string) => void): LogFol
   return { process: child, ended: () => ended };
 }
 
+const DOCKER_INSTALL_URL = 'https://docs.docker.com/get-docker/';
+
+export interface HostCheckOptions {
+  readonly image: string;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+/** The checks that need no run: Docker is there, the engine is new enough and the image is built. */
+export async function checkServerContainerHost(options: HostCheckOptions): Promise<void> {
+  const env = options.env ?? process.env;
+  const version = await runDocker(['version', '--format', '{{.Server.Version}}'], { env, timeoutMs: 30_000 });
+  if (version.missing || version.code !== 0) {
+    throw new ServerContainerError('dockerMissing', `Docker is needed for --server-container. Install it from ${DOCKER_INSTALL_URL}`);
+  }
+  const major = Number(/^(\d+)\./.exec(version.stdout.trim())?.[1]);
+  if (Number.isInteger(major) && major < MIN_ENGINE_MAJOR) {
+    throw new ServerContainerError('egressOpen', `Docker Engine ${version.stdout.trim()} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
+  }
+  if ((await runDocker(['image', 'inspect', '--format', '{{.Id}}', options.image], { env })).code !== 0) {
+    throw new ServerContainerError('imageMissing', `The image ${options.image} is not available. Run: tagreeve server-container build`);
+  }
+}
+
 /**
  * Starts the user's server container in Docker, or the stand-in when the test seam names one.
  * The config goes to Docker through the environment of the docker process, never through argv.
@@ -292,9 +318,14 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     for (const cleanup of cleanups.reverse()) await cleanup().catch(() => undefined);
   };
 
+  const checkAborted = (): void => {
+    if (options.signal?.aborted) throw new ServerContainerError('notReady', 'The start was cancelled.');
+  };
+
   async function waitReady(origin: string, follower: LogFollower): Promise<void> {
     const deadline = Date.now() + readyTimeoutMs;
     for (;;) {
+      checkAborted();
       if (await probeHealth(origin)) return;
       if (follower.ended()) throw new ServerContainerError('exited', `The server container exited before it was ready.${tail()}`);
       if (Date.now() >= deadline) throw new ServerContainerError('notReady', `The server container was not ready after ${Math.round(readyTimeoutMs / 1000)} s.${tail()}`);
@@ -315,20 +346,12 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
       cleanups.push(async () => void child.kill('SIGKILL'));
       const origin = `http://127.0.0.1:${port}`;
       await waitReady(origin, follower);
-      return { origin, logTail: () => [...lines], stop };
+      return { origin, logTail: () => [...lines], hasExited: follower.ended, stop };
     }
 
     const docker = (args: string[], extraEnv: NodeJS.ProcessEnv = {}, timeoutMs?: number) => runDocker(args, { env: { ...baseEnv, ...extraEnv }, timeoutMs });
 
-    const version = await docker(['version', '--format', '{{.Server.Version}}'], {}, 30_000);
-    if (version.missing || version.code !== 0) throw new ServerContainerError('dockerMissing', 'Docker is needed for --server-container.');
-    const major = Number(/^(\d+)\./.exec(version.stdout.trim())?.[1]);
-    if (Number.isInteger(major) && major < MIN_ENGINE_MAJOR) {
-      throw new ServerContainerError('egressOpen', `Docker Engine ${version.stdout.trim()} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
-    }
-    if ((await docker(['image', 'inspect', '--format', '{{.Id}}', options.image])).code !== 0) {
-      throw new ServerContainerError('imageMissing', `The image ${options.image} is not available. Run: tagreeve server-container build`);
-    }
+    await checkServerContainerHost({ image: options.image, env: baseEnv });
     await sweepOrphans({ env: baseEnv });
 
     const runId = options.runId ?? randomBytes(4).toString('hex');
@@ -343,6 +366,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     const created = await docker(['network', 'create', '--internal', ...labels, names.network]);
     if (created.code !== 0) throw new ServerContainerError('notReady', 'The internal Docker network could not be created.');
     cleanups.push(async () => void (await docker(['network', 'rm', names.network])));
+    checkAborted();
 
     let probeAddress: string;
     try {
@@ -353,6 +377,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     if (!net.isIPv4(probeAddress)) throw new ServerContainerError('notReady', `${PROBE_HOST} did not resolve to an IPv4 address. The container was not started.`);
 
     const probe = await docker(['run', '--rm', '--name', names.probe, '--network', names.network, ...labels, '--entrypoint', NODE_BIN, options.image, '-e', PROBE_SCRIPT, probeAddress], {}, 60_000);
+    checkAborted();
     let outcome: { connect?: unknown; dns?: unknown } | undefined;
     try {
       outcome = JSON.parse(probe.stdout.trim().split('\n').pop() ?? '') as { connect?: unknown; dns?: unknown };
@@ -373,6 +398,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     ]);
     if (relay.code !== 0) throw new ServerContainerError('notReady', 'The relay container could not be started.');
     cleanups.push(async () => void (await docker(['rm', '-f', names.relay])));
+    checkAborted();
     const joined = await docker(['network', 'connect', names.network, names.relay]);
     if (joined.code !== 0) throw new ServerContainerError('notReady', 'The relay container could not join the internal network.');
 
@@ -388,15 +414,33 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     );
     if (started.code !== 0) throw new ServerContainerError('notReady', `The server container could not be started.\n${started.stderr.split('\n').map(scrub).slice(-LOG_LINES).join('\n')}`);
     cleanups.push(async () => void (await docker(['rm', '-f', names.container])));
+    checkAborted();
 
     const child = spawn('docker', ['logs', '--follow', names.container], { shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: baseEnv });
     const follower = followOutput(child, push);
     cleanups.push(async () => void child.kill('SIGKILL'));
     const origin = `http://127.0.0.1:${publishedPort}`;
     await waitReady(origin, follower);
-    return { origin, logTail: () => [...lines], stop };
+    return { origin, logTail: () => [...lines], hasExited: follower.ended, stop };
   } catch (error) {
     await stop();
     throw error;
   }
+}
+
+/** On arm64 the image is the one `server-container build` made. Elsewhere it is Google's, pinned by digest. */
+export function defaultServerContainerImage(version: string, env: NodeJS.ProcessEnv = process.env, arch: string = process.arch): string {
+  if (arch === 'arm64') return imageTag(version);
+  try {
+    return baseImage(env);
+  } catch (error) {
+    throw new ServerContainerUsageError((error as Error).message);
+  }
+}
+
+export async function describeImage(image: string, env: NodeJS.ProcessEnv): Promise<string> {
+  if (isDigestReference(image)) return image;
+  const inspected = await runDocker(['image', 'inspect', '--format', '{{.Id}}', image], { env });
+  const id = inspected.stdout.trim();
+  return inspected.code === 0 && id ? `${image}@${id}` : image;
 }

@@ -13,6 +13,8 @@ export * from './gtm-scrub.ts';
 export * from './handoff-overlay.ts';
 export * from './payment.ts';
 export * from './server-container/ca.ts';
+export * from './server-container/capture.ts';
+export * from './server-container/link.ts';
 export * from './server-container/forward-list.ts';
 export * from './server-container/image.ts';
 export * from './server-container/runner.ts';

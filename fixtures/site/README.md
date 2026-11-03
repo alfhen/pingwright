@@ -18,7 +18,7 @@ All servers listen on port 0 (random).
 | Name | URL | Role |
 | --- | --- | --- |
 | `url` | `http://localhost:<p1>` | The shop. |
-| `sgtmUrl` | `http://127.0.0.1:<p2>` | Mock server-container host. `/pwstape?pk=<base64 path>`: 200 with a tiny script when the decoded path starts with `/gtag/js`, 204 otherwise. |
+| `sgtmUrl` | `http://127.0.0.1:<p2>` | Mock server-container host. `/pwstape?pk=<base64 path>`: 200 with a tiny script when the decoded path starts with `/gtag/js`, 204 otherwise. `sgtmRequests` lists `METHOD /path` of every request it received. |
 | `thirdPartyUrl` | `http://127.0.0.1:<p3>` | Unknown third-party host. Answers every path with a 1x1 GIF. |
 | `paymentFrameUrl` | `http://127.0.0.1:<p5>` | Card frame host for `/checkout/test-payment` and its variants. Answers only `GET /card-frame`, `GET /card-frame-extra-input`, `GET /card-frame-number`, `GET /card-frame-exp`, `GET /card-frame-csc`, `POST /card-extra` and `POST /card-submit`. Each extra post adds the expiry and CVC to `cardExtras`. Each submit adds the posted card number (a test card value) to `cardSubmits`. |
 
@@ -27,6 +27,8 @@ All servers listen on port 0 (random).
 ## Pages
 
 `/`, `/products/fake-tee`, `/collections/all`, `/cart`, `/checkout`, `/checkout/payment`, `/thank-you`. Every page loads `/fixture-config.js` and `/assets/site.js`.
+
+`/server-container` sends a Meta pixel `Purchase` hit with an event ID and a `POST /capi` to `sgtmUrl`. `?email=` is the email in that body. `?extra=1` adds a `POST /capi` with an unrelated event ID and a fake email, and a `POST /data`, a path no decoder knows. With `--server-container`, the stand-in container answers these instead of `sgtmUrl`.
 
 ## Element IDs
 

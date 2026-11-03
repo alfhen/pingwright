@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { Request } from '@tagreeve/core';
-import { isKnownVendorCollection, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
+import { isKnownVendorCollection, isServerContainerRequest, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
 
 test('fetch, xhr and ping get 204 with CORS that echoes the origin and allows credentials', () => {
   for (const resourceType of ['fetch', 'xhr', 'ping']) {
@@ -131,4 +131,25 @@ test('the Meta Conversions API endpoint is answered with a success body for ever
     expect(JSON.parse(stub.body?.toString() ?? '')).toEqual({ events_received: 1, messages: [], fbtrace_id: 'pw-fixture' });
   }
   expect(stubResponse({ resourceType: 'fetch', headers: {}, url: 'https://graph.facebook.com/v21.0/1/other' }).status).toBe(204);
+});
+
+test.each([
+  ['a collection request', 'https://sgtm.example.com/g/collect?v=2', 'fetch', true],
+  ['a path no decoder knows', 'https://sgtm.example.com/data', 'fetch', true],
+  ['a beacon', 'https://sgtm.example.com/anything', 'ping', true],
+  ['an image hit', 'https://sgtm.example.com/p.gif?x=1', 'image', true],
+  ['a gtm.js script load', 'https://sgtm.example.com/gtm.js?id=GTM-PWTEST1', 'script', false],
+  ['a gtag/js library load as a fetch', 'https://sgtm.example.com/gtag/js?id=G-PWTEST0001', 'fetch', false],
+  ['a document', 'https://sgtm.example.com/', 'document', false],
+  ['a stylesheet', 'https://sgtm.example.com/a.css', 'stylesheet', false],
+  ['a font', 'https://sgtm.example.com/a.woff', 'font', false],
+  ['another host', 'https://other.example.com/data', 'fetch', false],
+  ['a subdomain of a wildcard', 'https://a.sgtm.example.net/data', 'fetch', true],
+])('isServerContainerRequest: %s', (_name, url, resourceType, expected) => {
+  expect(isServerContainerRequest({ url, resourceType }, ['sgtm.example.com', '*.sgtm.example.net'])).toBe(expected);
+});
+
+test('isServerContainerRequest is false for an unparsable URL and an empty host list', () => {
+  expect(isServerContainerRequest({ url: 'not a url', resourceType: 'fetch' }, ['sgtm.example.com'])).toBe(false);
+  expect(isServerContainerRequest({ url: 'https://sgtm.example.com/data', resourceType: 'fetch' }, [])).toBe(false);
 });

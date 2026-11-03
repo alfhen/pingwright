@@ -27,6 +27,8 @@ export interface Summary {
   results: { expectation: string; pass: boolean; severity: Severity; message: string | undefined; note?: ResultNote; evidence: string[] }[];
   /** Set when a payment step typed a provider's documented test card. Names only. */
   testPayment?: { provider: string; host: string; testMode: 'declared' | 'marker' };
+  /** Set when a stand-in container of the test seam answered in place of a real server container. */
+  testServerContainer?: true;
   /** Set when the run was compared with a baseline. */
   baseline?: BaselineSummary;
 }
@@ -69,6 +71,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: f.detail })),
     ...(testPayment && { testPayment }),
+    ...(records.run.testServerContainer && { testServerContainer: true as const }),
     skippedFields: (records.steps ?? []).flatMap((s) => (s.skippedFields ?? []).map((selector) => ({ step: s.label, selector }))),
     results: results.map((r) => ({ expectation: r.expectation, pass: r.pass, message: r.message, ...(r.note && { note: r.note }), evidence: r.evidence, severity: r.severity ?? 'fail' })),
   };
@@ -154,6 +157,7 @@ export function formatSummary(summary: Summary): string {
     const { provider, host, testMode } = summary.testPayment;
     lines.push(`TEST PAYMENT: ${provider} on ${host} (test mode ${testMode === 'declared' ? 'declared' : 'on page'})`);
   }
+  if (summary.testServerContainer) lines.push('Server container: stand-in container (test seam)');
   lines.push('Hits');
   const vendors = Object.entries(summary.hits);
   if (vendors.length === 0) lines.push('  none');

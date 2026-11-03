@@ -303,3 +303,13 @@ test('platformHost summary lines hold names and counts only', () => {
   expect(text).toContain('platformHost: shopify, 1 request to 1 host (cdn 1)');
   for (const v of values) expect(text).not.toContain(v);
 });
+
+test('a run from the stand-in container says so in the summary and in --json', () => {
+  const records = { run: { id: 'run_x', testServerContainer: true }, hits: [], consentEpochs: [], flags: [], steps: [] } as unknown as RunRecords;
+  const summary = buildSummary(records, [], 'run.jsonl');
+  expect(summary.testServerContainer).toBe(true);
+  expect(formatSummary(summary)).toContain('Server container: stand-in container (test seam)');
+  const plain = buildSummary({ ...records, run: { id: 'run_x' } } as unknown as RunRecords, [], 'run.jsonl');
+  expect(plain).not.toHaveProperty('testServerContainer');
+  expect(formatSummary(plain)).not.toContain('stand-in');
+});
