@@ -27,7 +27,8 @@ FROM --platform=linux/amd64 \${GOOGLE_IMAGE} AS google
 FROM ${NODE_BUILD_IMAGE} AS build
 WORKDIR /app
 COPY --from=google /app/package.json /app/server_bin.js /app/health_checker_bin.js ./
-RUN npm install --omit=dev
+COPY --from=google /app/node_modules ./node_modules
+RUN npm rebuild re2
 
 FROM ${DISTROLESS_IMAGE}
 WORKDIR /app

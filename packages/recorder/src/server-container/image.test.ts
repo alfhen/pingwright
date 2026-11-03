@@ -36,6 +36,12 @@ describe('Dockerfile', () => {
     expect(DOCKERFILE).toContain('ARG GOOGLE_IMAGE=');
     expect(DOCKERFILE).not.toMatch(/docker push|--push/);
   });
+
+  it("uses Google's own node_modules and rebuilds only re2, so npm resolves nothing at build time", () => {
+    expect(DOCKERFILE).toMatch(/^COPY --from=google \/app\/node_modules /m);
+    expect(DOCKERFILE).toMatch(/^RUN npm rebuild re2$/m);
+    expect(DOCKERFILE).not.toMatch(/npm (install|i|ci)\b/);
+  });
 });
 
 describe('buildImage', () => {
