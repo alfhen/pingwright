@@ -1,13 +1,13 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunCa } from '../../../packages/recorder/src/server-container/ca.ts';
 import type { RunCa } from '../../../packages/recorder/src/server-container/ca.ts';
 import { createRecordingProxy } from '../../../packages/recorder/src/server-container/proxy.ts';
 import type { ProxyRequest, RecordingProxy } from '../../../packages/recorder/src/server-container/proxy.ts';
 import { standInContainerPath } from './index.ts';
-import { createStandIn } from './stand-in-container.ts';
+import { FIXTURE_AUTH, FIXTURE_CONFIG, createStandIn } from './stand-in-container.ts';
 
 let root: string;
 let ca: RunCa;
@@ -127,5 +127,46 @@ describe('stand-in container', () => {
     } finally {
       other.close();
     }
+  });
+
+  it('logs what a careless container would: the config, the proxy URL, the auth URL and the access token URL', async () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((line: unknown) => void lines.push(String(line)));
+    try {
+      const origin = await start();
+      await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
+      await until(() => answered.length === 3);
+      const logged = lines.join('\n');
+      expect(logged).toContain(FIXTURE_CONFIG);
+      expect(logged).toContain(`gtm_auth=${FIXTURE_AUTH}`);
+      expect(logged).toContain(`:${proxy.credential}@127.0.0.1:${proxy.port}`);
+      expect(logged).toContain('access_token=pw-fixture-access-token');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('reads the CA once at start: deleting the file later breaks nothing', async () => {
+    const origin = await start();
+    rmSync(ca.certPath);
+    await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
+    await until(() => answered.length === 3);
+    expect(answered).toHaveLength(3);
+  });
+
+  it('close waits for a vendor call that is under way', async () => {
+    const origin = await start();
+    await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
+    await until(() => answered.length >= 1);
+    await standIn!.close();
+    expect(answered).toHaveLength(3);
+  });
+
+  it('close drops vendor calls that are still waiting for their delay', async () => {
+    const origin = await start();
+    await fetch(`${origin}/capi?delayMs=300`, { method: 'POST', body: '{}' });
+    await standIn!.close();
+    await new Promise((r) => setTimeout(r, 450));
+    expect(answered).toEqual([]);
   });
 });
