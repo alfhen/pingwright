@@ -10,7 +10,7 @@
 
 <!-- U04 -->
 
-<!-- V04 -->
+- `suite --stores` now exits 2 when `--allow-test-payment` matches no store and a payment scenario would run. A stores file whose `autoconsentRules` file is missing is rejected when the file is read.
 
 <!-- B04 -->
 
