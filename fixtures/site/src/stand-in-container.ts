@@ -43,6 +43,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
         return;
       }
       const url = new URL(target);
+      const trusted = readFileSync(env.NODE_EXTRA_CA_CERTS, 'utf8');
       const auth = Buffer.from(`${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`).toString('base64');
       const connect = http.request({
         host: proxyUrl.hostname,
@@ -58,7 +59,7 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
           reject(new Error(`the proxy answered ${response.statusCode}`));
           return;
         }
-        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca: readFileSync(env.NODE_EXTRA_CA_CERTS!, 'utf8') });
+        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca: trusted });
         secure.on('error', reject);
         const headers: Record<string, string | number> = body === undefined ? {} : { 'content-type': 'text/plain', 'content-length': Buffer.byteLength(body) };
         // The agent hands out only the tunnel, and the lookup fails, so a request can never open a direct connection.
