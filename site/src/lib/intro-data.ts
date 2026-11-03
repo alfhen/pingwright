@@ -91,7 +91,7 @@ const clampY = (y: string): string => `clamp(calc(3.2% + 36px), ${y}, calc(95.5%
 
 export function placeNotifications(shown: number): PlacedNotification[] {
   return NOTIFICATIONS.slice(0, shown).map((n, i) => {
-    if (i < 4) return { ...n, x: clampX(`calc(100% - ${CARD_WIDTH + 24}px)`), y: clampY(`${42 + i * 88}px`), rotate: '0deg' };
+    if (i < 4) return { ...n, x: clampX(`calc(100% - ${CARD_WIDTH + 24}px)`), y: `calc(max(42px, 3.2% + 36px) + ${i * 88}px)`, rotate: '0deg' };
     const [x, y, rotate] = SCATTER[(i - 4) % SCATTER.length]!;
     return { ...n, x: clampX(x), y: clampY(y), rotate };
   });

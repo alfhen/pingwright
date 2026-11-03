@@ -297,6 +297,10 @@ for (const viewport of [
             return inside ? [] : [`#${i}: ${[r.left, r.top, r.right, r.bottom].map(Math.round).join(',')} in ${innerWidth}x${innerHeight}`];
           }),
         )),
+        ...(await page.evaluate(() => {
+          const cards = [...document.querySelectorAll('[data-intro-notification]')].slice(0, 4).map((el) => el.getBoundingClientRect());
+          return cards.flatMap((r, i) => (i > 0 && r.top < cards[i - 1]!.bottom ? [`stack card ${i} overlaps card ${i - 1} by ${Math.round(cards[i - 1]!.bottom - r.top)}px`] : []));
+        })),
       );
       await page.waitForTimeout(100);
     }
