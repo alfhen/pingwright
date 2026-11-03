@@ -15,7 +15,7 @@ const workflow = parse(text) as Workflow;
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps ?? [])
-    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n[ \t]*/g, ' ').split('\n'));
+    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n/g, '').split(/\n|&&|\|\||;|\|/));
 
 const runLines = runLinesOf(workflow);
 
@@ -163,6 +163,18 @@ describe('workflow rules', () => {
     const problems = workflowProblems(wf);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('without --dry-run');
+  });
+
+  it('does not take --dry-run from a later command joined by a continuation', () => {
+    const wf = base('      - run: |\n          npm publish --tag "$dist_tag" \\\n            && echo --dry-run\n');
+    const problems = workflowProblems(wf);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('without --dry-run');
+  });
+
+  it('keeps a token split by a continuation whole', () => {
+    const wf = base(`${good}      - run: |\n          docker pu\\\n          sh ghcr.io/x/y\n`);
+    expect(workflowProblems(wf)).toHaveLength(1);
   });
 
   it('fails github.token', () => {
