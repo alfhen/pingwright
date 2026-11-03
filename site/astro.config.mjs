@@ -3,6 +3,7 @@ import preact from '@astrojs/preact';
 import starlight from '@astrojs/starlight';
 import { satteri } from '@astrojs/markdown-satteri';
 import tailwindcss from '@tailwindcss/vite';
+import { annotatedSummary } from './src/plugins/annotated-summary.ts';
 import { brandAssets } from './src/plugins/brand-assets.ts';
 import { getStartedPrompt } from './src/plugins/get-started-prompt.ts';
 import { mermaidFences } from './src/plugins/mermaid.ts';
@@ -41,7 +42,7 @@ export default defineConfig({
   markdown: {
     processor: satteri({
       features: { smartPunctuation: false },
-      mdastPlugins: [repoLinks({ root: repoRoot, repo }), themedPictures, mermaidFences, getStartedPrompt],
+      mdastPlugins: [repoLinks({ root: repoRoot, repo }), themedPictures, mermaidFences, annotatedSummary(), getStartedPrompt],
     }),
   },
   integrations: [
@@ -85,7 +86,7 @@ export default defineConfig({
         MobileMenuToggle: './src/components/starlight/MobileMenuToggle.astro',
         Sidebar: './src/components/starlight/Sidebar.astro',
         PageTitle: './src/components/starlight/PageTitle.astro',
-        MarkdownContent: './src/components/starlight/MarkdownContent.astro',
+        MarkdownContent: './src/components/docs/MarkdownContent.astro',
         Footer: './src/components/starlight/Footer.astro',
       },
     }),

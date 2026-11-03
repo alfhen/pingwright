@@ -1,0 +1,16 @@
+---
+import SiteMarkdownContent from '../starlight/MarkdownContent.astro';
+import AgentCallout from './AgentCallout.astro';
+import './docs-components.css';
+
+const isGuide = Astro.locals.starlightRoute.entry.id.startsWith('docs/guide/');
+---
+
+<SiteMarkdownContent>
+  {isGuide && <AgentCallout />}
+  <slot />
+</SiteMarkdownContent>
+
+<script>
+  import '../../scripts/annotated-summary.ts';
+</script>

@@ -1,0 +1,192 @@
+/* The agent callout, handoff §3. */
+.agent-callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 1.5rem;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.agent-callout-label {
+  color: var(--mint);
+  font: 500 12px var(--font-mono);
+}
+
+.agent-callout-text {
+  flex: 1;
+  min-width: 240px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.agent-callout-text code {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.agent-callout-copy {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--mint);
+  color: var(--onmint);
+  font: 600 13px var(--font-sans);
+  cursor: pointer;
+}
+
+/* The annotated summary. Its code pane stays dark in both themes, so its colours are the dark theme's. */
+.annotated-summary {
+  container-type: inline-size;
+}
+
+.annotated-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.annotated-code {
+  padding: 16px 0;
+  overflow-x: auto;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font: 12.5px/1.75 var(--font-mono);
+}
+
+.annotated-line {
+  display: block;
+  min-width: 100%;
+  width: max-content;
+  padding: 0 16px;
+  white-space: pre;
+  cursor: default;
+}
+
+.annotated-line[data-tone='head'] {
+  color: var(--code-comment);
+}
+
+.annotated-line[data-tone='fail'] {
+  color: oklch(0.72 0.16 25);
+}
+
+.annotated-line[data-tone='pass'] {
+  color: oklch(0.82 0.12 175);
+}
+
+.annotated-line.is-active {
+  background: rgba(120, 220, 200, 0.12);
+}
+
+.annotated-line:focus-visible {
+  outline: 2px solid oklch(0.82 0.12 175);
+  outline-offset: -2px;
+}
+
+.annotated-panel {
+  padding: 20px;
+  background: var(--panel);
+}
+
+.annotated-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.annotated-note[hidden] {
+  display: none;
+}
+
+.annotated-title {
+  color: var(--mint);
+  font: 500 11px var(--font-mono);
+}
+
+.annotated-body {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+@container (max-width: 640px) {
+  .annotated-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Reference lists: the two-column tables of docs/cli.md, as a 170px code column and a description. */
+:root:has(.sidebar-content a[aria-current='page']:is([href$='/docs/cli'], [href$='/docs/cli.html'])) .sl-markdown-content table:not(:has(th:nth-child(3))) {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: none;
+    color: var(--muted);
+    vertical-align: baseline;
+  }
+
+  td:first-child {
+    width: 184px;
+    padding-inline-end: 14px;
+    color: var(--mint);
+    font: 13px var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  td code {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+  }
+
+  td:first-child code {
+    color: var(--mint);
+    font-size: 13px;
+  }
+
+  td:last-child code {
+    color: var(--ink);
+  }
+
+  @media (max-width: 32rem) {
+    tr,
+    td {
+      display: block;
+    }
+
+    td:first-child {
+      width: auto;
+      padding: 10px 0 0;
+      border: 0;
+    }
+
+    td:last-child {
+      margin: 0;
+      padding-top: 2px;
+    }
+  }
+}
