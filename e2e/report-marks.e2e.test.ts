@@ -59,6 +59,7 @@ test('a Meta hit before any answer is early, severity shows only on a failed res
   expect(traffic).toContain(cookieValue);
   expect(records.requests.some((q) => q.url.includes(encodedEmail)), 'the encoded email in a recorded request URL').toBe(true);
   expect(records.requests.map((q) => q.url).join('\n')).toContain(fixtureEmail);
+  expect(records.hits.some((h) => h.vendor === 'meta' && h.page?.includes(fixtureEmail)), 'the email in a recorded Meta hit').toBe(true);
   const secrets = [email, fixtureEmail, hash, sha(fixtureEmail).digest('base64'), sha(fixtureEmail).digest('base64url'), encodedEmail, cookieValue];
   for (const secret of secrets) {
     expect(html).not.toContain(secret);

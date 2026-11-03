@@ -30,15 +30,20 @@ test('a Meta hit with ud[em] before any answer warns, names the field and keeps 
 
 test('no email, hash or fbp value reaches stdout, stderr or the text output', async () => {
   const fbp = 'fb.1.1700000000000.100000001';
+  const cookieValue = 'pw-fixture-cookie-value';
   const json = await run('early-identifiers-leak');
   const text = await runText('early-identifiers-leak');
   const records = json.records!;
   const summary = JSON.parse(json.stdout) as Summary;
-  expect(records.hits.some((h) => h.vendor === 'meta' && h.fields?.includes('fbp'))).toBe(true);
-  expect(records.requests.some((q) => q.url.includes(fbp))).toBe(true);
-  expect(summary.results.find((x) => x.expectation === 'builtin: earlyIdentifiers')!.pass).toBe(false);
+  const hit = records.hits.find((h) => h.vendor === 'meta' && h.fields?.includes('fbp') && h.idFields?.includes('ud[em]'));
+  expect(hit).toBeDefined();
+  expect(records.requests.some((q) => q.url.includes(fbp) && q.url.includes(encodeURIComponent(FIXTURE_EMAIL)) && q.url.includes(FIXTURE_HASH))).toBe(true);
+  expect(records.requests.some((q) => q.url.includes(cookieValue))).toBe(true);
+  const result = summary.results.find((x) => x.expectation === 'builtin: earlyIdentifiers')!;
+  expect(result.pass).toBe(false);
+  expect(result.evidence).toEqual([hit!.id]);
   expect(text.stdout).toContain('earlyIdentifiers');
-  const secrets = [FIXTURE_EMAIL, encodeURIComponent(FIXTURE_EMAIL), FIXTURE_HASH, fbp, records.run.identity!.email];
+  const secrets = [FIXTURE_EMAIL, encodeURIComponent(FIXTURE_EMAIL), FIXTURE_HASH, fbp, cookieValue, records.run.identity!.email];
   for (const stream of [json.stdout, json.stderr, text.stdout, text.stderr]) {
     for (const secret of secrets) expect(stream).not.toContain(secret);
   }

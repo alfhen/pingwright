@@ -3,6 +3,6 @@ identity:
   email: pw-fixture@example.com
 steps:
   - wait: 1s
-  - visit: /meta-early-ids
+  - evaluate: "document.cookie = '_pwalready=pw-fixture-cookie-value; path=/'; new Image().src = 'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&cd[value]=10&cd[currency]=EUR&ud[em]=c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6&em=' + encodeURIComponent('pw-fixture@example.com') + '&fbp=fb.1.1700000000000.100000001&ck=' + encodeURIComponent(document.cookie) + '&dl=' + encodeURIComponent(location.href); true"
   - wait: 2s
 options: { seed: 1, allowUnknownDestination: true }
