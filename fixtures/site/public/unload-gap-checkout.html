@@ -20,5 +20,10 @@
     navigator.sendBeacon(hit('/g/collect', 'en=purchase&amp;ep.via=beacon'), '');
   });
 </script>"></iframe>
+<iframe id="pw-checkout-other" sandbox="allow-scripts" style="width:0;height:0;border:0" srcdoc="<script>
+  setTimeout(function () {
+    fetch('https://sgtm.tagreeve.invalid/g/collect?v=2&amp;tid=G-PWTEST0001&amp;cid=3333333333.4444444444&amp;gcs=G100&amp;en=other_frame_ga', { method: 'POST', mode: 'no-cors', body: '' }).catch(function () {});
+  }, 2200);
+</script>"></iframe>
 </body>
 </html>

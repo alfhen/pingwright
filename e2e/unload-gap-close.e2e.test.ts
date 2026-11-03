@@ -27,6 +27,10 @@ test('a checkout_completed push from a srcdoc frame shortly before the run ends 
   expect(records!.hits.some((h) => h.vendor === 'sgtm' && h.event === 'checkout_completed')).toBe(true);
   expect(records!.hits.some((h) => h.vendor === 'ga4' && h.event === 'page_view')).toBe(true);
   expect(records!.hits.some((h) => h.vendor === 'ga4' && h.event === 'purchase')).toBe(false);
+  const other = records!.hits.find((h) => h.vendor === 'ga4' && h.event === 'other_frame_ga');
+  expect(other).toBeDefined();
+  const otherRequest = records!.requests.find((r) => r.id === other!.requestId);
+  expect(otherRequest!.frameUrl).toBe('about:srcdoc');
   const gaps = records!.flags.filter((f) => f.kind === 'unloadGap');
   expect(gaps).toHaveLength(1);
   expect(gaps[0]!.detail).toContain('"checkout_completed"');
