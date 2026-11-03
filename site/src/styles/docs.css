@@ -72,22 +72,10 @@ body {
   padding-inline-start: 0;
 }
 
-/*
- * Handoff §3: the sidebar and the article sit in the header's 1280px frame, 56px apart, and the article
- * starts at the frame's left edge. --frame-start is the left edge of the header's content.
- */
+/* Handoff §3: the sidebar and the article sit in the header's frame (tokens.css), 56px apart. */
 @media (min-width: 50rem) {
-  :root {
-    --frame-start: max(28px, (100% - 1280px) / 2);
-  }
-
   .page > .header {
     padding-inline-end: 0;
-  }
-
-  /* --frame-start assumes the handoff's content-box header: 1280px of content inside 28px of padding. */
-  .page > .header .site-header {
-    box-sizing: content-box;
   }
 
   .sidebar-pane {
@@ -96,7 +84,7 @@ body {
   }
 
   .main-frame {
-    padding-inline: calc(var(--frame-start) + var(--sl-sidebar-width) + 56px) 28px;
+    padding-inline: calc(var(--frame-start) + var(--sl-sidebar-width) + 56px) var(--frame-pad);
   }
 
   .content-panel {
