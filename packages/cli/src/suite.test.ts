@@ -547,7 +547,10 @@ test('--server-container passes the same spec to every run', async () => {
   const fake = recorder();
   const saved = process.env.TAGREEVE_SERVER_CONTAINER_CONFIG;
   const savedSeam = process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD;
-  process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD = process.execPath;
+  const standIn = join(await mkdtemp(join(tmpdir(), 'pw-standin-')), 'standin');
+  await writeFile(standIn, '#!/bin/sh\nexit 0\n');
+  await chmod(standIn, 0o755);
+  process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD = standIn;
   process.env.TAGREEVE_SERVER_CONTAINER_CONFIG = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
   try {
     expect(await suiteCommand(args(dir, out, { serverContainer: true }), capture().io, fake)).toBe(0);

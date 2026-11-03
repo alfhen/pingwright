@@ -143,7 +143,7 @@ test('a config file readable by others is refused and the message holds neither 
 });
 
 test('the stand-in seam needs no config, and a bad seam value exits 2 without printing it', async () => {
-  const env = { TAGREEVE_TEST_SERVER_CONTAINER_CMD: process.execPath };
+  const env = { TAGREEVE_TEST_SERVER_CONTAINER_CMD: join(await fakeDockerPath('exit 0'), 'docker') };
   expect((await prepare({ serverContainer: true }, ['127.0.0.1'], env)).spec).toMatchObject({ configSource: { kind: 'env' } });
   const hosted = await prepare({ serverContainer: true }, ['sgtm.example.com'], env);
   expect(hosted.spec).toBeUndefined();
