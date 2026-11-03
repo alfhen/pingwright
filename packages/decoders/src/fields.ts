@@ -20,10 +20,15 @@ function mostlyDigits(segment: string): boolean {
   return digits >= 6 && digits * 2 >= segment.length;
 }
 
-function looksLikeValue(segment: string): boolean {
-  if (segment.length > 64 || !NAME_CHARS.test(segment)) return true;
+/** The value-shape tests of the field name rule, without the character check. */
+export function looksLikeValueToken(segment: string): boolean {
+  if (segment.length > 64) return true;
   if (HEX_TOKEN.test(segment) || LONG_DIGITS.test(segment) || mostlyDigits(segment)) return true;
   return DIGEST_TOKEN.test(segment) && /[A-Z]/.test(segment) && /[a-z]/.test(segment) && /\d/.test(segment);
+}
+
+function looksLikeValue(segment: string): boolean {
+  return !NAME_CHARS.test(segment) || looksLikeValueToken(segment);
 }
 
 /**

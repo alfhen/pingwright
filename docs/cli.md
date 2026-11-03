@@ -240,7 +240,7 @@ Compares two runs of the same scenario, for example one with a GTM override and 
 
 | Option | Meaning |
 | --- | --- |
-| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. For a Shopify custom pixel the `/web-pixels@<hash>/.../sandbox/<mode>` prefix is stripped from the key, so runs on different Shopify deploys still pair. The record keeps the raw page. Added and removed lines show it as `recorded as <page>` when it differs from the key, and the JSON result has it as `page` on each added, removed and changed hit. A hit with no page uses the URL of the frame that sent it, or an empty page if there is none. |
+| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. For a Shopify custom pixel the `/web-pixels@<hash>/.../sandbox/<mode>` prefix is stripped from the key, so runs on different Shopify deploys still pair. Each path segment that looks like a value (a token, a long hex or digit string, a UUID) becomes `*`, so `/checkouts/cn/<token>` is keyed as `/checkouts/cn/*`. The record keeps the raw page. Added and removed lines show it as `recorded as <page>` when it differs from the key, and the JSON result has it as `page` on each added, removed and changed hit. A hit with no page uses the URL of the frame that sent it, or an empty page if there is none. |
 | `--all-flags` | Shows flag count changes for hosts the scenario allows with `allowUnknownDestination`. They are hidden by default, because platform telemetry hosts often change by one between identical runs, and the summary says how many it hid. The JSON result always has them, with `allowed: true`. |
 | `--json` | Prints the full diff result as JSON instead of the text summary. |
 
@@ -254,7 +254,7 @@ Writes the shape of one run to a small file you can commit, so a later run can b
 
 | Option | Meaning |
 | --- | --- |
-| `--by-page` | Adds the page path to each key, as in `diff`. The path only: no query, no host. Do not use it on pages whose path holds a per-order token, such as a Shopify checkout, because the baseline would drift on every run. |
+| `--by-page` | Adds the page path to each key, as in `diff`. The path only: no query, no host. Segments that look like a value, such as a checkout token, are stored as `*`, so the baseline holds no token. |
 
 The file holds `baselineSchemaVersion`, the `scenario` name, the `site` host (no scheme, port or path), `byPage` and a sorted list of keys. A key is the consent epoch label, the vendor and the event. Under each key are the tuples seen: the four consent states, the raw `gcs` and `gcd` values, the names of the IDs that are present, and a hit count. It holds no hit ID, time, URL, query, cookie or value. There is no `approve` command: to accept a change, save the baseline again and review the file diff in the pull request.
 

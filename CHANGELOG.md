@@ -6,7 +6,7 @@
 
 <!-- U01 -->
 
-<!-- B01 -->
+- `--by-page` keys now replace path segments that look like a value, such as a checkout token, with `*`. A `--by-page` baseline saved on a page with a token drifts once. Save it again.
 
 <!-- M01 -->
 
