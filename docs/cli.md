@@ -394,7 +394,7 @@ Prints the version.
 | 1 | At least one expectation or built-in check failed, or `--baseline` found drift. |
 | 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file, a `payment` step without `--allow-test-payment <host>` for the `--site` host or without that host in the allowlist file, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `tagreeve install-browser`. |
 
-A usage error prints its message and one line, `Run tagreeve <command> --help for the options.`, on stderr. It does not print the full help. `--help` prints it. The line names the command when the arguments name one.
+A usage error prints its message and one line, `Run tagreeve <command> --help for the options.`, on stderr. It does not print the full help. `--help` prints it. The line names the command when the arguments name one, also when an option comes before the command. An unknown option prints one short message, for example `Unknown option --bogus.`. Every command takes `--help` and prints its own options, for example `tagreeve diff --help`.
 
 The JSONL file is still written when a step fails, up to the failing step.
 
