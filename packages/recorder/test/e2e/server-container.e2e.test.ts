@@ -107,6 +107,35 @@ http.createServer((req, res) => {
     expect((await readFile(seen, 'utf8')).trim().split('\n')).toEqual(['false', 'false']);
   }, 60_000);
 
+  test('concurrent container calls never pick up a cookie the container set on another call', async () => {
+    const seen = join(outDir, 'burst.log');
+    process.env[SEAM] = await standIn(
+      'burst-stand-in',
+      `import fs from 'node:fs';
+import http from 'node:http';
+http.createServer((req, res) => {
+  if (req.url !== '/healthz') {
+    fs.appendFileSync(${JSON.stringify(seen)}, String('cookie' in req.headers) + '\\n');
+    res.setHeader('set-cookie', 'FPID=pw-fixture-fpid; Path=/');
+  }
+  res.end('ok');
+}).listen(Number(process.env.PORT), '127.0.0.1');`,
+    );
+    const recorder = await launch();
+    try {
+      const page = await recorder.visit(`${site.url}/`);
+      await page.evaluate(() =>
+        Promise.all(Array.from({ length: 30 }, (_, i) => fetch(`http://localhost:8080/g/collect?v=2&n=${i}`, { mode: 'no-cors' }).catch(() => undefined))),
+      );
+      await recorder.wait(300);
+    } finally {
+      await recorder.close();
+    }
+    const lines = (await readFile(seen, 'utf8')).trim().split('\n');
+    expect(lines).toHaveLength(30);
+    expect(lines.every((l) => l === 'false')).toBe(true);
+  }, 60_000);
+
   test('a container call made after a handoff closes is redacted inside the grace window and kept after it', async () => {
     const signals = join(outDir, 'signals');
     await mkdir(signals, { recursive: true });

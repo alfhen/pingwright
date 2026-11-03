@@ -219,7 +219,6 @@ export class Recorder {
   private readonly navigationWindows = new NavigationWindows<PwRequest>();
   private session: ServerContainerSession | undefined;
   private sessionStopped: Promise<void> | undefined;
-  private containerClient: Promise<APIRequestContext> | undefined;
   private removeSignalHandlers: (() => void) | undefined;
   /** Why the container did not start. Set by `launch`; `recordScenario` ends the run when it is. */
   containerFailure: { errorClass: ServerContainerErrorClass; message: string } | undefined;
@@ -401,7 +400,6 @@ export class Recorder {
     this.removeSignalHandlers?.();
     this.removeSignalHandlers = undefined;
     this.sessionStopped ??= (async () => {
-      await this.containerClient?.then((client) => client.dispose()).catch(() => undefined);
       await this.session?.stop();
     })();
     return this.sessionStopped;
@@ -588,16 +586,15 @@ export class Recorder {
     const live = new URL(original.url());
     // A separate client, so the container's loopback address never reads or writes the context cookie jar.
     // allHeaders() holds the Cookie header Chromium would send, so SameSite and credentials mode already apply.
-    // The client falls back to its own jar when the header is absent, so the jar is cleared before each fetch.
+    // The client falls back to its own jar when the header is absent, so each call gets a client with an empty jar that no other call shares.
     // An empty cookie header must never be added: it would go out as an empty Cookie header.
     const { host: _host, ...headers } = await original.allHeaders();
     void _host;
     record.outcome = 'stubbed';
     this.stubRecorded.add(record.id);
+    let client: APIRequestContext | undefined;
     try {
-      this.containerClient ??= playwrightRequest.newContext();
-      const client = await this.containerClient;
-      await client.clearCookies();
+      client = await playwrightRequest.newContext();
       const response = await client.fetch(`${origin}${live.pathname}${live.search}`, {
         method: original.method(),
         headers,
@@ -610,6 +607,8 @@ export class Recorder {
       record.outcome = 'failed';
       record.failure = abortCode(error);
       await route.abort(abortCode(error));
+    } finally {
+      await client?.dispose().catch(() => undefined);
     }
   }
 
