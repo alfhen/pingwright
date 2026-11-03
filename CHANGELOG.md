@@ -2,13 +2,11 @@
 
 ## 0.5.0-rc.2
 
+Release candidate. Install it with `npm i -g tagreeve@next`.
+
 - The `payment` step finds each Shopify card field by its `name` or `autocomplete` and its frame by document path. A frame with the right title but another path is skipped. When the input count is not 1, the error lists the frame path and the `name`, `autocomplete` and `type` of each visible input (#788, #684, #691).
 
-<!-- C04 -->
-
 - Fix: a server container call made up to one second after a handoff closes is stored without its body and query values. A container call is no longer sent an empty `Cookie` header when the browser sends none (#772, #768).
-
-<!-- E04 -->
 
 - Fixes in the body scan: two different values no longer merge into one finding when one contains the other, a JSON path of digits is no longer read as a phone number, a part typed as binary in a text body is named by its field, and a body of over 100,000 values no longer overflows the stack. (#667, #668, #669, #670, #673)
 
@@ -18,29 +16,37 @@
 
 - `suite --stores` now exits 2 when `--allow-test-payment` matches no store and a payment scenario would run. A stores file whose `autoconsentRules` file is missing is rejected when the file is read.
 
-<!-- B04 -->
-
 - `diff --by-page` and `baseline save --by-page` now mask a path segment that holds `@`, a percent-encoded byte, an email, a phone number or a hash. `diff` treats `platformHost` flag changes as allowed and hides them unless `--all-flags` is given. The docs list the masking rules in full. (#705, #706, #743)
-
-<!-- Y04 -->
 
 - The verdict names a failed `deniedIdentifiers` check when only early identifiers are named, and an `earlyIdentifiers` warning when only denied identifiers are named. Each check is hidden only when its own findings are already in the sentence (#663, #805).
 
-<!-- H04 -->
-
 - Fix: the text and `--json` summaries show a flag's request with query names only, never values (`?a&b`). A query name that looks like a value reads `(other)`. The `sandboxPageUrl` message names the page by host and path. Records keep the full flag detail otherwise. Path segments are not masked yet. (#679, #801)
-
-<!-- L04 -->
 
 - `unloadGap` now matches a GA4 hit to a push by frame document, not by frame URL. Two `about:srcdoc` frames, or two frames with one URL, no longer cover each other (#723, #722, #724, #725).
 
-<!-- S04 -->
-
 - The recording proxy refuses every spelling of the unspecified address (`::0`, `0`, `0:0:0:0:0:0:0:0`), and checks the address it bound. `tagreeve server-container build` on arm64 now says Docker is needed when the Docker daemon does not answer (#718, #791).
 
-<!-- F04 -->
-
 - Adds `from: <step label>` to hit and cookie rules. The window starts at the labelled step's start, so a visit step's own page-load hits count. `after:` still starts at the step's end. A rule with both is a scenario error. (#789, #806)
+
+### Known in 0.5.0-rc.2
+
+Issues still open that you can meet:
+
+- `--server-container` needs Docker. The container downloads its configuration from Google at every start, so a run needs the network for three Google paths, and Google sees the container's request with your `gtm_auth`.
+- The Meta Conversions API, Pinterest and Criteo template tags are not yet proven to reach the recording proxy. Check C0, items 1 to 3, runs in the rc.2 field test.
+- Link rule 2 (a link by client ID and event name) is not built. Links between container calls and browser hits are exact by event ID only (#783).
+- The Shopify platform-host list holds only `cdn.shopify.com` and `monorail-edge.shopifysvc.com`. Other Shopify telemetry, checkout and payments hosts stay `unknownDestination` (#585).
+- The fix for the Shopify card fields (#788) is not yet confirmed on a real checkout. The rc.2 field test confirms it. If it fails, the error names the frame path and the inputs' attributes.
+- The payment step checks the card host before each short fill try. That narrows the window in #691 but cannot close it, because Playwright cannot check the host and type in one step (#845).
+- A flag's detail keeps query values in records. The text and `--json` summaries show query names only (#679, #782). Path segments are not masked in flag detail (#871).
+- A bare query item with no `=` is shown as a name unless it looks like a value (#869).
+- A hit from a redirect hop has no frame id and still matches by frame URL (#879).
+- The suite verdict can hide a check's failure in a run with no leak when another run named a leak (#822).
+- Stape-only features do not exist in the local container, which is Google's image: the custom loader and its domain features, Cookie Keeper, the geo and bot headers Stape adds, store ID headers, request logs and the CDN. Unpublished server workspaces are not available either.
+- `earlyIdentifiers` is `warn` by default.
+- The node-forge bump waits until the release is two weeks old, on 2026-11-10 (#719).
+
+The other open `review-minor` issues are in the 0.5.0 milestone.
 
 ## 0.5.0-rc.1
 

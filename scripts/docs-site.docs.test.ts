@@ -136,7 +136,7 @@ test('the home page has the hero and the footer, and the replay link dispatches 
   const page = await context.newPage();
   await page.goto(`${docsUrl}/`);
   await expect.poll(() => page.locator('h1').textContent()).toContain('"Should only take 5 minutes." Now it does.');
-  expect(await page.getByText('0.4 release candidate · Chromium · MIT').count()).toBe(1);
+  expect(await page.getByText('0.5 release candidate · Chromium · MIT').count()).toBe(1);
   expect(await page.getByText('tagreeve · MIT · runs on infrastructure you control').count()).toBe(1);
   await page.evaluate(() => {
     (window as unknown as { replays: number }).replays = 0;
