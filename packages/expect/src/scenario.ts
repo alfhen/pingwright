@@ -40,6 +40,8 @@ export interface Rule {
   /** The text inside `epoch(...)`. */
   inEpoch?: string;
   after?: string;
+  /** A step label; the window starts at that step's start. */
+  from?: string;
   hashesMatch?: boolean;
   body?: { has?: string[]; only?: string[]; ignore?: string[] };
   /** Cookie names or `*` globs. A cookie rule selects cookies, not hits. */
@@ -147,9 +149,9 @@ export class ScenarioError extends Error {
   }
 }
 
-const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after']);
+const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after', 'from']);
 const GROUP_KEYS = ['consent', 'ids', 'params', 'identity', 'body'] as const;
-const COOKIE_RULE_KEYS = ['cookie', 'before', 'in', 'after'];
+const COOKIE_RULE_KEYS = ['cookie', 'before', 'in', 'after', 'from'];
 const BODY_KEYS = ['has', 'only', 'ignore'] as const;
 const MAX_FIELD_NAME = 64;
 const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
@@ -643,6 +645,10 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         if (typeof v !== 'string' || !v) fail(p, 'must be a step label');
         else if (!stepLabels.has(v)) fail(p, `"${v}" is not a step label, defined labels: ${[...stepLabels].join(', ') || 'none'}`);
         else rule.after = v;
+      } else if (k === 'from') {
+        if (typeof v !== 'string' || !v) fail(p, 'must be a step label');
+        else if (!stepLabels.has(v)) fail(p, `"${v}" is not a step label, defined labels: ${[...stepLabels].join(', ') || 'none'}`);
+        else rule.from = v;
       } else if (VENDOR_KEYS.has(k)) {
         fail(p, 'invalid');
       } else {
@@ -651,8 +657,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
     }
     if (rule.cookie) {
       const mixed = Object.keys(flat).filter((k) => !COOKIE_RULE_KEYS.includes(k));
-      if (mixed.length) fail(path, `cookie cannot be combined with ${mixed.join(', ')}; it only takes before, in and after`);
+      if (mixed.length) fail(path, `cookie cannot be combined with ${mixed.join(', ')}; it only takes before, in, after and from`);
     }
+    if (rule.from && rule.after) fail(path, 'use either from or after, not both');
     if (rule.before && rule.inEpoch) fail(path, 'use either before or in, not both');
     if (rule.body?.has && rule.body.only) fail(path, 'body.has and body.only cannot be in the same entry');
     if (rule.body && rule.hashesMatch) fail(path, 'identity.hashesMatch cannot be combined with body.has or body.only');

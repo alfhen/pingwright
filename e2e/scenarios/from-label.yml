@@ -1,0 +1,11 @@
+start: /
+steps:
+  - consent: accept
+  - visit: /products/fake-tee
+    label: product
+  - wait: 3s
+expect:
+  must:
+    - { vendor: ga4, event: page_view, from: product }
+    - { vendor: ga4, event: page_view, after: product, count: 0 }
+options: { seed: 1, allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }

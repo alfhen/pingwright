@@ -246,6 +246,32 @@ test('after: <step label>', () => {
   expect(missing.message).toContain('"accept"');
 });
 
+test('from: <step label> starts at the step start and includes its own hits', () => {
+  const step: Step = { type: 'step', id: newId('step'), runId, index: 0, label: 'go', startedAt: 900, endedAt: 1000 };
+  const own = hit({ vendor: 'meta', t: 950 });
+  const earlier = hit({ vendor: 'meta', t: 899 });
+  const later = hit({ vendor: 'meta', t: 1001 });
+  const q = (key: string, kind = 'must') => `steps:\n  - { visit: /, label: go }\nexpect:\n  ${kind}:\n    - { vendor: meta, ${key}: go }`;
+  const from = rule(q('from'), [step, earlier, own, later]);
+  expect(from.evidence).toEqual([own.hit.id, later.hit.id]);
+  expect(from.message).toContain('from go');
+  expect(rule(q('after'), [step, earlier, own, later]).evidence).toEqual([later.hit.id]);
+  expect(rule(q('from', 'mustNot'), [step, own]).pass).toBe(false);
+  expect(rule(q('after', 'mustNot'), [step, own]).pass).toBe(true);
+  const missing = rule(q('from'), [own]);
+  expect(missing.pass).toBe(false);
+  expect(missing.message).toContain('"go"');
+});
+
+test('from: judges an unlinked server hit as cannot evaluate', () => {
+  const step: Step = { type: 'step', id: newId('step'), runId, index: 0, label: 'go', startedAt: 900, endedAt: 1000 };
+  const server = (over: Partial<Hit> = {}) => hit({ vendor: 'meta', t: 1500, ...over }, { captured: 'serverContainer' });
+  const q = `steps:\n  - { visit: /, label: go }\nexpect:\n  mustNot:\n    - { vendor: meta, from: go }`;
+  const unlinked = rule(q, [step, server()]);
+  expect(unlinked).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked' });
+  expect(unlinked.message).toContain('Cannot evaluate');
+});
+
 test('identity.hashesMatch', () => {
   const em = hashEmail(identity.email);
   const ph = hashPhone(identity.phone);

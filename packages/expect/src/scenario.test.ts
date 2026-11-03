@@ -157,6 +157,10 @@ test('step labels: written, default, duplicate and checked by after', () => {
   expect(errorOf('start: /\nsteps:\n  - { visit: /a, label: start }\n')).toContain('duplicate step label "start"');
   expect(parseScenario('start: /\nexpect:\n  must:\n    - { vendor: ga4, after: start }\n').expect.must).toHaveLength(1);
   expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, after: visit-1 }\n').expect.must).toHaveLength(1);
+  expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, from: visit-1 }\n').expect.must[0]).toMatchObject({ from: 'visit-1' });
+  expect(errorOf('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, from: nope }\n')).toMatch(/is not a step label/);
+  expect(errorOf('start: /\nsteps:\n  - visit: /\nexpect:\n  must:\n    - { vendor: ga4, from: visit-1, after: visit-1 }\n')).toMatch(/use either from or after, not both/);
+  expect(parseScenario('start: /\nsteps:\n  - visit: /\nexpect:\n  mustNot:\n    - { cookie: _a, from: visit-1 }\n').expect.mustNot[0]).toMatchObject({ from: 'visit-1' });
 });
 
 test('rejects an unknown vendor name', () => {

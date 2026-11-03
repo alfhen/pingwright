@@ -300,7 +300,7 @@ test('a real decoded GA4 G100 hit with cid is a ping', () => {
 });
 
 test('expectations: statuses, builtin names, notes and a value-free form', () => {
-  const entry = JSON.stringify({ vendor: 'ga4', params: { em: 'pw-fixture@example.com' }, ids: { 'hashes.em': 'abc123' }, page: { matches: 'secret' }, 'body.has': ['user_data'], 'consent.ads': 'denied', in: 'epoch(denied)' });
+  const entry = JSON.stringify({ vendor: 'ga4', params: { em: 'pw-fixture@example.com' }, ids: { 'hashes.em': 'abc123' }, page: { matches: 'secret' }, 'body.has': ['user_data'], 'consent.ads': 'denied', in: 'epoch(denied)', from: 'accept' });
   const model = buildReportModel(
     records({
       results: [
@@ -314,7 +314,7 @@ test('expectations: statuses, builtin names, notes and a value-free form', () =>
   );
   const [leak, warn, stub, cannot, builtin] = model.expectations;
   expect(leak!.status).toBe('FAIL');
-  expect(leak!.text).toBe('mustNot: vendor: ga4, params.em, ids.hashes.em, page.matches, body.has: user_data, consent.ads: denied, in: epoch(denied)');
+  expect(leak!.text).toBe('mustNot: vendor: ga4, params.em, ids.hashes.em, page.matches, body.has: user_data, consent.ads: denied, in: epoch(denied), from: accept');
   expect(leak!.evidence).toHaveLength(5);
   expect(leak!.evidenceCount).toBe(7);
   expect(warn).toMatchObject({ status: 'WARN', kind: 'builtin', text: 'builtin: deniedIdentifiers', severity: 'warn' });
