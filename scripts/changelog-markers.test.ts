@@ -21,7 +21,7 @@ function isOlder(a: Version, b: Version): boolean {
 export function markerProblems(text: string, packageVersion: string): string[] {
   const lines = text.split('\n');
   const start = lines.findIndex((line) => line.startsWith('## '));
-  if (start === -1) return [];
+  if (start === -1) return ['no ## version heading'];
   const heading = versionHeading.exec(lines[start]!);
   if (!heading) return [`line ${start + 1}: ${lines[start]} is not a version heading`];
   const pkg = versionHeading.exec(`## ${packageVersion}`);
@@ -73,6 +73,10 @@ describe('markerProblems', () => {
 
   it('flags two markers on neighbouring lines', () => {
     expect(markerProblems('## 1.0.0\n\n<!-- A01 -->\n<!-- B01 -->\n\n## 0.9.0\n', v)).toHaveLength(2);
+  });
+
+  it('flags a changelog with no ## heading', () => {
+    expect(markerProblems('# Changelog\n\n- A.\n', v)).toHaveLength(1);
   });
 
   it('ignores markers in older sections', () => {
