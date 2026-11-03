@@ -28,6 +28,8 @@ function firstVisitContext(options: BrowserContextOptions = {}): Promise<Browser
 async function openHome(page: Page): Promise<void> {
   await page.goto(`${docsUrl}/`);
   await page.waitForSelector('astro-island[component-url*="Intro"]:not([ssr])', { state: 'attached' });
+  // The island drops `ssr` before its effects run; `open` replaces `pending` once the intro and its key listener are live.
+  await page.waitForFunction(() => document.documentElement.dataset.intro !== 'pending');
 }
 
 const stage = (page: Page) => page.locator(overlay).getAttribute('data-stage', { timeout: 1000 }).catch(() => null);
