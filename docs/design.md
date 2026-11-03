@@ -127,7 +127,7 @@ Why unknown destinations pass rather than being blocked: blocking by host stops 
 
 Stub answers: 204 for `fetch`, `xhr` and beacon requests, a 1x1 GIF for images, a 200 success body for the Meta Conversions API endpoint, an empty 200 JavaScript response for scripts (gtag.js sends some Ads hits as script requests), and an empty 200 HTML response for documents (such as `td.doubleclick.net` iframes). The CORS headers echo the request `Origin` and allow credentials. Reports mark stubbed requests with `outcome: stubbed`. In `live` mode every request continues and has `outcome: passed`.
 
-**Unknown destination rule.** A request is flagged `unknownDestination` when its host is not first party, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged.
+**Unknown destination rule.** A request is flagged `unknownDestination` when its host is not first party, no decoder matches it, and it can carry data: a `fetch`, `xhr` or beacon request, or an `image` or `other` request with a query string or a body. Scripts, stylesheets, fonts and documents are never flagged. A request that would be flagged and matches an entry of the platform host list (§10.1) gets the flag `platformHost` instead, with the same detail. `platformHost` never fails a run. `options.platformHosts: false` turns the list off.
 
 **First party.** The registrable domain of the `--site` host, found with the Public Suffix List (`tldts`, private suffixes included), is first party: `--site https://www.shop.co.uk` makes `shop.co.uk` and every `*.shop.co.uk` host first party. A host with no registrable domain (an IP address, `localhost`) is first party only as the exact `--site` host. `options.firstPartyHosts` adds hosts or `*.domain` wildcards. A wildcard matches subdomains at any depth, not the bare domain.
 
@@ -358,6 +358,7 @@ Tagreeve reads either one only through the sink reader (§9). The sink reader is
 - **Sandbox handling.** Custom pixels run in a sandboxed iframe whose URL contains `/web-pixels@…/sandbox/`. Decoders report that path as a defect when it reaches vendors as the page URL.
 - **Checkout.** Checkout pages run no theme code. Add to cart goes through the cart API. Checkout payment is a handoff step. The one exception is the opt-in test payment (§5.4), where the user declares the host's test mode.
 - **Theme preview.** `preview_theme_id` is a scenario variable, so an unpublished theme can be tested.
+- **Platform hosts.** Shopify's own requests (telemetry, CDN, checkout) are flagged `platformHost`, not `unknownDestination`, so the unknown destinations that matter stay visible. The list is `platformHosts` in `packages/decoders/src/platform-hosts.ts`. Each entry names a host, a purpose and a link to a `shopify.dev` or `help.shopify.com` page that names the host. A host that no Shopify page names stays out. Third-party payment SDKs are not Shopify's and stay unknown destinations. The list applies to browser requests only.
 
 Other platforms come later and only if someone needs them.
 

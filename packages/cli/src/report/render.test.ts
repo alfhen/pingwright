@@ -7,7 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { parseCli } from '../args.ts';
 import { main } from '../main.ts';
 import { buildReportModel } from './model.ts';
-import { CSP, escapeHtml, renderReport } from './render.ts';
+import { CSP, escapeHtml, flags, renderReport } from './render.ts';
 
 const EMAIL = 'pw-fixture@example.com';
 const HASH = createHash('sha256').update(EMAIL).digest('hex');
@@ -274,4 +274,12 @@ test('report needs --html and one file', () => {
   expect(parseCli(['report', 'a.jsonl', '--html', 'out.html'])).toEqual({ command: 'report', input: 'a.jsonl', html: 'out.html' });
   expect(() => parseCli(['report', 'a.jsonl'])).toThrow('--html');
   expect(() => parseCli(['report', '--html', 'o.html'])).toThrow('one JSONL file');
+});
+
+test('platformHost flags render in a closed details element with counts per host', () => {
+  const model = buildReportModel(records());
+  model.flags = [{ kind: 'platformHost', count: 3, hosts: ['cdn.shopify.com'], hostCounts: [{ host: 'cdn.shopify.com', count: 3 }] }];
+  const html = flags(model);
+  expect(html).toContain('<details><summary>1 host</summary><ul><li>cdn.shopify.com: 3</li></ul></details>');
+  expect(html).not.toContain('<details open');
 });

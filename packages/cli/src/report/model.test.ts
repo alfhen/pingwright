@@ -353,6 +353,19 @@ test('flags count by kind and show hosts only', () => {
   expect(model.flags).toEqual([{ kind: 'unknownDestination', count: 2, hosts: ['tracker.example.com'] }]);
 });
 
+test('platformHost flags carry counts per host', () => {
+  const mk = (url: string): Request => ({
+    type: 'request', id: newId('request'), runId, stepId: null, t: 1, method: 'GET', url, resourceType: 'image', frameUrl: null,
+    initiator: null, headers: {}, postData: null, outcome: 'stubbed',
+  });
+  const requests = [mk('https://cdn.shopify.com/a?x=1'), mk('https://cdn.shopify.com/b?x=1'), mk('https://other.example.invalid/c?x=1')];
+  const flags = requests.map((r) => ({ type: 'flag' as const, id: newId('flag'), runId, kind: 'platformHost', recordIds: [r.id], detail: `GET ${r.url}` }));
+  const model = buildReportModel(records({ requests, flags }));
+  expect(model.flags).toEqual([
+    { kind: 'platformHost', count: 3, hosts: ['cdn.shopify.com', 'other.example.invalid'], hostCounts: [{ host: 'cdn.shopify.com', count: 2 }, { host: 'other.example.invalid', count: 1 }] },
+  ]);
+});
+
 test('fields list names seen while a signal was denied, and guard value-like names', () => {
   const model = buildReportModel(
     records({

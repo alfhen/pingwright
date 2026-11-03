@@ -280,3 +280,14 @@ test('baseline drift sets pass and ok to false, and no drift leaves them', () =>
   applyBaseline(same, noDrift);
   expect(same).toMatchObject({ pass: true, ok: true });
 });
+
+test('lists platform hosts in one line per platform', () => {
+  const flags = [
+    { kind: 'platformHost', detail: 'GET https://cdn.shopify.com/a?x=1' },
+    { kind: 'platformHost', detail: 'GET https://cdn.shopify.com/b?x=1' },
+    { kind: 'platformHost', detail: 'GET https://unlisted.example.invalid/b?x=1' },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('platformHost: shopify, 2 requests to 1 host (cdn 2)');
+  expect(text).toContain('platformHost: GET https://unlisted.example.invalid/b?x=1');
+});

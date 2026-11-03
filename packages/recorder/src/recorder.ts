@@ -82,6 +82,8 @@ export interface RecorderOptions {
   scenario?: string;
   /** Hosts or `*.domain` wildcards treated as first party besides the site's registrable domain. */
   firstPartyHosts?: string[];
+  /** `false` keeps platform hosts as `unknownDestination`. Default: true. */
+  platformHosts?: boolean;
   /** Event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
   /** Stored on the run record as `graceWindowMs`. */
@@ -821,6 +823,7 @@ export class Recorder {
       networkMode: this.options.networkMode,
       siteUrl: this.options.site,
       firstPartyHosts: this.options.firstPartyHosts,
+      platformHosts: this.options.platformHosts,
       trackers: this.trackers,
       requests,
       hits,
