@@ -14,6 +14,8 @@
 
 <!-- B04 -->
 
+- `diff --by-page` and `baseline save --by-page` now mask a path segment that holds `@`, a percent-encoded byte, an email, a phone number or a hash. `diff` treats `platformHost` flag changes as allowed and hides them unless `--all-flags` is given. The docs list the masking rules in full. (#705, #706, #743)
+
 <!-- Y04 -->
 
 <!-- H04 -->

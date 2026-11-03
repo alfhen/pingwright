@@ -199,6 +199,20 @@ test('byPage masks value-like path segments and keeps plain paths', () => {
   expect(a.hits[0]!.page).toContain('Z2NwLXVz');
 });
 
+test('byPage masks email, percent-encoded and phone segments', () => {
+  const a = makeRun();
+  const pages = [
+    'https://shop.example.com/account/pw-fixture%40example.com',
+    'https://shop.example.com/account/pw-fixture@example.com',
+    'https://shop.example.com/account/a%20b',
+    'https://shop.example.com/account/+15555550123',
+    'https://shop.example.com/account/fake-tee',
+  ];
+  for (const page of pages) addHit(a, { page });
+  const keys = diffRuns(a, makeRun(), { byPage: true }).removed.map((h) => h.key.page);
+  expect(keys.sort()).toEqual(['/account/*', '/account/*', '/account/*', '/account/*', '/account/fake-tee']);
+});
+
 test('byPage groups a hit without a page by its frame URL, else under an empty page', () => {
   const a = makeRun();
   const b = makeRun();
@@ -241,6 +255,17 @@ test('marks unknownDestination changes allowed when the built-in check did not b
   expect(diffRuns(a, b).flags).toEqual([{ host: 'ok.example.com', kind: 'unknownDestination', a: 1, b: 2, allowed: true }]);
   b.results[0] = result(false, [blocked.id]);
   expect(diffRuns(a, b).flags[0]?.allowed).toBe(false);
+});
+
+test('marks platformHost changes allowed, with or without a built-in check result', () => {
+  const a = makeRun();
+  const b = makeRun();
+  addFlag(a, addHit(a, {}, 'cdn.shopify.com'), 'platformHost');
+  addFlag(b, addHit(b, {}, 'cdn.shopify.com'), 'platformHost');
+  addFlag(b, addHit(b, {}, 'cdn.shopify.com'), 'platformHost');
+  expect(diffRuns(a, b).flags).toEqual([{ host: 'cdn.shopify.com', kind: 'platformHost', a: 1, b: 2, allowed: true }]);
+  b.results.push({ type: 'result', id: newId('result'), runId: b.run.id, expectation: 'builtin: unknownDestination', pass: false, evidence: [] } as RunRecords['results'][number]);
+  expect(diffRuns(a, b).flags[0]?.allowed).toBe(true);
 });
 
 test('does not report a flag change when only the host port differs', () => {

@@ -74,7 +74,7 @@ export function formatDiff(result: DiffResult, a: string, b: string, options: { 
     out.push('', 'Flags');
     for (const f of shownFlags) out.push(`  ${flagChangeLabel(f)}`);
   }
-  if (hiddenFlags) out.push('', `${hiddenFlags} flag count change${hiddenFlags === 1 ? '' : 's'} for hosts allowed by allowUnknownDestination not shown (use --all-flags)`);
+  if (hiddenFlags) out.push('', `${hiddenFlags} flag count change${hiddenFlags === 1 ? '' : 's'} for hosts allowed by allowUnknownDestination or platform hosts not shown (use --all-flags)`);
   return `${out.join('\n')}\n`;
 }
 
