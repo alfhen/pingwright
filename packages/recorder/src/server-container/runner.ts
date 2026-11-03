@@ -10,7 +10,7 @@ import { isAbsolute } from 'node:path';
 import type { ServerContainerErrorClass } from '@tagreeve/core';
 import { isLoopbackHost } from '../guard.ts';
 import { Scrubber } from '../gtm-scrub.ts';
-import { NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
+import { baseImage, imageTag, isDigestReference, NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
 
 export const CONFIG_ENV = 'TAGREEVE_SERVER_CONTAINER_CONFIG';
 export const TEST_COMMAND_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_CMD';
@@ -415,4 +415,21 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     await stop();
     throw error;
   }
+}
+
+/** On arm64 the image is the one `server-container build` made. Elsewhere it is Google's, pinned by digest. */
+export function defaultServerContainerImage(version: string, env: NodeJS.ProcessEnv = process.env, arch: string = process.arch): string {
+  if (arch === 'arm64') return imageTag(version);
+  try {
+    return baseImage(env);
+  } catch (error) {
+    throw new ServerContainerUsageError((error as Error).message);
+  }
+}
+
+export async function describeImage(image: string, env: NodeJS.ProcessEnv): Promise<string> {
+  if (isDigestReference(image)) return image;
+  const inspected = await runDocker(['image', 'inspect', '--format', '{{.Id}}', image], { env });
+  const id = inspected.stdout.trim();
+  return inspected.code === 0 && id ? `${image}@${id}` : image;
 }

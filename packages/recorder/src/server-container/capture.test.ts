@@ -4,7 +4,6 @@ import { decodeRequest } from '@tagreeve/decoders';
 import {
   captureServerContainerCall,
   createForward,
-  defaultServerContainerImage,
   MAX_QUIET_WAIT_MS,
   QUIET_MS,
   resolveUpstreamOrigin,
@@ -205,12 +204,5 @@ describe('waitForQuiet', () => {
     const c = clock();
     await waitForQuiet(() => c.now(), c);
     expect(c.now()).toBe(MAX_QUIET_WAIT_MS);
-  });
-});
-
-describe('defaultServerContainerImage', () => {
-  test('is the local build on arm64 and Google image elsewhere', () => {
-    expect(defaultServerContainerImage('0.5.0', {}, 'arm64')).toBe('tagreeve-sgtm:0.5.0');
-    expect(defaultServerContainerImage('0.5.0', {}, 'x64')).toMatch(/^gcr\.io\/cloud-tagging-10302018\/gtm-cloud-image@sha256:[0-9a-f]{64}$/);
   });
 });

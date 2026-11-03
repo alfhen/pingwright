@@ -450,8 +450,10 @@ describe('requests from the server container', () => {
     expect(buildFlags(input([fromContainer(url)])).map((f) => f.kind)).toEqual(['unknownDestination']);
   });
 
-  test('a call to a first-party subdomain is no firstPartySubdomain flag', () => {
+  test('a call to a first-party subdomain is an unknownDestination flag, not firstPartySubdomain', () => {
     const call = fromContainer(`https://sgtm.${HOST}/custom`);
-    expect(buildFlags(input([call]))).toEqual([]);
+    const flags = buildFlags(input([call]));
+    expect(flags.map((f) => f.kind)).toEqual(['unknownDestination']);
+    expect(flags[0]!.detail).toContain('from the server container:');
   });
 });

@@ -13,10 +13,9 @@ import { redactHeaders, redactSecretsInBody, redactSecretsInUrl } from '../redac
 import { stubResponse } from '../stub.ts';
 import { createRunCa } from './ca.ts';
 import type { RunCa } from './ca.ts';
-import { baseImage, imageTag, isDigestReference, runDocker } from './image.ts';
 import { createRecordingProxy } from './proxy.ts';
 import type { ProxyRequest, ProxyResponse, RecordingProxy } from './proxy.ts';
-import { findProxyListenHost, resolveStandInCommand, ServerContainerUsageError, startServerContainer, TEST_COMMAND_ENV } from './runner.ts';
+import { describeImage, findProxyListenHost, resolveStandInCommand, ServerContainerUsageError, startServerContainer, TEST_COMMAND_ENV } from './runner.ts';
 import type { ConfigSource, ServerContainer } from './runner.ts';
 
 export const TEST_UPSTREAM_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM';
@@ -127,23 +126,6 @@ export async function waitForQuiet(
     if (remaining <= 0 || at >= start + maxMs) return;
     await sleep(Math.min(remaining, start + maxMs - at));
   }
-}
-
-/** On arm64 the image is the one `server-container build` made. Elsewhere it is Google's, pinned by digest. */
-export function defaultServerContainerImage(version: string, env: NodeJS.ProcessEnv = process.env, arch: string = process.arch): string {
-  if (arch === 'arm64') return imageTag(version);
-  try {
-    return baseImage(env);
-  } catch (error) {
-    throw new ServerContainerUsageError((error as Error).message);
-  }
-}
-
-async function describeImage(image: string, env: NodeJS.ProcessEnv): Promise<string> {
-  if (isDigestReference(image)) return image;
-  const inspected = await runDocker(['image', 'inspect', '--format', '{{.Id}}', image], { env });
-  const id = inspected.stdout.trim();
-  return inspected.code === 0 && id ? `${image}@${id}` : image;
 }
 
 export interface SessionOptions {

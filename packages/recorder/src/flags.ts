@@ -83,7 +83,8 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, track
   const flags: Flag[] = [];
   for (const req of requests) {
     const fromContainer = req.captured === 'serverContainer';
-    if (isUnknownDestination(req, scope, trackers)) {
+    const unknown = fromContainer ? undecodedDataHost(req, trackers) !== undefined : isUnknownDestination(req, scope, trackers);
+    if (unknown) {
       // The proxy answered this call itself, so a platform host or a first-party host is no reason to treat it differently.
       const kind = !fromContainer && platformHosts && platformHostFor(req) ? 'platformHost' : 'unknownDestination';
       flags.push(flag(runId, kind, [req.id], `${fromContainer ? 'from the server container: ' : ''}${req.method} ${req.url}`));

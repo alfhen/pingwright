@@ -111,7 +111,7 @@ export class GtmOverrideFailure extends Error {
   }
 }
 
-/** The server container did not start. The run's JSONL is written, with `Run.serverContainer.error` and the `serverContainerFailed` flag. */
+/** The server container did not start or ended during the run. The run's JSONL is written, with `Run.serverContainer.error` and the `serverContainerFailed` flag. */
 export class ServerContainerFailure extends Error {
   constructor(
     message: string,
@@ -545,5 +545,8 @@ export async function recordScenario(options: RecordScenarioOptions): Promise<Ru
   }
   const result = await recorder.close();
   if (result.gtmOverrideFailure) throw new GtmOverrideFailure(result.gtmOverrideFailure, result);
+  // close() sets containerFailure when the container ended during the run; TypeScript still narrows it to undefined from the check above.
+  const lost = recorder.containerFailure as Recorder['containerFailure'];
+  if (lost) throw new ServerContainerFailure(lost.message, result);
   return result;
 }
