@@ -1,0 +1,137 @@
+/* The intro's own world. Tagreeve's mint never appears here, so nothing in it reads the site's colour tokens. */
+
+/* Set by the inline gate script before the first paint, so the site never flashes before the intro. */
+html[data-intro='pending'] body {
+  overflow: hidden;
+}
+
+html[data-intro='pending'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.intro-wallpaper,
+html[data-intro='pending'] body::after {
+  background:
+    radial-gradient(90% 70% at 10% 10%, oklch(0.72 0.12 250) 0%, transparent 60%),
+    radial-gradient(80% 70% at 90% 20%, oklch(0.7 0.13 320) 0%, transparent 60%),
+    radial-gradient(90% 80% at 60% 100%, oklch(0.62 0.13 200) 0%, transparent 65%),
+    #3b4a7a;
+}
+
+/* Keep in step with introFits in intro-data.ts: where the intro cannot play, the replay link would do nothing. */
+@media (width < 860px), (prefers-reduced-motion: reduce) {
+  [data-replay-intro] {
+    display: none;
+  }
+}
+
+/* The handoff's sizes assume browser defaults, not Tailwind's preflight. */
+.intro-root,
+.intro-root * {
+  box-sizing: content-box;
+}
+
+.intro-root {
+  line-height: normal;
+}
+
+.intro-root :focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 2px;
+}
+
+.intro-root button {
+  margin: 0;
+}
+
+@keyframes intro-toast-in {
+  from {
+    transform: translateY(14px) scale(0.9) rotate(var(--r, 0deg));
+    opacity: 0;
+  }
+  to {
+    transform: rotate(var(--r, 0deg));
+    opacity: 1;
+  }
+}
+
+@keyframes intro-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes intro-wasted-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+    letter-spacing: 0.2em;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    letter-spacing: 0.04em;
+  }
+}
+
+@keyframes intro-band-in {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes intro-slow-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08) rotate(-1deg);
+  }
+}
+
+@keyframes intro-site-in {
+  0% {
+    transform: translateY(100vh) scale(0.92);
+    opacity: 0.6;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes intro-ask-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes intro-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-3px, 2px);
+  }
+  50% {
+    transform: translate(3px, -2px);
+  }
+  75% {
+    transform: translate(-2px, -3px);
+  }
+}

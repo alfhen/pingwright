@@ -1,0 +1,9 @@
+---
+import '@fontsource/anton/latin-400.css';
+import './intro.css';
+import { introGateScript } from '../../lib/intro-data.ts';
+import Intro from './Intro.tsx';
+---
+
+<script is:inline set:html={introGateScript} />
+<Intro client:only="preact" />
