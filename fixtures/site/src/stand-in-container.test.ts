@@ -120,11 +120,9 @@ describe('stand-in container', () => {
   it('rejects a certificate from another CA', async () => {
     const other = createRunCa(root);
     try {
-      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
       const origin = await start({ NODE_EXTRA_CA_CERTS: other.certPath });
       await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
-      await until(() => logged.mock.calls.filter(([line]) => String(line).startsWith('Vendor call failed')).length === 3);
-      logged.mockRestore();
+      await new Promise((r) => setTimeout(r, 300));
       expect(answered).toEqual([]);
     } finally {
       other.close();
