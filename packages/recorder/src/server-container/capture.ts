@@ -7,7 +7,6 @@ import {
   type Request,
   type Response,
   type ServerContainerPassThrough,
-  type Step,
 } from '@tagreeve/core';
 import { isLoopbackHost } from '../guard.ts';
 import { redactHeaders, redactSecretsInBody, redactSecretsInUrl } from '../redact.ts';
@@ -39,23 +38,9 @@ function flattenHeaders(headers: ProxyRequest['headers']): Record<string, string
   return out;
 }
 
-/** The id of the last step that had started at `t`, or the fallback when none had. */
-export function stepIdAt(steps: readonly Pick<Step, 'id' | 'startedAt'>[], t: number, fallback: Id<'stp'> | null): Id<'stp'> | null {
-  let found: Id<'stp'> | null = null;
-  let foundAt = -Infinity;
-  for (const step of steps) {
-    if (step.startedAt <= t && step.startedAt >= foundAt) {
-      found = step.id;
-      foundAt = step.startedAt;
-    }
-  }
-  return found ?? fallback;
-}
-
 export interface CaptureContext {
   readonly runId: Id<'run'>;
-  readonly steps: readonly Pick<Step, 'id' | 'startedAt'>[];
-  readonly fallbackStepId: Id<'stp'> | null;
+  readonly stepId: Id<'stp'> | null;
 }
 
 /** Turns a call the container made into a request record. Secrets are replaced before anything else reads it. */
@@ -65,7 +50,7 @@ export function captureServerContainerCall(call: ProxyRequest, context: CaptureC
     type: 'request',
     id: newId('request'),
     runId: context.runId,
-    stepId: stepIdAt(context.steps, call.receivedAt, context.fallbackStepId),
+    stepId: context.stepId,
     t: call.receivedAt,
     method: call.method,
     url: redactSecretsInUrl(call.url),
@@ -146,7 +131,12 @@ export async function waitForQuiet(
 
 /** On arm64 the image is the one `server-container build` made. Elsewhere it is Google's, pinned by digest. */
 export function defaultServerContainerImage(version: string, env: NodeJS.ProcessEnv = process.env, arch: string = process.arch): string {
-  return arch === 'arm64' ? imageTag(version) : baseImage(env);
+  if (arch === 'arm64') return imageTag(version);
+  try {
+    return baseImage(env);
+  } catch (error) {
+    throw new ServerContainerUsageError((error as Error).message);
+  }
 }
 
 async function describeImage(image: string, env: NodeJS.ProcessEnv): Promise<string> {
@@ -161,7 +151,6 @@ export interface SessionOptions {
   readonly image: string;
   readonly serverHosts: readonly string[];
   readonly runId: Id<'run'>;
-  readonly steps: () => readonly Pick<Step, 'id' | 'startedAt'>[];
   readonly currentStepId: () => Id<'stp'> | null;
   /** Called for each recorded call, with the answer the proxy gave. */
   readonly onCapture: (request: Request, response: Response) => void;
@@ -181,6 +170,8 @@ export interface ServerContainerSession {
   lastCallAt(): number;
   /** Later calls are still answered, but no longer recorded. */
   stopRecording(): void;
+  /** True when the container ended before the run did. */
+  containerExited(): boolean;
   passThrough(): ServerContainerPassThrough;
   refused(): number;
   stop(): Promise<void>;
@@ -208,7 +199,7 @@ export async function startServerContainerSession(options: SessionOptions): Prom
       handler: (call) => {
         const answer = serverContainerAnswer({ url: call.url });
         if (recording) {
-          const request = captureServerContainerCall(call, { runId: options.runId, steps: options.steps(), fallbackStepId: options.currentStepId() });
+          const request = captureServerContainerCall(call, { runId: options.runId, stepId: options.currentStepId() });
           const response: Response = { type: 'response', id: newId('response'), requestId: request.id, status: answer.status, setCookieNames: [] };
           captured += 1;
           lastCallAt = Date.now();
@@ -238,6 +229,7 @@ export async function startServerContainerSession(options: SessionOptions): Prom
       standIn,
       captured: () => captured,
       lastCallAt: () => lastCallAt,
+      containerExited: () => running.container.hasExited(),
       stopRecording: () => {
         recording = false;
       },

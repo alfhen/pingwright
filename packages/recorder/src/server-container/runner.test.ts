@@ -347,6 +347,20 @@ describe('the stand-in seam', () => {
     }
   });
 
+  it('reports that a stand-in which dies after it was ready has exited', async () => {
+    const file = join(work, 'dying');
+    writeFileSync(file, `#!${process.execPath}\nrequire('node:http').createServer((req, res) => res.end('ok')).listen(Number(process.env.PORT), '127.0.0.1');\nsetTimeout(() => process.exit(1), 600);\n`);
+    chmodSync(file, 0o755);
+    const container = await startServerContainer({ ...options(), serverHosts: ['localhost'], env: { PATH: work, ...seam(file) }, pickPort: pickFreePort });
+    try {
+      expect(container.hasExited()).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      expect(container.hasExited()).toBe(true);
+    } finally {
+      await container.stop();
+    }
+  });
+
   it('never starts the stand-in for a non-loopback serverHosts list', async () => {
     const env = { PATH: work, ...seam(script()) };
     await expect(startServerContainer({ ...options(), env })).rejects.toBeInstanceOf(ServerContainerUsageError);

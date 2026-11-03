@@ -292,7 +292,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     networks.set(s.name, network);
   }
   const serverHosts = [...new Set(scenarios.flatMap((s) => s.parsed.options.serverHosts ?? []))];
-  const serverContainer = prepareServerContainer(args, serverHosts, io);
+  const serverContainer = await prepareServerContainer(args, serverHosts, io);
   if (serverContainer === undefined) return 2;
   const overrides = await readOverrides(args, io);
   if (!overrides) return 2;

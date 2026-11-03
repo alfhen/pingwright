@@ -81,9 +81,17 @@ test('--net-log stays live-only in server mode', () => {
 
 const FAKE_CONFIG = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
 
-function prepare(args: Parameters<typeof prepareServerContainer>[0], hosts: string[], env: NodeJS.ProcessEnv) {
+async function fakeDockerPath(body: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-docker-'));
+  const bin = join(dir, 'docker');
+  await writeFile(bin, `#!/bin/sh\n${body}\n`);
+  await chmod(bin, 0o755);
+  return dir;
+}
+
+async function prepare(args: Parameters<typeof prepareServerContainer>[0], hosts: string[], env: NodeJS.ProcessEnv) {
   const err: string[] = [];
-  const spec = prepareServerContainer(args, hosts, { stdout: () => undefined, stderr: (t) => err.push(t) }, env);
+  const spec = await prepareServerContainer(args, hosts, { stdout: () => undefined, stderr: (t) => err.push(t) }, env);
   return { spec, err: err.join('') };
 }
 
@@ -100,19 +108,20 @@ test('--server-container is accepted in server mode', () => {
   expect(resolveNetwork({ network: undefined, netLog: false, serverContainer: true }, parsed, { stdout: () => undefined, stderr: () => undefined })).toBe('server');
 });
 
-test('a run without the flag never reads the config or the seam', () => {
-  const { spec, err } = prepare({ serverContainerConfig: '/does/not/exist' }, ['127.0.0.1'], { TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: 'not-a-url' });
+test('a run without the flag never reads the config or the seam', async () => {
+  const { spec, err } = await prepare({ serverContainerConfig: '/does/not/exist' }, ['127.0.0.1'], { TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: 'not-a-url' });
   expect(spec).toBeNull();
   expect(err).toBe('');
 });
 
-test('the config comes from the environment variable and is validated before any browser starts', () => {
-  const ok = prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: FAKE_CONFIG });
+test('the config comes from the environment variable and is validated before any browser starts', async () => {
+  const docker = await fakeDockerPath('exit 0');
+  const ok = await prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: FAKE_CONFIG, PATH: docker });
   expect(ok.spec).toMatchObject({ configSource: { kind: 'env' } });
-  const missing = prepare({ serverContainer: true }, ['sgtm.example.com'], {});
+  const missing = await prepare({ serverContainer: true }, ['sgtm.example.com'], {});
   expect(missing.spec).toBeUndefined();
   expect(missing.err).toContain('TAGREEVE_SERVER_CONTAINER_CONFIG');
-  const bad = prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: 'pw-not-a-config' });
+  const bad = await prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: 'pw-not-a-config' });
   expect(bad.spec).toBeUndefined();
   expect(bad.err).toContain('base64');
   expect(bad.err).not.toContain('pw-not-a-config');
@@ -123,23 +132,47 @@ test('a config file readable by others is refused and the message holds neither 
   const file = join(dir, 'secret-name-config.txt');
   await writeFile(file, FAKE_CONFIG);
   await chmod(file, 0o644);
-  const open = prepare({ serverContainer: true, serverContainerConfig: file }, ['sgtm.example.com'], {});
+  const open = await prepare({ serverContainer: true, serverContainerConfig: file }, ['sgtm.example.com'], {});
   expect(open.spec).toBeUndefined();
   expect(open.err).toContain('mode 0600');
   expect(open.err).not.toContain(FAKE_CONFIG);
   expect(open.err).not.toContain('secret-name');
   await chmod(file, 0o600);
-  expect(prepare({ serverContainer: true, serverContainerConfig: file }, ['sgtm.example.com'], {}).spec).toMatchObject({ configSource: { kind: 'file', path: file } });
-  expect(prepare({ serverContainer: true, serverContainerConfig: join(dir, 'missing.txt') }, ['sgtm.example.com'], {}).spec).toBeUndefined();
+  expect((await prepare({ serverContainer: true, serverContainerConfig: file }, ['sgtm.example.com'], { PATH: await fakeDockerPath('exit 0') })).spec).toMatchObject({ configSource: { kind: 'file', path: file } });
+  expect((await prepare({ serverContainer: true, serverContainerConfig: join(dir, 'missing.txt') }, ['sgtm.example.com'], {})).spec).toBeUndefined();
 });
 
-test('the stand-in seam needs no config, and a bad seam value exits 2 without printing it', () => {
+test('the stand-in seam needs no config, and a bad seam value exits 2 without printing it', async () => {
   const env = { TAGREEVE_TEST_SERVER_CONTAINER_CMD: process.execPath };
-  expect(prepare({ serverContainer: true }, ['127.0.0.1'], env).spec).toMatchObject({ configSource: { kind: 'env' } });
-  const hosted = prepare({ serverContainer: true }, ['sgtm.example.com'], env);
+  expect((await prepare({ serverContainer: true }, ['127.0.0.1'], env)).spec).toMatchObject({ configSource: { kind: 'env' } });
+  const hosted = await prepare({ serverContainer: true }, ['sgtm.example.com'], env);
   expect(hosted.spec).toBeUndefined();
   expect(hosted.err).toContain('loopback');
-  const upstream = prepare({ serverContainer: true }, ['127.0.0.1'], { ...env, TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: 'http://pw-secret-host.example.com' });
+  const upstream = await prepare({ serverContainer: true }, ['127.0.0.1'], { ...env, TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: 'http://pw-secret-host.example.com' });
   expect(upstream.spec).toBeUndefined();
   expect(upstream.err).not.toContain('pw-secret-host');
+});
+
+test('without Docker the check exits before any browser, names the install page and holds no config', async () => {
+  const empty = await mkdtemp(join(tmpdir(), 'pw-nodocker-'));
+  const r = await prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: FAKE_CONFIG, PATH: empty });
+  expect(r.spec).toBeUndefined();
+  expect(r.err).toContain('Docker is needed for --server-container');
+  expect(r.err).toContain('https://docs.docker.com/get-docker/');
+  expect(r.err).not.toContain(FAKE_CONFIG);
+});
+
+test('a missing image exits before any browser and names the build command', async () => {
+  const docker = await fakeDockerPath('[ "$1" = image ] && exit 1\necho 27.0.0');
+  const r = await prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: FAKE_CONFIG, PATH: docker });
+  expect(r.spec).toBeUndefined();
+  expect(r.err).toContain('tagreeve server-container build');
+});
+
+test('a bad digest override of the base image exits 2', async () => {
+  const r = await prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: FAKE_CONFIG, TAGREEVE_SERVER_CONTAINER_BASE: 'not-a-digest' });
+  if (process.arch !== 'arm64') {
+    expect(r.spec).toBeUndefined();
+    expect(r.err).toContain('TAGREEVE_SERVER_CONTAINER_BASE');
+  }
 });

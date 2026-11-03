@@ -11,6 +11,7 @@ import {
   loadContainerConfig,
   resolveStandInCommand,
   resolveUpstreamOrigin,
+  checkServerContainerHost,
   ServerContainerError,
   ServerContainerFailure,
   ServerContainerUsageError,
@@ -142,12 +143,12 @@ export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog' | 'serve
  * Checks `--server-container` before any browser starts. Returns `null` when the flag is off, the spec when it can run,
  * and undefined after writing the reason to stderr. Messages never hold the config, the path of the config or a seam value.
  */
-export function prepareServerContainer(
+export async function prepareServerContainer(
   args: Pick<RunArgs | SuiteArgs, 'serverContainer' | 'serverContainerConfig'>,
   serverHosts: readonly string[],
   io: Io,
   env: NodeJS.ProcessEnv = process.env,
-): RunSpec['serverContainer'] | null | undefined {
+): Promise<RunSpec['serverContainer'] | null | undefined> {
   if (!args.serverContainer) return null;
   const configSource: ConfigSource = args.serverContainerConfig !== undefined ? { kind: 'file', path: args.serverContainerConfig } : { kind: 'env' };
   try {
@@ -160,13 +161,11 @@ export function prepareServerContainer(
       }
       loadContainerConfig(configSource, env);
     }
-    return { configSource, image: defaultServerContainerImage(readVersion(), env) };
+    const image = defaultServerContainerImage(readVersion(), env);
+    if (standIn === undefined) await checkServerContainerHost({ image, env });
+    return { configSource, image };
   } catch (error) {
     if (error instanceof ServerContainerError || error instanceof ServerContainerUsageError) {
-      io.stderr(`${error.message}\n`);
-      return undefined;
-    }
-    if (error instanceof Error && error.message.startsWith('TAGREEVE_SERVER_CONTAINER_BASE')) {
       io.stderr(`${error.message}\n`);
       return undefined;
     }
@@ -311,7 +310,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
 
   const network = resolveNetwork(args, parsed, io);
   if (!network) return 2;
-  const serverContainer = prepareServerContainer(args, parsed.options.serverHosts ?? [], io);
+  const serverContainer = await prepareServerContainer(args, parsed.options.serverHosts ?? [], io);
   if (serverContainer === undefined) return 2;
 
   const gates = await checkTestPaymentGates(parsed, args.site, args.allowTestPayment);

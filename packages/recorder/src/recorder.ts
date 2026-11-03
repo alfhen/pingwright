@@ -53,6 +53,7 @@ import { isKnownVendorCollection, isServerContainerRequest, isStubbedCollection,
 import { startServerContainerSession, waitForQuiet, type ServerContainerSession } from './server-container/capture.ts';
 import { linkServerHits } from './server-container/link.ts';
 import { ServerContainerError, type ConfigSource } from './server-container/runner.ts';
+import { onTerminate } from './terminate.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import {
@@ -179,21 +180,6 @@ function initiatorOf(request: PwRequest): string | null {
   return request.serviceWorker() ? 'serviceWorker' : null;
 }
 
-/** Runs the handler once on SIGINT or SIGTERM. The returned function removes the listeners. */
-function onTerminate(handler: (signal: NodeJS.Signals) => void): () => void {
-  const listeners: [NodeJS.Signals, () => void][] = [];
-  const remove = () => listeners.forEach(([signal, listener]) => process.off(signal, listener));
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    const listener = () => {
-      remove();
-      handler(signal);
-    };
-    listeners.push([signal, listener]);
-    process.once(signal, listener);
-  }
-  return remove;
-}
-
 export class Recorder {
   runId: Id<'run'> = newId('run');
   coverage!: CaptureCoverage;
@@ -272,6 +258,8 @@ export class Recorder {
         channel: 'chromium',
         headless: !options.headed,
         ...(netLogPath ? { args: [`--log-net-log=${netLogPath}`] } : {}),
+        // Playwright's handlers exit the process once the browser is closed, before the containers are removed.
+        ...(options.serverContainer ? { handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false } : {}),
       });
     } catch (error) {
       removeNetLogDir?.();
@@ -377,7 +365,6 @@ export class Recorder {
         image: serverContainer.image,
         serverHosts: this.options.serverHosts ?? [],
         runId: this.runId,
-        steps: () => this.steps,
         currentStepId: () => this.currentStepId,
         onCapture: (request, response) => {
           this.extraRequests.push(request);
@@ -390,8 +377,9 @@ export class Recorder {
       return;
     }
     if (this.session.standIn) this.run.testServerContainer = true;
-    this.removeSignalHandlers = onTerminate((signal) => {
-      void this.stopSession().finally(() => process.kill(process.pid, signal));
+    this.removeSignalHandlers = onTerminate(async () => {
+      await this.browser.close().catch(() => undefined);
+      await this.stopSession();
     });
   }
 
@@ -923,6 +911,9 @@ export class Recorder {
   /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
   async close(): Promise<RunResult> {
     const closeStartedAt = nodeNow();
+    if (this.session?.containerExited() && !this.containerFailure) {
+      this.containerFailure = { errorClass: 'exited', message: 'The server container ended during the run.' };
+    }
     if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
     if (this.session) {
       const session = this.session;

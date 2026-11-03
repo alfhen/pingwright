@@ -9,7 +9,6 @@ import {
   QUIET_MS,
   resolveUpstreamOrigin,
   serverContainerAnswer,
-  stepIdAt,
   waitForQuiet,
   type CaptureContext,
 } from './capture.ts';
@@ -18,9 +17,8 @@ import type { ProxyRequest } from './proxy.ts';
 const TOKEN = 'pw-fixture-access-token';
 const PROOF = 'pw-fixture-proof-value';
 const runId = newId('run');
-const stepA = { id: newId('step'), startedAt: 1000 };
-const stepB = { id: newId('step'), startedAt: 2000 };
-const context: CaptureContext = { runId, steps: [stepA, stepB], fallbackStepId: stepB.id };
+const stepId = newId('step');
+const context: CaptureContext = { runId, stepId };
 
 function call(over: Partial<Omit<ProxyRequest, 'body'>> & { body?: string } = {}): ProxyRequest {
   const { body, ...rest } = over;
@@ -112,19 +110,13 @@ describe('the rebuilt request', () => {
   });
 });
 
-describe('stepIdAt', () => {
-  test('is the step that was running when the call arrived', () => {
-    expect(stepIdAt([stepA, stepB], 1500, null)).toBe(stepA.id);
-    expect(stepIdAt([stepA, stepB], 2500, null)).toBe(stepB.id);
+describe('step of a call', () => {
+  test('is the step the recorder named when the call arrived', () => {
+    expect(captureServerContainerCall(call(), context).stepId).toBe(stepId);
   });
 
-  test('a call after the last step, in the wait before close, takes the last step', () => {
-    expect(captureServerContainerCall(call({ receivedAt: 99_999 }), context).stepId).toBe(stepB.id);
-  });
-
-  test('a call before any step takes the fallback', () => {
-    expect(stepIdAt([stepA], 10, stepB.id)).toBe(stepB.id);
-    expect(stepIdAt([stepA], 10, null)).toBeNull();
+  test('is null before any step', () => {
+    expect(captureServerContainerCall(call(), { runId, stepId: null }).stepId).toBeNull();
   });
 });
 

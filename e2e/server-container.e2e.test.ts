@@ -189,18 +189,14 @@ describe('--server-container checks', () => {
     expectNoSecrets(r.stdout + r.stderr);
   }, 60_000);
 
-  test('a container that cannot start writes the run, sets the flag and exits 2', async () => {
+  test('without Docker the command exits 2 before any browser, writes no record and names the install page', async () => {
     const empty = join(outDir, 'no-docker');
     await mkdir(empty, { recursive: true });
     const r = await run('server-container', ['--server-container'], { ...env, TAGREEVE_TEST_SERVER_CONTAINER_CMD: '', TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: '', PATH: empty });
     expect(r.code).toBe(2);
-    expect(r.stderr).toContain('Docker is needed');
-    const path = /Record: (\S+)/.exec(r.stderr)?.[1];
-    expect(path).toBeDefined();
-    const text = await readFile(path!, 'utf8');
-    const lines = text.trim().split('\n').map((l) => JSON.parse(l) as { type: string; kind?: string; serverContainer?: { error?: string } });
-    expect(lines[0]!.serverContainer!.error).toBe('dockerMissing');
-    expect(lines.some((l) => l.type === 'flag' && l.kind === 'serverContainerFailed')).toBe(true);
-    expectNoSecrets(text + r.stderr);
-  }, 120_000);
+    expect(r.stderr).toContain('Docker is needed for --server-container');
+    expect(r.stderr).toContain('https://docs.docker.com/get-docker/');
+    expect(r.records).toBeUndefined();
+    expectNoSecrets(r.stdout + r.stderr);
+  }, 60_000);
 });

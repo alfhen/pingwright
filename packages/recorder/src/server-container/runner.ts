@@ -144,6 +144,8 @@ export interface ServerContainer {
   readonly origin: string;
   /** The last scrubbed log lines. */
   logTail(): string[];
+  /** True once the container (or the stand-in) has ended. */
+  hasExited(): boolean;
   stop(): Promise<void>;
 }
 
@@ -258,6 +260,29 @@ function followOutput(child: ChildProcess, push: (line: string) => void): LogFol
   return { process: child, ended: () => ended };
 }
 
+const DOCKER_INSTALL_URL = 'https://docs.docker.com/get-docker/';
+
+export interface HostCheckOptions {
+  readonly image: string;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+/** The checks that need no run: Docker is there, the engine is new enough and the image is built. */
+export async function checkServerContainerHost(options: HostCheckOptions): Promise<void> {
+  const env = options.env ?? process.env;
+  const version = await runDocker(['version', '--format', '{{.Server.Version}}'], { env, timeoutMs: 30_000 });
+  if (version.missing || version.code !== 0) {
+    throw new ServerContainerError('dockerMissing', `Docker is needed for --server-container. Install it from ${DOCKER_INSTALL_URL}`);
+  }
+  const major = Number(/^(\d+)\./.exec(version.stdout.trim())?.[1]);
+  if (Number.isInteger(major) && major < MIN_ENGINE_MAJOR) {
+    throw new ServerContainerError('egressOpen', `Docker Engine ${version.stdout.trim()} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
+  }
+  if ((await runDocker(['image', 'inspect', '--format', '{{.Id}}', options.image], { env })).code !== 0) {
+    throw new ServerContainerError('imageMissing', `The image ${options.image} is not available. Run: tagreeve server-container build`);
+  }
+}
+
 /**
  * Starts the user's server container in Docker, or the stand-in when the test seam names one.
  * The config goes to Docker through the environment of the docker process, never through argv.
@@ -314,20 +339,12 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
       cleanups.push(async () => void child.kill('SIGKILL'));
       const origin = `http://127.0.0.1:${port}`;
       await waitReady(origin, follower);
-      return { origin, logTail: () => [...lines], stop };
+      return { origin, logTail: () => [...lines], hasExited: follower.ended, stop };
     }
 
     const docker = (args: string[], extraEnv: NodeJS.ProcessEnv = {}, timeoutMs?: number) => runDocker(args, { env: { ...baseEnv, ...extraEnv }, timeoutMs });
 
-    const version = await docker(['version', '--format', '{{.Server.Version}}'], {}, 30_000);
-    if (version.missing || version.code !== 0) throw new ServerContainerError('dockerMissing', 'Docker is needed for --server-container.');
-    const major = Number(/^(\d+)\./.exec(version.stdout.trim())?.[1]);
-    if (Number.isInteger(major) && major < MIN_ENGINE_MAJOR) {
-      throw new ServerContainerError('egressOpen', `Docker Engine ${version.stdout.trim()} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
-    }
-    if ((await docker(['image', 'inspect', '--format', '{{.Id}}', options.image])).code !== 0) {
-      throw new ServerContainerError('imageMissing', `The image ${options.image} is not available. Run: tagreeve server-container build`);
-    }
+    await checkServerContainerHost({ image: options.image, env: baseEnv });
     await sweepOrphans({ env: baseEnv });
 
     const runId = options.runId ?? randomBytes(4).toString('hex');
@@ -393,7 +410,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     cleanups.push(async () => void child.kill('SIGKILL'));
     const origin = `http://127.0.0.1:${publishedPort}`;
     await waitReady(origin, follower);
-    return { origin, logTail: () => [...lines], stop };
+    return { origin, logTail: () => [...lines], hasExited: follower.ended, stop };
   } catch (error) {
     await stop();
     throw error;

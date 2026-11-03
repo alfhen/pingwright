@@ -546,12 +546,16 @@ test('--server-container passes the same spec to every run', async () => {
   const { dir, out } = await workDir({ 'a.yml': CONTAINER_SCENARIO, 'b.yml': CONTAINER_SCENARIO });
   const fake = recorder();
   const saved = process.env.TAGREEVE_SERVER_CONTAINER_CONFIG;
+  const savedSeam = process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD;
+  process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD = process.execPath;
   process.env.TAGREEVE_SERVER_CONTAINER_CONFIG = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
   try {
     expect(await suiteCommand(args(dir, out, { serverContainer: true }), capture().io, fake)).toBe(0);
   } finally {
     if (saved === undefined) delete process.env.TAGREEVE_SERVER_CONTAINER_CONFIG;
     else process.env.TAGREEVE_SERVER_CONTAINER_CONFIG = saved;
+    if (savedSeam === undefined) delete process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD;
+    else process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD = savedSeam;
   }
   expect(fake.specs).toHaveLength(2);
   expect(fake.specs.every((s) => s.serverContainer?.configSource.kind === 'env')).toBe(true);
