@@ -10,6 +10,8 @@
 
 <!-- K05 -->
 
+<!-- P05 -->
+
 ## 0.5.0-rc.2
 
 Release candidate. Install it with `npm i -g tagreeve@next`.
