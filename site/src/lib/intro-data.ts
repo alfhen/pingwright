@@ -80,11 +80,22 @@ export interface PlacedNotification extends Notification {
 }
 
 /** The first four stack at the top right, the rest scatter. */
+/** Card box width: 330px content plus 13px padding each side. */
+const CARD_WIDTH = 356;
+/** Room for a card's rotation and the ring shadow beyond a 12px margin. */
+const EDGE_X = 18;
+const EDGE_TOP = 30;
+/** A card is at most about 110px tall; rotation adds up to 20px more. */
+const EDGE_BOTTOM = 145;
+
+const clampX = (x: string): string => `clamp(${EDGE_X}px, ${x}, calc(100% - ${CARD_WIDTH + EDGE_X}px))`;
+const clampY = (y: string): string => `clamp(${EDGE_TOP}px, ${y}, calc(100% - ${EDGE_BOTTOM}px))`;
+
 export function placeNotifications(shown: number): PlacedNotification[] {
   return NOTIFICATIONS.slice(0, shown).map((n, i) => {
-    if (i < 4) return { ...n, x: 'calc(100% - 340px)', y: `${42 + i * 88}px`, rotate: '0deg' };
+    if (i < 4) return { ...n, x: clampX(`calc(100% - ${CARD_WIDTH + 24}px)`), y: clampY(`${42 + i * 88}px`), rotate: '0deg' };
     const [x, y, rotate] = SCATTER[(i - 4) % SCATTER.length]!;
-    return { ...n, x, y, rotate };
+    return { ...n, x: clampX(x), y: clampY(y), rotate };
   });
 }
 
