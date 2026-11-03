@@ -210,3 +210,29 @@ test('a baseline does not drift when only the time of a linked server hit change
   expect(result).toMatchObject({ drift: false, added: 0, removed: 0, countChanges: 0 });
   expect(result.warnings).toEqual([]);
 });
+
+test('the compare output holds no email, hash or cookie value, with a moved hit and a new tuple', () => {
+  const email = 'pw-fixture@example.com';
+  const hash = 'c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6';
+  const cookie = 'pw-fixture-cookie-value';
+  const secrets = [email, encodeURIComponent(email), hash, cookie];
+  const labels = ['undecided', 'granted'];
+  const withSecrets = (t: number): RunRecords => {
+    const run = runWithEpochs([{ t }], labels);
+    const hit = run.hits[0]!;
+    hit.page = `http://localhost:3000/a?em=${email}&h=${hash}`;
+    hit.params = { em: email, enc: encodeURIComponent(email), hash, ck: cookie };
+    return run;
+  };
+  const before = withSecrets(10);
+  const after = withSecrets(150);
+  after.hits.push({ ...after.hits[0]!, id: newId('hit'), t: 160, vendor: 'ga4', event: 'add_to_cart' });
+  const input = JSON.stringify([before.hits, after.hits]);
+  for (const secret of secrets) expect(input).toContain(secret);
+
+  const result = compareBaseline(buildBaseline(before, true), after);
+  expect(result.warnings.some((w) => w.startsWith('moved meta PageView from undecided to granted on page /a'))).toBe(true);
+  expect(result.changes.some((c) => c.startsWith('added ga4 add_to_cart'))).toBe(true);
+  const output = JSON.stringify(result);
+  for (const secret of secrets) expect(output).not.toContain(secret);
+});
