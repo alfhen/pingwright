@@ -287,14 +287,19 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Reply: "Sure, I\'ll take a look"' }).click();
     await expect.poll(() => stage(page), { timeout: 10_000 }).toBe('wasted');
     expect(await page.locator('[data-intro-notification]').count()).toBe(13);
-    await page.waitForTimeout(500);
-    const outside = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-intro-notification]')].flatMap((el, i) => {
-        const r = el.getBoundingClientRect();
-        const inside = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
-        return inside ? [] : [`#${i}: ${[r.left, r.top, r.right, r.bottom].map(Math.round).join(',')} in ${innerWidth}x${innerHeight}`];
-      }),
-    );
+    const outside: string[] = [];
+    while ((await stage(page)) === 'wasted') {
+      outside.push(
+        ...(await page.evaluate(() =>
+          [...document.querySelectorAll('[data-intro-notification]')].flatMap((el, i) => {
+            const r = el.getBoundingClientRect();
+            const inside = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+            return inside ? [] : [`#${i}: ${[r.left, r.top, r.right, r.bottom].map(Math.round).join(',')} in ${innerWidth}x${innerHeight}`];
+          }),
+        )),
+      );
+      await page.waitForTimeout(100);
+    }
     expect(outside).toEqual([]);
     await context.close();
   });
