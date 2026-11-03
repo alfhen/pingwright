@@ -31,7 +31,10 @@
   --sl-color-hairline-light: var(--line);
   --sl-color-hairline: var(--line);
   --sl-color-hairline-shade: var(--line);
+}
 
+/* Layout values stay out of the theme block above: its (0,2,0) selector would beat the :root overrides in the media queries below. */
+:root {
   --sl-font: 'Geist';
   --sl-font-mono: 'Geist Mono';
   --sl-nav-height: 56px;
