@@ -52,7 +52,7 @@ import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLo
 import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, isServerContainerRequest, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
-import { startServerContainerSession, waitForQuiet, type ServerContainerSession } from './server-container/capture.ts';
+import { QUIET_MS, startServerContainerSession, waitForQuiet, type ServerContainerSession } from './server-container/capture.ts';
 import { linkServerHits } from './server-container/link.ts';
 import { ServerContainerError, type ConfigSource } from './server-container/runner.ts';
 import { onTerminate } from './terminate.ts';
@@ -371,7 +371,8 @@ export class Recorder {
       signal: abort.signal,
       currentStepId: () => this.currentStepId,
       onCapture: (request, response) => {
-        this.extraRequests.push(this.redactForHandoff(request, request.t));
+        // The proxy cannot tell which browser request led to a call, so a call is redacted by time: inside a window or within QUIET_MS after it.
+        this.extraRequests.push(this.redactForHandoff(request, request.t, QUIET_MS));
         this.responses.push(response);
       },
     });
@@ -469,8 +470,8 @@ export class Recorder {
   }
 
   /** A person is typing during a handoff, so only requests that decode as tracking hits keep their body and query. */
-  private redactForHandoff(record: Request, at = Date.now()): Request {
-    if (!this.duringHandoff(at)) return record;
+  private redactForHandoff(record: Request, at = Date.now(), graceMs = 0): Request {
+    if (!this.duringHandoff(at, graceMs)) return record;
     if (isCollectionEndpoint(record, this.trackers) || isKnownVendorCollection(record) || decodeRequest(record, undefined, this.trackers).length > 0) return record;
     return {
       ...record,
@@ -482,8 +483,8 @@ export class Recorder {
     };
   }
 
-  private duringHandoff(at: number): boolean {
-    return this.handoffWindows.some((w) => at >= w.from && (w.to === null || at <= w.to));
+  private duringHandoff(at: number, graceMs: number): boolean {
+    return this.handoffWindows.some((w) => at >= w.from && (w.to === null || at <= w.to + graceMs));
   }
 
   /** Requests sent while a handoff is active, including unload sends queued then and replayed later, are stored without their typed values. */
@@ -587,15 +588,16 @@ export class Recorder {
     const live = new URL(original.url());
     // A separate client, so the container's loopback address never reads or writes the context cookie jar.
     // allHeaders() holds the Cookie header Chromium would send, so SameSite and credentials mode already apply.
-    // The client falls back to its own jar when the header is absent, so an empty one is sent instead.
-    const { host: _host, ...sent } = await original.allHeaders();
+    // The client falls back to its own jar when the header is absent, so the jar is cleared before each fetch.
+    // An empty cookie header must never be added: it would go out as an empty Cookie header.
+    const { host: _host, ...headers } = await original.allHeaders();
     void _host;
-    const headers = { cookie: '', ...sent };
     record.outcome = 'stubbed';
     this.stubRecorded.add(record.id);
     try {
       this.containerClient ??= playwrightRequest.newContext();
       const client = await this.containerClient;
+      await client.clearCookies();
       const response = await client.fetch(`${origin}${live.pathname}${live.search}`, {
         method: original.method(),
         headers,

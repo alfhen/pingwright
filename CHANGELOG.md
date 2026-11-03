@@ -6,6 +6,8 @@
 
 <!-- C04 -->
 
+- Fix: a server container call made up to one second after a handoff closes is stored without its body and query values. A container call is no longer sent an empty `Cookie` header when the browser sends none (#772, #768).
+
 <!-- E04 -->
 
 <!-- U04 -->
