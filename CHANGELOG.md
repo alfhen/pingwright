@@ -2,11 +2,17 @@
 
 ## 0.5.0-rc.2
 
-<!-- P04 -->
+- The `payment` step finds each Shopify card field by its `name` or `autocomplete` and its frame by document path. A frame with the right title but another path is skipped. When the input count is not 1, the error lists the frame path and the `name`, `autocomplete` and `type` of each visible input (#788, #684, #691).
 
 <!-- C04 -->
 
+- Fix: a server container call made up to one second after a handoff closes is stored without its body and query values. A container call is no longer sent an empty `Cookie` header when the browser sends none (#772, #768).
+
 <!-- E04 -->
+
+- Fixes in the body scan: two different values no longer merge into one finding when one contains the other, a JSON path of digits is no longer read as a phone number, a part typed as binary in a text body is named by its field, and a body of over 100,000 values no longer overflows the stack. (#667, #668, #669, #670, #673)
+
+- `identity.hashesMatch` checks every value of a Conversions API `em` or `ph`. Further values are hit params `hashedEmail.1`, `hashedEmail.2` and so on. A filter on `ids.hashes.<field>.matchesIdentity` is computed from the run identity on a `meta-capi` hit; the record keeps null. Every further value of `fn`, `ln`, `ct`, `zp` and `country` is checked too, and a plain `ct`, `zp` or `country` on a Conversions API event fails the check. (#712, #714, #715, #808)
 
 - An unknown option now prints one line, `Unknown option --bogus.`. `tagreeve <command> --help` prints the options of that command for every command. A mistyped option before the command keeps the command name in the usage hint.
 

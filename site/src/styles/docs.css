@@ -31,12 +31,17 @@
   --sl-color-hairline-light: var(--line);
   --sl-color-hairline: var(--line);
   --sl-color-hairline-shade: var(--line);
+}
 
+/* Layout values stay out of the theme block above: its (0,2,0) selector would beat the :root overrides in the media queries below. */
+:root {
   --sl-font: 'Geist';
   --sl-font-mono: 'Geist Mono';
   --sl-nav-height: 56px;
-  --sl-sidebar-width: calc(230px + 2 * var(--sl-sidebar-pad-x));
+  --sl-sidebar-width: 230px;
   --sl-content-width: 860px;
+  --sl-content-gap-y: 18px;
+  --sl-content-pad-x: 28px;
   --sl-text-h1: clamp(36px, 6vw, 52px);
   --sl-text-h2: 28px;
   --sl-text-h3: 20px;
@@ -48,15 +53,81 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  body {
+    transition:
+      background-color 0.3s,
+      color 0.3s;
+  }
+}
+
+@media (max-width: 520px) {
+  :root {
+    --sl-content-pad-x: 16px;
+  }
+}
+
 .page > .header {
   padding-block: 0;
   padding-inline-start: 0;
 }
 
+/* Handoff §3: the sidebar and the article sit in the header's frame (tokens.css), 56px apart. */
 @media (min-width: 50rem) {
   .page > .header {
     padding-inline-end: 0;
   }
+
+  .sidebar-pane {
+    inset-inline-start: var(--frame-start);
+    border-inline-end: 0;
+  }
+
+  .main-frame {
+    padding-inline: calc(var(--frame-start) + var(--sl-sidebar-width) + 56px) var(--frame-pad);
+  }
+
+  .content-panel {
+    padding-inline: 0;
+  }
+
+  .content-panel .sl-container {
+    margin-inline: 0;
+  }
+}
+
+/* One article, no title band: the path label, the title and the body run on with the article's 18px gap. */
+.content-panel {
+  padding-block: 0;
+}
+
+.content-panel:first-child {
+  padding-top: 40px;
+}
+
+.content-panel + .content-panel {
+  padding-top: var(--sl-content-gap-y);
+  padding-bottom: 110px;
+  border-top: 0;
+}
+
+/* The README has no title, only the anchor; its lockup starts where the path label would. */
+.content-panel:has(.page-anchor) {
+  padding-top: 0;
+}
+
+.content-panel:has(.page-anchor) + .content-panel {
+  padding-top: 40px;
+}
+
+.content-panel .sl-container > * + * {
+  margin-top: var(--sl-content-gap-y);
+}
+
+.docs-path {
+  display: block;
+  color: var(--muted);
+  font: 500 12px var(--font-mono);
 }
 
 /* Below Starlight's breakpoint its sidebar menu takes over from the header's ☰. */
@@ -75,10 +146,57 @@ body {
   padding-top: 32px;
   gap: 22px;
   font-size: 14px;
+  line-height: normal;
+}
+
+@media (min-width: 50rem) {
+  .sidebar-content {
+    padding-inline: 0;
+  }
 }
 
 .sidebar-content ul.top-level > li + li {
-  margin-top: 18px;
+  margin-top: 22px;
+}
+
+.sidebar-content site-search button[data-open-modal] {
+  justify-content: space-between;
+  width: 100%;
+  height: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 12px var(--font-mono);
+}
+
+.sidebar-content site-search button[data-open-modal]:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+.sidebar-content site-search button[data-open-modal] > svg {
+  display: none;
+}
+
+.sidebar-content site-search button[data-open-modal] > span {
+  margin-inline-end: auto;
+  text-transform: lowercase;
+}
+
+.sidebar-content site-search button[data-open-modal] > span::before {
+  content: '/ ';
+}
+
+.sidebar-content site-search button[data-open-modal] kbd {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
 .sidebar-content summary {
@@ -107,6 +225,7 @@ body {
 
 .sidebar-content ul ul a {
   padding: 6px 10px;
+  line-height: normal;
   border-radius: 6px;
   color: var(--muted);
   font-size: 14px;
@@ -135,8 +254,32 @@ body {
 }
 
 .content-panel h1 {
+  margin: 0;
   line-height: 1;
   letter-spacing: -0.045em;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+  line-height: var(--sl-line-height);
+}
+
+.sl-markdown-content :not(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper) + .sl-heading-wrapper.level-h2 {
+  margin-top: 40px;
+}
+
+.sl-markdown-content > .sl-heading-wrapper.level-h2:first-child {
+  margin-top: 22px;
+}
+
+/* The lede: the first paragraph, after the agent callout on guide pages. */
+.sl-markdown-content > p:first-child,
+.sl-markdown-content > .agent-callout:first-child + p {
+  color: var(--muted);
+  font-size: 19px;
+}
+
+.sl-markdown-content > .agent-callout {
+  margin-bottom: 0;
 }
 
 .sl-markdown-content a {
@@ -145,6 +288,9 @@ body {
 }
 
 .sl-markdown-content :not(pre) > code {
+  padding: 0;
+  font-size: 1em;
+  background: transparent;
   font-family: var(--font-mono);
   color: var(--ink);
 }
@@ -161,9 +307,29 @@ body {
   background: var(--panel);
 }
 
-.pagination-links a {
-  border-color: var(--line);
-  box-shadow: none;
+.docs-footer .pagination-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 42px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.docs-footer .pagination-links a {
+  color: var(--mint);
+  text-decoration: none;
+}
+
+.docs-footer .pagination-links a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.docs-footer .pagination-links [rel='next'] {
+  margin-inline-start: auto;
+  text-align: end;
 }
 
 /* On the site, the README's <picture> becomes these two images; see the themed-pictures plugin. */
@@ -177,9 +343,9 @@ body {
 }
 
 .docs-version {
-  margin: 0;
+  margin: 24px 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .get-started-prompt {

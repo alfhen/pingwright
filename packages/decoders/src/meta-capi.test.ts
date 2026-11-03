@@ -91,6 +91,13 @@ test('params carry the hashed values that identity.hashesMatch reads', () => {
   });
 });
 
+test('every value of a multi-value em or ph is kept as an indexed param', () => {
+  const postData = JSON.stringify({ data: [{ event_name: 'Lead', user_data: { em: [HASH_A, '', HASH_B], ph: HASH_B } }] });
+  const [hit] = decodeRequest(req({ postData }));
+  expect(hit?.params).toMatchObject({ hashedEmail: HASH_A, 'hashedEmail.1': HASH_B, hashedPhone: HASH_B });
+  expect(Object.keys(hit?.params ?? {}).sort()).toEqual(['hashedEmail', 'hashedEmail.1', 'hashedPhone', 'pixelId']);
+});
+
 test('a body that does not parse gives one hit with incomplete fields', () => {
   const postData = '{"data":[{"event_name":';
   expect(() => JSON.parse(postData)).toThrow();

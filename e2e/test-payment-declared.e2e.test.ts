@@ -84,7 +84,8 @@ test('without the test seam the fixture declaration is refused', async () => {
 
 const HASH = createHash('sha256').update(EMAIL).digest('hex');
 const COOKIE_VALUE = 'pw-fixture-cookie-value';
-const LEAKS = [EMAIL, encodeURIComponent(EMAIL), HASH, COOKIE_VALUE, CARD];
+const EMAIL_ENCODED = encodeURIComponent(EMAIL);
+const LEAKS = [EMAIL, EMAIL_ENCODED, HASH, COOKIE_VALUE, CARD];
 
 function requestUrls(records: RunRecords): string {
   return records.requests.map((r) => r.url).join('\n');
@@ -94,7 +95,9 @@ test('a declared run prints no email, hash or cookie value that the run recorded
   const r = await run('test-payment-declared-leak', allow, await config(['localhost', DECLARATION]));
   expect(r.code, r.failed.join('; ')).toBe(0);
   const urls = requestUrls(r.records!);
-  for (const value of [EMAIL, HASH, COOKIE_VALUE]) expect(urls).toContain(value);
+  // Each leak value must really be in the run, or its absence below proves nothing.
+  expect(site.cardSubmits).toEqual([CARD]);
+  for (const value of [EMAIL, EMAIL_ENCODED, HASH, COOKIE_VALUE]) expect(urls).toContain(value);
   for (const value of LEAKS) {
     expect(r.stdout).not.toContain(value);
     expect(r.stderr).not.toContain(value);
@@ -109,7 +112,7 @@ test('a run without a declaration prints no email, hash or cookie value either',
   const recordPath = /^Record: (.+)$/m.exec(r.stderr)?.[1];
   expect(recordPath).toBeDefined();
   const urls = requestUrls(await readRun(recordPath!));
-  for (const value of [EMAIL, HASH, COOKIE_VALUE]) expect(urls).toContain(value);
+  for (const value of [EMAIL, EMAIL_ENCODED, HASH, COOKIE_VALUE]) expect(urls).toContain(value);
   for (const value of LEAKS) expect(r.stderr).not.toContain(value);
   expect(site.cardSubmits).toEqual([]);
 }, 120_000);

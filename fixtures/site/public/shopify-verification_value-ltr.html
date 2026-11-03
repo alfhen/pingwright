@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card security code document</title>
+</head>
+<body>
+<label>Security code <input name="verification_value" autocomplete="cc-csc" type="text"></label>
+<script>
+window.addEventListener('message', function (e) {
+  if (e.data !== 'pw-pay') return;
+  fetch('/card-extra', { method: 'POST', body: 'csc:' + document.querySelector('input[name="verification_value"]').value });
+});
+</script>
+</body>
+</html>

@@ -47,19 +47,38 @@ beforeEach(() => {
   site.cardExtras.length = 0;
 });
 
-test.each([
-  ['a hidden duplicate frame before the real one', 'dup-first'],
-  ['a hidden duplicate frame after the real one', 'dup-second'],
-  ['a hidden extra input inside the card frame', 'dup-input'],
-  ['one frame per field, marker in the common ancestor', 'split-inside'],
-])('%s: the card is typed into the verified frame and submitted', async (_name, page) => {
-  const r = await play(`test-payment-frames-${page}`);
+function expectTyped(r: Awaited<ReturnType<typeof play>>): void {
   expect(r.code, r.stderr).toBe(0);
   expect(r.failed.filter((f) => f !== SANDBOX && f !== 'builtin: deniedIdentifiers')).toEqual([]);
   expect(r.stderr).not.toContain('could not be filled');
   expect(site.cardSubmits).toEqual([CARD]);
   expect(r.records!.steps.find((s) => s.payment)?.payment).toEqual({ provider: 'fixture', mode: 'test', testMode: 'marker' });
   expectNoLeak(r);
+}
+
+test.each([
+  ['a hidden duplicate frame before the real one', 'dup-first'],
+  ['a hidden duplicate frame after the real one', 'dup-second'],
+  ['a hidden extra input inside the card frame', 'dup-input'],
+  ['one frame per field, marker in the common ancestor', 'split-inside'],
+])('%s: the card is typed into the verified frame and submitted', async (_name, page) => {
+  expectTyped(await play(`test-payment-frames-${page}`));
+}, 120_000);
+
+// The real number input has no id, so the old '#cc-number' selector finds nothing. The extras show what each document received.
+const EMPTY_AUTOFILL = 'autofill:' + '|'.repeat(7);
+
+test('Shopify-shaped documents: eight visible autofill inputs get nothing, each field gets its own value', async () => {
+  const r = await play('test-payment-frames-shopify-fields');
+  expectTyped(r);
+  expect([...site.cardExtras].sort()).toEqual([EMPTY_AUTOFILL, 'csc:123', 'exp:12/40'].sort());
+}, 120_000);
+
+test('a decoy frame on the card host with another path gets nothing, the real number frame gets the card', async () => {
+  const r = await play('test-payment-frames-shopify-decoy');
+  expectTyped(r);
+  // 'decoy:' with no value shows the decoy was alive and received the pay message.
+  expect([...site.cardExtras].sort()).toEqual([EMPTY_AUTOFILL, 'csc:123', 'decoy:', 'exp:12/40'].sort());
 }, 120_000);
 
 test('split frames with the marker outside their common ancestor: test mode is not detected and nothing is submitted', async () => {

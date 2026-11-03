@@ -7,7 +7,22 @@ const CARD = '4242424242424242';
 const identity = { firstName: 'Pw', lastName: 'Tester' } as Identity;
 const FIXTURE_FRAME = '#card-frame, #card-frame-number';
 const FIXTURE_FRAMES = [FIXTURE_FRAME, '#card-frame, #card-frame-exp', '#card-frame, #card-frame-csc'];
+const FIXTURE_INPUTS = ['input[autocomplete="cc-number"], input[name="number"]', 'input[autocomplete="cc-exp"], input[name="expiry"]', 'input[autocomplete="cc-csc"], input[name="verification_value"]'];
 const SHOPIFY_FRAMES = ['iframe[title*="Card number" i]', 'iframe[title*="Expiration" i]', 'iframe[title*="Security code" i]', 'iframe[title*="Name on card" i]'];
+
+const SHOPIFY_HOST = 'https://checkout.pci.shopifyinc.com';
+const SHOPIFY_DOCS = ['number', 'expiry', 'verification_value', 'name'].map((doc, i) => ({
+  name: doc,
+  url: `${SHOPIFY_HOST}/build/abc123/${doc}-ltr.html`,
+  matches: [SHOPIFY_FRAMES[i]!],
+}));
+const SHOPIFY_INPUTS = ['input[autocomplete="cc-number"], input[name="number"]', 'input[autocomplete="cc-exp"], input[name="expiry"]', 'input[autocomplete="cc-csc"], input[name="verification_value"]', 'input[autocomplete="cc-name"], input[name="name"]'];
+
+interface FakeInput {
+  name: string;
+  autocomplete: string;
+  type: string;
+}
 
 interface FakeFrame {
   name?: string;
@@ -28,6 +43,10 @@ interface Setup {
   counts?: number[];
   /** The frames move to this URL once the first count() has been answered. */
   moveFramesAfterCount?: string;
+  /** The visible inputs the frame reports when the count is not 1. */
+  inputs?: FakeInput[];
+  /** The first fill tries fail with a Playwright timeout; the frames move to this URL after the first of them. */
+  slowFill?: { tries: number; moveTo?: string };
   failFill?: boolean;
   failFillAt?: number;
   fillMessage?: (value: string) => string;
@@ -43,6 +62,7 @@ function fake(setup: Setup = {}) {
   const frames = (setup.frames ?? [{ url: frameUrl }]).map((f, i) => ({ name: `f${i}`, visible: true, url: GOOD_FRAME, ...f }));
   let fills = 0;
   let countCalls = 0;
+  let slowTries = 0;
   const container = {
     asElement: () => ({
       waitForSelector: async () => {
@@ -66,7 +86,14 @@ function fake(setup: Setup = {}) {
                   if (setup.moveFramesAfterCount) for (const f of frames) f.url = setup.moveFramesAfterCount;
                   return count;
                 },
-                fill: async (value: string) => {
+                evaluateAll: async () => setup.inputs ?? [],
+                fill: async (value: string, options?: { timeout?: number }) => {
+                  if (setup.slowFill && slowTries < setup.slowFill.tries) {
+                    slowTries++;
+                    log.push(`try ${options?.timeout}`);
+                    if (setup.slowFill.moveTo) for (const f of frames) f.url = setup.slowFill.moveTo;
+                    throw Object.assign(new Error('locator.fill: Timeout 500ms exceeded.'), { name: 'TimeoutError' });
+                  }
                   log.push(`fill ${selector} ${input} ${value} @${frame.name}`);
                   if (failFill && fills++ === failFillAt) throw new Error(setup.fillMessage?.(value) ?? `locator.fill: Timeout. fill("${value}")`);
                 },
@@ -113,9 +140,9 @@ test('all gates pass: host check, frame lookup, marker, hold, then the provider 
     ...FIXTURE_FRAMES.map((s) => `locator ${s}`),
     'marker',
     'hold',
-    `fill ${FIXTURE_FRAME} #cc-number ${CARD} @f0`,
-    `fill ${FIXTURE_FRAMES[1]} #cc-exp 12/40 @f0`,
-    `fill ${FIXTURE_FRAMES[2]} #cc-csc 123 @f0`,
+    `fill ${FIXTURE_FRAME} ${FIXTURE_INPUTS[0]} ${CARD} @f0`,
+    `fill ${FIXTURE_FRAMES[1]} ${FIXTURE_INPUTS[1]} 12/40 @f0`,
+    `fill ${FIXTURE_FRAMES[2]} ${FIXTURE_INPUTS[2]} 123 @f0`,
   ]);
   expect(record.payment).toEqual({ provider: 'fixture', mode: 'test', testMode: 'marker' });
 });
@@ -199,9 +226,37 @@ describe('duplicate frames and inputs', () => {
     const counts = [2];
     expect(counts).toContain(2);
     const { error, log, record } = await play({ counts, timeout: 300 });
-    expect(error?.message).toBe('card field number could not be filled: 2 visible inputs match');
+    expect(error?.message).toBe('card field number could not be filled: 2 visible inputs match in /card-frame: none visible');
     expect(fills(log)).toEqual([]);
     expect(record.payment).toBeUndefined();
+  });
+
+  test('a fill that times out is tried again after the host and path are checked, and then types', async () => {
+    const { error, log } = await play({ slowFill: { tries: 2 } });
+    expect(error).toBeUndefined();
+    expect(log.filter((l) => l.startsWith('try'))).toHaveLength(2);
+    expect(fills(log)).toHaveLength(3);
+  });
+
+  test('each fill try is short', async () => {
+    const { log } = await play({ slowFill: { tries: 1 }, timeout: 4000 });
+    expect(log.find((l) => l.startsWith('try'))).toBe('try 500');
+  });
+
+  test.each([
+    ['another host', 'http://example.com/card-frame'],
+    ['another path', 'http://127.0.0.1:4000/elsewhere.html'],
+  ])('a frame that moves to %s during a slow fill gets nothing typed', async (_name, moveTo) => {
+    const { error, log, record } = await play({ slowFill: { tries: 1, moveTo } });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(fills(log)).toEqual([]);
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a fill that keeps timing out fails at the deadline with the timeout line', async () => {
+    const { error, log } = await play({ slowFill: { tries: 1e9 }, timeout: 700 });
+    expect(error?.message).toContain('card field number could not be filled: locator.fill: Timeout');
+    expect(fills(log)).toEqual([]);
   });
 
   test('a frame that moves to another host after the count gets nothing typed', async () => {
@@ -242,7 +297,7 @@ describe('the reason of a fill error', () => {
 
   test('a short test card does not eat digits of a longer number in the reason', async () => {
     const { error } = await play(
-      { provider: 'shopify-bogus', url: 'https://shop.example.com/checkout', frameUrl: 'https://checkout.pci.shopifyinc.com/frame', failFill: true, fillMessage: (value) => `Timeout 15000ms exceeded fill("${value}")` },
+      { provider: 'shopify-bogus', url: 'https://shop.example.com/checkout', frames: SHOPIFY_DOCS, failFill: true, fillMessage: (value) => `Timeout 15000ms exceeded fill("${value}")` },
       { host: 'shop.example.com', declaredProviders: ['shopify-bogus'] },
       'shop.example.com',
     );
@@ -273,7 +328,7 @@ describe('the reason of a fill error', () => {
 
   test('a name fill failure names the field', async () => {
     const { error } = await play(
-      { provider: 'shopify-test', url: 'https://shop.example.com/checkout', frameUrl: 'https://checkout.pci.shopifyinc.com/frame', failFill: true, failFillAt: 3 },
+      { provider: 'shopify-test', url: 'https://shop.example.com/checkout', frames: SHOPIFY_DOCS, failFill: true, failFillAt: 3 },
       { host: 'shop.example.com', declaredProviders: ['shopify-test'] },
       'shop.example.com',
     );
@@ -283,27 +338,74 @@ describe('the reason of a fill error', () => {
 
 describe.each(['shopify-test', 'shopify-bogus'])('%s runtime', (provider) => {
   const shop = { host: 'shop.example.com', declaredProviders: [provider] };
-  const base = { provider, url: 'https://shop.example.com/checkout', frameUrl: 'https://checkout.pci.shopifyinc.com/frame' };
+  const base = { provider, url: 'https://shop.example.com/checkout', frames: SHOPIFY_DOCS };
 
-  test('looks up the four Shopify frame selectors, then types into each with the bare input selector', async () => {
+  test('looks up the four Shopify frame selectors, then types into each with its own input selector', async () => {
     const { error, log } = await play(base, shop, 'shop.example.com');
     expect(error).toBeUndefined();
     expect(log.filter((l) => l.startsWith('locator'))).toEqual(SHOPIFY_FRAMES.map((s) => `locator ${s}`));
     const typed = fills(log);
     expect(typed.map((l) => /Card number|Expiration|Security code|Name on card/.exec(l)?.[0])).toEqual(['Card number', 'Expiration', 'Security code', 'Name on card']);
-    for (const line of typed) expect(line).toMatch(/\] input /);
+    typed.forEach((line, i) => expect(line).toContain(`] ${SHOPIFY_INPUTS[i]} `));
+    expect(typed.join('\n')).not.toMatch(/\] input /);
     expect(typed[3]).toContain('Pw Tester');
   });
 
+  test('each field is typed into the frame with its own document path, with -rtl accepted', async () => {
+    const frames = SHOPIFY_DOCS.map((d) => ({ ...d, url: d.url.replace('-ltr', '-rtl') }));
+    const { error, log } = await play({ ...base, frames }, shop, 'shop.example.com');
+    expect(error).toBeUndefined();
+    expect(fills(log).map((l) => l.split('@')[1])).toEqual(['number', 'expiry', 'verification_value', 'name']);
+  });
+
+  test('a decoy frame with the right title and host and another path is skipped, and the real one is typed', async () => {
+    const decoy = { name: 'decoy', url: `${SHOPIFY_HOST}/build/abc123/foo.html`, matches: [SHOPIFY_FRAMES[0]!] };
+    const { error, log } = await play({ ...base, frames: [decoy, ...SHOPIFY_DOCS] }, shop, 'shop.example.com');
+    expect(error).toBeUndefined();
+    expect(fills(log).map((l) => l.split('@')[1])).toEqual(['number', 'expiry', 'verification_value', 'name']);
+  });
+
+  test('only a decoy frame: the reason names the path, not the host, and nothing is typed', async () => {
+    const decoy = { name: 'decoy', url: `${SHOPIFY_HOST}/build/abc123/foo.html?x=1`, matches: [SHOPIFY_FRAMES[0]!] };
+    const { error, log } = await play({ ...base, frames: [decoy], timeout: 300 }, shop, 'shop.example.com');
+    expect(error?.message).toBe('card frame not found (number): served from another path: /build/abc123/foo.html');
+    expect(error?.message).not.toContain('shopifyinc');
+    expect(log).not.toContain('hold');
+    expect(fills(log)).toEqual([]);
+  });
+
+  test('each wrong document suffix is refused for its field', async () => {
+    for (const [i, doc] of SHOPIFY_DOCS.entries()) {
+      const frames = SHOPIFY_DOCS.map((d, j) => (j === i ? { ...d, url: `${SHOPIFY_HOST}/build/abc123/${doc.name}.html` } : d));
+      const { error, log } = await play({ ...base, frames, timeout: 300 }, shop, 'shop.example.com');
+      expect(error?.message).toContain(`card frame not found (${['number', 'expiry', 'cvc', 'name'][i]}): served from another path: /build/abc123/${doc.name}.html`);
+      expect(fills(log)).toEqual([]);
+    }
+  });
+
+  test('a number document with autofill inputs: the reason has the path and each input, and no value', async () => {
+    const inputs = [
+      { name: 'number', autocomplete: 'cc-number', type: 'text' },
+      { name: 'autofill-name', autocomplete: 'cc-name', type: 'text' },
+    ];
+    const { error, log } = await play({ ...base, counts: [2], inputs, timeout: 300 }, shop, 'shop.example.com');
+    expect(error?.message).toBe(
+      'card field number could not be filled: 2 visible inputs match in /build/abc123/number-ltr.html: [name=number autocomplete=cc-number type=text] [name=autofill-name autocomplete=cc-name type=text]',
+    );
+    for (const value of [CARD, 'shopifyinc', 'Pw Tester']) expect(error?.message).not.toContain(value);
+    expect(fills(log)).toEqual([]);
+  });
+
   test('types nothing when the card frames come from another host', async () => {
-    const { error, log } = await play({ ...base, frameUrl: 'https://evil.example.com/frame', timeout: 300 }, shop, 'shop.example.com');
+    const frames = SHOPIFY_DOCS.map((d) => ({ ...d, url: d.url.replace(SHOPIFY_HOST, 'https://evil.example.com') }));
+    const { error, log } = await play({ ...base, frames, timeout: 300 }, shop, 'shop.example.com');
     expect(error?.message).toContain('card frame not found');
     expect(log.filter((l) => l.startsWith('fill') || l === 'hold')).toEqual([]);
   });
 });
 
 describe('shopify-test in marker mode', () => {
-  const base = { provider: 'shopify-test', url: 'https://shop.example.com/checkout', frameUrl: 'https://checkout.pci.shopifyinc.com/frame' };
+  const base = { provider: 'shopify-test', url: 'https://shop.example.com/checkout', frames: SHOPIFY_DOCS };
 
   test('the marker is checked before the hold when the provider is not declared', async () => {
     const { error, log, record } = await play(base, { host: 'shop.example.com' }, 'shop.example.com');

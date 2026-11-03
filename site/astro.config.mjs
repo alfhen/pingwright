@@ -13,6 +13,17 @@ import { repoLinks } from './src/plugins/repo-links.ts';
 import { themedPictures } from './src/plugins/themed-pictures.ts';
 
 const repo = 'https://github.com/alfhen/tagreeve';
+
+/** The handoff's code panes: one ink colour on near-black in both site themes, with dim comments. */
+const codeTheme = {
+  name: 'tagreeve-code',
+  type: 'dark',
+  colors: { 'editor.background': '#060807', 'editor.foreground': '#D9E2DF' },
+  tokenColors: [
+    { settings: { foreground: '#D9E2DF' } },
+    { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: '#6E7B78' } },
+  ],
+};
 const repoRoot = new URL('../', import.meta.url);
 
 const sidebar = [
@@ -57,15 +68,22 @@ export default defineConfig({
       ],
       sidebar,
       tableOfContents: false,
+      disable404Route: true,
+      routeMiddleware: './src/plugins/clean-urls-route.ts',
       markdown: { processedDirs: ['..'] },
       expressiveCode: {
-        themes: ['github-dark-default'],
+        themes: [codeTheme],
+        defaultProps: { frame: 'none' },
         styleOverrides: {
           codeBackground: '#060807',
           codeForeground: '#D9E2DF',
           borderColor: 'var(--line)',
           borderRadius: '10px',
           codeFontFamily: "'Geist Mono', ui-monospace, monospace",
+          codeFontSize: '13px',
+          codeLineHeight: '1.7',
+          codePaddingBlock: '14px',
+          codePaddingInline: '16px',
           uiFontFamily: "'Geist Mono', ui-monospace, monospace",
           frames: { shadowColor: 'transparent' },
         },
@@ -87,6 +105,8 @@ export default defineConfig({
         MobileMenuToggle: './src/components/starlight/MobileMenuToggle.astro',
         Sidebar: './src/components/starlight/Sidebar.astro',
         PageTitle: './src/components/starlight/PageTitle.astro',
+        Pagination: './src/components/starlight/Pagination.astro',
+        Search: './src/components/starlight/Search.astro',
         MarkdownContent: './src/components/docs/MarkdownContent.astro',
         Footer: './src/components/starlight/Footer.astro',
       },

@@ -32,6 +32,39 @@ describe('/unload-gap', () => {
   });
 });
 
+describe('Shopify-shaped card documents', () => {
+  const doc = async (name: string) => (await fetch(`${site.paymentFrameUrl}/build/pwtest0/${name}`)).text();
+
+  test('the number document has eight visible autofill inputs and a real number input without an id', async () => {
+    const html = await doc('number-ltr.html');
+    expect(html.match(/name="autofill-/g)).toHaveLength(8);
+    expect(html).toContain('<input name="number" autocomplete="cc-number"');
+    expect(html).not.toContain('id="cc-number"');
+  });
+
+  test('the expiry and security code documents use the Shopify names', async () => {
+    expect(await doc('expiry-ltr.html')).toContain('name="expiry" autocomplete="cc-exp"');
+    expect(await doc('verification_value-ltr.html')).toContain('name="verification_value" autocomplete="cc-csc"');
+  });
+
+  test('the decoy document keeps the old #cc-number id on its input', async () => {
+    expect(await doc('decoy.html')).toContain('id="cc-number"');
+  });
+
+  test('other build paths are 404', async () => {
+    expect((await fetch(`${site.paymentFrameUrl}/build/pwtest0/other.html`)).status).toBe(404);
+  });
+
+  test('the pages load the documents from the card host and the decoy comes first', async () => {
+    const fields = await page('/checkout/test-payment-shopify-fields');
+    expect(fields).toContain("paymentFrameUrl + '/build/pwtest0/'");
+    expect(fields).toContain('id="pw-test-mode"');
+    const decoy = await page('/checkout/test-payment-shopify-decoy');
+    expect(decoy.indexOf('class="decoy"')).toBeGreaterThan(-1);
+    expect(decoy.indexOf('class="decoy"')).toBeLessThan(decoy.indexOf('class="real"'));
+  });
+});
+
 describe('/server-container', () => {
   test('is the file on disk and sends the pixel hit and the hit to the mock server container host', async () => {
     const html = await page('/server-container');
