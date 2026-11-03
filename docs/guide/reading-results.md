@@ -67,7 +67,7 @@ flowchart TB
 
 A reject ends the undecided epoch and starts a denied epoch, and Tagreeve puts each hit in the epoch where it was sent.
 
-Expectations use epochs. `before: consent` means "in the first epoch, while the visitor is undecided". `in: epoch(denied)` means "in an epoch where consent is denied". A Google hit is the exception: Tagreeve reads the consent values the hit carries, not the epoch. So a GA4 hit sent with denied values matches `in: epoch(denied)`, even while the visitor is undecided. See [Consent states](what-it-checks.md#consent-states). The [design](../design.md#_7-3-consent-epochs-and-timing) has the exact timing rules.
+Expectations use epochs. `before: consent` means "in the first epoch, while the visitor is undecided". `in: epoch(denied)` means "in an epoch where consent is denied". A Google hit is the exception: Tagreeve reads the consent values the hit carries, not the epoch. So a GA4 hit sent with denied values matches `in: epoch(denied)`, even while the visitor is undecided. See [Consent states](what-it-checks.md#consent-states). The [design](../design.md#73-consent-epochs-and-timing) has the exact timing rules.
 
 ## Expectations and built-in checks
 
@@ -91,7 +91,7 @@ The record file is a JSONL file. Each line is one JSON object, and its `type` sa
 grep hit_01M66G9M2S992B5DF1MZ15ZQ08 runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
-Programs can read the file, or the output of `tagreeve run --json`. The [design](../design.md#_4-data-model) lists every field.
+Programs can read the file, or the output of `tagreeve run --json`. The [design](../design.md#4-data-model) lists every field.
 
 ## Compare two runs
 

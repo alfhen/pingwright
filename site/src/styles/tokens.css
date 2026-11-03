@@ -1,0 +1,71 @@
+@custom-variant light (&:where([data-theme='light'], [data-theme='light'] *));
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #090b0b;
+  --bg2: #0f1312;
+  --panel: #121716;
+  --ink: #e8eeec;
+  --muted: #8a9794;
+  --line: #1f2826;
+  --mint: oklch(0.82 0.12 175);
+  --mintdim: oklch(0.82 0.12 175 / 0.14);
+  --fail: oklch(0.72 0.16 25);
+  --faildim: oklch(0.72 0.16 25 / 0.14);
+  --warn: oklch(0.84 0.13 85);
+  --onmint: #06201c;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f7f6;
+  --bg2: #ecf0ee;
+  --panel: #ffffff;
+  --ink: #0e1715;
+  --muted: #56625f;
+  --line: #dce3e0;
+  --mint: oklch(0.52 0.1 178);
+  --mintdim: oklch(0.52 0.1 178 / 0.1);
+  --fail: oklch(0.55 0.19 27);
+  --faildim: oklch(0.55 0.19 27 / 0.1);
+  --warn: oklch(0.6 0.13 75);
+  --onmint: #ffffff;
+}
+
+/* The terminal and code panes stay dark in both themes. */
+:root {
+  --term-bg: #0c0d0e;
+  --term-ink: #d6d6d2;
+  --term-dim: #9a9da2;
+  --term-frame: #3a3c40;
+  --term-spinner: #c9a86a;
+  --code-bg: #060807;
+  --code-ink: #d9e2df;
+  --code-comment: #6e7b78;
+}
+
+@theme inline {
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --color-void: var(--bg);
+  --color-void-2: var(--bg2);
+  --color-panel: var(--panel);
+  --color-rule: var(--line);
+  --color-fg: var(--ink);
+  --color-dim: var(--muted);
+  --color-mint: var(--mint);
+  --color-mintdim: var(--mintdim);
+  --color-fail: var(--fail);
+  --color-faildim: var(--faildim);
+  --color-warn: var(--warn);
+  --color-onmint: var(--onmint);
+  --color-term: var(--term-bg);
+  --color-term-ink: var(--term-ink);
+  --color-term-dim: var(--term-dim);
+  --color-term-frame: var(--term-frame);
+  --color-term-spinner: var(--term-spinner);
+  --color-code: var(--code-bg);
+  --color-code-ink: var(--code-ink);
+  --color-code-comment: var(--code-comment);
+}

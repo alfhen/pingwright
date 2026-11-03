@@ -1,7 +1,4 @@
-<script setup lang="ts">
-import { ref } from 'vue';
-
-const prompt = `Set up Tagreeve to test the tracking and the cookie consent on my website.
+export const PROMPT = `Set up Tagreeve to test the tracking and the cookie consent on my website.
 
 Tagreeve is a command-line tool. It opens my site in a real browser, acts as a visitor, records every tracking request and checks the requests against rules that I write. The docs are at https://tagreeve.dev.
 
@@ -18,28 +15,4 @@ Rules for you:
 - Do not use \`--network live\` unless I ask for it.
 - Keep the \`runs/\` folder on my machine. Do not commit it or upload it.`;
 
-const status = ref('');
-let clearTimer: ReturnType<typeof setTimeout> | undefined;
-
-async function copy() {
-  try {
-    await navigator.clipboard.writeText(prompt);
-    status.value = 'Copied';
-  } catch {
-    status.value = 'Copy did not work. Select the prompt below and copy it.';
-  }
-  clearTimeout(clearTimer);
-  clearTimer = setTimeout(() => (status.value = ''), 4000);
-}
-</script>
-
-<template>
-  <div class="get-started-prompt">
-    <button type="button" class="get-started-copy" @click="copy">Copy get started prompt</button>
-    <span class="get-started-status" role="status" aria-live="polite">{{ status }}</span>
-    <details class="get-started-details">
-      <summary>Read the prompt</summary>
-      <pre class="get-started-text">{{ prompt }}</pre>
-    </details>
-  </div>
-</template>
+export const INSTALL_COMMAND = 'npm i -g tagreeve@next';

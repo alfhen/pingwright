@@ -1,0 +1,40 @@
+---
+import '@fontsource/geist/400.css';
+import '@fontsource/geist/500.css';
+import '@fontsource/geist/600.css';
+import '@fontsource/geist/700.css';
+import '@fontsource/geist-mono/400.css';
+import '@fontsource/geist-mono/500.css';
+import '@fontsource/geist-mono/600.css';
+import '../styles/site.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import { themeInitScript } from '../lib/theme.ts';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
+    <link rel="icon" href="/favicon-16.svg" type="image/svg+xml" sizes="16x16" />
+    <link rel="icon" href="/favicon-32.svg" type="image/svg+xml" sizes="32x32" />
+    <script is:inline set:html={themeInitScript} />
+  </head>
+  <body>
+    <header class="sticky top-0 z-30 border-b border-rule bg-void">
+      <SiteHeader />
+    </header>
+    <slot />
+  </body>
+</html>

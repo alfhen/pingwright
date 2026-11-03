@@ -1,0 +1,16 @@
+/* Styles that the home page and the docs share. */
+
+:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+}
+
+/* The toggle names the theme it switches to. */
+[data-theme='light'] .when-dark,
+:root:not([data-theme='light']) .when-light {
+  display: none;
+}
+
+.site-header a {
+  text-decoration: none;
+}
