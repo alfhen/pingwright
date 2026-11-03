@@ -7,21 +7,24 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 ## Set up
 
 1. Install Docker and start it. If Docker is not running, a run with `--server-container` exits 2 before any browser starts and says `Docker is needed for --server-container`.
-2. On Apple silicon (arm64), build the image once:
+2. Get the image. Run:
 
    ```bash
    tagreeve server-container build
    ```
 
-   Google's image is amd64 only, so Tagreeve rebuilds it for arm64 in your own Docker. It never pushes an image. On amd64 the command prints the Google image to pull and no build is needed.
+   On amd64 the command prints Google's image reference and builds nothing. Pull that reference with `docker pull`. Without the pull, the first run exits 2 because the image is missing.
+
+   On Apple silicon (arm64), Google's image is amd64 only, so the command rebuilds it for arm64 in your own Docker. The image tag holds the Tagreeve version, so run the command again after each Tagreeve upgrade. Tagreeve never pushes an image.
 3. Get the container config. In the Google Tag Manager admin, open your server container, then Admin, then Container settings, then "Manually provision tagging server". The page shows a long config string. Copy it. Below, `<container-config>` stands for that string.
-4. Save the config to a file that only you can read:
+4. Save the config to a file that only you can read, in a folder outside any repository. A folder under your home directory works:
 
    ```bash
-   (umask 077; cat > sgtm-config.txt)
+   mkdir -p -m 700 ~/.config/tagreeve
+   (umask 077; cat > ~/.config/tagreeve/sgtm-config.txt)
    ```
 
-   Paste the config, press Enter, then press Ctrl-D. On macOS, `(umask 077; pbpaste > sgtm-config.txt)` copies it from the clipboard. You can also save it from an editor and run `chmod 600 sgtm-config.txt`.
+   Paste the config, press Enter, then press Ctrl-D. On macOS, `(umask 077; pbpaste > ~/.config/tagreeve/sgtm-config.txt)` copies it from the clipboard. You can also save it from an editor and run `chmod 600 ~/.config/tagreeve/sgtm-config.txt`.
 
    Do not put the config in a command line, and do not run `export TAGREEVE_SERVER_CONTAINER_CONFIG=...`. Your shell keeps both in its history. Tagreeve refuses a config file that other users can read. If you use the environment variable `TAGREEVE_SERVER_CONTAINER_CONFIG`, set it from a source that your shell history does not keep.
 5. In the scenario, use server mode and name your container's domain in `serverHosts`:
@@ -39,7 +42,7 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 6. Run it:
 
    ```bash
-   tagreeve run scenario.yml --site https://test.example.com --network server --server-container --server-container-config sgtm-config.txt
+   tagreeve run scenario.yml --site https://test.example.com --network server --server-container --server-container-config ~/.config/tagreeve/sgtm-config.txt
    ```
 
    Use a test identity and a test copy of your site. The container may pass visitor data to Tagreeve's recording proxy, and the run records it.
@@ -58,7 +61,7 @@ The container downloads its configuration from Google, as it always does. Tagree
 - `GET` or `HEAD` for `/server.js`
 - `GET` or `HEAD` for `/s/gtag/destination`
 
-Nothing else leaves the machine from the container. The browser's hits are stubbed as in any other run, except for the hosts you named in `serverHosts`.
+Nothing else leaves the machine from the container. The browser's hits are stubbed as in any other run. Requests to a host in `serverHosts` that are not loads go to the local container and stay on your machine. Only script loads from those hosts, such as `gtm.js`, and the site's own pages use the network.
 
 ## Read the results
 
@@ -68,7 +71,7 @@ The summary has a `Server container` line. It shows whether the image started, h
 Server container: image ok; 7 vendor calls, 5 linked exactly, 1 probable, 1 unlinked; 3 requests forwarded to Google
 ```
 
-The report shows each vendor call as its own row, for example `Google Ads conversion, sent by the server container`. The row sits in the consent period of the browser hit that led to it. Notes on a result tell you how far to trust that link:
+The report gives each server vendor its own row, for example `Google Ads conversion, sent by the server container`. A row sits in the consent epoch of the browser hit that led to it. Calls with no browser hit are in an unlinked column after the last epoch. Notes on a result tell you how far to trust that link:
 
 - `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not by an event ID. A probable link can warn but cannot fail a run.
 - `serverSendUnlinked`: no browser hit was found for the call. A check that depends on consent cannot judge it, so that check warns.
@@ -89,7 +92,7 @@ A suite with `--server-container` starts one container for each run, so it is sl
 
 The config lets anyone run your container. Treat it like a password. Keep it out of:
 
-- the repository, including scenario files and fixtures
+- the repository, including scenario files and fixtures (keep the config file outside it, for example under `~/.config/tagreeve/`)
 - issues, pull requests and chat messages
 - CI logs and command lines in shared logs
 - screenshots
