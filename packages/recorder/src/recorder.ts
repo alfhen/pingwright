@@ -371,7 +371,7 @@ export class Recorder {
       signal: abort.signal,
       currentStepId: () => this.currentStepId,
       onCapture: (request, response) => {
-        this.extraRequests.push(request);
+        this.extraRequests.push(this.redactForHandoff(request, request.t));
         this.responses.push(response);
       },
     });
@@ -934,17 +934,22 @@ export class Recorder {
     await this.wait(50);
   }
 
-  /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
-  async close(): Promise<RunResult> {
-    const closeStartedAt = nodeNow();
+  private noteContainerExit(): void {
     if (this.session?.containerExited() && !this.containerFailure) {
       this.containerFailure = { errorClass: 'exited', message: 'The server container ended during the run.' };
     }
+  }
+
+  /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
+  async close(): Promise<RunResult> {
+    const closeStartedAt = nodeNow();
+    this.noteContainerExit();
     if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
     if (this.session) {
       const session = this.session;
       await waitForQuiet(() => session.lastCallAt());
       session.stopRecording();
+      this.noteContainerExit();
     }
     this.closed = true;
     try {
