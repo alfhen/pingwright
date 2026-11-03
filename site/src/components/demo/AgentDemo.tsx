@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { DemoData, Line, ScenarioKey, Tone } from '../../lib/demo-data.ts';
 import { frameAt, SEND_AT, TICK, totalOf } from './timeline.ts';
 
-const MINT = 'var(--ad-mint)';
-const FAIL = 'var(--ad-fail)';
-const TERM_TONE: Record<Tone, string> = { fg: 'var(--code-ink)', dim: 'var(--ad-muted)', faint: '#5B6865', mint: MINT, fail: FAIL, warn: 'var(--ad-warn)' };
+const MINT = 'var(--term-mint)';
+const FAIL = 'var(--term-fail)';
+const TERM_TONE: Record<Tone, string> = { fg: 'var(--code-ink)', dim: 'var(--term-muted)', faint: '#5B6865', mint: MINT, fail: FAIL, warn: 'var(--term-warn)' };
 
 interface Props {
   data: DemoData;
@@ -88,13 +88,13 @@ export default function AgentDemo({ data }: Props) {
         {f.idle && (
           <div class="ad-idle" data-demo="idle">
             <div class="ad-ask">
-              <span style={{ fontSize: '11px', color: 'var(--ad-muted)' }}>~/northwind — your coding agent</span>
+              <span style={{ fontSize: '11px', color: 'var(--term-muted)' }}>~/northwind — your coding agent</span>
               <div style={{ display: 'flex', gap: '10px', fontSize: '14px', lineHeight: 1.55 }}>
                 <span style={{ color: 'var(--term-dim)' }}>&gt;</span>
                 <span style={{ flex: 1 }}>{data.userPrompt}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '11.5px', color: 'var(--ad-muted)' }}>Mads's question. The agent will run Tagreeve to answer it.</span>
+                <span style={{ fontSize: '11.5px', color: 'var(--term-muted)' }}>Mads's question. The agent will run Tagreeve to answer it.</span>
                 <button type="button" class="ad-ask-button" data-demo="ask" onClick={start}>
                   Ask the agent ⏎
                 </button>

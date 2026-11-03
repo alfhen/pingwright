@@ -1,8 +1,0 @@
-/* The terminal and code panes stay dark in both themes, so they keep the dark-theme accents of tokens.css. */
-:root {
-  --ad-mint: oklch(0.82 0.12 175);
-  --ad-fail: oklch(0.72 0.16 25);
-  --ad-warn: oklch(0.84 0.13 85);
-  --ad-onmint: #06201c;
-  --ad-muted: #8a9794;
-}

@@ -28,10 +28,10 @@
 @keyframes ad-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--ad-mint) 50%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--term-mint) 50%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px color-mix(in oklch, var(--ad-mint) 0%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in oklch, var(--term-mint) 0%, transparent);
   }
 }
 
@@ -166,10 +166,10 @@
 .ad-ask {
   width: min(620px, 100%);
   background: var(--term-bg);
-  border: 1px solid var(--ad-mint);
+  border: 1px solid var(--term-mint);
   border-radius: 12px;
   box-shadow:
-    0 0 0 4px color-mix(in oklch, var(--ad-mint) 15%, transparent),
+    0 0 0 4px color-mix(in oklch, var(--term-mint) 15%, transparent),
     0 30px 60px -20px rgba(0, 0, 0, 0.7);
   padding: 16px 18px;
   display: flex;
@@ -182,8 +182,8 @@
 
 .ad-ask-button {
   font: 600 14px var(--font-sans);
-  background: var(--ad-mint);
-  color: var(--ad-onmint);
+  background: var(--term-mint);
+  color: var(--term-onmint);
   border: 0;
   border-radius: 8px;
   padding: 9px 16px;

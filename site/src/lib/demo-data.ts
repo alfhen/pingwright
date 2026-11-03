@@ -98,10 +98,15 @@ const EVIDENCE = /hit_(?:…|\.\.\.)?[0-9A-Z]+/g;
 const NUMBER = /(?<![\w.…])\d+(?:\.\d+)?(?!\w)/g;
 const LIST_MARKER = /^\d+\. /gm;
 
+/** The results that fail the run: failed rules and checks, except those with severity warn. */
+export function failedResults(records: RunRecords): RunRecords['results'] {
+  return records.results.filter((r) => !r.pass && r.severity !== 'warn');
+}
+
 /** The numbers a reply may use: rule messages, evidence counts, hit counts, the number of failed rules and the exit code. */
 export function recordNumbers(records: RunRecords, exitCode: number): Set<string> {
   const numbers = new Set<string>([String(exitCode)]);
-  const failed = records.results.filter((r) => !r.pass && r.severity !== 'warn');
+  const failed = failedResults(records);
   numbers.add(String(failed.length));
   numbers.add(String(records.results.length));
   for (const r of records.results) {
@@ -153,7 +158,7 @@ function epochAt(records: RunRecords, t: number) {
 }
 
 function failedEvidence(records: RunRecords): Set<string> {
-  return new Set(records.results.filter((r) => !r.pass && r.severity !== 'warn').flatMap((r) => r.evidence));
+  return new Set(failedResults(records).flatMap((r) => r.evidence));
 }
 
 function tagOf(records: RunRecords, hit: Hit, fail: boolean): string {

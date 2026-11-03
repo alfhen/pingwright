@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { createIdentity, hashEmail, hashPhone, readRun, type TagreeveRecord } from '../../../packages/core/src/index.ts';
 import { demoDir, demoLeaks, demoScenarios, demoSeeds, rewriteHosts, scrubRecords } from '../../../scripts/record-site-demo.ts';
-import { checkReply, demoHits, HIT_WINDOW, loadDemo, parseReply, recordedExitCode } from './demo-data.ts';
+import { checkReply, demoHits, failedResults, HIT_WINDOW, loadDemo, parseReply, recordedExitCode } from './demo-data.ts';
 
 const dir = fileURLToPath(new URL('../../demo/', import.meta.url));
 const records = (s: string) => readRun(join(dir, `${s}.jsonl`));
@@ -52,7 +52,7 @@ describe('checkReply', () => {
     expect(reject.hits.map((h) => h.id)).toContain(passing);
     expect(() => checkReply('Evidence: hit_…Z6CB.', reject, 1, 'reject.reply.md')).toThrow(/hit_…Z6CB is not the evidence of a failed rule/);
     expect(() => checkReply(`Evidence: ${passing}.`, reject, 1, 'reject.reply.md')).toThrow(passing);
-    const warned = reject.results.find((r) => !r.pass && r.severity === 'warn')!.evidence[0]!;
+    const warned = reject.results.find((r) => !r.pass && !failedResults(reject).includes(r))!.evidence[0]!;
     expect(() => checkReply(`Evidence: ${warned}.`, reject, 1, 'reject.reply.md')).toThrow(warned);
   });
 
@@ -63,7 +63,7 @@ describe('checkReply', () => {
 
   test('accepts the IDs and numbers of the record, list markers and words with digits', async () => {
     const reject = await records('reject');
-    const failed = reject.results.find((r) => !r.pass)!;
+    const failed = failedResults(reject)[0]!;
     const tail = failed.evidence[0]!.slice(-4);
     expect(() => checkReply(`1. GA4 sends ${failed.evidence.length} hits.\n2. Evidence: hit_…${tail}, ${failed.evidence[0]}.`, reject, 1, 'x')).not.toThrow();
   });
@@ -87,7 +87,7 @@ describe.each(demoScenarios)('the %s hits', (s) => {
 
   test('get the fail style from the failed results of the record', async () => {
     const run = await records(s);
-    const evidence = new Set(run.results.filter((r) => !r.pass && r.severity !== 'warn').flatMap((r) => r.evidence));
+    const evidence = new Set(failedResults(run).flatMap((r) => r.evidence));
     const failing = demoHits(run).filter((h) => h.fail).map((h) => h.id);
     expect(failing.length).toBeGreaterThan(0);
     expect(new Set(failing)).toEqual(new Set(run.hits.filter((h) => evidence.has(h.id)).map((h) => h.id)));

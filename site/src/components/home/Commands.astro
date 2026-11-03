@@ -2,16 +2,15 @@
 import { root } from 'astro:config/server';
 import { fileURLToPath } from 'node:url';
 import { loadDemo, type Tone } from '../../lib/demo-data.ts';
-import '../demo/term-accents.css';
 
 const { commands } = await loadDemo(fileURLToPath(new URL('demo/', root)));
 const toneClass: Record<Tone, string> = {
   fg: 'text-code-ink',
   dim: 'text-code-comment',
   faint: 'text-code-comment',
-  mint: 'text-(--ad-mint)',
-  fail: 'text-(--ad-fail)',
-  warn: 'text-(--ad-warn)',
+  mint: 'text-term-mint',
+  fail: 'text-term-fail',
+  warn: 'text-term-warn',
 };
 ---
 
