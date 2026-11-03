@@ -139,3 +139,16 @@ test('on a 390 px screen the docs content has the same 16 px side padding in bot
     await context.close();
   }
 });
+
+test('at 1440 px the sidebar starts under the logo and the article 56 px past the sidebar, as in the handoff', async () => {
+  const context = await newDocsContext(browser!, { viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await page.goto(`${docsUrl}/docs/guide/reading-results`, { waitUntil: 'networkidle' });
+  const x = async (selector: string) => (await page.locator(selector).first().boundingBox())!.x;
+  expect(await x('.sidebar-content')).toBe(80);
+  expect(await x('.site-header > a')).toBe(80);
+  for (const selector of ['.docs-path', '.content-panel h1', '.sl-markdown-content']) {
+    expect(await x(selector), selector).toBe(366);
+  }
+  await context.close();
+});

@@ -78,11 +78,16 @@ body {
  */
 @media (min-width: 50rem) {
   :root {
-    --frame-start: calc(max(0px, (100% - 1280px) / 2) + 28px);
+    --frame-start: max(28px, (100% - 1280px) / 2);
   }
 
   .page > .header {
     padding-inline-end: 0;
+  }
+
+  /* --frame-start assumes the handoff's content-box header: 1280px of content inside 28px of padding. */
+  .page > .header .site-header {
+    box-sizing: content-box;
   }
 
   .sidebar-pane {
