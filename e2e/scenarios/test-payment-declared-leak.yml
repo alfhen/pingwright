@@ -2,7 +2,7 @@ start: /set-cookie-already
 identity: { email: pw-fixture@example.com }
 steps:
   - wait: 1s
-  - evaluate: "new Image().src = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view&ep.em=pw-fixture@example.com&ep.hex=c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6&ep.ck=' + encodeURIComponent(document.cookie); true"
+  - evaluate: "new Image().src = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view&ep.em=pw-fixture@example.com&ep.hex=c57ca7ee07d1c5f5e3c2b5e993e9863c0677fd15765ffa52e86946c4f512dfa6&ep.emenc=' + encodeURIComponent('pw-fixture@example.com') + '&ep.ck=' + encodeURIComponent(document.cookie); true"
   - wait: 1s
   - visit: /checkout/test-payment?marker=off
   - payment: { provider: fixture, card: "4242424242424242" }

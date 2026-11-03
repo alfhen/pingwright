@@ -2,7 +2,7 @@
 
 ## 0.5.0-rc.2
 
-<!-- P04 -->
+- The `payment` step finds each Shopify card field by its `name` or `autocomplete` and its frame by document path. A frame with the right title but another path is skipped. When the input count is not 1, the error lists the frame path and the `name`, `autocomplete` and `type` of each visible input (#788, #684, #691).
 
 <!-- C04 -->
 
