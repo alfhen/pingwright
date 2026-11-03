@@ -9,6 +9,8 @@ import { addFindings, emptyFindings, findingsSentence } from './verdict.ts';
 import { definitionList, escapeHtml, page, runHeader, runSections } from './render.ts';
 
 export interface SuiteCellView {
+  /** Set with `--stores`. */
+  store?: string;
   variant: string;
   status: string;
   exitCode: number;
@@ -29,6 +31,7 @@ export interface DiffRow {
 
 export interface DiffView {
   scenario: string;
+  store?: string;
   from: string;
   to: string;
   warnings: string[];
@@ -37,7 +40,7 @@ export interface DiffView {
 }
 
 export interface SuiteReportModel {
-  header: { id: string; startedAt: string; host: string; variants: string[]; exitCode: number };
+  header: { id: string; startedAt: string; host: string; stores: string[]; variants: string[]; exitCode: number };
   warnings: string[];
   scenarios: { name: string; cells: SuiteCellView[] }[];
   diffs: DiffView[];
@@ -45,7 +48,7 @@ export interface SuiteReportModel {
 
 export type SuiteRecords = ReadonlyMap<string, RunRecords | undefined>;
 
-export const recordKey = (scenario: string, variant: string): string => JSON.stringify([scenario, variant]);
+export const recordKey = (scenario: string, variant: string, store?: string): string => JSON.stringify(store === undefined ? [scenario, variant] : [scenario, variant, store]);
 
 function hostOf(url: string): string {
   try {
@@ -55,7 +58,7 @@ function hostOf(url: string): string {
   }
 }
 
-function diffView(scenario: string, from: string, to: string, a: RunRecords, b: RunRecords): DiffView {
+function diffView(scenario: string, store: string | undefined, from: string, to: string, a: RunRecords, b: RunRecords): DiffView {
   const result = diffRuns(a, b);
   const rows = new Map<string, DiffRow>();
   const rowOf = (key: { epoch: string; vendor: string; event: string }): DiffRow => {
@@ -70,6 +73,7 @@ function diffView(scenario: string, from: string, to: string, a: RunRecords, b: 
   for (const m of result.countMismatches) rowOf(m.key).countMismatches++;
   return {
     scenario,
+    ...(store !== undefined && { store }),
     from,
     to,
     warnings: result.warnings,
@@ -78,29 +82,36 @@ function diffView(scenario: string, from: string, to: string, a: RunRecords, b: 
   };
 }
 
-/** Diffs run from the first variant to each other, as the suite table does. */
+/** Diffs run from the first variant to each other, within one store, as the suite table does. */
 export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords): SuiteReportModel {
   const warnings: string[] = [];
   const names = [...new Set(manifest.cells.map((c) => c.scenario))];
+  const storeNames = manifest.stores.map((s) => s.name);
+  const storeAxis: (string | undefined)[] = storeNames.length ? storeNames : [undefined];
   const scenarios = names.map((name) => ({
     name,
-    cells: manifest.variants.flatMap((variant): SuiteCellView[] => {
-      const cell = manifest.cells.find((c) => c.scenario === name && c.variant === variant);
-      if (!cell) return [];
-      const loaded = records.get(recordKey(name, variant));
-      if (!loaded && cell.status !== 'skipped') warnings.push(`${name} (${variant}): no record, so the run is not in this report`);
-      if (loaded?.truncatedAtLine) warnings.push(`${name} (${variant}): record is truncated at line ${loaded.truncatedAtLine}, so later records are missing from this report`);
-      return [{ variant, status: cell.status, exitCode: cell.exitCode, ...(cell.failed && { failed: cell.failed }), model: loaded && buildReportModel(loaded) }];
-    }),
+    cells: storeAxis.flatMap((store) =>
+      manifest.variants.flatMap((variant): SuiteCellView[] => {
+        const cell = manifest.cells.find((c) => c.scenario === name && c.labels?.store === store && c.variant === variant);
+        if (!cell) return [];
+        const label = `${name}${store === undefined ? '' : ` on ${store}`} (${variant})`;
+        const loaded = records.get(recordKey(name, variant, store));
+        if (!loaded && cell.status !== 'skipped') warnings.push(`${label}: no record, so the run is not in this report`);
+        if (loaded?.truncatedAtLine) warnings.push(`${label}: record is truncated at line ${loaded.truncatedAtLine}, so later records are missing from this report`);
+        return [{ ...(store !== undefined && { store }), variant, status: cell.status, exitCode: cell.exitCode, ...(cell.failed && { failed: cell.failed }), model: loaded && buildReportModel(loaded) }];
+      }),
+    ),
   }));
 
   const [first, ...others] = manifest.variants;
   const diffs: DiffView[] = [];
   for (const name of names) {
-    const a = records.get(recordKey(name, first!));
-    for (const to of others) {
-      const b = records.get(recordKey(name, to));
-      if (a && b) diffs.push(diffView(name, first!, to, a, b));
+    for (const store of storeAxis) {
+      const a = records.get(recordKey(name, first!, store));
+      for (const to of others) {
+        const b = records.get(recordKey(name, to, store));
+        if (a && b) diffs.push(diffView(name, store, first!, to, a, b));
+      }
     }
   }
 
@@ -109,6 +120,7 @@ export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords):
       id: manifest.id,
       startedAt: new Date(manifest.startedAt).toISOString(),
       host: hostOf(manifest.site),
+      stores: storeNames,
       variants: manifest.variants,
       exitCode: manifest.exitCode,
     },
@@ -125,22 +137,37 @@ function isFailedField(value: unknown): boolean {
   return typeof f.rules === 'number' && Number.isFinite(f.rules) && f.rules >= 0 && Array.isArray(f.checks) && f.checks.every((x) => typeof x === 'string');
 }
 
+function isStoreList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((s: unknown) => {
+      const store = s as Record<string, unknown> | null;
+      return typeof store === 'object' && store !== null && typeof store.name === 'string' && typeof store.site === 'string';
+    })
+  );
+}
+
+function isLabels(value: unknown): boolean {
+  return value === undefined || (typeof value === 'object' && value !== null && Object.values(value).every((v) => typeof v === 'string'));
+}
+
 function isManifest(value: unknown): value is SuiteManifest {
   if (typeof value !== 'object' || value === null) return false;
   const m = value as Record<string, unknown>;
   return (
-    m.suiteSchemaVersion === 1 &&
+    (m.suiteSchemaVersion === 1 || m.suiteSchemaVersion === 2) &&
     typeof m.id === 'string' &&
     typeof m.startedAt === 'number' &&
     Number.isFinite(m.startedAt) &&
     typeof m.site === 'string' &&
     typeof m.exitCode === 'number' &&
+    (m.suiteSchemaVersion === 1 || isStoreList(m.stores)) &&
     Array.isArray(m.variants) &&
     m.variants.every((v) => typeof v === 'string') &&
     Array.isArray(m.cells) &&
     m.cells.every((c: unknown) => {
       const cell = c as Record<string, unknown> | null;
-      return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number' && isFailedField(cell.failed);
+      return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number' && isFailedField(cell.failed) && isLabels(cell.labels);
     })
   );
 }
@@ -176,17 +203,19 @@ export async function loadSuite(dir: string): Promise<{ manifest: SuiteManifest;
     throw new Error(`${dir} has no readable suite.json. report reads one .jsonl run record or a suite directory.`);
   }
   if (!isManifest(manifest)) throw new Error(`${join(dir, 'suite.json')} is not a suite manifest`);
+  manifest.stores ??= [];
+  for (const cell of manifest.cells) cell.labels ??= {};
   const records = new Map<string, RunRecords | undefined>();
   for (const cell of manifest.cells) {
     const name = cell.record;
     if (typeof name !== 'string' || name !== basename(name)) continue;
-    records.set(recordKey(cell.scenario, cell.variant), await readRun(join(dir, name)).catch(() => undefined));
+    records.set(recordKey(cell.scenario, cell.variant, cell.labels.store), await readRun(join(dir, name)).catch(() => undefined));
   }
   return { manifest, records };
 }
 
 function diffTable(d: DiffView): string {
-  const heading = `<h3>${escapeHtml(d.scenario)}: ${escapeHtml(d.from)} to ${escapeHtml(d.to)}</h3>`;
+  const heading = `<h3>${escapeHtml(d.scenario)}${d.store === undefined ? '' : ` on ${escapeHtml(d.store)}`}: ${escapeHtml(d.from)} to ${escapeHtml(d.to)}</h3>`;
   const warnings = d.warnings.map((w) => `<p class="warn-box">${escapeHtml(w)}</p>`).join('');
   if (d.rows.length === 0 && d.flags.length === 0) return `${heading}${warnings}<p class="empty">No differences.</p>`;
   const flags = d.flags.length
@@ -202,42 +231,48 @@ function diffTable(d: DiffView): string {
 }
 
 function verdicts(model: SuiteReportModel): string {
-  const items = model.header.variants.map((variant) => {
-    const findings = emptyFindings();
-    let unfinished = 0;
-    let noRecord = 0;
-    for (const s of model.scenarios) {
-      const cell = s.cells.find((c) => c.variant === variant);
-      if (cell?.status === 'error') unfinished++;
-      else if (cell?.model) addFindings(findings, cell.model);
-      else if (cell?.status === 'fail' || cell?.status === 'warn') noRecord++;
-    }
-    const sentence = findingsSentence(findings, true);
-    const base = noRecord && sentence === 'no leaks' ? 'leaks not known' : sentence;
-    const tail =
-      (unfinished ? `; ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '') +
-      (noRecord ? `; ${noRecord} run${noRecord === 1 ? ' has' : 's have'} no record` : '');
-    return `<li><strong>${escapeHtml(variant)}:</strong> ${escapeHtml(base + tail)}</li>`;
-  });
+  const items = (model.header.stores.length ? model.header.stores : [undefined]).flatMap((store) =>
+    model.header.variants.map((variant) => {
+      const findings = emptyFindings();
+      let unfinished = 0;
+      let noRecord = 0;
+      for (const s of model.scenarios) {
+        const cell = s.cells.find((c) => c.store === store && c.variant === variant);
+        if (cell?.status === 'error') unfinished++;
+        else if (cell?.model) addFindings(findings, cell.model);
+        else if (cell?.status === 'fail' || cell?.status === 'warn') noRecord++;
+      }
+      const sentence = findingsSentence(findings, true);
+      const base = noRecord && sentence === 'no leaks' ? 'leaks not known' : sentence;
+      const tail =
+        (unfinished ? `; ${unfinished} run${unfinished === 1 ? '' : 's'} did not finish` : '') +
+        (noRecord ? `; ${noRecord} run${noRecord === 1 ? ' has' : 's have'} no record` : '');
+      return `<li><strong>${escapeHtml(store === undefined ? variant : `${store}, ${variant}`)}:</strong> ${escapeHtml(base + tail)}</li>`;
+    }),
+  );
   return `<ul class="verdicts">${items.join('')}</ul>`;
 }
 
 function overview(model: SuiteReportModel): string {
+  const stores = model.header.stores;
   const head = model.header.variants.map((v) => `<th scope="col">${escapeHtml(v)}</th>`).join('');
   const rows = model.scenarios
-    .map((s) => {
-      const cells = model.header.variants.map((v) => {
-        const cell = s.cells.find((c) => c.variant === v);
-        return `<td>${cell ? escapeHtml(cellText({ status: cell.status as SuiteCell['status'], exitCode: cell.exitCode as SuiteCell['exitCode'], failed: cell.failed })) : ''}</td>`;
-      });
-      return `<tr><th scope="row">${escapeHtml(s.name)}</th>${cells.join('')}</tr>`;
-    })
+    .flatMap((s) =>
+      (stores.length ? stores : [undefined]).map((store) => {
+        const cells = model.header.variants.map((v) => {
+          const cell = s.cells.find((c) => c.store === store && c.variant === v);
+          return `<td>${cell ? escapeHtml(cellText({ status: cell.status as SuiteCell['status'], exitCode: cell.exitCode as SuiteCell['exitCode'], failed: cell.failed })) : ''}</td>`;
+        });
+        return `<tr><th scope="row">${escapeHtml(s.name)}</th>${store === undefined ? '' : `<td>${escapeHtml(store)}</td>`}${cells.join('')}</tr>`;
+      }),
+    )
     .join('');
-  return `<div class="scroll"><table><thead><tr><th scope="col">Scenario</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="scroll"><table><thead><tr><th scope="col">Scenario</th>${stores.length ? '<th scope="col">Store</th>' : ''}${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 export function suiteTitle(h: SuiteReportModel['header']): string {
-  return `Tagreeve suite: ${h.variants.join(' vs ')}${h.host ? ` on ${h.host}` : ''}, ${h.startedAt.slice(0, 10)}`;
+  const where = h.stores.length ? ` on ${h.stores.join(', ')}` : h.host ? ` on ${h.host}` : '';
+  return `Tagreeve suite: ${h.variants.join(' vs ')}${where}, ${h.startedAt.slice(0, 10)}`;
 }
 
 export function renderSuiteReport(model: SuiteReportModel): string {
@@ -248,7 +283,8 @@ export function renderSuiteReport(model: SuiteReportModel): string {
     .map((s) => {
       const cells = s.cells
         .map((c) => {
-          const title = `<h3>${escapeHtml(s.name)} (${escapeHtml(c.variant)}): ${escapeHtml(c.status.toUpperCase())}</h3>`;
+          const where = c.store === undefined ? `${s.name} (${c.variant})` : `${s.name} on ${c.store}, ${c.variant}`;
+          const title = `<h3>${escapeHtml(where)}: ${escapeHtml(c.status.toUpperCase())}</h3>`;
           if (!c.model) return `${title}<p class="empty">${c.status === 'skipped' ? 'Skipped.' : 'No record to show.'}</p>`;
           return `${title}${definitionList(runHeader(c.model.header))}${runSections(c.model, 'h4')}`;
         })
@@ -262,6 +298,7 @@ ${definitionList([
   ['Suite', h.id],
   ['Started', h.startedAt],
   ['Site host', h.host],
+  ...(h.stores.length ? [['Stores', h.stores.join(', ')] as [string, string]] : []),
   ['Variants', h.variants.join(', ')],
   ['Exit code', String(Number(h.exitCode))],
 ])}

@@ -69,7 +69,9 @@ export interface VariantArg {
 export interface SuiteArgs {
   command: 'suite';
   dir: string;
-  site: string;
+  /** Exactly one of `site` and `stores` is set. */
+  site?: string;
+  stores?: string;
   variants: VariantArg[];
   network: Network | undefined;
   out: string;
@@ -94,14 +96,15 @@ export const USAGE = `Usage:
   tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
   tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
-  tagreeve suite <dir> --site <url> [--variant published] [--variant name=override.json] [options]
+  tagreeve suite <dir> (--site <url> | --stores <stores.json>) [--variant published] [--variant name=override.json] [options]
   tagreeve install-browser
   tagreeve --version
 
 Run "tagreeve run --help" for the options of run.
 
 Options for suite:
-  --site <url>               The site to test (required)
+  --site <url>               The site to test. Give --site or --stores
+  --stores <file>            A stores.json file: run every scenario against each store (instead of --site)
   --variant <name[=file]>    A GTM build to test (repeatable). "published" is the live container; name=file serves an override file. Default: published
   --with-handoff             Also run scenarios with handoff steps, last, headed
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
@@ -172,6 +175,7 @@ function parseVariants(entries: string[]): VariantArg[] {
 
 const OPTIONS = {
   site: { type: 'string' },
+  stores: { type: 'string' },
   network: { type: 'string' },
   out: { type: 'string' },
   seed: { type: 'string' },
@@ -244,12 +248,19 @@ function parseCommand(argv: string[]): Command {
   if (command !== 'run' && command !== 'suite') throw new UsageError(`Unknown command "${command}"`);
 
   if (rest.length !== 1) throw new UsageError(command === 'run' ? 'run takes one scenario file' : 'suite takes one scenario directory');
-  if (!values.site) throw new UsageError('--site is required');
-  try {
-    const url = new URL(values.site);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
-  } catch {
-    throw new UsageError(`--site must be an http or https URL, got "${values.site}"`);
+  if (command === 'suite') {
+    if (values.site !== undefined && values.stores !== undefined) throw new UsageError('--site and --stores cannot be used together');
+    if (values.site === undefined && values.stores === undefined) throw new UsageError('--site or --stores is required');
+  } else if (!values.site) {
+    throw new UsageError('--site is required');
+  }
+  if (values.site !== undefined) {
+    try {
+      const url = new URL(values.site);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
+    } catch {
+      throw new UsageError(`--site must be an http or https URL, got "${values.site}"`);
+    }
   }
   const network = values.network;
   if (network !== undefined && network !== 'stub' && network !== 'server' && network !== 'live') {
@@ -278,7 +289,8 @@ function parseCommand(argv: string[]): Command {
     return {
       command: 'suite',
       dir: rest[0]!,
-      site: values.site,
+      ...(values.site !== undefined && { site: values.site }),
+      ...(values.stores !== undefined && { stores: values.stores }),
       variants: parseVariants(values.variant ?? []),
       network,
       out: values.out ?? 'runs',
@@ -293,13 +305,13 @@ function parseCommand(argv: string[]): Command {
       json: values.json ?? false,
     };
   }
-  for (const flag of ['variant', 'with-handoff', 'with-test-payment'] as const) {
+  for (const flag of ['variant', 'with-handoff', 'with-test-payment', 'stores'] as const) {
     if (values[flag] !== undefined) throw new UsageError(`--${flag} is not an option of run`);
   }
   return {
     command: 'run',
     scenario: rest[0]!,
-    site: values.site,
+    site: values.site!,
     network,
     out: values.out ?? 'runs',
     seed,
