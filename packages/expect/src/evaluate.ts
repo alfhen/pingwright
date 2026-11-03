@@ -26,7 +26,7 @@ import {
   binaryShare,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -318,7 +318,7 @@ function evaluateCookieRule(rule: Rule, patterns: string[], ctx: Context): RuleO
 
 const NOT_RECORDED = 'cannot evaluate: field names not recorded';
 const BODY_CUT = 'cannot evaluate: body not fully recorded';
-const VENDOR_IGNORE: Record<string, readonly string[]> = { ga4: GA4_BODY_ONLY_IGNORE, meta: META_BODY_ONLY_IGNORE, sgtm: SGTM_BODY_ONLY_IGNORE };
+const VENDOR_IGNORE: Record<string, readonly string[]> = { ga4: GA4_BODY_ONLY_IGNORE, meta: META_BODY_ONLY_IGNORE, 'meta-capi': META_CAPI_BODY_ONLY_IGNORE, sgtm: SGTM_BODY_ONLY_IGNORE };
 
 function listNames(names: string[]): string {
   return names.length > MAX_NAMES ? `${names.slice(0, MAX_NAMES).join(', ')} and ${names.length - MAX_NAMES} more` : names.join(', ');

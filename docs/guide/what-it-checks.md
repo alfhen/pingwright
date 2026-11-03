@@ -57,7 +57,7 @@ In stub mode, Tagreeve records a known tracking request and answers it itself, s
 
 Scripts and pages still load. For example, the Google tag script and the Meta pixel script (the code that sends Meta hits) come from the vendor as usual. Only the tracking requests are answered locally.
 
-A few rare requests can still get through. One example is a request that a sandboxed iframe (a small page inside your page with limited rights) sends while it is still loading. The [design](../design.md#_5-3-network-modes) lists these cases.
+A few rare requests can still get through. One example is a request that a sandboxed iframe (a small page inside your page with limited rights) sends while it is still loading. The [design](../design.md#53-network-modes) lists these cases.
 
 Tagreeve sends a request it does not know on to its host. It flags that request as an unknown destination, and the run fails unless you allow it. Live mode (`--network live`) sends every request on. Use live mode only when you want test hits to reach a real vendor account.
 

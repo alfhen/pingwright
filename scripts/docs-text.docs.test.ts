@@ -20,7 +20,7 @@ test('install text gives npm i -g tagreeve@next and no tagreeve 0.3.0', () => {
   expect(installProblem(read('README.md'))).toBeUndefined();
   expect(installProblem(read('docs/guide/first-run.md'))).toBeUndefined();
   expect(installProblem(installSection(read('docs/cli.md')))).toBeUndefined();
-  expect(installProblem(read('.vitepress/theme/GetStartedPrompt.vue'))).toBeUndefined();
+  expect(installProblem(read('site/src/lib/prompt.ts'))).toBeUndefined();
 });
 
 test('the install check fails on a bare install or a tagreeve 0.3.0 claim', () => {

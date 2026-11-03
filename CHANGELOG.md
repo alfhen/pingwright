@@ -2,13 +2,16 @@
 
 ## 0.5.0-rc.1
 
-<!-- A01 -->
+- Removed the old command alias. Use `tagreeve`. (#546)
+- The release workflow test is stricter: it checks job permissions, publish lines, `github.token` and docker pushes. (#546)
 
-<!-- U01 -->
+- Fixed: `unloadGap` now also warns when an embedded frame pushed a tracking event shortly before the run ended (browser close), not only before a navigation (#261, #550).
+- Fixed: a GA4 hit sent from the same frame as the push now covers the event, whatever its custom name, so custom event names no longer give a false `unloadGap` (#261, #550).
+- Fixed: the `/unload-gap?mode=` fixture page writes the mode into the iframe `src` on the server (#552).
 
-<!-- B01 -->
+- `--by-page` keys now replace path segments that look like a value, such as a checkout token, with `*`. A `--by-page` baseline saved on a page with a token drifts once. Save it again.
 
-<!-- M01 -->
+- Adds a `meta-capi` decoder for Meta Conversions API calls (`graph.facebook.com/v<n>/<id>/events`). One hit for each event in `data`. In `stub` mode the endpoint is answered with a success body. Part of #358.
 
 <!-- V01 -->
 

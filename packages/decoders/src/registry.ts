@@ -3,13 +3,14 @@ import type { Decoder, NewHitId } from './decoder.ts';
 import { ga4 } from './ga4.ts';
 import { googleAds } from './google-ads.ts';
 import { meta } from './meta.ts';
+import { metaCapi } from './meta-capi.ts';
 import { pinterest } from './pinterest.ts';
 import { sgtmDataClient } from './sgtm-data-client.ts';
 import { createStapeCustomLoader } from './stape-custom-loader.ts';
 import { decodeTracker, trackerCollection } from './tracker.ts';
 import { trackerList, type TrackerEntry } from './tracker-list.ts';
 
-const direct: readonly Decoder[] = [ga4, meta, pinterest, googleAds, sgtmDataClient];
+const direct: readonly Decoder[] = [ga4, meta, metaCapi, pinterest, googleAds, sgtmDataClient];
 
 export const decoders: readonly Decoder[] = [...direct, createStapeCustomLoader(direct)];
 

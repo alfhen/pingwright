@@ -1,6 +1,6 @@
 import { newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { decodeRequest, GA4_BODY_ONLY_IGNORE, matchesIgnoreList, META_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE } from './index.ts';
+import { decodeRequest, GA4_BODY_ONLY_IGNORE, matchesIgnoreList, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, SGTM_BODY_ONLY_IGNORE } from './index.ts';
 
 const GTAG_QUERY = [
   'v=2', 'tid=G-PWTEST0001', 'gtm=45je5aa0v9100000za200', '_p=1760000000000', 'gcd=13l3l3l3l1l1', 'npa=0', 'dma=0',
@@ -39,4 +39,14 @@ test('ignore list entries may be globs', () => {
   expect(matchesIgnoreList('expv2[0]', META_BODY_ONLY_IGNORE)).toBe(true);
   expect(matchesIgnoreList('email', META_BODY_ONLY_IGNORE)).toBe(false);
   expect(SGTM_BODY_ONLY_IGNORE).toContain('dtdc');
+});
+
+test('a Conversions API hit has only transport fields from the meta-capi ignore list', () => {
+  const postData = JSON.stringify({
+    data: [{ event_name: 'Lead', event_time: 1, event_id: 'pw-1', event_source_url: 'http://localhost:3000/', action_source: 'website' }],
+  });
+  const [hit] = decodeRequest({ ...request, method: 'POST', url: 'https://graph.facebook.com/v21.0/100000000000001/events', postData });
+  expect(hit?.vendor).toBe('meta-capi');
+  expect(hit?.fields?.length).toBe(5);
+  expect((hit?.fields ?? []).filter((f) => !matchesIgnoreList(f, META_CAPI_BODY_ONLY_IGNORE))).toEqual([]);
 });

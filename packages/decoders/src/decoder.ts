@@ -4,7 +4,7 @@ export type NewHitId = () => Id<'hit'>;
 
 export const defaultHitId: NewHitId = () => newId('hit');
 
-export const vendorKeys: readonly string[] = ['ga4', 'google-ads', 'meta', 'pinterest', 'sgtm'];
+export const vendorKeys: readonly string[] = ['ga4', 'google-ads', 'meta', 'meta-capi', 'pinterest', 'sgtm'];
 
 export interface Decoder {
   name: string;

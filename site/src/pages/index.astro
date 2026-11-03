@@ -1,0 +1,26 @@
+---
+import HomeLayout from '../layouts/HomeLayout.astro';
+import AgentDemo from '../components/home/AgentDemo.astro';
+import Commands from '../components/home/Commands.astro';
+import Footer from '../components/home/Footer.astro';
+import Hero from '../components/home/Hero.astro';
+import SafeByDefault from '../components/home/SafeByDefault.astro';
+import SignOff from '../components/home/SignOff.astro';
+import Vendors from '../components/home/Vendors.astro';
+import WhyName from '../components/home/WhyName.astro';
+import FirstVisitIntro from '../components/intro/FirstVisitIntro.astro';
+---
+
+<HomeLayout title="Tagreeve" description="Agent-first testing for website tracking and consent.">
+  <FirstVisitIntro />
+  <main>
+    <Hero />
+    <AgentDemo />
+    <Commands />
+    <Vendors />
+    <SafeByDefault />
+    <WhyName />
+    <SignOff />
+  </main>
+  <Footer />
+</HomeLayout>

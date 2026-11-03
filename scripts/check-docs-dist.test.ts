@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findExternalRefs } from './check-docs-dist.ts';
+import { findDeadLinks, findExternalRefs } from './check-docs-dist.ts';
 
 describe('findExternalRefs', () => {
   it('passes local references', () => {
@@ -25,7 +25,7 @@ describe('findExternalRefs', () => {
     expect(findExternalRefs('a.css', "@import './local.css';")).toEqual([]);
   });
 
-  it('flags the VitePress preload stylesheet form', () => {
+  it('flags the preload stylesheet form', () => {
     expect(findExternalRefs('a.html', '<link rel="preload stylesheet" href="https://evil.example.com/a.css" as="style">')).toHaveLength(1);
     expect(findExternalRefs('a.html', '<link rel="preload stylesheet" href="/assets/a.css" as="style">')).toEqual([]);
   });
@@ -38,5 +38,37 @@ describe('findExternalRefs', () => {
 
   it('flags Google Fonts anywhere', () => {
     expect(findExternalRefs('a.js', 'x="fonts.googleapis.com"')).toEqual(['fonts.googleapis.com']);
+  });
+});
+
+describe('findDeadLinks', () => {
+  const files = new Set(['index.html', 'docs/cli.html', 'docs/guide/first-run.html', 'favicon.ico', '_astro/app.js']);
+  const pages = (firstRun: string) =>
+    new Map([
+      ['index.html', '<a href="/docs/cli">CLI</a>'],
+      ['docs/cli.html', '<h2 id="exit-codes">Exit codes</h2><h2 id="85-what-the-server-container-sends-on">8.5</h2>'],
+      ['docs/guide/first-run.html', firstRun],
+    ]);
+
+  it('passes good page links, fragments, assets and outside links', () => {
+    const html =
+      '<link rel="icon" href="/favicon.ico"><script src="/_astro/app.js"></script><h2 id="install">Install</h2>' +
+      '<a href="/docs/cli#exit-codes">a</a><a href="../cli#85-what-the-server-container-sends-on">b</a>' +
+      '<a href="#install">c</a><a href="/">d</a><a href="https://github.com/alfhen/tagreeve/blob/main/LICENSE">e</a>' +
+      '<a href="mailto:x@example.com">f</a><script>const t = \'<a href="/nowhere">\';</script>';
+    expect(findDeadLinks(pages(html), files)).toEqual([]);
+  });
+
+  it('reports a link to a page that was not built', () => {
+    expect(findDeadLinks(pages('<a href="/docs/does-not-exist">x</a>'), files)).toEqual([
+      'docs/guide/first-run.html: /docs/does-not-exist (no such page or file)',
+    ]);
+  });
+
+  it('reports a fragment that is not on the target page', () => {
+    expect(findDeadLinks(pages('<a href="/docs/cli#_8-5-what-the-server-container-sends-on">x</a><a href="#nope">y</a>'), files)).toEqual([
+      'docs/guide/first-run.html: /docs/cli#_8-5-what-the-server-container-sends-on (no #_8-5-what-the-server-container-sends-on on /docs/cli)',
+      'docs/guide/first-run.html: #nope (no #nope on /docs/guide/first-run)',
+    ]);
   });
 });

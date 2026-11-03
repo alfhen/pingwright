@@ -2,6 +2,8 @@
 
 Status: proposal (#224). Nothing is built yet. If it is accepted, the PR plan in §9 follows from it.
 
+**Update:** the site moved from VitePress to Astro, Starlight and Tailwind v4 with the plan in `docs/plan-site.md`. The sections below still describe the VitePress setup, except the rules in §8 and the decisions in §10, which follow the new site.
+
 ## 1. Goal and non-goals
 
 **Goal.** Publish the README and `docs/*.md` as a static site at `https://pingwright.dev`. The Markdown files in the repo stay the only source. The site has a sidebar and a search box, and it rebuilds when `main` changes.
@@ -259,17 +261,18 @@ What PRs do: the VitePress config, the workflow, the dogfood check, the post-dep
 ## 8. Rules for the docs PRs
 
 - Docs only. No analytics, cookies, forms, third-party scripts or CDN fonts. The dogfood check enforces this.
+- Fonts are self-hosted: Geist, Geist Mono and Anton come from npm packages and are bundled with the site. No font comes from a CDN.
 - No `CNAME` file. No domain in `packages/` or `fixtures/`.
 - Exact versions at least two weeks old. Actions pinned to SHAs.
 - The site's dependencies are root `devDependencies`. They never enter the CLI's `dist/` or its tarball (`files` is `dist`, `README.md` and `LICENSE`).
-- `.vitepress/cache` and `.vitepress/dist` go in `.gitignore`.
+- `site/dist` and `site/.astro` go in `.gitignore`.
 
 **Writing.** Every page a reader sees follows these rules:
 
 - Write in Simplified Technical English (ASD-STE100 style): short sentences, one idea per sentence, active voice, common words. Define a term the first time it appears, then use only that term.
 - Explain in simple terms first. Put the technical detail after the plain explanation, not instead of it.
 - Prefer a picture to a paragraph. Show flows, consent states and what a run records as diagrams.
-- Diagrams are Mermaid code blocks (` ```mermaid `) in the markdown. GitHub draws them, and the site draws them from the `mermaid` package bundled with the site (root `devDependency`, no CDN). The theme follows light and dark mode with the brand colours from `brand/README.md` and the system font stack. Each diagram has a one-line text summary under it.
+- Diagrams are Mermaid code blocks (` ```mermaid `) in the markdown. GitHub draws them, and the site draws them from the `mermaid` package bundled with the site (root `devDependency`, no CDN). The theme follows light and dark mode with the site colours and the self-hosted Geist font. Each diagram has a one-line text summary under it.
 - Run the `humanizer` skill on all new or changed prose before the PR, and fix what it finds.
 - The reviewer checks the writing as well as the facts.
 
@@ -308,10 +311,10 @@ D3 and D4 both touch the workflow, so they go one after the other.
 ## 10. Decisions
 
 - **Mermaid `11.17.2`** draws diagrams, bundled from the site's own files and loaded only on pages that have a diagram.
-- **`/` is a VitePress home page** (`docs/index.md`). The README cannot carry the front matter that GitHub would show as a table, so it is published at `/readme`.
-- **VitePress `2.0.0-alpha.20`**, pinned exactly. Bump it on purpose, never by range.
+- **`/` is an Astro page** (`site/src/pages/index.astro`). The README is published at `/readme`.
+- **Astro and Starlight** generate the site, with Tailwind v4 for the styles. Each is pinned exactly in the root `devDependencies`. Bump them on purpose, never by range. Astro telemetry is off (`ASTRO_TELEMETRY_DISABLED=1`) wherever the Astro CLI runs.
 - **User docs only:** the README, `cli.md`, `shopify-checkout.md` and `design.md`. Plans, proposals, `release.md` and `AGENTS.md` are for maintainers and stay in the repo.
-- **Web Storage is allowed** for the two VitePress UI keys (`vitepress:local-search-detailed-list`, `vitepress-theme-appearance`). They never leave the browser. The dogfood check still fails on any cookie.
-- **A CSP is a later PR.** VitePress adds inline scripts, so a `<meta>` policy needs their hashes **(verify)**.
+- **Web Storage is allowed** for Starlight's theme key (`starlight-theme`) and `tagreeve.introSeen`. They never leave the browser. The dogfood check still fails on any cookie.
+- **A CSP is a later PR.** Starlight and the theme script add inline scripts, so a `<meta>` policy needs their hashes **(verify)**.
 - **`ci.yml` gets SHA-pinned actions in its own PR.** Dependabot for actions comes with it.
 - **CAA:** add `0 issue "letsencrypt.org"` as a maintainer step (M7), after the first certificate is issued.

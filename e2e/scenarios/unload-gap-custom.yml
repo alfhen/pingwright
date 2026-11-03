@@ -1,0 +1,9 @@
+start: /unload-gap?mode=custom
+steps:
+  - consent: reject
+  - wait: 3s
+  - visit: /
+expect:
+  must:
+    - { vendor: sgtm, event: custom_add }
+options: { seed: 1, allowUnknownDestination: true }

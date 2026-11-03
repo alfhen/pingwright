@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-> **Pingwright is now Tagreeve.** The command `pingwright` still works until 0.5.0. Versions up to 0.3.0 are on npm as `pingwright`, and `tagreeve` starts at 0.4.0-rc.1. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
+> **Pingwright is now Tagreeve.** Versions up to 0.3.0 are on npm as `pingwright`, and `tagreeve` starts at 0.4.0-rc.1. The steps to move over are in [CHANGELOG.md](CHANGELOG.md).
 
 Agent-first testing for tags and consent. Tagreeve plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 
@@ -99,7 +99,7 @@ Node 22.18 or later. `npm i -g tagreeve@next` installs the newest 0.4 release ca
 4. `tagreeve run scenario.yml --site https://staging.example.com`
 5. Read the summary, and the full record in `runs/run_<id>.jsonl`.
 
-`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys are `ga4`, `google-ads`, `meta`, `pinterest`, `sgtm`, and every vendor on the tracker list (`linkedin`, `microsoft-uet`, `reddit`) or in a `--tracker-list` file. A scenario that names any other vendor is rejected when it is parsed.
+`consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys are `ga4`, `google-ads`, `meta`, `meta-capi`, `pinterest`, `sgtm`, and every vendor on the tracker list (`linkedin`, `microsoft-uet`, `reddit`) or in a `--tracker-list` file. A scenario that names any other vendor is rejected when it is parsed.
 
 Stub mode is the default: known collection endpoints are recorded and answered locally. Unknown destinations still receive hits and are flagged as `unknownDestination`, which fails the run. The registrable domain of `--site` is first party: for `--site https://www.shop.co.uk`, `shop.co.uk` and every `*.shop.co.uk` host are not unknown. Data-carrying requests to those subdomains that no decoder matches, such as server-side GTM on `sgtm.shop.co.uk/collect`, are listed as `firstPartySubdomain` flags, grouped by host. They do not fail the run. Hosts without a registrable domain, such as IP addresses and `localhost`, are first party only as the exact `--site` host. If a site serves its own assets from another domain, list it under `options: { firstPartyHosts: ['i.example-cdn.com', '*.example-static.com'] }`. To accept specific unknown hosts without calling them first party, use `options: { allowUnknownDestination: ['tracker.example.net'] }`; every other unknown destination still fails. `allowUnknownDestination: true` allows all of them, and the summary still lists them. A request sent while a sandboxed `srcdoc` iframe is loading can escape stubbing and recording (see [design §5.3](docs/design.md)). Use `--network live` to let everything through. Tagreeve decodes GA4, Google Ads, Meta, Pinterest and Stape traffic, and stubs the hosts on the tracker list. Hits to other vendors, such as TikTok, are not stubbed unless you add them with `--tracker-list`: they pass through and can only show up as `unknownDestination` flags.
 
