@@ -1,6 +1,8 @@
 ---
-import Default from '@astrojs/starlight/components/Footer.astro';
+import Pagination from 'virtual:starlight/components/Pagination';
 ---
 
-<p class="docs-version">Docs for main. To read the docs of a release, open the repo at its tag.</p>
-<Default />
+<footer class="docs-footer">
+  <Pagination />
+  <p class="docs-version">Docs for main. To read the docs of a release, open the repo at its tag.</p>
+</footer>

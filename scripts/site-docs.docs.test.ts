@@ -125,3 +125,30 @@ test('the two-column tables of /docs/cli show as a reference list with a 170 px 
   expect(await otherCell.evaluate((cell) => getComputedStyle(cell).fontFamily)).not.toContain('Geist Mono');
   await context.close();
 });
+
+test('on a 390 px screen the docs content has the same 16 px side padding in both themes', async () => {
+  for (const theme of ['dark', 'light']) {
+    const context = await newDocsContext(browser!, { viewport: { width: 390, height: 844 } });
+    await context.addInitScript((value) => localStorage.setItem('starlight-theme', value), theme);
+    const page = await context.newPage();
+    await page.goto(`${docsUrl}/docs/guide/reading-results`, { waitUntil: 'networkidle' });
+    expect(await page.evaluate(() => document.documentElement.dataset.theme), theme).toBe(theme);
+    const padding = await page.locator('.content-panel').last().evaluate((panel) => getComputedStyle(panel).paddingLeft);
+    expect(padding, theme).toBe('16px');
+    expect((await page.locator('.sl-markdown-content').boundingBox())!.x, theme).toBe(16);
+    await context.close();
+  }
+});
+
+test('at 1440 px the sidebar starts under the logo and the article 56 px past the sidebar, as in the handoff', async () => {
+  const context = await newDocsContext(browser!, { viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await page.goto(`${docsUrl}/docs/guide/reading-results`, { waitUntil: 'networkidle' });
+  const x = async (selector: string) => (await page.locator(selector).first().boundingBox())!.x;
+  expect(await x('.sidebar-content')).toBe(80);
+  expect(await x('.site-header > a')).toBe(80);
+  for (const selector of ['.docs-path', '.content-panel h1', '.sl-markdown-content']) {
+    expect(await x(selector), selector).toBe(366);
+  }
+  await context.close();
+});
