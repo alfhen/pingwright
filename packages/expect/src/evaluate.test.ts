@@ -263,6 +263,15 @@ test('from: <step label> starts at the step start and includes its own hits', ()
   expect(missing.message).toContain('"go"');
 });
 
+test('from: judges an unlinked server hit as cannot evaluate', () => {
+  const step: Step = { type: 'step', id: newId('step'), runId, index: 0, label: 'go', startedAt: 900, endedAt: 1000 };
+  const server = (over: Partial<Hit> = {}) => hit({ vendor: 'meta', t: 1500, ...over }, { captured: 'serverContainer' });
+  const q = `steps:\n  - { visit: /, label: go }\nexpect:\n  mustNot:\n    - { vendor: meta, from: go }`;
+  const unlinked = rule(q, [step, server()]);
+  expect(unlinked).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked' });
+  expect(unlinked.message).toContain('Cannot evaluate');
+});
+
 test('identity.hashesMatch', () => {
   const em = hashEmail(identity.email);
   const ph = hashPhone(identity.phone);
