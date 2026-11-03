@@ -15,7 +15,7 @@
 
 <!-- V01 -->
 
-- Requests to known Shopify platform hosts are flagged `platformHost` instead of `unknownDestination`, so they no longer fail the `unknownDestination` check. They are still listed in the summary and the report. Set `options.platformHosts: false` to restore the old behaviour. Fixes #585.
+- Requests to `cdn.shopify.com` are flagged `platformHost` instead of `unknownDestination`, so they no longer fail the `unknownDestination` check. They are still listed in the summary and the report. Set `options.platformHosts: false` to restore the old behaviour.
 
 <!-- K02 -->
 

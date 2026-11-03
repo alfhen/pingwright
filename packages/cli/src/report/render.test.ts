@@ -283,3 +283,16 @@ test('platformHost flags render in a closed details element with counts per host
   expect(html).toContain('<details><summary>1 host</summary><ul><li>cdn.shopify.com: 3</li></ul></details>');
   expect(html).not.toContain('<details open');
 });
+
+test('platformHost report cell holds host names and counts, not request values', () => {
+  const values = [EMAIL, HASH, encodeURIComponent(EMAIL), COOKIE];
+  const url = `https://cdn.shopify.com/a/${HASH}?e=${EMAIL}&u=${values[2]}&c=${COOKIE}`;
+  for (const v of values) expect(url).toContain(v);
+  const base = records();
+  const request = { ...base.requests[0]!, url, headers: {}, postData: null, resourceType: 'image' };
+  const flag = { type: 'flag' as const, id: newId('flag'), runId, kind: 'platformHost', recordIds: [request.id], detail: `GET ${url}` };
+  const model = buildReportModel({ ...base, requests: [request], hits: [], flags: [flag] });
+  const cell = flags(model);
+  expect(cell).toContain('cdn.shopify.com: 1');
+  for (const v of values) expect(cell).not.toContain(v);
+});
