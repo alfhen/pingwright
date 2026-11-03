@@ -13,12 +13,13 @@
 <input name="autofill-year" autocomplete="cc-exp-year" type="text" aria-label="Autofill year">
 <input name="autofill-email" autocomplete="email" type="text" aria-label="Autofill email">
 <input name="autofill-tel" autocomplete="tel" type="text" aria-label="Autofill phone">
+<input name="number" autocomplete="cc-number" type="text" style="display:none" tabindex="-1" aria-hidden="true">
 <label>Card number <input name="number" autocomplete="cc-number" inputmode="numeric" type="text"></label>
 <script>
 window.addEventListener('message', function (e) {
   if (e.data !== 'pw-pay') return;
   var autofill = Array.prototype.map.call(document.querySelectorAll('input[name^="autofill-"]'), function (i) { return i.value; });
-  var number = document.querySelector('input[name="number"]').value;
+  var number = document.querySelector('label input[name="number"]').value;
   fetch('/card-extra', { method: 'POST', body: 'autofill:' + autofill.join('|') }).then(function () {
     return fetch('/card-submit', { method: 'POST', body: number });
   }).then(function () {
