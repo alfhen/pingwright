@@ -8,6 +8,6 @@ import '../demo/agent-demo.css';
 const data = await loadDemo(fileURLToPath(new URL('demo/', root)));
 ---
 
-<section class="mx-auto box-content max-w-[1280px] px-7 pt-3" aria-label="Agent demo">
+<section class="frame pt-3" aria-label="Agent demo">
   <AgentDemoIsland client:load data={data} />
 </section>

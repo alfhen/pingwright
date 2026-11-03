@@ -2,7 +2,8 @@
 @import './tokens.css';
 @import './shared.css';
 
-/* The handoff sets sizes with the `font` shorthand, which resets line-height to normal. */
+/* The handoff sets sizes with the `font` shorthand, which resets line-height to normal.
+   This build only: markup the docs also render, such as SiteHeader, sets its own leading. */
 @theme {
   --text-xs--line-height: normal;
   --text-sm--line-height: normal;

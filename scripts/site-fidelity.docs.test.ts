@@ -39,6 +39,46 @@ for (const width of [1440, 1920]) {
   });
 }
 
+async function headerFrame(page: Page) {
+  return page.evaluate(() => {
+    const header = document.querySelector('.site-header')!;
+    const style = getComputedStyle(header);
+    const probe = document.createElement('div');
+    probe.style.marginInlineStart = 'var(--frame-start)';
+    document.body.append(probe);
+    const frameStart = probe.getBoundingClientRect().left;
+    probe.remove();
+    return {
+      left: header.getBoundingClientRect().left + parseFloat(style.paddingLeft),
+      frameStart,
+      lineHeights: [...header.querySelectorAll('a, button, span')]
+        .filter((el) => el.textContent!.trim())
+        .map((el) => `${el.textContent!.trim().slice(0, 30)}: ${getComputedStyle(el).lineHeight}`),
+    };
+  });
+}
+
+for (const width of [1440, 1920]) {
+  test(`the header on /docs/cli has the home header's frame and line heights at ${width} px, and --frame-start marks its left edge`, async () => {
+    const home = await openHome(width);
+    const onHome = await headerFrame(home);
+    await home.goto(`${docsUrl}/docs/cli`);
+    const onDocs = await headerFrame(home);
+    expect(onHome.left).toBe((width - 1280) / 2);
+    expect(onDocs.left).toBe(onHome.left);
+    expect([onHome.frameStart, onDocs.frameStart]).toEqual([onHome.left, onHome.left]);
+    expect(onDocs.lineHeights.filter((h) => !h.endsWith(': normal'))).toEqual([]);
+    expect(onDocs.lineHeights).toEqual(onHome.lineHeights);
+    await home.context().close();
+  });
+}
+
+test('the header keeps its 16 px side padding at 390 px', async () => {
+  const page = await openHome(390);
+  expect(await page.locator('.site-header').evaluate((el) => getComputedStyle(el).paddingInline)).toBe('16px');
+  await page.context().close();
+});
+
 for (const width of [1440, 390]) {
   test(`every line of each command panel fits inside the panel at ${width} px`, async () => {
     const page = await openHome(width);
