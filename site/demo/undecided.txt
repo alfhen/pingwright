@@ -1,0 +1,26 @@
+Hits
+  ga4: page_view x6, user_engagement x1
+  sgtm: (no event) x2
+  meta: PageView x2
+  google-ads: page_view x2, view_item x1
+Consent epochs
+  undecided (to end)
+Flags
+  unknownDestination: 127.0.0.1:58415 x2 (/unknown-pixel)
+  sandboxPageUrl: ga4 x2 (/web-pixels@0.0.0-fixture/sandbox/modern/)
+Expectations
+  FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}
+       Expected no matching hits before consent, found 5 matching hits (5 before narrowing).
+       evidence: hit_01M6FCNYTJDFX1KXE2Z0TZ1FMT, hit_01M6FCNYTKDX1CFFZ473FNE5Q2, hit_01M6FCNYTKDX1CFFZ473FNE5Q6, hit_01M6FCNYTMEH72V03A6APJW7CS, hit_01M6FCNYTMEH72V03A6APJW7CT
+  PASS must: {"vendor":"ga4","event":"page_view","count":">=2"}
+       evidence: hit_01M6FCNYTG1PEC8EFA5QQ5K7XZ, hit_01M6FCNYTJDFX1KXE2Z0TZ1FMS, hit_01M6FCNYTJDFX1KXE2Z0TZ1FMV, hit_01M6FCNYTKDX1CFFZ473FNE5Q3, hit_01M6FCNYTKDX1CFFZ473FNE5Q5 and 1 more
+  PASS builtin: unknownDestination
+       evidence: flg_01M6FCNYTNA4W3Y98NFTEA1AJ2, flg_01M6FCNYTP5M46TAJDQTHTVV8W
+  WARN builtin: sandboxPageUrl
+       Expected no hit to carry a sandbox URL as its page, found 2: http://localhost:58419/web-pixels@0.0.0-fixture/sandbox/modern/.
+       evidence: hit_01M6FCNYTJDFX1KXE2Z0TZ1FMS, hit_01M6FCNYTKDX1CFFZ473FNE5Q5
+  PASS builtin: deniedIdentifiers
+  PASS builtin: earlyIdentifiers
+  PASS builtin: possibleRealData
+Result: fail (1 of 7) with 1 warning
+Record: runs/run_01M6FCNPGJA5KY32Z0MNA50MV1.jsonl

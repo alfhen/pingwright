@@ -1,0 +1,13 @@
+---
+import { root } from 'astro:config/server';
+import { fileURLToPath } from 'node:url';
+import AgentDemoIsland from '../demo/AgentDemo.tsx';
+import { loadDemo } from '../../lib/demo-data.ts';
+import '../demo/agent-demo.css';
+
+const data = await loadDemo(fileURLToPath(new URL('demo/', root)));
+---
+
+<section class="mx-auto max-w-[1280px] px-7 pt-3" aria-label="Agent demo">
+  <AgentDemoIsland client:load data={data} />
+</section>

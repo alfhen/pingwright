@@ -1,0 +1,12 @@
+start: /
+steps:
+  - wait: 2s
+  - consent: none
+  - visit: /products/fake-tee
+  - wait: 3s
+expect:
+  must:
+    - { vendor: ga4, event: page_view, count: ">=2" }
+  mustNot:
+    - { vendor: [meta, google-ads], before: consent }
+options: { allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }
