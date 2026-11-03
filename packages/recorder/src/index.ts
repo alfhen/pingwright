@@ -14,4 +14,6 @@ export * from './handoff-overlay.ts';
 export * from './payment.ts';
 export * from './server-container/ca.ts';
 export * from './server-container/forward-list.ts';
+export * from './server-container/image.ts';
+export * from './server-container/runner.ts';
 export * from './server-container/proxy.ts';

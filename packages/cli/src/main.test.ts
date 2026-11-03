@@ -29,3 +29,14 @@ test('--help still prints the full text', async () => {
   expect(r.code).toBe(0);
   expect(r.stdout).toContain('tagreeve install-browser');
 });
+
+test('--help lists server-container build', async () => {
+  const r = await runMain(['--help']);
+  expect(r.stdout).toContain('tagreeve server-container build');
+});
+
+test('server-container without a subcommand is a short usage error', async () => {
+  const r = await runMain(['server-container']);
+  expect(r.code).toBe(2);
+  expect(r.stderr).toContain('tagreeve server-container --help');
+});

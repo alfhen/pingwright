@@ -191,3 +191,13 @@ For a stub-mode run, `/pwcookie` is a Stape loader request, so stub mode answers
 | `/meta-early-ids` | `?ids=fbp` | Loads neither `site.js` nor `banner.js`: no banner and no Consent Mode default. Sends one Meta `Purchase` image hit for pixel `100000000000001` at once, with `ud[em]` (the SHA-256 of the fake fixture email). `ids=fbp` sends `fbp` instead of `ud[em]`. | None. |
 
 `/unload-gap` takes a `mode` switch that the gap frame reads. With a `mode`, the server writes it into the iframe `src` and leaves out the page's inline script. Without `mode` the page is as described above. `?mode=custom`: 1.8 s after load the frame pushes `custom_add`, sends a `/data` hit named `custom_add` and a GA4 `/g/collect` hit named `custom_add_ga` to `https://sgtm.tagreeve.invalid`, and sends nothing in `pagehide`. `?mode=close`: the frame pushes `add_to_cart` and holds the hit until `pagehide`. The scenario does not navigate, so the hit goes out only when the page closes.
+
+## Stand-in server container
+
+`standInContainerPath` (from `@tagreeve/fixture-site`) is the absolute path of `src/stand-in-container.ts`, an executable Node script that stands in for the server container image. A test sets `TAGREEVE_TEST_SERVER_CONTAINER_CMD` to it. The runner then starts it in place of `docker run`, with `PORT`, `HTTP_PROXY` and `NODE_EXTRA_CA_CERTS`. It needs no Docker and no network.
+
+- It listens on `127.0.0.1:$PORT`. `GET /healthz` answers `200` once its two start-up fetches are done.
+- At start it fetches `https://www.googletagmanager.com/server.js?id=GTM-PWTEST1&gtm_auth=pw-fixture-auth` and `/s/gtag/destination` through the proxy, and logs the first URL in full to stderr.
+- A `POST` to `/g/collect`, `/pixel` or `/capi` is answered `200`. Then it makes three vendor calls: a GA4 `POST` to `www.google-analytics.com/g/collect`, a Google Ads `GET` to `www.googleadservices.com/pagead/conversion/000000001/`, and a Conversions API `POST` to `graph.facebook.com/v21.0/100000000000001/events?access_token=pw-fixture-access-token`. The event name, event ID and email come from the query or a JSON or form body. The email is hashed with SHA-256 unless it already is a hash.
+- `delayMs` (0 to 5000, default 0) on the triggering request delays the vendor calls by that long after the answer.
+- Like the real image it reads only the upper-case `HTTP_PROXY`, tunnels with `CONNECT`, and trusts only the CA in `NODE_EXTRA_CA_CERTS`. It never opens a direct connection: with no proxy it sends nothing.

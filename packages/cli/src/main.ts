@@ -1,3 +1,4 @@
+import { buildImage } from '@tagreeve/recorder';
 import { parseCli, RUN_USAGE, UsageError, USAGE, usageHint } from './args.ts';
 import { baselineCommand } from './baseline.ts';
 import { diffCommand } from './diff.ts';
@@ -11,6 +12,24 @@ const processIo: Io = {
   stdout: (text) => void process.stdout.write(text),
   stderr: (text) => void process.stderr.write(text),
 };
+
+async function buildCommand(io: Io): Promise<number> {
+  const result = await buildImage({ version: readVersion() });
+  switch (result.status) {
+    case 'not-needed':
+      io.stdout(`No build is needed on this machine. Pull Google's image and use it as it is:\n  ${result.image}\n`);
+      return 0;
+    case 'built':
+      io.stdout(`Built ${result.tag}\nImage ID: ${result.imageId}\n`);
+      return 0;
+    case 'dockerMissing':
+      io.stderr('Docker is needed for server-container build. Install it from https://docs.docker.com/get-docker/\n');
+      return 2;
+    case 'failed':
+      io.stderr(`The image build failed.\n${result.message}\n`);
+      return 2;
+  }
+}
 
 /** Returns the exit code: 0 pass, 1 failed expectations, 2 usage or run error. */
 export async function main(argv: string[], io: Io = processIo): Promise<number> {
@@ -33,6 +52,8 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         return await reportCommand(command, io);
       case 'suite':
         return await suiteCommand(command, io);
+      case 'server-container':
+        return await buildCommand(io);
       case 'run':
         return await runCommand(command, io);
     }

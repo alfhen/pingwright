@@ -17,6 +17,8 @@
 
 - Requests to `cdn.shopify.com` and `monorail-edge.shopifysvc.com` are flagged `platformHost` instead of `unknownDestination`, so they no longer fail the `unknownDestination` check. They are still listed in the summary and the report. Set `options.platformHosts: false` to restore the old behaviour.
 
+- Adds `tagreeve server-container build`, which builds the Docker image for the coming server container feature (arm64 builds locally from Google's image, pinned by digest; amd64 needs no build). Adds the runner, the per-run `--internal` network, the relay and egress probe, the owner-labelled sweep and a stand-in container for tests. Tagreeve never pushes an image. Part of #358.
+
 <!-- K02 -->
 
 <!-- K03 -->
