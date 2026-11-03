@@ -27,13 +27,16 @@ describe('intro data', () => {
 
   test('the first four notifications stack at the top right and the rest scatter', () => {
     const placed = placeNotifications(13);
+    const x = 'clamp(calc(4.5% + 24px), calc(100% - 380px), calc(97% - 380px))';
     expect(placed.slice(0, 4).map((n) => [n.x, n.y, n.rotate])).toEqual([
-      ['calc(100% - 340px)', '42px', '0deg'],
-      ['calc(100% - 340px)', '130px', '0deg'],
-      ['calc(100% - 340px)', '218px', '0deg'],
-      ['calc(100% - 340px)', '306px', '0deg'],
+      [x, 'calc(max(42px, 3.2% + 36px) + 0px)', '0deg'],
+      [x, 'calc(max(42px, 3.2% + 36px) + 88px)', '0deg'],
+      [x, 'calc(max(42px, 3.2% + 36px) + 176px)', '0deg'],
+      [x, 'calc(max(42px, 3.2% + 36px) + 264px)', '0deg'],
     ]);
-    expect(placed.slice(4).map((n) => [n.x, n.y, n.rotate])).toEqual(SCATTER.slice(0, 9));
+    expect(placed.slice(4).map((n) => [n.x, n.y, n.rotate])).toEqual(
+      SCATTER.slice(0, 9).map(([sx, sy, r]) => [`clamp(calc(4.5% + 24px), ${sx}, calc(97% - 380px))`, `clamp(calc(3.2% + 36px), ${sy}, calc(95.5% - 150px))`, r]),
+    );
     expect(placeNotifications(2)).toHaveLength(2);
   });
 

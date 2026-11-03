@@ -80,11 +80,20 @@ export interface PlacedNotification extends Notification {
 }
 
 /** The first four stack at the top right, the rest scatter. */
+/** Card box width: 330px content plus 13px padding each side. */
+const CARD_WIDTH = 356;
+/**
+ * The wasted stage scales the wallpaper by 1.08 and tilts it 1deg around (60%, 40%).
+ * These bounds keep a 12px margin at the end of that zoom, with room for a card's own rotation.
+ */
+const clampX = (x: string): string => `clamp(calc(4.5% + 24px), ${x}, calc(97% - ${CARD_WIDTH + 24}px))`;
+const clampY = (y: string): string => `clamp(calc(3.2% + 36px), ${y}, calc(95.5% - 150px))`;
+
 export function placeNotifications(shown: number): PlacedNotification[] {
   return NOTIFICATIONS.slice(0, shown).map((n, i) => {
-    if (i < 4) return { ...n, x: 'calc(100% - 340px)', y: `${42 + i * 88}px`, rotate: '0deg' };
+    if (i < 4) return { ...n, x: clampX(`calc(100% - ${CARD_WIDTH + 24}px)`), y: `calc(max(42px, 3.2% + 36px) + ${i * 88}px)`, rotate: '0deg' };
     const [x, y, rotate] = SCATTER[(i - 4) % SCATTER.length]!;
-    return { ...n, x, y, rotate };
+    return { ...n, x: clampX(x), y: clampY(y), rotate };
   });
 }
 

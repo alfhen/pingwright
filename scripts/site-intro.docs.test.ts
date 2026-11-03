@@ -275,6 +275,40 @@ test('the run from Reply to the end of fly plays every stage, then unmounts the 
   expect(outside).toEqual([]);
 });
 
+for (const viewport of [
+  { width: 860, height: 700 },
+  { width: 1024, height: 768 },
+  { width: 1440, height: 900 },
+]) {
+  test(`all 13 notifications stay inside the screen at ${viewport.width}x${viewport.height}`, async () => {
+    const context = await firstVisitContext({ viewport });
+    const page = await context.newPage();
+    await openHome(page);
+    await page.getByRole('button', { name: 'Reply: "Sure, I\'ll take a look"' }).click();
+    await expect.poll(() => stage(page), { timeout: 10_000 }).toBe('wasted');
+    expect(await page.locator('[data-intro-notification]').count()).toBe(13);
+    const outside: string[] = [];
+    while ((await stage(page)) === 'wasted') {
+      outside.push(
+        ...(await page.evaluate(() =>
+          [...document.querySelectorAll('[data-intro-notification]')].flatMap((el, i) => {
+            const r = el.getBoundingClientRect();
+            const inside = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+            return inside ? [] : [`#${i}: ${[r.left, r.top, r.right, r.bottom].map(Math.round).join(',')} in ${innerWidth}x${innerHeight}`];
+          }),
+        )),
+        ...(await page.evaluate(() => {
+          const cards = [...document.querySelectorAll('[data-intro-notification]')].slice(0, 4).map((el) => el.getBoundingClientRect());
+          return cards.flatMap((r, i) => (i > 0 && r.top < cards[i - 1]!.bottom ? [`stack card ${i} overlaps card ${i - 1} by ${Math.round(cards[i - 1]!.bottom - r.top)}px`] : []));
+        })),
+      );
+      await page.waitForTimeout(100);
+    }
+    expect(outside).toEqual([]);
+    await context.close();
+  });
+}
+
 test('the page under the intro is complete HTML, and the intro adds nothing without JavaScript', async () => {
   const html = readFileSync(join(dist, 'index.html'), 'utf8');
   const island = /<astro-island[^>]*component-url="[^"]*Intro[^"]*"[^>]*>([\s\S]*?)<\/astro-island>/.exec(html);
