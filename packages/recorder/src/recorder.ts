@@ -34,6 +34,8 @@ import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type
 import { decodeRequest, isCollectionEndpoint, trackerList, type TrackerEntry } from '@tagreeve/decoders';
 import {
   chromium,
+  request as playwrightRequest,
+  type APIRequestContext,
   type APIResponse,
   type Browser,
   type BrowserContext,
@@ -217,6 +219,7 @@ export class Recorder {
   private readonly navigationWindows = new NavigationWindows<PwRequest>();
   private session: ServerContainerSession | undefined;
   private sessionStopped: Promise<void> | undefined;
+  private containerClient: Promise<APIRequestContext> | undefined;
   private removeSignalHandlers: (() => void) | undefined;
   /** Why the container did not start. Set by `launch`; `recordScenario` ends the run when it is. */
   containerFailure: { errorClass: ServerContainerErrorClass; message: string } | undefined;
@@ -396,7 +399,10 @@ export class Recorder {
   private stopSession(): Promise<void> {
     this.removeSignalHandlers?.();
     this.removeSignalHandlers = undefined;
-    this.sessionStopped ??= this.session?.stop() ?? Promise.resolve();
+    this.sessionStopped ??= (async () => {
+      await this.containerClient?.then((client) => client.dispose()).catch(() => undefined);
+      await this.session?.stop();
+    })();
     return this.sessionStopped;
   }
 
@@ -579,16 +585,23 @@ export class Recorder {
   private async routeToContainer(route: Route, record: Request, origin: string): Promise<void> {
     const original = route.request();
     const live = new URL(original.url());
-    const { host: _host, cookie: _cookie, ...rest } = original.headers();
+    // A separate client, so the container's loopback address never reads or writes the context cookie jar.
+    // allHeaders() holds the Cookie header Chromium would send, so SameSite and credentials mode already apply.
+    // The client falls back to its own jar when the header is absent, so an empty one is sent instead.
+    const { host: _host, ...sent } = await original.allHeaders();
     void _host;
-    void _cookie;
-    // Request.headers() has no Cookie, and the fetch would look the jar up for the container's loopback address.
-    const cookies = await this.context.cookies(original.url());
-    const headers = cookies?.length ? { ...rest, cookie: cookies.map((c) => `${c.name}=${c.value}`).join('; ') } : rest;
+    const headers = { cookie: '', ...sent };
     record.outcome = 'stubbed';
     this.stubRecorded.add(record.id);
     try {
-      const response = await route.fetch({ url: `${origin}${live.pathname}${live.search}`, headers, maxRedirects: 0 });
+      this.containerClient ??= playwrightRequest.newContext();
+      const client = await this.containerClient;
+      const response = await client.fetch(`${origin}${live.pathname}${live.search}`, {
+        method: original.method(),
+        headers,
+        data: original.postDataBuffer() ?? undefined,
+        maxRedirects: 0,
+      });
       this.recordApiResponse(record, response);
       await route.fulfill({ response });
     } catch (error) {

@@ -212,12 +212,51 @@ http.createServer((req, res) => {
     try {
       await recorder.context.addCookies([{ name: 'FPID', value: 'pw-fixture-fpid', url: 'http://localhost/' }]);
       const page = await recorder.visit(`${site.url}/`);
-      await page.evaluate(() => fetch('http://localhost:8080/g/collect?v=2', { mode: 'no-cors' }).catch(() => undefined));
+      await page.evaluate(() => fetch('http://localhost:8080/g/collect?v=2', { mode: 'no-cors', credentials: 'include' }).catch(() => undefined));
       await recorder.wait(300);
     } finally {
       await recorder.close();
     }
     expect((await readFile(seen, 'utf8')).trim().split('\n')).toEqual(['FPID=pw-fixture-fpid']);
+  }, 60_000);
+
+  test('the container never touches the context cookie jar and gets no Cookie header after the server-host cookies are cleared', async () => {
+    const seen = join(outDir, 'jar.log');
+    process.env[SEAM] = await standIn(
+      'jar-stand-in',
+      `import fs from 'node:fs';
+import http from 'node:http';
+http.createServer((req, res) => {
+  if (req.url !== '/healthz') {
+    fs.appendFileSync(${JSON.stringify(seen)}, '[' + String(req.headers.cookie ?? '') + ']' + '\\n');
+    res.setHeader('set-cookie', 'FPID=pw-fixture-fpid; Path=/');
+  }
+  res.end('ok');
+}).listen(Number(process.env.PORT), '127.0.0.1');`,
+    );
+    process.env[CONFIG_ENV] = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
+    const recorder = await launchRecorder({
+      networkMode: 'server',
+      serverHosts: ['localhost'],
+      outDir,
+      site: site.url,
+      serverContainer: { configSource: { kind: 'env' }, image: 'unused' },
+    });
+    let jar: string[] = [];
+    try {
+      const page = await recorder.visit(`${site.url}/`);
+      const call = () => page.evaluate(() => fetch('http://localhost:8080/g/collect?v=2', { mode: 'no-cors', credentials: 'include' }).catch(() => undefined));
+      await call();
+      await recorder.wait(300);
+      await recorder.context.clearCookies({ domain: 'localhost' });
+      await call();
+      await recorder.wait(300);
+      jar = (await recorder.context.cookies()).map((c) => c.domain);
+    } finally {
+      await recorder.close();
+    }
+    expect(jar).not.toContain('127.0.0.1');
+    expect((await readFile(seen, 'utf8')).trim().split('\n')).toEqual(['[]', '[]']);
   }, 60_000);
 
   test('a container that ends during the run is recorded with its error and the serverContainerFailed flag', async () => {
