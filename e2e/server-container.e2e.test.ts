@@ -165,6 +165,19 @@ describe('without --server-container', () => {
   }, 60_000);
 });
 
+describe('a container that ends during the run', () => {
+  test('exits 2 with the record path, the error class and the flag, and no config', async () => {
+    const exiting = join(outDir, 'exiting-stand-in');
+    await writeFile(exiting, `#!${process.execPath}\nimport http from 'node:http';\nhttp.createServer((req, res) => res.end('ok')).listen(Number(process.env.PORT), '127.0.0.1');\nsetTimeout(() => process.exit(0), 800);\n`);
+    await chmod(exiting, 0o755);
+    const r = await run('server-container', ['--server-container'], { ...env, TAGREEVE_TEST_SERVER_CONTAINER_CMD: exiting });
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('Server container: ');
+    expect(r.stderr).toContain('Record: ');
+    expectNoSecrets(r.stdout + r.stderr);
+  }, 60_000);
+});
+
 describe('--server-container checks', () => {
   test('a scenario that is not in server mode exits 2 and starts no browser', async () => {
     const r = await run('accept', ['--server-container'], env);

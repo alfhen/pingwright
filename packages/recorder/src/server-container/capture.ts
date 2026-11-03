@@ -138,6 +138,7 @@ export interface SessionOptions {
   readonly onCapture: (request: Request, response: Response) => void;
   readonly env?: NodeJS.ProcessEnv;
   readonly tempRoot?: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface ServerContainerSession {
@@ -200,6 +201,7 @@ export async function startServerContainerSession(options: SessionOptions): Prom
       image: options.image,
       serverHosts: options.serverHosts,
       env,
+      ...(options.signal && { signal: options.signal }),
     });
     const image = standIn ? STAND_IN_IMAGE : await describeImage(options.image, env);
     const startedAt = nodeNow();

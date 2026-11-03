@@ -2,7 +2,7 @@ import { createIdentity, type Request } from '@tagreeve/core';
 import { parseScenario } from '@tagreeve/expect';
 import { afterEach, describe, expect, test } from 'vitest';
 import { TEST_LOOPBACK_IS_HOSTED_ENV, isGuardExemptHost, isLoopbackHost, isSensitiveField } from './guard.ts';
-import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath } from './steps.ts';
+import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath, ServerContainerFailure } from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
   autocomplete: null,
@@ -400,5 +400,54 @@ describe('select and locator steps on a fake page', () => {
       (e: Error) => e.message,
     );
     expect(inHandoff).toBe('step "click-1": locator.click: Timeout 10ms exceeded.');
+  });
+});
+
+describe('a server container that did not run', () => {
+  const written = { path: 'run.jsonl', records: {} };
+  const fake = (containerFailure: unknown, afterClose?: unknown) => {
+    const recorder: Record<string, unknown> = {
+      site: 'http://localhost',
+      containerFailure,
+      setIdentity: () => undefined,
+      beginStep: () => ({}),
+      endStep: () => undefined,
+      checkpoint: () => Promise.resolve(),
+      close: () => {
+        if (afterClose) recorder.containerFailure = afterClose;
+        return Promise.resolve(written);
+      },
+      context: { pages: () => [{ goto: () => Promise.resolve() }] },
+    };
+    return recorder;
+  };
+  const options = (recorder: unknown) => ({
+    networkMode: 'server' as const,
+    outDir: 'unused',
+    site: 'http://localhost',
+    parsed: parseScenario('start: /\n'),
+    launch: (() => Promise.resolve(recorder)) as never,
+  });
+
+  test('a failure at launch throws ServerContainerFailure with the written run and plays no step', async () => {
+    const recorder = fake({ errorClass: 'imageMissing', message: 'The image is not available.' });
+    recorder.beginStep = () => {
+      throw new Error('played a step');
+    };
+    const error = await recordScenario(options(recorder)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServerContainerFailure);
+    expect((error as ServerContainerFailure).message).toBe('The image is not available.');
+    expect((error as ServerContainerFailure).run).toBe(written);
+  });
+
+  test('a container that ended during the run throws ServerContainerFailure after the run is written', async () => {
+    const recorder = fake(undefined, { errorClass: 'exited', message: 'The server container ended during the run.' });
+    const error = await recordScenario(options(recorder)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServerContainerFailure);
+    expect((error as ServerContainerFailure).run).toBe(written);
+  });
+
+  test('a run whose container stayed up returns the result', async () => {
+    await expect(recordScenario(options(fake(undefined)))).resolves.toBe(written);
   });
 });

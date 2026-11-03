@@ -135,7 +135,7 @@ Options for run:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
-  --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/guide/server-container.md
+  --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
   --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
   --baseline <file>          Compare the hits with a baseline file and fail on drift
   --var <k=v>                Scenario variable (repeatable)
@@ -159,7 +159,7 @@ Options:
   --autoconsent-rules <file> Extra autoconsent rules (repeatable)
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
-  --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/guide/server-container.md
+  --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
   --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
   --baseline <file>          Compare the hits with a baseline file made by "tagreeve baseline save" and fail on drift
   --var <k=v>                Scenario variable (repeatable)

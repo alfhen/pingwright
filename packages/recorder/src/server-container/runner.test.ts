@@ -208,6 +208,19 @@ describe('startServerContainer', () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 
+  it('removes the container, the relay and the network when the start is aborted while waiting for the container', async () => {
+    const controller = new AbortController();
+    const watch = setInterval(() => {
+      if (runCalls(fake.calls()).length >= 3) controller.abort();
+    }, 20);
+    const error = (await startServerContainer(options({}, { signal: controller.signal, readyTimeoutMs: 20_000 })).catch((e: unknown) => e)) as ServerContainerError;
+    clearInterval(watch);
+    expect(error).toBeInstanceOf(ServerContainerError);
+    expect(error.message).toContain('cancelled');
+    const removed = fake.calls().filter((call) => call.argv[0] === 'rm' || (call.argv[0] === 'network' && call.argv[1] === 'rm'));
+    expect(removed).toHaveLength(3);
+  });
+
   it('sweeps stale objects before it creates anything', async () => {
     await startHealth();
     const container = await startServerContainer(options());

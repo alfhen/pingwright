@@ -1,13 +1,9 @@
 import { hashEmail, type Hit, type Identity, type Request } from '@tagreeve/core';
-import { hostMatches } from '@tagreeve/expect';
+import { isServerHostUrl } from '../stub.ts';
 
 /** A shared value shorter than this proves nothing. */
 const MIN_VALUE_LENGTH = 8;
 const CLIENT_ID_NAMES = new Set(['cid', 'client_id', 'clientid', 'fbp']);
-
-function bare(host: string): string {
-  return host.replace(/^\[|\]$/g, '');
-}
 
 function eventIdOf(hit: Hit): string | undefined {
   return hit.params.eventId ?? hit.params.eid ?? hit.params.event_id;
@@ -91,17 +87,9 @@ function sharedKind(server: Facts, browser: Facts): 'eventId' | 'clientId' | 'id
  */
 export function linkServerHits({ hits, requests, serverHosts, identity }: LinkInput): Hit[] {
   const byId = new Map(requests.map((r) => [r.id, r]));
-  const patterns = serverHosts.map(bare);
   const facts: Facts[] = hits.map((hit) => {
     const request = byId.get(hit.requestId);
-    let onServerHost = false;
-    if (request) {
-      try {
-        onServerHost = hostMatches(bare(new URL(request.url).hostname), patterns);
-      } catch {
-        onServerHost = false;
-      }
-    }
+    const onServerHost = request ? isServerHostUrl(request.url, serverHosts) : false;
     return {
       hit,
       request,

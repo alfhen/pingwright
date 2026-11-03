@@ -137,6 +137,8 @@ export interface StartOptions {
   readonly pollMs?: number;
   /** Picks the loopback port the browser side is published on. */
   readonly pickPort?: () => Promise<number>;
+  /** Aborting stops the start at its next step and removes what it started. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ServerContainer {
@@ -316,9 +318,14 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     for (const cleanup of cleanups.reverse()) await cleanup().catch(() => undefined);
   };
 
+  const checkAborted = (): void => {
+    if (options.signal?.aborted) throw new ServerContainerError('notReady', 'The start was cancelled.');
+  };
+
   async function waitReady(origin: string, follower: LogFollower): Promise<void> {
     const deadline = Date.now() + readyTimeoutMs;
     for (;;) {
+      checkAborted();
       if (await probeHealth(origin)) return;
       if (follower.ended()) throw new ServerContainerError('exited', `The server container exited before it was ready.${tail()}`);
       if (Date.now() >= deadline) throw new ServerContainerError('notReady', `The server container was not ready after ${Math.round(readyTimeoutMs / 1000)} s.${tail()}`);
@@ -359,6 +366,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     const created = await docker(['network', 'create', '--internal', ...labels, names.network]);
     if (created.code !== 0) throw new ServerContainerError('notReady', 'The internal Docker network could not be created.');
     cleanups.push(async () => void (await docker(['network', 'rm', names.network])));
+    checkAborted();
 
     let probeAddress: string;
     try {
@@ -369,6 +377,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     if (!net.isIPv4(probeAddress)) throw new ServerContainerError('notReady', `${PROBE_HOST} did not resolve to an IPv4 address. The container was not started.`);
 
     const probe = await docker(['run', '--rm', '--name', names.probe, '--network', names.network, ...labels, '--entrypoint', NODE_BIN, options.image, '-e', PROBE_SCRIPT, probeAddress], {}, 60_000);
+    checkAborted();
     let outcome: { connect?: unknown; dns?: unknown } | undefined;
     try {
       outcome = JSON.parse(probe.stdout.trim().split('\n').pop() ?? '') as { connect?: unknown; dns?: unknown };
@@ -389,6 +398,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     ]);
     if (relay.code !== 0) throw new ServerContainerError('notReady', 'The relay container could not be started.');
     cleanups.push(async () => void (await docker(['rm', '-f', names.relay])));
+    checkAborted();
     const joined = await docker(['network', 'connect', names.network, names.relay]);
     if (joined.code !== 0) throw new ServerContainerError('notReady', 'The relay container could not join the internal network.');
 
@@ -404,6 +414,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     );
     if (started.code !== 0) throw new ServerContainerError('notReady', `The server container could not be started.\n${started.stderr.split('\n').map(scrub).slice(-LOG_LINES).join('\n')}`);
     cleanups.push(async () => void (await docker(['rm', '-f', names.container])));
+    checkAborted();
 
     const child = spawn('docker', ['logs', '--follow', names.container], { shell: false, stdio: ['ignore', 'pipe', 'pipe'], env: baseEnv });
     const follower = followOutput(child, push);

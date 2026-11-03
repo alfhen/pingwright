@@ -359,28 +359,37 @@ export class Recorder {
   private async startContainer(): Promise<void> {
     const { serverContainer } = this.options;
     if (!serverContainer) return;
+    const abort = new AbortController();
+    const starting = startServerContainerSession({
+      configSource: serverContainer.configSource,
+      image: serverContainer.image,
+      serverHosts: this.options.serverHosts ?? [],
+      runId: this.runId,
+      signal: abort.signal,
+      currentStepId: () => this.currentStepId,
+      onCapture: (request, response) => {
+        this.extraRequests.push(request);
+        this.responses.push(response);
+      },
+    });
+    // Registered before the start, which is the slowest part: a signal then cancels it and removes what it started.
+    this.removeSignalHandlers = onTerminate(async () => {
+      abort.abort();
+      await this.browser.close().catch(() => undefined);
+      const started = await starting.catch(() => undefined);
+      if (started) this.session ??= started;
+      await this.stopSession();
+    });
     try {
-      this.session = await startServerContainerSession({
-        configSource: serverContainer.configSource,
-        image: serverContainer.image,
-        serverHosts: this.options.serverHosts ?? [],
-        runId: this.runId,
-        currentStepId: () => this.currentStepId,
-        onCapture: (request, response) => {
-          this.extraRequests.push(request);
-          this.responses.push(response);
-        },
-      });
+      this.session = await starting;
     } catch (error) {
+      this.removeSignalHandlers();
+      this.removeSignalHandlers = undefined;
       if (!(error instanceof ServerContainerError)) throw error;
       this.containerFailure = { errorClass: error.errorClass, message: error.message };
       return;
     }
     if (this.session.standIn) this.run.testServerContainer = true;
-    this.removeSignalHandlers = onTerminate(async () => {
-      await this.browser.close().catch(() => undefined);
-      await this.stopSession();
-    });
   }
 
   /** Stops the container, the proxy and the CA once. Safe to call from `close` and from a signal. */
@@ -570,8 +579,12 @@ export class Recorder {
   private async routeToContainer(route: Route, record: Request, origin: string): Promise<void> {
     const original = route.request();
     const live = new URL(original.url());
-    const { host: _host, ...headers } = original.headers();
+    const { host: _host, cookie: _cookie, ...rest } = original.headers();
     void _host;
+    void _cookie;
+    // Request.headers() has no Cookie, and the fetch would look the jar up for the container's loopback address.
+    const cookies = await this.context.cookies(original.url());
+    const headers = cookies?.length ? { ...rest, cookie: cookies.map((c) => `${c.name}=${c.value}`).join('; ') } : rest;
     record.outcome = 'stubbed';
     this.stubRecorded.add(record.id);
     try {
