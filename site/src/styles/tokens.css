@@ -43,6 +43,11 @@
   --code-bg: #060807;
   --code-ink: #d9e2df;
   --code-comment: #6e7b78;
+  --term-mint: oklch(0.82 0.12 175);
+  --term-fail: oklch(0.72 0.16 25);
+  --term-warn: oklch(0.84 0.13 85);
+  --term-onmint: #06201c;
+  --term-muted: #8a9794;
 }
 
 @theme inline {
@@ -68,4 +73,9 @@
   --color-code: var(--code-bg);
   --color-code-ink: var(--code-ink);
   --color-code-comment: var(--code-comment);
+  --color-term-mint: var(--term-mint);
+  --color-term-fail: var(--term-fail);
+  --color-term-warn: var(--term-warn);
+  --color-term-onmint: var(--term-onmint);
+  --color-term-muted: var(--term-muted);
 }

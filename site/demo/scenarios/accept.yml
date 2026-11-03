@@ -1,0 +1,13 @@
+start: /
+steps:
+  - wait: 2s
+  - consent: accept
+  - visit: /products/fake-tee
+  - addToCart: "#add-to-cart"
+  - wait: 3s
+expect:
+  must:
+    - { vendor: meta, event: AddToCart, in: epoch(granted) }
+  mustNot:
+    - { vendor: [meta, google-ads], before: consent }
+options: { allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }

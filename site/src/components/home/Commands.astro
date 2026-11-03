@@ -1,0 +1,69 @@
+---
+import { root } from 'astro:config/server';
+import { fileURLToPath } from 'node:url';
+import { loadDemo, type Tone } from '../../lib/demo-data.ts';
+
+const { commands } = await loadDemo(fileURLToPath(new URL('demo/', root)));
+const toneClass: Record<Tone, string> = {
+  fg: 'text-code-ink',
+  dim: 'text-code-comment',
+  faint: 'text-code-comment',
+  mint: 'text-term-mint',
+  fail: 'text-term-fail',
+  warn: 'text-term-warn',
+};
+---
+
+<section class="mx-auto grid max-w-[1280px] grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-start gap-11 px-7 pt-[110px] pb-10" data-commands>
+  <div class="flex flex-col gap-4">
+    <span class="font-mono text-xs font-medium text-mint">// for people, CI and agents</span>
+    <h2 class="m-0 text-5xl leading-none font-semibold tracking-[-0.045em] text-balance">Test before you publish. Diff after.</h2>
+    <p class="m-0 text-[17px] leading-[1.55] text-pretty text-dim">
+      Run a scenario against your live container and an unpublished GTM workspace, then compare per consent epoch, vendor and event. Run a whole folder in CI.
+    </p>
+    <div class="mt-1.5 flex flex-col gap-0.5" role="group" aria-label="Commands">
+      {
+        commands.map((c, i) => (
+          <button
+            type="button"
+            data-command={c.key}
+            aria-pressed={i === 0 ? 'true' : 'false'}
+            aria-controls={`command-${c.key}`}
+            class="flex cursor-pointer flex-col gap-[3px] rounded-[10px] border border-transparent bg-transparent px-4 py-3.5 text-left font-sans text-fg aria-pressed:border-rule aria-pressed:bg-panel"
+          >
+            <span class="font-mono text-sm font-semibold">{c.name}</span>
+            <span class="text-sm text-dim">{c.desc}</span>
+          </button>
+        ))
+      }
+    </div>
+  </div>
+  {
+    commands.map((c, i) => (
+      <div
+        id={`command-${c.key}`}
+        data-command-panel={c.key}
+        hidden={i !== 0}
+        tabindex="0"
+        role="region"
+        aria-label={`${c.name} output`}
+        class="m-0 max-h-[640px] min-h-[380px] overflow-auto rounded-[14px] border border-rule bg-code px-[22px] py-5 font-mono text-[13px] leading-[1.7] whitespace-pre text-code-ink"
+      >
+        {c.lines.map((l) => <div class={toneClass[l.tone]}>{l.text || ' '}</div>)}
+      </div>
+    ))
+  }
+</section>
+
+<script>
+  for (const section of document.querySelectorAll<HTMLElement>('[data-commands]')) {
+    const buttons = section.querySelectorAll<HTMLButtonElement>('button[data-command]');
+    const panels = section.querySelectorAll<HTMLElement>('[data-command-panel]');
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        for (const b of buttons) b.setAttribute('aria-pressed', String(b === button));
+        for (const p of panels) p.hidden = p.dataset.commandPanel !== button.dataset.command;
+      });
+    }
+  }
+</script>

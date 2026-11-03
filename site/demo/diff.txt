@@ -1,0 +1,84 @@
+Diff runs/run_01M6FCP6JP11GQV3GDB8EJR9K0.jsonl -> runs/run_01M6FCNZFK6EMZQGJ03ZCPAYSX.jsonl
+
+Epoch denied
+  ga4
+    page_view
+      removed (step "visit-3"): hit_01M6FCPCWXCMS1ZWP6YR9KYMRS
+      removed (step "visit-3"): hit_01M6FCPCWXCMS1ZWP6YR9KYMRV
+      removed (step "visit-3"): hit_01M6FCPCWXCMS1ZWP6YR9KYMRW
+      count 3 -> 0 (pairing by order)
+    user_engagement
+      removed (step "visit-3"): hit_01M6FCPCWZC1RPH2MH8B93TJKP
+      count 1 -> 0 (pairing by order)
+  google-ads
+    add_to_cart
+      removed (step "addToCart-4"): hit_01M6FCPCWZC1RPH2MH8B93TJKN
+      count 1 -> 0 (pairing by order)
+    page_view
+      removed (step "visit-3"): hit_01M6FCPCWY43XTZNAAXRG3HAPE
+      count 1 -> 0 (pairing by order)
+    source_update
+      removed (step "visit-3"): hit_01M6FCPCWY43XTZNAAXRG3HAPG
+      count 1 -> 0 (pairing by order)
+    view_item
+      removed (step "visit-3"): hit_01M6FCPCWY43XTZNAAXRG3HAPF
+      count 1 -> 0 (pairing by order)
+  meta
+    AddToCart
+      removed (step "addToCart-4"): hit_01M6FCPCWY43XTZNAAXRG3HAPH
+      count 1 -> 0 (pairing by order)
+    PageView
+      removed (step "visit-3"): hit_01M6FCPCWXCMS1ZWP6YR9KYMRX
+      count 1 -> 0 (pairing by order)
+  sgtm
+    (no event)
+      removed (step "visit-3"): hit_01M6FCPCWXCMS1ZWP6YR9KYMRT
+      count 1 -> 0 (pairing by order)
+
+Epoch granted
+  ga4
+    page_view
+      added (step "visit-3"): hit_01M6FCP5S4DAEXYWPSPMPDZFNG
+      added (step "visit-3"): hit_01M6FCP5S4DAEXYWPSPMPDZFNJ
+      added (step "visit-3"): hit_01M6FCP5S4DAEXYWPSPMPDZFNK
+      count 0 -> 3 (pairing by order)
+    user_engagement
+      added (step "visit-3"): hit_01M6FCP5S67V46X3C5NEMVAAGR
+      count 0 -> 1 (pairing by order)
+  google-ads
+    add_to_cart
+      added (step "addToCart-4"): hit_01M6FCP5S67V46X3C5NEMVAAGM
+      added (step "addToCart-4"): hit_01M6FCP5S67V46X3C5NEMVAAGN
+      added (step "addToCart-4"): hit_01M6FCP5S67V46X3C5NEMVAAGQ
+      count 0 -> 3 (pairing by order)
+    consent_update
+      added (step "consent-2"): hit_01M6FCP5S4DAEXYWPSPMPDZFNE
+      count 0 -> 1 (pairing by order)
+    gtag.config
+      added (step "consent-2"): hit_01M6FCP5S4DAEXYWPSPMPDZFNC
+      added (step "consent-2"): hit_01M6FCP5S4DAEXYWPSPMPDZFND
+      added (step "visit-3"): hit_01M6FCP5S57YWNB4MGSYHT4N4C
+      added (step "visit-3"): hit_01M6FCP5S57YWNB4MGSYHT4N4D
+      count 0 -> 4 (pairing by order)
+    page_view
+      added (step "visit-3"): hit_01M6FCP5S67V46X3C5NEMVAAGJ
+      count 0 -> 1 (pairing by order)
+    remarketing
+      added (step "consent-2"): hit_01M6FCP5S4DAEXYWPSPMPDZFNF
+      count 0 -> 1 (pairing by order)
+    view_item
+      added (step "visit-3"): hit_01M6FCP5S57YWNB4MGSYHT4N4E
+      added (step "visit-3"): hit_01M6FCP5S57YWNB4MGSYHT4N4F
+      added (step "visit-3"): hit_01M6FCP5S67V46X3C5NEMVAAGK
+      count 0 -> 3 (pairing by order)
+  meta
+    AddToCart
+      added (step "addToCart-4"): hit_01M6FCP5S67V46X3C5NEMVAAGP
+      count 0 -> 1 (pairing by order)
+    PageView
+      added (step "visit-3"): hit_01M6FCP5S57YWNB4MGSYHT4N4B
+      count 0 -> 1 (pairing by order)
+  sgtm
+    (no event)
+      added (step "visit-3"): hit_01M6FCP5S4DAEXYWPSPMPDZFNH
+      count 0 -> 1 (pairing by order)
