@@ -40,6 +40,8 @@
 
 <!-- F04 -->
 
+- Adds `from: <step label>` to hit and cookie rules. The window starts at the labelled step's start, so a visit step's own page-load hits count. `after:` still starts at the step's end. A rule with both is a scenario error. (#789, #806)
+
 ## 0.5.0-rc.1
 
 Release candidate. Install it with `npm i -g tagreeve@next`.

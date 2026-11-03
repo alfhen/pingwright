@@ -86,7 +86,7 @@ const WORST_FIRST: Mark[] = ['leak', 'unchecked', 'mixed', 'early', 'full', 'pin
 const CONSENT_FIELDS: (keyof ConsentState)[] = ['analytics', 'ads', 'adUserData', 'adPersonalization'];
 const MAX_EVIDENCE = 5;
 const MAX_VALUE = 80;
-const SHOWN_VALUE_KEYS = new Set(['vendor', 'event', 'in', 'before', 'after', 'host', 'count', 'outcome', 'transport', 'cookie']);
+const SHOWN_VALUE_KEYS = new Set(['vendor', 'event', 'in', 'before', 'after', 'from', 'host', 'count', 'outcome', 'transport', 'cookie']);
 const MIXED_HIT = 'some signals denied';
 
 interface Verdict {

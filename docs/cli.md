@@ -195,6 +195,22 @@ Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not
 
 The lists are exported from `@tagreeve/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE`, `META_CAPI_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
 
+### Rules from a step
+
+`after: <step label>` and `from: <step label>` limit a rule to hits and cookies from a labelled step on. `after` starts when the step ends. `from` starts when the step starts, so it includes what the step does itself. For a `visit` step, the page-load hits belong to `from` only:
+
+```yaml
+steps:
+  - visit: /products/fake-tee
+    label: product
+expect:
+  must:
+    - { vendor: ga4, event: page_view, from: product }
+    - { vendor: ga4, event: page_view, after: product, count: 0 }
+```
+
+A rule takes one of `from` and `after`, not both: that is a scenario error that names the rule. Both keys work on cookie rules and on server hits the way `after` always did.
+
 ### Rules on cookies
 
 `cookie` checks which cookies were set, by name. A value is never read, recorded or shown.
@@ -209,11 +225,11 @@ expect:
 ```
 
 - `cookie` is a name or a glob (`*` matches zero or more characters, so `_ga*` matches `_ga` and `_ga_PWTEST`), or a list of them. Names of at most 64 characters.
-- The entry stands alone. It takes `before: consent`, `in: epoch(...)` and `after: <step label>` as a hit rule does, and nothing else. `vendor`, `event`, `count`, `body.*` and the other hit keys are scenario errors.
+- The entry stands alone. It takes `before: consent`, `in: epoch(...)`, `after: <step label>` and `from: <step label>` as a hit rule does, and nothing else. `vendor`, `event`, `count`, `body.*` and the other hit keys are scenario errors.
 - Two sources count. A `Set-Cookie` header on any response, from any host, is placed at its request's time, and the evidence is that request ID. A cookie in a checkpoint (set by a script, or earlier) is placed at the checkpoint's time and the evidence is the checkpoint ID. A checkpoint only shows that the cookie was present then, not when it was set, and the message says so. To test a script cookie before consent, add a `checkpoint` step before the consent step. When a header and a checkpoint show the same name, the result cites the request.
 - When the evidence is a `Set-Cookie` header, the message says what the checkpoints show, with a count of requests: `found _dcid from Set-Cookie (7 requests); stored by the browser`. A checkpoint taken after the request was sent holds a cookie with that name, and its domain matches the response host by RFC 6265 domain-match (`Domain=example.com` set by `sgtm.example.com` counts). A checkpoint counts only if it was taken more than 50 ms after the request was sent, so one that ran while the response was still arriving is ignored. If the last checkpoint taken before the request already holds a same-named cookie, the message says `the cookie was already set before this response`. It makes no claim about storage and has no `cookieNotStored` note. Otherwise, if a later checkpoint exists and none holds the cookie, the message says `no later checkpoint has it` and the result has `note: cookieNotStored`. The rule still fails: the server tried to set the cookie. With no checkpoint after the request, the message says nothing about storage. A response still in flight at the last checkpoint can read as not stored. When one name has several `Set-Cookie` responses, the text ranks stored, then not stored, then already set, then unknown. When names differ, each group is listed: `stored by the browser: a; the cookie was already set before this response: b`. A consent tool can delete a stored cookie, so the text reports the checkpoints and makes no claim about the browser. Only names and counts are shown, never a value.
 - A time is placed in an epoch like a hit's, with the same grace window. A cookie set less than the grace window before the consent answer counts after it. Wait before the consent step when a test depends on it.
-- A rule with `before`, `in` or `after` that matches a checkpoint without a time (a record from before 0.3) cannot be placed. The result is `cannot evaluate` and never passes.
+- A rule with `before`, `in`, `after` or `from` that matches a checkpoint without a time (a record from before 0.3) cannot be placed. The result is `cannot evaluate` and never passes.
 - Cookie names are guarded like field names: a name that looks like a value is shown as `(other)`.
 
 In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for that reason, so a passing result in `stub` mode ends with `stub mode: stubbed endpoints set no cookies` and has `note: stubNoCookies`. To see the cookies of a server container, run with `--network server` and list its host in `options.serverHosts`, or use `--network live`. In `server` mode a send from `pagehide` or `visibilitychange` to a server host is still answered in the page, so a cookie that such a send would set is not seen, and a passing cookie rule can miss it.

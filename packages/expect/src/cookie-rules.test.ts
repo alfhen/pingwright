@@ -82,6 +82,16 @@ test('after: <step label> keeps cookies from that step on', () => {
   expect(run(rule, [step('go', 0, 2000), early, response(early, ['_pwid'])])[0]!.pass).toBe(true);
 });
 
+test('from: <step label> keeps cookies set during that step', () => {
+  const during = request(50);
+  const records = [step('go', 0, 100), during, response(during, ['_pwid'])];
+  const from = run('expect:\n  mustNot:\n    - { cookie: _pwid, from: go }', records)[0]!;
+  expect(from.pass).toBe(false);
+  expect(from.evidence).toEqual([during.id]);
+  expect(from.message).toContain('from go');
+  expect(run('expect:\n  mustNot:\n    - { cookie: _pwid, after: go }', records)[0]!.pass).toBe(true);
+});
+
 test('a checkpoint cookie is placed at Checkpoint.t and the message says it was present, not set', () => {
   const before = checkpoint('early', 50, ['_ga_PWTEST']);
   const after = checkpoint('late', 2000, ['_ga_PWTEST']);
