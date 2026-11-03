@@ -7,7 +7,7 @@ Consent epochs
   undecided (2.6 s)
   granted (to end)
 Flags
-  unknownDestination: 127.0.0.1:58415 x2 (/unknown-pixel)
+  unknownDestination: pixel.adnetwork.example x2 (/unknown-pixel)
   sandboxPageUrl: ga4 x2 (/web-pixels@0.0.0-fixture/sandbox/modern/)
 Expectations
   FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}
@@ -18,7 +18,7 @@ Expectations
   PASS builtin: unknownDestination
        evidence: flg_01M6FCP5S8DG10H55GW3EEM4DD, flg_01M6FCP5S8DG10H55GW3EEM4DE
   WARN builtin: sandboxPageUrl
-       Expected no hit to carry a sandbox URL as its page, found 2: http://localhost:58419/web-pixels@0.0.0-fixture/sandbox/modern/.
+       Expected no hit to carry a sandbox URL as its page, found 2: https://staging.northwind.example/web-pixels@0.0.0-fixture/sandbox/modern/.
        evidence: hit_01M6FCP5S2B862YGVCTNZBC5BW, hit_01M6FCP5S4DAEXYWPSPMPDZFNJ
   PASS builtin: deniedIdentifiers
   PASS builtin: earlyIdentifiers

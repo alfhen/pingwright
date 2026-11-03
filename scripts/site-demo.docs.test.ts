@@ -101,7 +101,7 @@ describe('the commands section', () => {
     run: /^Record: .*$/m.exec(demoFile('reject.txt'))![0],
     diff: demoFile('diff.txt').split('\n')[0]!,
     suite: /^Manifest: .*$/m.exec(demoFile('suite.txt'))![0],
-    json: `"expectation": ${JSON.stringify((JSON.parse(demoFile('json.txt')) as { results: { expectation: string }[] }).results[0]!.expectation)}`,
+    json: /evidence: (hit_\w+)/.exec(demoFile('reject.txt'))![1]!,
   };
 
   test('the four rows switch the panel to their recorded output', async () => {

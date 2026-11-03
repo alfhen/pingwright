@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { createIdentity, hashEmail, hashPhone, readRun, type TagreeveRecord } from '../../../packages/core/src/index.ts';
-import { demoDir, demoLeaks, demoScenarios, demoSeeds, scrubRecords } from '../../../scripts/record-site-demo.ts';
-import { checkReply, demoHits, HIT_WINDOW, loadDemo, parseReply } from './demo-data.ts';
+import { demoDir, demoLeaks, demoScenarios, demoSeeds, rewriteHosts, scrubRecords } from '../../../scripts/record-site-demo.ts';
+import { checkReply, demoHits, HIT_WINDOW, loadDemo, parseReply, recordedExitCode } from './demo-data.ts';
 
 const dir = fileURLToPath(new URL('../../demo/', import.meta.url));
 const records = (s: string) => readRun(join(dir, `${s}.jsonl`));
@@ -15,24 +15,47 @@ test('the committed demo loads, and every reply matches its record', async () =>
   expect(demo.commands.map((c) => c.key)).toEqual(['run', 'diff', 'suite', 'json']);
 });
 
+test('the run and --json panels show the same reject run', async () => {
+  const demo = await loadDemo(dir);
+  const text = (key: string) => demo.commands.find((c) => c.key === key)!.lines.map((l) => l.text).join('\n');
+  const first = (await records('reject')).results[0]!;
+  for (const id of first.evidence) {
+    expect(text('run')).toContain(id);
+    expect(text('json')).toContain(`"${id}"`);
+  }
+  expect(text('json')).toContain(JSON.stringify(first.message));
+});
+
+test('each exit code is the one the recorded "Result:" line reports', async () => {
+  const demo = await loadDemo(dir);
+  for (const s of demo.scenarios) {
+    const result = /^Result: (pass|fail)/m.exec(readFileSync(join(dir, `${s.key}.txt`), 'utf8'))![1];
+    expect(s.exitCode, s.key).toBe(result === 'pass' ? 0 : 1);
+    expect(s.verdict.exit).toBe(`exit ${s.exitCode}`);
+    expect(s.toolOut.at(-1)!.text).toBe(`exit ${s.exitCode}`);
+  }
+  expect(recordedExitCode('Result: pass with 1 warning\n', 'x')).toBe(0);
+  expect(() => recordedExitCode('Run failed: boom\n', 'x.txt')).toThrow(/x\.txt/);
+});
+
 describe('checkReply', () => {
   test('throws on an evidence ID that is not in the record, and names it', async () => {
     const reject = await records('reject');
-    expect(() => checkReply('Evidence: hit_…ZZZZ.', reject, 'reject.reply.md')).toThrow(/hit_…ZZZZ/);
+    expect(() => checkReply('Evidence: hit_…ZZZZ.', reject, 1, 'reject.reply.md')).toThrow(/hit_…ZZZZ/);
     const full = 'hit_01ZZZZZZZZZZZZZZZZZZZZZZZZ';
-    expect(() => checkReply(`Evidence: ${full}.`, reject, 'reject.reply.md')).toThrow(full);
+    expect(() => checkReply(`Evidence: ${full}.`, reject, 1, 'reject.reply.md')).toThrow(full);
   });
 
   test('throws on a number that is not in the record, and names it', async () => {
     const reject = await records('reject');
-    expect(() => checkReply('Meta fires before the answer (9999 hits).', reject, 'reject.reply.md')).toThrow(/number 9999/);
+    expect(() => checkReply('Meta fires before the answer (9999 hits).', reject, 1, 'reject.reply.md')).toThrow(/number 9999/);
   });
 
   test('accepts the IDs and numbers of the record, list markers and words with digits', async () => {
     const reject = await records('reject');
     const failed = reject.results.find((r) => !r.pass)!;
     const tail = failed.evidence[0]!.slice(-4);
-    expect(() => checkReply(`1. GA4 sends ${failed.evidence.length} hits.\n2. Evidence: hit_…${tail}, ${failed.evidence[0]}.`, reject, 'x')).not.toThrow();
+    expect(() => checkReply(`1. GA4 sends ${failed.evidence.length} hits.\n2. Evidence: hit_…${tail}, ${failed.evidence[0]}.`, reject, 1, 'x')).not.toThrow();
   });
 
   test('parseReply keeps line breaks inside a paragraph', () => {
@@ -94,7 +117,9 @@ describe('no demo file holds identity data', () => {
     expect(scan('cookie: pw_consent=reject')).toEqual(['pw_consent=']);
     expect(demoLeaks(`a ${reject.email} b`)).toContain(reject.email);
     expect(demoLeaks('GET https://www.facebook.com/tr/')).toEqual(['https://www.facebook.com/tr/']);
-    expect(demoLeaks('GET http://127.0.0.1:5555/unknown-pixel')).toEqual([]);
+    expect(demoLeaks('GET http://127.0.0.1:5555/unknown-pixel')).toEqual(['127.0.0.1:5555']);
+    expect(demoLeaks('unknownDestination: localhost:5555 x2')).toEqual(['localhost:5555']);
+    expect(demoLeaks('GET https://staging.northwind.example/ and https://pixel.adnetwork.example/x')).toEqual([]);
   });
 });
 
@@ -112,8 +137,25 @@ test('scrubRecords drops the identity, the seed, values, headers and every reque
   const out = scrubRecords(input);
   const text = out.map((r) => JSON.stringify(r)).join('\n');
   expect(out.map((r) => r.id)).toEqual(['run_1', 'req_1', 'hit_1']);
-  expect(demoLeaks(text)).toEqual([]);
+  expect(demoLeaks(rewriteHosts(text, origins))).toEqual([]);
   expect(text).not.toContain('fb.1.2');
   expect(text).not.toContain('em=x');
   expect(text).not.toContain('"x"');
+});
+
+const origins = { url: 'http://localhost:1', sgtmUrl: 'http://127.0.0.1:5', thirdPartyUrl: 'http://127.0.0.1:51', containerUrl: 'http://127.0.0.1:52', paymentFrameUrl: 'http://127.0.0.1:53' };
+
+test('rewriteHosts puts a demo host in place of each fixture origin, and leaves no loopback host', () => {
+  const text = [
+    '"site":"http://localhost:1","page":"http://localhost/products/fake-tee"',
+    'GET http://127.0.0.1:5/pwstape and http://127.0.0.1:51/unknown-pixel',
+    'unknownDestination: 127.0.0.1:51 x2 (/unknown-pixel)',
+  ].join('\n');
+  expect(rewriteHosts(text, origins)).toBe(
+    [
+      '"site":"https://staging.northwind.example","page":"https://staging.northwind.example/products/fake-tee"',
+      'GET https://sgtm.northwind.example/pwstape and https://pixel.adnetwork.example/unknown-pixel',
+      'unknownDestination: pixel.adnetwork.example x2 (/unknown-pixel)',
+    ].join('\n'),
+  );
 });

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { buildSummary } from '../../../packages/cli/src/summary.ts';
 import { readRun, type Hit, type RunRecords } from '../../../packages/core/src/index.ts';
 
 export const STORY_HOST = 'staging.northwind.example';
@@ -99,8 +100,8 @@ const NUMBER = /(?<![\w.…])\d+(?:\.\d+)?(?!\w)/g;
 const LIST_MARKER = /^\d+\. /gm;
 
 /** The numbers a reply may use: rule messages, evidence counts, hit counts, the number of failed rules and the exit code. */
-export function recordNumbers(records: RunRecords): Set<string> {
-  const numbers = new Set<string>([String(exitCodeOf(records))]);
+export function recordNumbers(records: RunRecords, exitCode: number): Set<string> {
+  const numbers = new Set<string>([String(exitCode)]);
   const failed = records.results.filter((r) => !r.pass && r.severity !== 'warn');
   numbers.add(String(failed.length));
   numbers.add(String(records.results.length));
@@ -121,7 +122,7 @@ export function recordNumbers(records: RunRecords): Set<string> {
 }
 
 /** Throws, naming the value, when the reply uses an evidence ID or a number that the record does not hold. */
-export function checkReply(text: string, records: RunRecords, name: string): void {
+export function checkReply(text: string, records: RunRecords, exitCode: number, name: string): void {
   const ids = records.hits.map((h) => h.id as string);
   for (const token of text.match(EVIDENCE) ?? []) {
     const tail = token.replace(/^hit_(?:…|\.\.\.)?/, '');
@@ -130,14 +131,17 @@ export function checkReply(text: string, records: RunRecords, name: string): voi
       throw new Error(`${name}: evidence ID ${token} ${matches.length ? 'matches more than one hit' : 'is not a hit'} in the record of ${records.run.id}`);
     }
   }
-  const numbers = recordNumbers(records);
+  const numbers = recordNumbers(records, exitCode);
   for (const n of text.replace(EVIDENCE, '').replace(LIST_MARKER, '').match(NUMBER) ?? []) {
     if (!numbers.has(n)) throw new Error(`${name}: the number ${n} is not in the record of ${records.run.id}`);
   }
 }
 
-function exitCodeOf(records: RunRecords): number {
-  return records.results.every((r) => r.pass || r.severity === 'warn') ? 0 : 1;
+/** The exit code of a recorded `tagreeve run`, from the "Result:" line it printed: 0 for pass, 1 for fail. */
+export function recordedExitCode(stdout: string, name: string): 0 | 1 {
+  const result = /^Result: (pass|fail)\b/m.exec(stdout)?.[1];
+  if (!result) throw new Error(`${name}: no "Result: pass" or "Result: fail" line`);
+  return result === 'pass' ? 0 : 1;
 }
 
 function epochAt(records: RunRecords, t: number) {
@@ -209,10 +213,12 @@ export function shortenOutput(stdout: string, exitCode: number): Line[] {
   ];
 }
 
-function jsonLines(stdout: string): Line[] {
-  const summary = JSON.parse(stdout) as { results: { pass: boolean }[] };
-  const first = summary.results[0];
-  if (!first) throw new Error('json.txt: the summary has no results');
+/** The first result of the summary that `tagreeve run --json` prints for this record. */
+function jsonLines(records: RunRecords, stdout: string, name: string): Line[] {
+  const path = /^Record: (\S+)$/m.exec(stdout)?.[1];
+  if (!path) throw new Error(`${name}: no "Record:" line`);
+  const first = buildSummary(records, records.results, path).results[0];
+  if (!first) throw new Error(`${name}: the record has no results`);
   return linesOf(JSON.stringify(first, null, 2)).map((text) => ({ text, tone: /^ {2}"pass": false/.test(text) ? 'fail' : 'fg' }));
 }
 
@@ -222,13 +228,22 @@ function diffLines(stdout: string): Line[] {
 
 const read = (dir: string, file: string) => readFileSync(join(dir, file), 'utf8');
 
-async function loadScenario(dir: string, key: ScenarioKey, label: string, action: 'accept' | 'reject' | null): Promise<DemoScenario> {
+interface Recorded {
+  records: RunRecords;
+  stdout: string;
+}
+
+async function loadRecorded(dir: string, key: ScenarioKey): Promise<Recorded> {
   const records = await readRun(join(dir, `${key}.jsonl`));
-  const stdout = read(dir, `${key}.txt`);
+  if (records.run.site !== `https://${STORY_HOST}`) throw new Error(`site/demo/${key}.jsonl: the run's site is ${records.run.site}, not https://${STORY_HOST}`);
+  return { records, stdout: read(dir, `${key}.txt`) };
+}
+
+function scenarioOf(dir: string, { records, stdout }: Recorded, key: ScenarioKey, label: string, action: 'accept' | 'reject' | null): DemoScenario {
   const replyName = `site/demo/${key}.reply.md`;
   const reply = parseReply(read(dir, `${key}.reply.md`), replyName);
-  checkReply([reply.plan, reply.verdict.title, reply.verdict.body, ...reply.reply].join('\n'), records, replyName);
-  const exitCode = exitCodeOf(records);
+  const exitCode = recordedExitCode(stdout, `site/demo/${key}.txt`);
+  checkReply([reply.plan, reply.verdict.title, reply.verdict.body, ...reply.reply].join('\n'), records, exitCode, replyName);
   const clock = demoClock(records);
   const answered = [...records.consentEpochs].sort((a, b) => a.startT - b.startT)[1];
   if (Boolean(action) !== Boolean(answered)) throw new Error(`site/demo/${key}.jsonl: the consent epochs do not fit a visitor who ${label}`);
@@ -249,17 +264,19 @@ async function loadScenario(dir: string, key: ScenarioKey, label: string, action
 
 /** Builds the demo from the recorded files in `dir` (`site/demo`). Throws when a reply does not match its record. */
 export async function loadDemo(dir: string): Promise<DemoData> {
-  const scenarios = await Promise.all(SCENARIOS.map((s) => loadScenario(dir, s.key, s.label, s.action)));
+  const recorded = new Map(await Promise.all(SCENARIOS.map(async (s) => [s.key, await loadRecorded(dir, s.key)] as const)));
+  const scenarios = SCENARIOS.map((s) => scenarioOf(dir, recorded.get(s.key)!, s.key, s.label, s.action));
+  const reject = recorded.get('reject')!;
   const diff = read(dir, 'diff.txt');
   const [, a, b] = /^Diff (\S+) -> (\S+)$/m.exec(diff) ?? [];
   if (!a || !b) throw new Error('site/demo/diff.txt: no "Diff a -> b" line');
   const site = `--site https://${STORY_HOST}`;
   const command = (text: string): Line => ({ text: `$ ${text}`, tone: 'dim' });
   const commands: DemoCommand[] = [
-    { key: 'run', name: 'tagreeve run', desc: 'Play one scenario. Exit 0, 1 or 2.', lines: [command(`tagreeve run reject.yml ${site}`), ...toLines(linesOf(read(dir, 'reject.txt')))] },
+    { key: 'run', name: 'tagreeve run', desc: 'Play one scenario. Exit 0, 1 or 2.', lines: [command(`tagreeve run reject.yml ${site}`), ...toLines(linesOf(reject.stdout))] },
     { key: 'diff', name: 'tagreeve diff', desc: 'Compare two records, e.g. published vs. workspace.', lines: [command(`tagreeve diff ${a} ${b}`), ...diffLines(diff)] },
     { key: 'suite', name: 'tagreeve suite', desc: 'A folder of scenarios × several GTM builds, for CI.', lines: [command(`tagreeve suite tagreeve/ ${site}`), ...toLines(linesOf(read(dir, 'suite.txt')))] },
-    { key: 'json', name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [command(`tagreeve run reject.yml --site … --json | jq '.results[0]'`), ...jsonLines(read(dir, 'json.txt'))] },
+    { key: 'json', name: '--json', desc: 'Stable JSON with evidence IDs, for agents and scripts.', lines: [command(`tagreeve run reject.yml --site … --json | jq '.results[0]'`), ...jsonLines(reject.records, reject.stdout, 'site/demo/reject.txt')] },
   ];
   return { storyHost: STORY_HOST, userPrompt: USER_PROMPT, scenarios, commands };
 }

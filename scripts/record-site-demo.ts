@@ -11,12 +11,25 @@ export const demoDir = join(root, 'site/demo');
 export const demoScenarios = ['undecided', 'accept', 'reject'] as const;
 export type DemoScenario = (typeof demoScenarios)[number];
 
-/** The `--seed` of every recorded run, so a test can rebuild each fake identity. `json` is the second reject run and `suite` the suite. */
-export const demoSeeds = { undecided: 7101, accept: 7102, reject: 7103, json: 7104, suite: 7105 } as const;
+/** The `--seed` of every recorded run, so a test can rebuild each fake identity. `suite` is the seed of the suite. */
+export const demoSeeds = { undecided: 7101, accept: 7102, reject: 7103, suite: 7105 } as const;
+
+/** The host each fixture server has in the demo files. `url` must stay the story host that `demo-data.ts` checks for. */
+export const demoHosts = {
+  url: 'staging.northwind.example',
+  sgtmUrl: 'sgtm.northwind.example',
+  thirdPartyUrl: 'pixel.adnetwork.example',
+  containerUrl: 'gtm.northwind.example',
+  paymentFrameUrl: 'pay.northwind.example',
+} as const;
+
+export type FixtureOrigins = Record<keyof typeof demoHosts, string>;
 
 const keptTypes = new Set<TagreeveRecord['type']>(['run', 'step', 'request', 'hit', 'consentEpoch', 'result', 'flag']);
 
 const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
+const loopbackHost = /\b(?:localhost|127\.0\.0\.1)(?::\d+)?(?!\d)/g;
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function isLoopback(url: string): boolean {
   try {
@@ -79,6 +92,21 @@ function pick(raw: Record<string, string>, keys: string[]): Record<string, strin
   return Object.fromEntries(keys.filter((k) => k in raw).map((k) => [k, raw[k]!]));
 }
 
+/**
+ * Puts the demo host of each fixture server in place of its loopback origin, so the files tell the story of
+ * `--site https://staging.northwind.example`. A hit page without a port is the shop's.
+ */
+export function rewriteHosts(text: string, origins: FixtureOrigins): string {
+  let out = text;
+  for (const key of Object.keys(demoHosts) as (keyof FixtureOrigins)[]) {
+    const origin = origins[key];
+    const host = new URL(origin).host;
+    out = out.replace(new RegExp(`${escape(origin)}(?!\\d)`, 'g'), `https://${demoHosts[key]}`);
+    out = out.replace(new RegExp(`${escape(host)}(?!\\d)`, 'g'), demoHosts[key]);
+  }
+  return out.replace(/http:\/\/localhost(?![:\w])/g, `https://${demoHosts.url}`);
+}
+
 /** Every form of one seed's fake email and phone that must never be in a demo file. */
 export function identityValues(seed: number): string[] {
   const { email, phone } = createIdentity(seed);
@@ -86,15 +114,29 @@ export function identityValues(seed: number): string[] {
   return [email, phone, e164, ...Object.values(hashEmail(email)), ...Object.values(hashPhone(phone))];
 }
 
+const allowedHosts = new Set<string>(Object.values(demoHosts));
+
 /**
  * What in `text` a demo file must not hold: a fake identity of one of the seeds, the seed field, a consent cookie
- * value, the old store host or any host that is not loopback.
+ * value, the old store host, a fixture's loopback host or any host that is not a demo host.
  */
 export function demoLeaks(text: string, seeds: readonly number[] = Object.values(demoSeeds)): string[] {
   const found = seeds.flatMap(identityValues).filter((v) => text.includes(v));
   for (const marker of ['identitySeed', 'pw_consent=', 'northwind.dk']) if (text.includes(marker)) found.push(marker);
-  for (const [url] of text.matchAll(/\bhttps?:\/\/[^\s"'\\)]+/g)) if (!isLoopback(url)) found.push(url);
+  for (const [url] of text.matchAll(/\bhttps?:\/\/[^\s"'\\)]+/g)) {
+    const host = hostnameOf(url);
+    if (!loopback.has(host) && !allowedHosts.has(host)) found.push(url);
+  }
+  for (const [host] of text.matchAll(loopbackHost)) found.push(host);
   return found;
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
 }
 
 interface CliResult {
@@ -148,24 +190,21 @@ async function record(): Promise<void> {
       const raw = await readRecords(join(work, path));
       const identity = raw[0]?.type === 'run' ? raw[0].identity : null;
       if (identity?.email !== createIdentity(demoSeeds[s]).email) throw new Error(`${s}: the run's identity is not the one of seed ${demoSeeds[s]}`);
-      const scrubbed = toJsonl(scrubRecords(raw));
+      if (/^Result: fail\b/m.test(result.stdout) !== (result.code === 1)) throw new Error(`${s}: the "Result:" line does not match exit ${result.code}`);
+      const scrubbed = rewriteHosts(toJsonl(scrubRecords(raw)), site);
       const runId = /run_[0-9A-Z]+/.exec(path)![0];
       runIds.set(s, runId);
       await writeFile(join(clean, 'runs', `${runId}.jsonl`), scrubbed);
       written.set(`${s}.jsonl`, scrubbed);
-      written.set(`${s}.txt`, result.stdout);
+      written.set(`${s}.txt`, rewriteHosts(result.stdout, site));
     }
-
-    console.error('Recording reject --json');
-    const json = check('json', await cli(['run', 'tagreeve/reject.yml', '--site', site.url, '--out', 'runs', '--seed', String(demoSeeds.json), '--json'], work));
-    written.set('json.txt', json.stdout);
 
     const diff = check('diff', await cli(['diff', `runs/${runIds.get('reject')}.jsonl`, `runs/${runIds.get('accept')}.jsonl`], clean));
     written.set('diff.txt', diff.stdout);
 
     console.error('Recording the suite');
     const suite = check('suite', await cli(['suite', 'tagreeve/', '--site', site.url, '--out', 'runs', '--seed', String(demoSeeds.suite)], work));
-    written.set('suite.txt', suite.stderr + suite.stdout);
+    written.set('suite.txt', rewriteHosts(suite.stderr + suite.stdout, site));
 
     for (const [name, text] of written) {
       const leaks = demoLeaks(text);
