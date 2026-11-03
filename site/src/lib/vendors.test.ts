@@ -3,20 +3,20 @@ import type { Request } from '../../../packages/core/src/index.ts';
 import { decoders, decodeRequest, trackerList } from '../../../packages/decoders/src/index.ts';
 import { decodedVendors, stubbedVendors } from './vendors.ts';
 
-function req(url: string): Request {
+function req(url: string, method = 'GET', postData: string | null = null): Request {
   return {
     type: 'request',
     id: 'req_sample' as Request['id'],
     runId: 'run_sample' as Request['runId'],
     stepId: null,
     t: 1_800_000_000_000,
-    method: 'GET',
+    method,
     url,
     resourceType: 'image',
     frameUrl: 'http://localhost:3000/',
     initiator: null,
     headers: {},
-    postData: null,
+    postData,
     outcome: 'stubbed',
   };
 }
@@ -27,6 +27,7 @@ const samples: Request[] = [
   req('https://www.facebook.com/tr?id=100000000000001&ev=PageView'),
   req('https://ct.pinterest.com/v3/?tid=2612345678901&event=init'),
   req('https://shop.example.com/data?v=2&event=page_view'),
+  req('https://graph.facebook.com/v19.0/100000000000001/events', 'POST', JSON.stringify({ data: [{ event_name: 'Purchase' }] })),
 ];
 
 const sorted = (values: Iterable<string>): string[] => [...new Set(values)].sort();
