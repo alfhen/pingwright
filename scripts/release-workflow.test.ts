@@ -15,7 +15,7 @@ const workflow = parse(text) as Workflow;
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps ?? [])
-    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n\s*/g, ' ').split('\n'));
+    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n[ \t]*/g, ' ').split('\n'));
 
 const runLines = runLinesOf(workflow);
 
@@ -156,6 +156,13 @@ describe('workflow rules', () => {
   it('accepts a continued publish that has the flags', () => {
     const wf = base('      - run: |\n          npm publish \\\n            --dry-run \\\n            --tag "$dist_tag"\n');
     expect(workflowProblems(wf)).toEqual([]);
+  });
+
+  it('does not join a command after a blank line to a trailing backslash', () => {
+    const wf = base('      - run: |\n          npm publish --tag "$dist_tag" \\\n\n          echo --dry-run\n');
+    const problems = workflowProblems(wf);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('without --dry-run');
   });
 
   it('fails github.token', () => {
