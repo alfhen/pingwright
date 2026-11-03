@@ -6,15 +6,15 @@ const nav = [
   { label: 'Docs', href: '/docs/guide/what-it-checks' },
   { label: 'CLI reference', href: '/docs/cli' },
 ];
-const buttonBase = 'cursor-pointer rounded-md border border-rule bg-transparent font-mono font-medium';
+const buttonBase = 'cursor-pointer rounded-md border border-rule bg-transparent font-mono font-medium leading-[normal]';
 ---
 
-<div class="site-header mx-auto flex h-14 max-w-[1280px] items-center gap-[26px] px-7 max-[520px]:gap-3 max-[520px]:px-4">
+<div class="site-header frame flex h-14 items-center gap-[26px] leading-[normal] max-[520px]:gap-3 max-[520px]:px-4">
   <a href="/" class="flex shrink-0 items-center gap-[9px] text-fg hover:no-underline">
     <Mark />
-    <span class="font-mono text-base font-semibold tracking-[-0.02em]">tagreeve</span>
+    <span class="font-mono text-base leading-[normal] font-semibold tracking-[-0.02em]">tagreeve</span>
   </a>
-  <nav aria-label="Main" class="hidden flex-1 gap-5 text-sm min-[860px]:flex">
+  <nav aria-label="Main" class="hidden flex-1 gap-5 text-sm leading-[normal] min-[860px]:flex">
     {nav.map((item) => <a href={item.href} class="text-dim hover:text-fg">{item.label}</a>)}
   </nav>
   <button
@@ -37,7 +37,7 @@ const buttonBase = 'cursor-pointer rounded-md border border-rule bg-transparent 
   id="site-menu"
   aria-label="Menu"
   hidden
-  class="absolute inset-x-0 top-14 flex-col border-t border-b border-rule bg-void px-7 pt-1.5 pb-3.5 text-base [&:not([hidden])]:flex"
+  class="absolute inset-x-0 top-14 flex-col border-t border-b border-rule bg-void px-7 pt-1.5 pb-3.5 text-base leading-[normal] [&:not([hidden])]:flex"
 >
   {nav.map((item) => <a href={item.href} class="border-b border-rule py-2.5 text-fg">{item.label}</a>)}
   <a href={repo} class="border-b border-rule py-2.5 text-fg min-[521px]:hidden">github ↗</a>

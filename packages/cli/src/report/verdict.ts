@@ -5,6 +5,8 @@ export interface Findings {
   /** Vendors that sent hits in a state, and vendors whose identifiers went out in a state. Keyed by epoch label. */
   hits: Map<string, Set<string>>;
   identifiers: Map<string, Set<string>>;
+  /** Built-in checks already named by an identifier finding of their own label. */
+  namedChecks: Set<string>;
   /** Failed and warned rules: `must`, `mustNot` and unreadable entries. */
   failed: number;
   warned: number;
@@ -18,7 +20,7 @@ export interface Findings {
 }
 
 export function emptyFindings(): Findings {
-  return { hits: new Map(), identifiers: new Map(), failed: 0, warned: 0, failedChecks: new Map(), warnedChecks: new Map(), unchecked: 0, unlinkedServerHits: 0, probableServerHits: 0 };
+  return { hits: new Map(), identifiers: new Map(), namedChecks: new Set(), failed: 0, warned: 0, failedChecks: new Map(), warnedChecks: new Map(), unchecked: 0, unlinkedServerHits: 0, probableServerHits: 0 };
 }
 
 export function addFindings(into: Findings, model: ReportModel): void {
@@ -28,6 +30,8 @@ export function addFindings(into: Findings, model: ReportModel): void {
     row.segments.forEach((segment, i) => {
       if (segment.mark !== 'leak') return;
       const target = segment.label === IDENTIFIER_LEAK || segment.label === IDENTIFIER_EARLY ? into.identifiers : into.hits;
+      if (segment.label === IDENTIFIER_LEAK) into.namedChecks.add('deniedIdentifiers');
+      if (segment.label === IDENTIFIER_EARLY) into.namedChecks.add('earlyIdentifiers');
       const label = model.columns[i]!.label;
       const vendors = target.get(label) ?? new Set<string>();
       vendors.add(row.vendor);
@@ -70,8 +74,7 @@ export function findingsSentence(f: Findings, inRuns = false): string {
   const parts: string[] = [];
   for (const [label, vendors] of [...f.hits].sort(([a], [b]) => a.localeCompare(b))) parts.push(`${list(vendors)} ${vendors.size === 1 ? 'sends' : 'send'} hits in the ${label} state`);
   for (const [label, vendors] of [...f.identifiers].sort(([a], [b]) => a.localeCompare(b))) parts.push(`identifiers go out to ${list(vendors)} in the ${label} state`);
-  const named = f.identifiers.size > 0;
-  const shown = (checks: Map<string, number>) => new Map([...checks].filter(([name]) => !(named && (name === 'deniedIdentifiers' || name === 'earlyIdentifiers'))));
+  const shown = (checks: Map<string, number>) => new Map([...checks].filter(([name]) => !f.namedChecks.has(name)));
   if (parts.length === 0 && f.unchecked === 0) parts.push('no leaks');
   if (f.failed > 0) parts.push(`${plural(f.failed, 'rule')} failed`);
   parts.push(...checkParts(shown(f.failedChecks), 'failed', inRuns));

@@ -48,6 +48,7 @@ const pages: Record<string, string> = {
   '/stable-ids': 'stable-ids.html',
   '/shared-hashes': 'shared-hashes.html',
   '/sgtm-data-tag': 'sgtm-data-tag.html',
+  '/sgtm-plain': 'sgtm-plain.html',
   '/server-container': 'server-container.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
   '/delayed-hit': 'delayed-hit.html',

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import net from 'node:net';
@@ -8,6 +8,7 @@ import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { standInContainerPath } from '../fixtures/site/src/index.ts';
+import { FIXTURE_AUTH, FIXTURE_CONFIG } from '../fixtures/site/src/stand-in-container.ts';
 import { DOCKERFILE } from '../packages/recorder/src/server-container/image.ts';
 import { createFakeDocker } from '../packages/recorder/src/server-container/fake-docker.test-helper.ts';
 import { createRunCa } from '../packages/recorder/src/server-container/ca.ts';
@@ -18,9 +19,10 @@ import { startServerContainer } from '../packages/recorder/src/server-container/
 import type { ServerContainer } from '../packages/recorder/src/server-container/runner.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const AUTH = 'pw-fixture-auth';
+const AUTH = FIXTURE_AUTH;
 const ACCESS_TOKEN = 'pw-fixture-access-token';
-const CONFIG = Buffer.from(`id=GTM-PWTEST1&env=1&auth=${AUTH}`).toString('base64');
+const CONFIG = FIXTURE_CONFIG;
+const ARM64 = ['--import', "data:text/javascript,Object.defineProperty(process,'arch',{value:'arm64'})"];
 const EMAIL = 'Pw.Runner@example.invalid';
 
 let work: string;
@@ -124,12 +126,30 @@ describe('the stand-in server container through the seam', () => {
     expect(proxy.refused()).toBe(0);
   });
 
-  test('output and captured calls hold no config or gtm_auth, and the output no access token', () => {
-    const output = container.logTail().join('\n');
-    expect(output).toContain('www.googletagmanager.com');
-    for (const secret of [CONFIG, AUTH, ACCESS_TOKEN]) expect(output).not.toContain(secret);
-    const captured = JSON.stringify(answered.map((request) => ({ url: request.url, headers: request.headers, body: request.body.toString('utf8') })));
-    for (const secret of [CONFIG, AUTH, proxy.credential]) expect(captured).not.toContain(secret);
+  test('the raw stand-in output holds the config, gtm_auth, access token and proxy URL, and the scrubbed log holds none of them', async () => {
+    const port = await new Promise<number>((resolve) => {
+      const probe = net.createServer().listen(0, '127.0.0.1', () => {
+        const { port: free } = probe.address() as net.AddressInfo;
+        probe.close(() => resolve(free));
+      });
+    });
+    const proxyUrl = `http://${proxy.username}:${proxy.credential}@127.0.0.1:${proxy.port}`;
+    const child = spawn(standInContainerPath, [], { shell: false, env: { PATH: process.env.PATH ?? '', HTTP_PROXY: proxyUrl, NODE_EXTRA_CA_CERTS: ca.certPath, PORT: String(port) } });
+    let raw = '';
+    child.stderr.on('data', (chunk: Buffer) => (raw += chunk.toString('utf8')));
+    try {
+      const origin = `http://127.0.0.1:${port}`;
+      for (let i = 0; i < 200 && (await fetch(`${origin}/healthz`).catch(() => undefined))?.status !== 200; i++) await new Promise((r) => setTimeout(r, 25));
+      await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
+      await until(() => raw.includes(ACCESS_TOKEN));
+    } finally {
+      child.kill('SIGKILL');
+    }
+    for (const secret of [CONFIG, AUTH, ACCESS_TOKEN, proxy.credential]) expect(raw).toContain(secret);
+
+    const scrubbed = container.logTail().join('\n');
+    expect(scrubbed).toContain('www.googletagmanager.com');
+    for (const secret of [CONFIG, AUTH, ACCESS_TOKEN, proxy.credential]) expect(scrubbed).not.toContain(secret);
   });
 });
 
@@ -144,28 +164,23 @@ describe('tagreeve server-container build from a copy of dist/cli.js outside the
 
   function run(dir: string, env: NodeJS.ProcessEnv): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
-      execFile(process.execPath, [join(dir, 'dist/cli.js'), 'server-container', 'build'], { cwd: dir, env }, (error, stdout, stderr) => {
+      execFile(process.execPath, [...ARM64, join(dir, 'dist/cli.js'), 'server-container', 'build'], { cwd: dir, env }, (error, stdout, stderr) => {
         resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, stdout, stderr });
       });
     });
   }
 
-  test('writes the embedded Dockerfile into the build context, or says no build is needed', async () => {
+  test('writes the embedded Dockerfile into the build context', async () => {
     const dir = copy();
     const fake = createFakeDocker();
     try {
       const result = await run(dir, { ...fake.env(), PATH: `${fake.dir}:${process.env.PATH ?? ''}` });
       expect(result.code).toBe(0);
       const calls = fake.calls();
-      if (process.arch === 'arm64') {
-        expect(result.stdout).toContain('Built tagreeve-sgtm:');
-        const build = calls.find((call) => call.argv[0] === 'build');
-        expect(build?.dockerfile).toBe(DOCKERFILE);
-        expect(build?.argv).toContain('linux/arm64');
-      } else {
-        expect(result.stdout).toContain('No build is needed');
-        expect(calls.find((call) => call.argv[0] === 'build')).toBeUndefined();
-      }
+      expect(result.stdout).toContain('Built tagreeve-sgtm:');
+      const build = calls.find((call) => call.argv[0] === 'build');
+      expect(build?.dockerfile).toBe(DOCKERFILE);
+      expect(build?.argv).toContain('linux/arm64');
       expect(calls.some((call) => ['push', 'login'].includes(call.argv[0]!))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -173,7 +188,7 @@ describe('tagreeve server-container build from a copy of dist/cli.js outside the
     }
   });
 
-  test.skipIf(process.arch !== 'arm64')('exits 2 without docker', async () => {
+  test('exits 2 without docker', async () => {
     const dir = copy();
     const empty = mkdtempSync(join(tmpdir(), 'tagreeve-no-docker-'));
     try {

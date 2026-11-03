@@ -23,7 +23,7 @@ function epoch(startT: number, endT: number | null, label: EvalEpoch['label'], s
 
 const undecidedOnly = [epoch(0, null, 'undecided', unknown)];
 const grantedLater = [epoch(0, 1000, 'undecided', unknown), epoch(1000, null, 'granted', granted)];
-const deniedDefault = [epoch(0, null, 'denied', denied)];
+const deniedDefault = [epoch(0, null, 'undecided', denied)];
 
 function check(hits: Hit[], epochs: EvalEpoch[] = undecidedOnly, options = ''): Result {
   const scenario = parseScenario(`start: /\n${options}`);
@@ -76,6 +76,7 @@ test('a hit with no consent epoch at all counts as before the answer', () => {
 
 test('a denied default is left to deniedIdentifiers', () => {
   const h = withIds('meta', 'em');
+  expect(deniedDefault[0]!.label).toBe('undecided');
   expect(check([h], deniedDefault).pass).toBe(true);
   const scenario = parseScenario('start: /');
   const denial = evaluate([...deniedDefault, h], scenario).find((r) => r.expectation === 'builtin: deniedIdentifiers')!;

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 export const STORE_NAME = /^[a-z0-9][a-z0-9_-]*$/;
@@ -44,7 +44,7 @@ export async function readStores(path: string): Promise<Store[]> {
     throw new StoresError(`${path}: stores must be a list of 1 to ${MAX_STORES} stores.`);
   }
   const names = new Set<string>();
-  return list.map((entry, index): Store => {
+  const stores = list.map((entry, index): Store => {
     const fail = (reason: string): never => {
       throw new StoresError(`${path}: store ${index} ${reason}.`);
     };
@@ -79,4 +79,10 @@ export async function readStores(path: string): Promise<Store[]> {
       ...(autoconsentRules !== undefined && { autoconsentRules: resolve(dirname(path), autoconsentRules as string) }),
     };
   });
+  for (const [index, store] of stores.entries()) {
+    if (store.autoconsentRules === undefined) continue;
+    const isFile = await stat(store.autoconsentRules).then((s) => s.isFile(), () => false);
+    if (!isFile) throw new StoresError(`${path}: store ${index} has autoconsentRules that are not a readable file.`);
+  }
+  return stores;
 }

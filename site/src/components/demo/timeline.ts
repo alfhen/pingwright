@@ -5,6 +5,8 @@ export const OFF = 2800;
 export const END = 5600;
 export const RATE = 0.16;
 export const TICK = 80;
+/** How long the banner button shows pressed before the answer lands. */
+export const PRESS_MS = 300;
 export const REPLY_AT = OFF + END + 700;
 
 const SPIN = ['·', '✢', '✳', '✶', '✻', '✽'];
@@ -84,7 +86,7 @@ export function frameAt(sc: DemoScenario, T: number, armed: boolean, userPrompt:
     path,
     pageVisible: t > 1250,
     bannerVisible: t > 1600 && !answered,
-    pressing: sc.answer && t >= sc.answer.at - 300 && t < sc.answer.at ? sc.answer.action : null,
+    pressing: sc.answer && t >= sc.answer.at - PRESS_MS && t < sc.answer.at ? sc.answer.action : null,
     epoch: answered ? sc.answer!.epoch : 'undecided',
     hits: armed ? sc.hits.filter((h) => h.at <= t).sort((a, b) => a.at - b.at).reverse() : [],
     showVerdict: armed && t > END,
