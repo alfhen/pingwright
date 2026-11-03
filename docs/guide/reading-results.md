@@ -54,7 +54,7 @@ This is the full output. It is not shortened. Here is how to read the less obvio
 
 With `--server-container`, the summary has a `Server container` line, and the report shows the vendors that your server container sent on in their own rows. Each such hit is judged by the browser hit it came from, not by the time the container sent it. The container may send a call after the visitor changed their answer, and the answer that counts is the one the browser hit was sent under.
 
-Only an exact link can fail a run. When a failure rests on a link by a shared value (`probable`), it shows as `WARN` with a note. A hit with no link cannot be judged for consent. Checks that need its consent state show `WARN` and `cannot evaluate`. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched.
+Only an exact link can fail a run on time or consent. When a failure rests on a link by a shared value (`probable`), it shows as `WARN` with a note. If the same run also has an exact leak, it still fails. A hit with no link cannot be judged for consent. Checks that need its consent state show `WARN` and `cannot evaluate`, also when a probable leak sits next to the unlinked hit. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched.
 
 ## Consent epochs
 
