@@ -206,11 +206,12 @@ test('byPage masks email, percent-encoded and phone segments', () => {
     'https://shop.example.com/account/pw-fixture@example.com',
     'https://shop.example.com/account/a%20b',
     'https://shop.example.com/account/+15555550123',
+    'https://shop.example.com/account/cHdAZXhhbXBsZS5jb20',
     'https://shop.example.com/account/fake-tee',
   ];
   for (const page of pages) addHit(a, { page });
   const keys = diffRuns(a, makeRun(), { byPage: true }).removed.map((h) => h.key.page);
-  expect(keys.sort()).toEqual(['/account/*', '/account/*', '/account/*', '/account/*', '/account/fake-tee']);
+  expect(keys.sort()).toEqual(['/account/*', '/account/*', '/account/*', '/account/*', '/account/*', '/account/fake-tee']);
 });
 
 test('byPage groups a hit without a page by its frame URL, else under an empty page', () => {
