@@ -28,6 +28,7 @@ The handoff is final for look, copy and motion. Where it conflicts with a rule i
 | "The existing `docs/**/*.md` move over unchanged" | They stay in `docs/`. Links and anchors change where Starlight needs it. | VitePress anchors (`#_8-5-...`) and `.md` links do not resolve in Astro without a change. |
 | "Make the demo real: record against Tagreeve's test shop" | Record against `fixtures/site` in `stub` mode | The fixture site is the test shop. No real store is used. |
 | Design system page (optional) | Not built | The handoff says it is internal. |
+| Safe by default: the heading "Point it at production. Nothing leaks." and the stub mode card "Nothing reaches the vendor" | The heading "Known vendor hits stay local." and the stub mode card "Known endpoints stay local", which says that an unknown destination fails the run but its request can still reach the vendor | Stub mode lets hits to unknown destinations through (design §5.3). The handoff's copy promised more than Tagreeve does. |
 
 ## Order and waves
 
