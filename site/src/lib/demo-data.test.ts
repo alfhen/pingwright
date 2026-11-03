@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { createIdentity, hashEmail, hashPhone, readRun, type TagreeveRecord } from '../../../packages/core/src/index.ts';
 import { demoDir, demoLeaks, demoScenarios, demoSeeds, rewriteHosts, scrubRecords } from '../../../scripts/record-site-demo.ts';
+import { PRESS_MS } from '../components/demo/timeline.ts';
 import { ANSWER_AT, checkReply, demoHits, failedResults, HIT_WINDOW, loadDemo, parseReply, recordedExitCode } from './demo-data.ts';
 
 const dir = fileURLToPath(new URL('../../demo/', import.meta.url));
@@ -42,7 +43,7 @@ test('the banner answer lands at ANSWER_AT, after the hits before it and before 
     const recordT = new Map<string, number>(run.hits.map((h) => [h.id, h.t]));
     const before = s.hits.filter((h) => recordT.get(h.id)! < answerT).map((h) => h.at);
     const after = s.hits.filter((h) => recordT.get(h.id)! >= answerT).map((h) => h.at);
-    expect(Math.max(...before), s.key).toBe(ANSWER_AT - 300);
+    expect(Math.max(...before), s.key).toBe(ANSWER_AT - PRESS_MS);
     expect(Math.min(...after), s.key).toBeGreaterThanOrEqual(ANSWER_AT);
     expect(Math.min(...after), s.key).toBeLessThan(ANSWER_AT + 200);
   }

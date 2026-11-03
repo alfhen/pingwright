@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readRun, type Hit, type RunRecords } from '../../../packages/core/src/index.ts';
+import { PRESS_MS } from '../components/demo/timeline.ts';
 
 export const STORY_HOST = 'staging.northwind.example';
 export const USER_PROMPT = `Meta numbers fell off a cliff after Tuesday's publish, and Legal says Meta fires before people answer the cookie banner. Can you check ${STORY_HOST}?`;
@@ -8,9 +9,8 @@ export const USER_PROMPT = `Meta numbers fell off a cliff after Tuesday's publis
 /** The demo's window for hits, in ms of the demo clock `t`: the first recorded hit lands at the start, the last at the end. */
 export const HIT_WINDOW = [1900, 4700] as const;
 
-/** When the banner answer lands on the demo clock. The button shows pressed for the 300 ms before it. */
+/** When the banner answer lands on the demo clock. The button shows pressed for the `PRESS_MS` before it. */
 export const ANSWER_AT = 3300;
-const PRESS_MS = 300;
 
 export type ScenarioKey = 'undecided' | 'reject' | 'accept';
 export type Tone = 'fg' | 'dim' | 'faint' | 'mint' | 'fail' | 'warn';
