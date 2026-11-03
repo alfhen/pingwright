@@ -6,7 +6,7 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 
 ## Set up
 
-1. Install Docker and start it. If Docker is not running, a run with `--server-container` exits 2 before any browser starts and says `Docker is needed for --server-container`.
+1. Install Docker and start it. If Docker is not running, a run with `--server-container` exits 2 before any browser starts and says `Docker is needed for --server-container`. The build command on arm64 says the same when Docker does not answer.
 2. Get the image. Run:
 
    ```bash

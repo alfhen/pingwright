@@ -56,7 +56,19 @@ export interface RecordingProxy {
 const USERNAME = 'tagreeve';
 const MAX_BODY_BYTES = 1024 * 1024;
 const IDLE_TIMEOUT_MS = 30_000;
-const WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]', '']);
+const UNSPECIFIED_ADDRESSES = new Set(['0.0.0.0', '::', '::ffff:0.0.0.0']);
+
+/** True for every spelling of an unspecified address, and for an empty host (which binds all interfaces). */
+function isUnspecifiedHost(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '');
+  if (bare === '') return true;
+  try {
+    const normalized = new URL(`http://${bare.includes(':') ? `[${bare}]` : bare}`).hostname.replace(/^\[|\]$/g, '');
+    return UNSPECIFIED_ADDRESSES.has(normalized) || normalized === '::ffff:0:0';
+  } catch {
+    return false;
+  }
+}
 
 function digest(value: string): Buffer {
   return createHash('sha256').update(value).digest();
@@ -82,7 +94,7 @@ function parseConnectTarget(authority: string | undefined): Target | undefined {
 }
 
 export async function createRecordingProxy(options: RecordingProxyOptions): Promise<RecordingProxy> {
-  if (WILDCARD_HOSTS.has(options.host)) throw new Error('The proxy must not listen on a wildcard address.');
+  if (isUnspecifiedHost(options.host)) throw new Error('The proxy must not listen on a wildcard address.');
   const credential = randomBytes(24).toString('base64url');
   const expected = digest(`Basic ${Buffer.from(`${USERNAME}:${credential}`).toString('base64')}`);
   const idleMs = options.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
@@ -245,6 +257,10 @@ export async function createRecordingProxy(options: RecordingProxyOptions): Prom
     });
   });
   const address = server.address();
+  if (address && typeof address === 'object' && isUnspecifiedHost(address.address)) {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    throw new Error('The proxy must not listen on a wildcard address.');
+  }
   const port = typeof address === 'object' && address ? address.port : options.port;
 
   return {

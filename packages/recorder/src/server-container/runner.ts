@@ -10,7 +10,7 @@ import { isAbsolute } from 'node:path';
 import type { ServerContainerErrorClass } from '@tagreeve/core';
 import { isLoopbackHost } from '../guard.ts';
 import { Scrubber } from '../gtm-scrub.ts';
-import { baseImage, imageTag, isDigestReference, NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
+import { baseImage, checkDockerPresent, DOCKER_NEEDED_MESSAGE, imageTag, isDigestReference, NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
 
 export const CONFIG_ENV = 'TAGREEVE_SERVER_CONTAINER_CONFIG';
 export const TEST_COMMAND_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_CMD';
@@ -262,7 +262,6 @@ function followOutput(child: ChildProcess, push: (line: string) => void): LogFol
   return { process: child, ended: () => ended };
 }
 
-const DOCKER_INSTALL_URL = 'https://docs.docker.com/get-docker/';
 
 export interface HostCheckOptions {
   readonly image: string;
@@ -272,13 +271,11 @@ export interface HostCheckOptions {
 /** The checks that need no run: Docker is there, the engine is new enough and the image is built. */
 export async function checkServerContainerHost(options: HostCheckOptions): Promise<void> {
   const env = options.env ?? process.env;
-  const version = await runDocker(['version', '--format', '{{.Server.Version}}'], { env, timeoutMs: 30_000 });
-  if (version.missing || version.code !== 0) {
-    throw new ServerContainerError('dockerMissing', `Docker is needed for --server-container. Install it from ${DOCKER_INSTALL_URL}`);
-  }
-  const major = Number(/^(\d+)\./.exec(version.stdout.trim())?.[1]);
+  const docker = await checkDockerPresent(env);
+  if (!docker.ok) throw new ServerContainerError('dockerMissing', DOCKER_NEEDED_MESSAGE);
+  const major = Number(/^(\d+)\./.exec(docker.serverVersion)?.[1]);
   if (Number.isInteger(major) && major < MIN_ENGINE_MAJOR) {
-    throw new ServerContainerError('egressOpen', `Docker Engine ${version.stdout.trim()} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
+    throw new ServerContainerError('egressOpen', `Docker Engine ${docker.serverVersion} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
   }
   if ((await runDocker(['image', 'inspect', '--format', '{{.Id}}', options.image], { env })).code !== 0) {
     throw new ServerContainerError('imageMissing', `The image ${options.image} is not available. Run: tagreeve server-container build`);

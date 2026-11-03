@@ -23,7 +23,7 @@ async function buildCommand(io: Io): Promise<number> {
       io.stdout(`Built ${result.tag}\nImage ID: ${result.imageId}\n`);
       return 0;
     case 'dockerMissing':
-      io.stderr('Docker is needed for server-container build. Install it from https://docs.docker.com/get-docker/\n');
+      io.stderr(`${result.message}\n`);
       return 2;
     case 'failed':
       io.stderr(`The image build failed.\n${result.message}\n`);

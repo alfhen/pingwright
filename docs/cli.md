@@ -372,7 +372,7 @@ tagreeve report runs/suite_<id> --html suite-report.html
 tagreeve server-container build
 ```
 
-Builds the Docker image that the server container feature runs, and tags it `tagreeve-sgtm:<tagreeve version>`. It prints the image ID. It needs Docker and pulls large images, so it is a command of its own: a run never builds an image. On arm64 it exits 2 without Docker or when the build fails.
+Builds the Docker image that the server container feature runs, and tags it `tagreeve-sgtm:<tagreeve version>`. It prints the image ID. It needs Docker and pulls large images, so it is a command of its own: a run never builds an image. On arm64 it first asks Docker for its version. If Docker is missing or its daemon does not answer, it exits 2 and says `Docker is needed for --server-container. Install it from https://docs.docker.com/get-docker/`. It also exits 2 when the build fails.
 
 On an arm64 machine (Apple silicon) the image is built here from Google's image, which is amd64 only. The build copies Google's app files and `node_modules` into a Node 24 distroless image and rebuilds the native `re2` module for arm64. Tagreeve holds the Dockerfile in its own code, writes it to a temporary folder and builds from that folder. It pulls Google's image under Google's terms, never pushes an image, and never puts a file of Google's in a place other than your Docker. On an amd64 machine no build is needed: the command prints the Google image reference to pull and use as it is.
 
