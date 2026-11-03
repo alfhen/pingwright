@@ -78,3 +78,7 @@ A script can read this code. So can a job that runs your tests on every change. 
 - [Reading a run's results](./reading-results.md)
 - [CLI reference](../cli.md) for every option and command
 - [Design](../design.md) for scenario steps and expectations
+
+[nowhere](./does-not-exist)
+
+[gone](./reading-results.md#no-such-heading)
