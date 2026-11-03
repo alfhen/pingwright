@@ -34,6 +34,7 @@ test('a run matches its own baseline, and a run with an extra add_to_cart drifts
   expect(same.code).toBe(0);
   const sameSummary = JSON.parse(same.stdout) as JsonSummary;
   expect(sameSummary.baseline).toMatchObject({ drift: false, added: 0, removed: 0 });
+  expect(sameSummary.baseline?.warnings.filter((w) => w.startsWith('moved '))).toEqual([]);
   expect(sameSummary.ok).toBe(true);
   expect(sameSummary.pass).toBe(sameSummary.results.every((r) => r.pass));
 
@@ -61,6 +62,28 @@ test('a run matches its own baseline, and a run with an extra add_to_cart drifts
   expect(text.stdout).toContain('Result: fail');
 }, 180_000);
 
+test('a baseline from a scenario name without .yml compares with no scenario warning', async () => {
+  const base = await run('baseline-base');
+  expect(base.code).toBe(0);
+  const baselinePath = join(outDir, 'no-ext-baseline.json');
+  expect((await baselineSave([(JSON.parse(base.stdout) as { path: string }).path, baselinePath])).code).toBe(0);
+  const saved = JSON.parse(await readFile(baselinePath, 'utf8')) as { scenario: string };
+  expect(saved.scenario).toMatch(/\.yml$/);
+  const stripped = { ...saved, scenario: saved.scenario.replace(/\.yml$/, '') };
+  expect(stripped.scenario).not.toBe(saved.scenario);
+  await writeFile(baselinePath, JSON.stringify(stripped));
+
+  const same = await run('baseline-base', ['--baseline', baselinePath]);
+  expect(same.code).toBe(0);
+  const summary = JSON.parse(same.stdout) as JsonSummary;
+  expect(summary.baseline).toMatchObject({ drift: false, added: 0, removed: 0 });
+  expect(summary.baseline?.warnings.filter((w) => w.includes('scenario'))).toEqual([]);
+
+  const other = await run('baseline-cart', ['--baseline', baselinePath]);
+  const otherSummary = JSON.parse(other.stdout) as JsonSummary;
+  expect(otherSummary.baseline?.warnings.some((w) => w.includes('scenario baseline-base,'))).toBe(true);
+}, 180_000);
+
 test('the baseline file holds no email, hash, cookie value, URL or query', async () => {
   const base = await run('baseline-leak');
   const records = base.records!;
@@ -68,9 +91,8 @@ test('the baseline file holds no email, hash, cookie value, URL or query', async
   const sha = createHash('sha256').update(EMAIL);
   const identitySecrets = [EMAIL, encodeURIComponent(EMAIL), sha.copy().digest('hex'), sha.copy().digest('base64'), sha.copy().digest('base64url')];
   const secrets = [otherHash, ...identitySecrets];
-  expect(JSON.stringify(records.requests)).toContain(otherHash);
   const hitParams = JSON.stringify(records.hits.map((h) => h.params));
-  for (const secret of identitySecrets.filter((s) => s !== encodeURIComponent(EMAIL))) expect(hitParams).toContain(secret);
+  for (const secret of secrets) expect(hitParams).toContain(secret);
   expect(hitParams).toContain(COOKIE_VALUE);
   expect(JSON.stringify(records.checkpoints)).toContain('_pwalready');
   expect(records.requests.some((r) => r.url.includes('/set-cookie-already'))).toBe(true);
