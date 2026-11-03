@@ -36,6 +36,8 @@ ENV NODE_ENV=production
 CMD ["server_bin.js"]
 `;
 
+export const NODE_BIN = '/nodejs/bin/node';
+
 /** Run as `node -e` in the relay container. RELAY_MAP is `listen=host:port,listen=host:port`. */
 export const RELAY_SCRIPT = `const net = require('node:net');
 for (const entry of String(process.env.RELAY_MAP || '').split(',')) {

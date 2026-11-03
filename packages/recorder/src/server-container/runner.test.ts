@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFakeDocker } from './fake-docker.test-helper.ts';
 import type { FakeDocker, FakeDockerCall, FakeDockerScript } from './fake-docker.test-helper.ts';
-import { NAME_PREFIX, OWNER_HOST_LABEL, OWNER_PID_LABEL } from './image.ts';
+import { NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL } from './image.ts';
 import { ServerContainerError, ServerContainerUsageError, createLogScrubber, loadContainerConfig, pickFreePort, resolveStandInCommand, startServerContainer, sweepOrphans } from './runner.ts';
 import type { StartOptions } from './runner.ts';
 
@@ -72,7 +72,7 @@ describe('startServerContainer', () => {
     const network = create.argv.at(-1)!;
     expect(network).toBe(`${NAME_PREFIX}net-r1`);
 
-    expect(probe!.argv).toEqual(expect.arrayContaining(['--rm', '--network', network, '--entrypoint', 'node']));
+    expect(probe!.argv).toEqual(expect.arrayContaining(['--rm', '--network', network, '--entrypoint', NODE_BIN]));
     expect(probe!.argv).not.toContain('-d');
 
     expect(relay!.argv).toEqual(expect.arrayContaining(['-d', '--rm', '--add-host', 'host.docker.internal:host-gateway']));

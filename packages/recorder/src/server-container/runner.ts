@@ -9,7 +9,7 @@ import { hostname } from 'node:os';
 import { isAbsolute } from 'node:path';
 import { isLoopbackHost } from '../guard.ts';
 import { Scrubber } from '../gtm-scrub.ts';
-import { NAME_PREFIX, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
+import { NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
 
 export const CONFIG_ENV = 'TAGREEVE_SERVER_CONTAINER_CONFIG';
 export const TEST_COMMAND_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_CMD';
@@ -352,7 +352,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     }
     if (!net.isIPv4(probeAddress)) throw new ServerContainerError('notReady', `${PROBE_HOST} did not resolve to an IPv4 address. The container was not started.`);
 
-    const probe = await docker(['run', '--rm', '--name', names.probe, '--network', names.network, ...labels, '--entrypoint', 'node', options.image, '-e', PROBE_SCRIPT, probeAddress], {}, 60_000);
+    const probe = await docker(['run', '--rm', '--name', names.probe, '--network', names.network, ...labels, '--entrypoint', NODE_BIN, options.image, '-e', PROBE_SCRIPT, probeAddress], {}, 60_000);
     let outcome: { connect?: unknown; dns?: unknown } | undefined;
     try {
       outcome = JSON.parse(probe.stdout.trim().split('\n').pop() ?? '') as { connect?: unknown; dns?: unknown };
@@ -369,7 +369,7 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
       '--add-host', 'host.docker.internal:host-gateway',
       '-p', `127.0.0.1:${publishedPort}:${CONTAINER_PORT}`,
       '-e', `RELAY_MAP=${RELAY_PROXY_PORT}=host.docker.internal:${options.proxyPort},${CONTAINER_PORT}=${names.container}:${CONTAINER_PORT}`,
-      '--entrypoint', 'node', options.image, '-e', RELAY_SCRIPT,
+      '--entrypoint', NODE_BIN, options.image, '-e', RELAY_SCRIPT,
     ]);
     if (relay.code !== 0) throw new ServerContainerError('notReady', 'The relay container could not be started.');
     cleanups.push(async () => void (await docker(['rm', '-f', names.relay])));
