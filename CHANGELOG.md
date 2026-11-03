@@ -14,7 +14,7 @@
 
 - `identity.hashesMatch` checks every value of a Conversions API `em` or `ph`. Further values are hit params `hashedEmail.1`, `hashedEmail.2` and so on. A filter on `ids.hashes.<field>.matchesIdentity` is computed from the run identity on a `meta-capi` hit; the record keeps null. Every further value of `fn`, `ln`, `ct`, `zp` and `country` is checked too, and a plain `ct`, `zp` or `country` on a Conversions API event fails the check. (#712, #714, #715, #808)
 
-<!-- U04 -->
+- An unknown option now prints one line, `Unknown option --bogus.`. `tagreeve <command> --help` prints the options of that command for every command. A mistyped option before the command keeps the command name in the usage hint.
 
 - `suite --stores` now exits 2 when `--allow-test-payment` matches no store and a payment scenario would run. A stores file whose `autoconsentRules` file is missing is rejected when the file is read.
 

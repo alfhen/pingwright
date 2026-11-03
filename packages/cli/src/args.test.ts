@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { parseCli, UsageError } from './args.ts';
+import { helpText, parseCli, UsageError } from './args.ts';
 
 test('parses run with every option', () => {
   expect(
@@ -128,6 +128,8 @@ test.each([
   [['--out', 'report', 'nope'], undefined],
   [['--out', 'report', 'run'], 'run'],
   [['diff', 'a'], 'diff'],
+  [['--sitee', 'http://x', 'run', 's.yml'], 'run'],
+  [['--jsno', 'run', 's.yml', '--site', 'http://x'], 'run'],
 ])('usage error for %j carries command %s', (argv, command) => {
   let error: unknown;
   try {
@@ -184,4 +186,28 @@ test.each([
   ['suite', ['suite', 'dir', '--site', 'http://localhost:3000']],
 ])('--server-container-config without --server-container is a usage error on %s', (_name, argv) => {
   expect(() => parseCli([...argv, '--server-container-config', 'c.txt'])).toThrow('--server-container-config needs --server-container');
+});
+
+test('an unknown option is one short line', () => {
+  for (const argv of [['run', 's.yml', '--site', 'http://x.test', '--bogus'], ['--bogus'], ['diff', '-x']]) {
+    const flag = argv.find((a) => a === '--bogus' || a === '-x')!;
+    expect(() => parseCli(argv)).toThrow(`Unknown option ${flag}.`);
+  }
+});
+
+test.each(['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'] as const)('%s --help prints the help of that command', (command) => {
+  expect(parseCli([command, '--help'])).toEqual({ command: 'help', topic: command });
+  expect(helpText(command)).toContain(`Usage: tagreeve ${command}`);
+});
+
+test('diff help lists the diff options, not the run options', () => {
+  const text = helpText('diff');
+  expect(text).toContain('--all-flags');
+  expect(text).toContain('--by-page');
+  expect(text).not.toContain('--network');
+});
+
+test('suite help lists the suite options', () => {
+  expect(helpText('suite')).toContain('--with-handoff');
+  expect(helpText('suite')).toContain('--stores');
 });

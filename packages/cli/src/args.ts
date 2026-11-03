@@ -11,7 +11,7 @@ export class UsageError extends Error {
   }
 }
 
-const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'];
+const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'] as const;
 
 export function usageHint(command: string | undefined): string {
   return `Run tagreeve ${command ? `${command} ` : ''}--help for the options.`;
@@ -98,7 +98,9 @@ export interface ServerContainerArgs {
   action: 'build';
 }
 
-export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
+export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
+
+export type HelpTopic = (typeof COMMANDS)[number];
 
 export const USAGE = `Usage:
   tagreeve run <scenario.yml> --site <url> [options]
@@ -171,6 +173,74 @@ Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
 Scenario format: https://github.com/alfhen/tagreeve/blob/main/docs/design.md#11-expectations
 `;
 
+const SUITE_USAGE = `Usage: tagreeve suite <dir> (--site <url> | --stores <stores.json>) [options]
+
+Runs every scenario in <dir> and writes one record per run plus a suite.json.
+
+Options:
+${USAGE.slice(USAGE.indexOf('  --site <url>               The site to test. Give'), USAGE.indexOf('\nOptions for run:')).trimEnd()}
+  -h, --help                 Show this help
+`;
+
+const DIFF_USAGE = `Usage: tagreeve diff <a.jsonl> <b.jsonl> [options]
+
+Compares the hits of two run records. It exits 0 whether or not they differ.
+
+Options:
+  --by-page                  Add the page path to each key
+  --all-flags                Also show flag count changes for hosts allowed by allowUnknownDestination (hidden by default)
+  --json                     Print the full diff result as JSON
+  -h, --help                 Show this help
+`;
+
+const BASELINE_USAGE = `Usage: tagreeve baseline save <run.jsonl> <baseline.json> [options]
+
+Saves the hit tuples of a run as a baseline file. Pass the file to "tagreeve run --baseline".
+
+Options:
+  --by-page                  Add the page path to each key
+  -h, --help                 Show this help
+`;
+
+const REPORT_USAGE = `Usage: tagreeve report <run.jsonl | suite-dir> --html <out.html>
+
+Writes an HTML report for a run record or a suite directory.
+
+Options:
+  --html <file>              The report file to write (required)
+  -h, --help                 Show this help
+`;
+
+const INSTALL_BROWSER_USAGE = `Usage: tagreeve install-browser
+
+Installs the Chromium that Tagreeve drives. It takes no options.
+
+Options:
+  -h, --help                 Show this help
+`;
+
+const SERVER_CONTAINER_USAGE = `Usage: tagreeve server-container build
+
+Builds the image for the server container feature on arm64 (Apple silicon) from Google's image. It needs Docker, pulls large images and never pushes. On amd64 it prints the image to use.
+
+Options:
+  -h, --help                 Show this help
+`;
+
+const HELP_TEXT: Record<HelpTopic, string> = {
+  run: RUN_USAGE,
+  suite: SUITE_USAGE,
+  diff: DIFF_USAGE,
+  baseline: BASELINE_USAGE,
+  report: REPORT_USAGE,
+  'install-browser': INSTALL_BROWSER_USAGE,
+  'server-container': SERVER_CONTAINER_USAGE,
+};
+
+export function helpText(topic: HelpTopic | undefined): string {
+  return topic ? HELP_TEXT[topic] : USAGE;
+}
+
 export const NET_LOG_NEEDS_LIVE =
   '--net-log needs --network live. In stub mode it would let the requests a frame sends while it unloads leave the machine.';
 
@@ -217,13 +287,31 @@ const OPTIONS = {
   help: { type: 'boolean', short: 'h' },
 } as const;
 
+function commandOf(argv: string[]): HelpTopic | undefined {
+  const { tokens } = parseArgs({ args: argv, allowPositionals: true, strict: false, options: OPTIONS, tokens: true });
+  // An unknown option may take the next word as its value, so that word is a command only when no other word is.
+  const isCommand = (word: string): boolean => (COMMANDS as readonly string[]).includes(word);
+  let skip = false;
+  let skipped: string | undefined;
+  for (const token of tokens) {
+    if (token.kind === 'option') {
+      skip = !(token.name in OPTIONS) && token.value === undefined;
+    } else if (token.kind === 'positional') {
+      if (!skip) return isCommand(token.value) ? (token.value as HelpTopic) : skipped as HelpTopic | undefined;
+      if (skipped === undefined && isCommand(token.value)) skipped = token.value;
+      skip = false;
+    }
+  }
+  return skipped as HelpTopic | undefined;
+}
+
 export function parseCli(argv: string[]): Command {
   try {
     return parseCommand(argv);
   } catch (error) {
     if (error instanceof UsageError && error.command === undefined) {
-      const first = parseArgs({ args: argv, allowPositionals: true, strict: false, options: OPTIONS }).positionals[0];
-      if (first !== undefined && COMMANDS.includes(first)) error.command = first;
+      const command = commandOf(argv);
+      if (command !== undefined) error.command = command;
     }
     throw error;
   }
@@ -238,12 +326,16 @@ function parseCommand(argv: string[]): Command {
       options: OPTIONS,
     });
   } catch (error) {
+    const unknown = error instanceof Error && /^Unknown option '(-[^']*)'/.exec(error.message);
+    if (unknown) throw new UsageError(`Unknown option ${unknown[1]}.`);
     throw new UsageError(error instanceof Error ? error.message : String(error));
   }
   const { values, positionals } = parsed;
   if (values.version) return { command: 'version' };
   const [command, ...rest] = positionals;
-  if (values.help && command === 'run') return { command: 'help', topic: 'run' };
+  if (values.help && command !== undefined && (COMMANDS as readonly string[]).includes(command)) {
+    return { command: 'help', topic: command as HelpTopic };
+  }
   if (values.help || command === undefined) return { command: 'help' };
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');
