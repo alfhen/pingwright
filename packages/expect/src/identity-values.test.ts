@@ -444,6 +444,10 @@ test.each([
   ['a JSON unicode escape', '{"e":"\\u00e9visitor@other-person.example"}', 'e'],
   ['a tab escape in an NDJSON line', '{"a":"x\\tvisitor@other-person.example"}\n{"b":1}', 'a'],
   ['a [] joined into the name', 'x[]visitor@other-person.example=1', '(other)'],
+  ['a %5B%5D joined into the name', 'x%5B%5Dvisitor@other-person.example=1', '(other)'],
+  ['a lowercase %5b%5d joined into the name', 'x%5b%5dvisitor@other-person.example=1', '(other)'],
+  ['a long name joined with []', 'abcdef[]visitor@other-person.example=1', '(other)'],
+  ['a long name joined after another field', 'a=1&abcdef[]visitor@other-person.example=1', '(other)'],
 ])('possibleRealData reports one value once when the body and its field read it with different edges: %s', (_n, body, where) => {
   expect(body).toContain('visitor@other-person.example');
   const [leak, ...rest] = findForeignData([rawRequest(REPLAY, body)], [], identity);

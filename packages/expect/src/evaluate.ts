@@ -1387,16 +1387,14 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 
 // The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
 // merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
-// merges, and only when it differs from the field's value by a few edge characters: a different value in the URL, or a longer
-// value elsewhere, keeps its own finding.
-const MAX_EDGE_SHIFT = 5;
-
+// merges, and only when the shorter value never stands alone in the body: a different value in the URL, or a longer value
+// elsewhere, keeps its own finding.
 // The shorter value must never stand alone in the body: a separate value that a longer one contains keeps its own finding.
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  if (long.length - short.length > MAX_EDGE_SHIFT || !long.includes(short)) return false;
+  if (!long.includes(short)) return false;
   return bodies.every((raw) => {
-    const text = raw.replaceAll('[]', '');
+    const text = raw.replace(/\[\]|%5B%5D/gi, '');
     const covered: [number, number][] = [];
     for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
     for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
