@@ -387,7 +387,7 @@ Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`)
 
 ## 12. Interfaces
 
-**CLI:** `tagreeve run`, `tagreeve diff`, `tagreeve suite`, `tagreeve baseline` (`baseline save`, and `run --baseline` to check a run against it), `tagreeve report` (an HTML file for one run or a suite) `tagreeve server-container build` (builds the image of the opt-in server container feature, never pushes it) and `tagreeve install-browser`. Terminal, JSON and JUnit output of `report` is not built (§15.3).
+**CLI:** `tagreeve run`, `tagreeve diff`, `tagreeve suite`, `tagreeve baseline` (`baseline save`, and `run --baseline` to check a run against it), `tagreeve report` (an HTML file for one run or a suite), `tagreeve server-container build` (builds the image of the opt-in server container feature, never pushes it) and `tagreeve install-browser`. Terminal, JSON and JUnit output of `report` is not built (§15.3).
 
 **CLI only.** Tagreeve has no MCP server. An agent runs the CLI and reads `--json` output and the JSONL record. Every result includes record IDs, the run ID and the step label. Errors say what was expected and what was found.
 
