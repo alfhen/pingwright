@@ -6,13 +6,9 @@ import { expect, test } from 'vitest';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const BINARY = /\.(png|ico|woff2?)$/;
 
-const wholeFiles = [/^brand\/site-handoff\//, /^docs\/plan-.*\.md$/, /^docs\/proposal-.*\.md$/, /^scripts\/no-old-name\.test\.ts$/, /^packages\/cli\/src\/alias-bin(\.test)?\.ts$/];
+const wholeFiles = [/^brand\/site-handoff\//, /^docs\/plan-.*\.md$/, /^docs\/proposal-.*\.md$/, /^scripts\/no-old-name\.test\.ts$/];
 
 const allowedLines: Record<string, RegExp> = {
-  'package.json': /^\s*"pingwright": "dist\/pingwright\.js"/,
-  'scripts/build.ts': /alias-bin\.ts|'pingwright\.js'/,
-  '.github/workflows/ci.yml': /bin\/pingwright" --version/,
-  '.github/workflows/release-tag.yml': /bin\/pingwright" --version/,
   'README.md': /^> \*\*Pingwright is now Tagreeve/,
   'site/src/components/home/WhyName.astro': /^\s*<span[^>]*>Pronounced like "tag reeve"\. Formerly Pingwright\.<\/span>$/,
 };
@@ -65,16 +61,19 @@ test('any case of the old name is reported', () => {
   expect(oldNameHits({ 'docs/a.md': 'PINGWRIGHT_X and pingwright and @pingwright/core' })).toEqual(['docs/a.md:1']);
 });
 
-test('the allowlist lets the history, the record key and the alias through', () => {
+test('the allowlist lets the history, and the record key through', () => {
   const changelog = ['# Changelog', '', '## 0.4.0-rc.1', '', '### Pingwright is now Tagreeve', '', 'Run `npm uninstall -g pingwright`.', '', '### Added', '', 'x', '', '## 0.3.0', '', 'Pingwright 0.3'].join('\n');
   expect(
     oldNameHits({
       'CHANGELOG.md': changelog,
       'docs/plan-0.4.md': 'Pingwright',
       'packages/core/src/records.ts': 'pingwrightVersion: string;',
-      'package.json': '    "pingwright": "dist/pingwright.js"',
     }),
   ).toEqual([]);
+});
+
+test('a pingwright bin in package.json is reported', () => {
+  expect(oldNameHits({ 'package.json': '    "pingwright": "dist/pingwright.js"' })).toEqual(['package.json:1']);
 });
 
 test('the old name in the 0.4.0-rc.1 notes outside the rename block is reported', () => {

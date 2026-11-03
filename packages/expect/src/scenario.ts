@@ -103,6 +103,8 @@ export interface ScenarioOptions {
   /** `true` allows every unknown destination. A list allows only those hosts or `*.domain` wildcards. */
   allowUnknownDestination?: boolean | string[];
   firstPartyHosts?: string[];
+  /** `false` makes requests to known platform hosts `unknownDestination` again. Default: true. */
+  platformHosts?: boolean;
   /** Regular expression matched against request URLs: a matching request in an `addToCart` step counts as a cart change. */
   cartRequest?: string;
   /** dataLayer event names or `*` globs that `unloadGap` never reports. */
@@ -156,7 +158,7 @@ const NETWORKS = ['stub', 'server', 'live'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff', 'payment'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts', 'viewport'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'platformHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts', 'viewport'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -674,6 +676,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         } else if (k === 'allowUnknownDestination') {
           if (typeof v === 'boolean' || isHostList(v)) options.allowUnknownDestination = v;
           else fail(p, `must be true, false or a list of hosts${HOST_HINT}`);
+        } else if (k === 'platformHosts') {
+          if (typeof v === 'boolean') options.platformHosts = v;
+          else fail(p, 'must be true or false');
         } else if (k === 'cartRequest') {
           if (typeof v === 'string' && v !== '' && isRegExp(v)) options.cartRequest = v;
           else fail(p, 'must be a regular expression such as "/api/cart/add"');

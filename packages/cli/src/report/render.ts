@@ -78,10 +78,16 @@ export function expectations(model: ReportModel): string {
   return `<ul class="results">${model.expectations.map(expectation).join('')}</ul>`;
 }
 
+function flagHosts(f: ReportModel['flags'][number]): string {
+  if (!f.hostCounts) return f.hosts.map(escapeHtml).join(', ');
+  const items = f.hostCounts.map((h) => `<li>${escapeHtml(h.host)}: ${h.count}</li>`).join('');
+  return `<details><summary>${f.hostCounts.length} ${f.hostCounts.length === 1 ? 'host' : 'hosts'}</summary><ul>${items}</ul></details>`;
+}
+
 export function flags(model: ReportModel): string {
   if (model.flags.length === 0) return '<p class="empty">No flags.</p>';
   const rows = model.flags
-    .map((f) => `<tr><td>${escapeHtml(f.kind)}</td><td>${f.count}</td><td>${f.hosts.map(escapeHtml).join(', ')}</td></tr>`)
+    .map((f) => `<tr><td>${escapeHtml(f.kind)}</td><td>${f.count}</td><td>${flagHosts(f)}</td></tr>`)
     .join('');
   return `<div class="scroll"><table><thead><tr><th scope="col">Kind</th><th scope="col">Count</th><th scope="col">Hosts</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }

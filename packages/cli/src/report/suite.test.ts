@@ -8,7 +8,7 @@ import { main } from '../main.ts';
 import type { SuiteManifest } from '../suite.ts';
 import { buildReportModel } from './model.ts';
 import { CSP, renderReport } from './render.ts';
-import { buildSuiteModel, recordKey, renderSuiteReport, type SuiteRecords } from './suite.ts';
+import { buildSuiteModel, loadSuite, recordKey, renderSuiteReport, type SuiteRecords } from './suite.ts';
 
 const EMAIL = 'pw-fixture@example.com';
 const HASH = createHash('sha256').update(EMAIL).digest('hex');
@@ -72,6 +72,7 @@ const manifest: SuiteManifest = {
   id: 'suite_<b>01</b>',
   startedAt: 1_800_000_000_000,
   site: 'https://shop.example.com',
+  stores: [],
   variants: ['published', 'workspace'],
   cells: [
     { scenario: 'checkout', variant: 'published', labels: {}, status: 'pass', exitCode: 0, record: 'checkout.published.jsonl' },
@@ -198,7 +199,7 @@ test('a run whose only failure could not be evaluated does not read as clean', (
 
 test('a flag with no host has no placeholder in the diff table', () => {
   const html = renderSuiteReport({
-    header: { id: 's', startedAt: 'x', host: 'h', variants: ['a', 'b'], exitCode: 0 },
+    header: { id: 's', startedAt: 'x', host: 'h', stores: [], variants: ['a', 'b'], exitCode: 0 },
     warnings: [],
     scenarios: [],
     diffs: [{ scenario: 'c', from: 'a', to: 'b', warnings: [], rows: [], flags: [{ kind: 'unloadGap', host: '', a: 0, b: 1 }] }],
@@ -367,6 +368,64 @@ test('a failed cell with no record does not read as no leaks', () => {
   const failing: SuiteManifest = { ...manifest, cells: manifest.cells.map((c) => (c.scenario === 'gone' && c.variant === 'published' ? { ...c, status: 'fail' as const, exitCode: 1 as const } : c)) };
   const html = renderSuiteReport(buildSuiteModel(failing, loaded));
   expect(html).toContain('<li><strong>published:</strong> leaks not known; 1 run has no record</li>');
+});
+
+const storesManifest: SuiteManifest = {
+  ...manifest,
+  suiteSchemaVersion: 2,
+  stores: [
+    { name: 'se', site: 'https://shop.example.se' },
+    { name: 'de', site: 'https://shop.example.de' },
+  ],
+  cells: ['se', 'de'].flatMap((store) => [
+    { scenario: 'checkout', variant: 'published', labels: { store }, status: 'pass' as const, exitCode: 0 as const, record: `checkout.${store}.published.jsonl` },
+    { scenario: 'checkout', variant: 'workspace', labels: { store }, status: 'pass' as const, exitCode: 0 as const, record: `checkout.${store}.workspace.jsonl` },
+  ]),
+  exitCode: 0,
+};
+const storeRecords: SuiteRecords = new Map(
+  ['se', 'de'].flatMap((store) => [
+    [recordKey('checkout', 'published', store), records('checkout', 'published', ['page_view'])] as const,
+    [recordKey('checkout', 'workspace', store), records('checkout', 'workspace', store === 'se' ? ['page_view'] : ['page_view', 'extra'])] as const,
+  ]),
+);
+
+test('a suite with stores has a Store column, a row per scenario and store, and a verdict per store and variant', () => {
+  const html = renderSuiteReport(buildSuiteModel(storesManifest, storeRecords));
+  expect(html).toContain('<th scope="col">Scenario</th><th scope="col">Store</th><th scope="col">published</th>');
+  expect(html).toContain('<tr><th scope="row">checkout</th><td>se</td><td>PASS</td><td>PASS</td></tr>');
+  expect(html).toContain('<tr><th scope="row">checkout</th><td>de</td><td>PASS</td><td>PASS</td></tr>');
+  for (const label of ['se, published', 'se, workspace', 'de, published', 'de, workspace']) expect(html).toContain(`<li><strong>${label}:</strong>`);
+  expect(html).toContain('<h3>checkout on se, published: PASS</h3>');
+  expect(html).toContain('<h3>checkout on de, workspace: PASS</h3>');
+  expect(html).toContain('<dt>Stores</dt><dd>se, de</dd>');
+  expect(html).toContain('<title>Tagreeve suite: published vs workspace on se, de, 2027-01-15</title>');
+});
+
+test('diffs are within a store', () => {
+  const model = buildSuiteModel(storesManifest, storeRecords);
+  expect(model.diffs.map((d) => [d.store, d.from, d.to, d.rows.length])).toEqual([
+    ['se', 'published', 'workspace', 0],
+    ['de', 'published', 'workspace', 1],
+  ]);
+  expect(renderSuiteReport(model)).toContain('<h3>checkout on de: published to workspace</h3>');
+});
+
+test('a version 1 manifest still loads, with no stores', async () => {
+  const sub = join(dir, 'v1');
+  await mkdir(sub);
+  const v1 = { ...manifest, suiteSchemaVersion: 1, stores: undefined, cells: manifest.cells.map((c) => ({ ...c, labels: undefined })) };
+  await writeFile(join(sub, 'suite.json'), JSON.stringify(v1));
+  const suite = await loadSuite(sub);
+  expect(suite.manifest.stores).toEqual([]);
+  expect(renderSuiteReport(buildSuiteModel(suite.manifest, loaded))).not.toContain('<th scope="col">Store</th>');
+});
+
+test('a version 2 manifest with a malformed stores list is refused', async () => {
+  const sub = join(dir, 'v2bad');
+  await mkdir(sub);
+  await writeFile(join(sub, 'suite.json'), JSON.stringify({ ...manifest, suiteSchemaVersion: 2, stores: [{ name: 1 }] }));
+  await expect(loadSuite(sub)).rejects.toThrow('is not a suite manifest');
 });
 
 test('the suite title names the variants, host and date, and the run title the scenario', () => {

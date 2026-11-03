@@ -181,6 +181,24 @@ test('byPage strips the sandbox prefix from the key and keeps the raw page in th
   expect(a.hits[0]!.page).toContain('web-pixels@aaa');
 });
 
+test('byPage masks value-like path segments and keeps plain paths', () => {
+  const a = makeRun();
+  const pages = [
+    'https://shop.example.com/checkouts/cn/Z2NwLXVzLWVhc3QxOjAxSFBXVEVTVDAwMDAwMDAx',
+    'https://shop.example.com/100000000001/orders/0123456789abcdef0123456789abcdef',
+    'https://shop.example.com/checkouts/123e4567-e89b-12d3-a456-426614174000',
+    'https://shop.example.com/products/fake-tee',
+    'https://shop.example.com/pages/about.html',
+    'https://shop.example.com/web-pixels@aaa/custom/web-pixel-1@1/sandbox/modern/cart',
+  ];
+  for (const page of pages) addHit(a, { page });
+  const keys = diffRuns(a, makeRun(), { byPage: true }).removed.map((h) => h.key.page).sort();
+  expect(keys).toEqual([
+    '/checkouts/cn/*', '/*/orders/*', '/checkouts/*', '/products/fake-tee', '/pages/about.html', '/cart',
+  ].sort());
+  expect(a.hits[0]!.page).toContain('Z2NwLXVz');
+});
+
 test('byPage groups a hit without a page by its frame URL, else under an empty page', () => {
   const a = makeRun();
   const b = makeRun();

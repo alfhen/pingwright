@@ -87,7 +87,16 @@ test.each([
 
 test('suite takes one directory and needs --site', () => {
   expect(() => parseCli(['suite', '--site', 'https://x.test'])).toThrow('one scenario directory');
-  expect(() => parseCli(['suite', 'dir'])).toThrow('--site is required');
+  expect(() => parseCli(['suite', 'dir'])).toThrow('--site or --stores is required');
+});
+
+test('suite takes --stores instead of --site, never both, and run refuses it', () => {
+  const parsed = parseCli(['suite', 'dir', '--stores', 'stores.json']);
+  expect(parsed).toMatchObject({ command: 'suite', stores: 'stores.json' });
+  expect(parsed).not.toHaveProperty('site');
+  expect(() => parseCli(['suite', 'dir', '--stores', 's.json', '--site', 'https://x.test'])).toThrow('cannot be used together');
+  expect(() => parseCli(['run', 's.yml', '--site', 'https://x.test', '--stores', 's.json'])).toThrow('--stores is not an option of run');
+  expect(() => parseCli(['run', 's.yml', '--stores', 's.json'])).toThrow('--site is required');
 });
 
 test.each([

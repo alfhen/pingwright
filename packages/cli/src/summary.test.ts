@@ -1,4 +1,5 @@
 import type { Hit, Result, RunRecords } from '@tagreeve/core';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -279,4 +280,26 @@ test('baseline drift sets pass and ok to false, and no drift leaves them', () =>
   const same = { ...base };
   applyBaseline(same, noDrift);
   expect(same).toMatchObject({ pass: true, ok: true });
+});
+
+test('lists platform hosts in one line per platform', () => {
+  const flags = [
+    { kind: 'platformHost', detail: 'GET https://cdn.shopify.com/a?x=1' },
+    { kind: 'platformHost', detail: 'GET https://cdn.shopify.com/b?x=1' },
+    { kind: 'platformHost', detail: 'GET https://unlisted.example.invalid/b?x=1' },
+  ];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('platformHost: shopify, 2 requests to 1 host (cdn 2)');
+  expect(text).toContain('platformHost: GET https://unlisted.example.invalid/b?x=1');
+});
+
+test('platformHost summary lines hold names and counts only', () => {
+  const email = 'pw-fixture@example.com';
+  const values = [email, createHash('sha256').update(email).digest('hex'), encodeURIComponent(email), 'pwfake-cookie-value-0001'];
+  const url = `https://cdn.shopify.com/a/${values[1]}?e=${values[0]}&u=${values[2]}&c=${values[3]}`;
+  for (const v of values) expect(url).toContain(v);
+  const flags = [{ kind: 'platformHost', detail: `GET ${url}` }];
+  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
+  expect(text).toContain('platformHost: shopify, 1 request to 1 host (cdn 1)');
+  for (const v of values) expect(text).not.toContain(v);
 });

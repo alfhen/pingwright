@@ -11,6 +11,10 @@ const DAY = 86_400;
 const ITP_CAP_DAYS = 7;
 
 const name = process.argv[2] ?? 'webkit';
+if (name !== 'webkit' && name !== 'chromium') {
+  console.error('Usage: node scripts/probe-webkit.ts [webkit|chromium]');
+  process.exit(2);
+}
 const type: BrowserType = name === 'chromium' ? chromium : webkit;
 
 const isOffMachine = (url: URL) =>

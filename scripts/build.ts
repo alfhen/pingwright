@@ -15,7 +15,7 @@ const alias = Object.fromEntries(
 
 rmSync(path('dist'), { recursive: true, force: true });
 await build({
-  entryPoints: { cli: path('packages/cli/src/bin.ts'), pingwright: path('packages/cli/src/alias-bin.ts') },
+  entryPoints: { cli: path('packages/cli/src/bin.ts') },
   outdir: path('dist'),
   splitting: true,
   chunkNames: '[name]-[hash]',
@@ -29,4 +29,4 @@ await build({
 });
 mkdirSync(path('dist/rules'), { recursive: true });
 cpSync(path('packages/consent/rules/fixture-site.json'), path('dist/rules/fixture-site.json'));
-for (const file of ['cli.js', 'pingwright.js']) chmodSync(path(`dist/${file}`), 0o755);
+chmodSync(path('dist/cli.js'), 0o755);

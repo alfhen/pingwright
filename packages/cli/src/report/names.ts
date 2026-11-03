@@ -2,6 +2,7 @@ export const VENDOR_NAMES: Readonly<Record<string, string>> = {
   ga4: 'Google Analytics 4',
   'google-ads': 'Google Ads',
   meta: 'Meta',
+  'meta-capi': 'Meta Conversions API',
   pinterest: 'Pinterest',
   sgtm: 'server container',
   linkedin: 'LinkedIn',

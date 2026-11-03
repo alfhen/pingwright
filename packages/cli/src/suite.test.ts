@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { newId, RunWriter, type Run } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import type { SuiteArgs } from './args.ts';
 import type { RunOutcome, RunSpec } from './run.ts';
@@ -203,7 +204,7 @@ test('the manifest holds no path, query, override file path or auth value', asyn
   const [suiteDir] = await readdir(out);
   const text = await readFile(join(out, suiteDir!, 'suite.json'), 'utf8');
   const manifest = JSON.parse(text) as SuiteManifest;
-  expect(manifest).toMatchObject({ suiteSchemaVersion: 1, site: 'https://shop.example.com', variants: ['published', 'ws'], exitCode: 0 });
+  expect(manifest).toMatchObject({ suiteSchemaVersion: 2, site: 'https://shop.example.com', stores: [], variants: ['published', 'ws'], exitCode: 0 });
   expect(manifest.cells).toHaveLength(2);
   expect(manifest.cells[0]).toMatchObject({ scenario: 'a', variant: 'published', labels: {}, status: 'pass', exitCode: 0 });
   for (const forbidden of [file, 'secret-place', FAKE_AUTH, '/some/path', 'token=abc']) {
@@ -276,6 +277,7 @@ test('the table shows one diff column per extra variant and the record paths', (
     id: 'suite_X',
     startedAt: 0,
     site: 'https://shop.example.com',
+    stores: [],
     variants: ['published', 'workspace'],
     cells: [
       cell('checkout', 'published', 'pass'),
@@ -329,4 +331,211 @@ test('cell text: a check-only failure, a warn with a check, an unfinished run an
   expect(cellText({ status: 'error', exitCode: 2 })).toBe('ERROR (exit 2)');
   expect(cellText({ status: 'fail', exitCode: 1 })).toBe('FAIL');
   expect(cellText({ status: 'pass', exitCode: 0 })).toBe('PASS');
+});
+
+const DECLARED = 'start: /\nvars:\n  product: tee\n  size: m\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
+const PAYMENT = 'start: /\nsteps:\n  - payment: { provider: fixture, card: "4242424242424242" }\nexpect:\n  must: []\n  mustNot: []\n';
+
+async function storesFile(dir: string, stores: unknown[]): Promise<string> {
+  const path = join(dir, '..', 'stores.json');
+  await writeFile(path, JSON.stringify({ storesSchemaVersion: 1, stores }));
+  return path;
+}
+
+async function manifestOf(out: string): Promise<SuiteManifest> {
+  const [suiteDir] = await readdir(out);
+  return JSON.parse(await readFile(join(out, suiteDir!, 'suite.json'), 'utf8')) as SuiteManifest;
+}
+
+test('--stores runs every scenario against every store with a store label and file stem', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
+  const stores = await storesFile(dir, [
+    { name: 'se', site: 'https://shop.example.se/path?token=abc', country: 'SE' },
+    { name: 'de', site: 'https://shop.example.de' },
+  ]);
+  const fake = recorder();
+  const c = capture();
+  const variants = [{ name: 'published' }, { name: 'ws' }];
+  expect(await suiteCommand(args(dir, out, { site: undefined, stores, variants }), c.io, fake)).toBe(0);
+  expect(fake.specs.map((s) => [s.scenarioName, s.site, s.variant])).toEqual([
+    ['a', 'https://shop.example.se/path?token=abc', { name: 'published', fileStem: 'a.se' }],
+    ['a', 'https://shop.example.se/path?token=abc', { name: 'ws', fileStem: 'a.se' }],
+    ['a', 'https://shop.example.de', { name: 'published', fileStem: 'a.de' }],
+    ['a', 'https://shop.example.de', { name: 'ws', fileStem: 'a.de' }],
+    ['b', 'https://shop.example.se/path?token=abc', { name: 'published', fileStem: 'b.se' }],
+    ['b', 'https://shop.example.se/path?token=abc', { name: 'ws', fileStem: 'b.se' }],
+    ['b', 'https://shop.example.de', { name: 'published', fileStem: 'b.de' }],
+    ['b', 'https://shop.example.de', { name: 'ws', fileStem: 'b.de' }],
+  ]);
+  expect(new Set(fake.specs.filter((s) => s.scenarioName === 'a').map((s) => s.seed)).size).toBe(1);
+  const manifest = await manifestOf(out);
+  expect(manifest.suiteSchemaVersion).toBe(2);
+  expect(manifest.site).toBe('https://shop.example.se');
+  expect(manifest.stores).toEqual([
+    { name: 'se', site: 'https://shop.example.se' },
+    { name: 'de', site: 'https://shop.example.de' },
+  ]);
+  expect(manifest.cells).toHaveLength(8);
+  expect(manifest.cells.slice(0, 4).map((x) => [x.scenario, x.labels, x.variant])).toEqual([
+    ['a', { store: 'se' }, 'published'],
+    ['a', { store: 'se' }, 'ws'],
+    ['a', { store: 'de' }, 'published'],
+    ['a', { store: 'de' }, 'ws'],
+  ]);
+  expect(JSON.stringify(manifest)).not.toContain('token=abc');
+  expect(JSON.stringify(manifest)).not.toContain('/path');
+  expect(c.out()).toMatch(/^scenario\s+store\s+published\s+ws\s+diff \(published -> ws\)$/m);
+  expect(c.out()).toMatch(/^a\s+se\s+PASS\s+PASS\s+/m);
+  expect(c.out()).toMatch(/^a\s+de\s+PASS\s+PASS\s+/m);
+});
+
+test('without --stores the cells have no labels and the manifest has no stores', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  await suiteCommand(args(dir, out), capture().io, recorder());
+  const manifest = await manifestOf(out);
+  expect(manifest.stores).toEqual([]);
+  expect(manifest.cells[0]!.labels).toEqual({});
+  expect(manifest.diffs.every((d) => d.store === undefined)).toBe(true);
+});
+
+test('diffs compare variants within one store', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const stores = await storesFile(dir, [
+    { name: 'se', site: 'https://shop.example.se' },
+    { name: 'de', site: 'https://shop.example.de' },
+  ]);
+  const fake = {
+    run: async (spec: RunSpec): Promise<RunOutcome> => {
+      const run = { type: 'run', id: newId('run'), scenario: 'a', variant: spec.variant!.name, site: spec.site, startedAt: 0, networkMode: 'stub' } as unknown as Run;
+      const writer = await RunWriter.create(spec.out, run);
+      await writer.close();
+      const path = join(spec.out, `${spec.variant!.fileStem}.${spec.variant!.name}.jsonl`);
+      await rename(writer.path, path);
+      return { code: 0, path, summary: { ok: true, pass: true } as RunOutcome['summary'] };
+    },
+  };
+  const variants = [{ name: 'published' }, { name: 'ws' }];
+  await suiteCommand(args(dir, out, { site: undefined, stores, variants }), capture().io, fake);
+  const manifest = await manifestOf(out);
+  expect(manifest.diffs.map((d) => [d.scenario, d.store, d.from, d.to])).toEqual([
+    ['a', 'se', 'published', 'ws'],
+    ['a', 'de', 'published', 'ws'],
+  ]);
+});
+
+test('var precedence is the scenario, then the store, then --var', async () => {
+  const { dir, out } = await workDir({ 'a.yml': DECLARED });
+  const stores = await storesFile(dir, [
+    { name: 'one', site: 'https://one.example.com', vars: { product: 'mug', size: 'l' } },
+    { name: 'two', site: 'https://two.example.com' },
+  ]);
+  const fake = recorder();
+  await suiteCommand(args(dir, out, { site: undefined, stores, vars: { size: 'xl' } }), capture().io, fake);
+  expect(fake.specs.map((s) => s.parsed.vars)).toEqual([
+    { product: 'mug', size: 'xl' },
+    { product: 'tee', size: 'xl' },
+  ]);
+});
+
+test('a store var that no scenario declares exits 2 and names the store and var, not the value', async () => {
+  const { dir, out } = await workDir({ 'a.yml': DECLARED });
+  const stores = await storesFile(dir, [{ name: 'one', site: 'https://one.example.com', vars: { nope: 'pw-secret-value' } }]);
+  const fake = recorder();
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { site: undefined, stores }), c.io, fake)).toBe(2);
+  expect(c.err()).toContain('Store "one": var nope');
+  expect(c.err()).not.toContain('pw-secret-value');
+  expect(fake.specs).toEqual([]);
+});
+
+test('a bad stores file exits 2 before any run', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const stores = await storesFile(dir, [{ name: 'Bad', site: 'https://x.test' }]);
+  const fake = recorder();
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { site: undefined, stores }), c.io, fake)).toBe(2);
+  expect(c.err()).toContain('store 0 needs a name');
+  expect(fake.specs).toEqual([]);
+});
+
+test('store country sets identity.country, and a scenario with another country gets a warning', async () => {
+  const withCountry = 'start: /\nidentity:\n  country: DE\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
+  const { dir, out } = await workDir({ 'a.yml': withCountry, 'b.yml': VALID });
+  const stores = await storesFile(dir, [{ name: 'se', site: 'https://shop.example.se', country: 'SE' }]);
+  const fake = recorder();
+  const c = capture();
+  await suiteCommand(args(dir, out, { site: undefined, stores }), c.io, fake);
+  expect(fake.specs.map((s) => s.parsed.identity.country)).toEqual(['SE', 'SE']);
+  expect(c.err()).toContain('Warning: a: identity.country differs from the country of store "se"');
+  expect(c.err()).not.toContain('Warning: b:');
+});
+
+test('store autoconsent rules are added to the --autoconsent-rules of that store only', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const stores = await storesFile(dir, [
+    { name: 'one', site: 'https://one.example.com', autoconsentRules: 'rules.json' },
+    { name: 'two', site: 'https://two.example.com' },
+  ]);
+  const fake = recorder();
+  await suiteCommand(args(dir, out, { site: undefined, stores, autoconsentRules: ['global.json'] }), capture().io, fake);
+  expect(fake.specs.map((s) => s.autoconsentRules)).toEqual([['global.json', join(dir, '..', 'rules.json')], ['global.json']]);
+});
+
+test('a payment scenario runs only for the store whose host equals --allow-test-payment', async () => {
+  const { dir, out } = await workDir({ 'pay.yml': PAYMENT });
+  const stores = await storesFile(dir, [
+    { name: 'local', site: 'http://localhost:4000' },
+    { name: 'other', site: 'http://127.0.0.1:4000' },
+  ]);
+  const xdg = join(dir, '..', 'xdg');
+  const hosts = join(xdg, 'tagreeve', 'test-payment-hosts.json');
+  await mkdir(join(hosts, '..'), { recursive: true });
+  await writeFile(hosts, JSON.stringify(['localhost']));
+  await chmod(hosts, 0o600);
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = xdg;
+  try {
+    const fake = recorder();
+    const code = await suiteCommand(args(dir, out, { site: undefined, stores, withTestPayment: true, allowTestPayment: 'localhost' }), capture().io, fake);
+    expect(code).toBe(0);
+    expect(fake.specs.map((s) => s.site)).toEqual(['http://localhost:4000']);
+    const manifest = await manifestOf(out);
+    expect(manifest.cells.map((x) => [x.labels.store, x.status])).toEqual([
+      ['local', 'pass'],
+      ['other', 'skipped'],
+    ]);
+  } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  }
+});
+
+test('the table names the store in the record and error lines', () => {
+  const cell = (store: string, exitCode: 0 | 2) => ({
+    scenario: 'a',
+    variant: 'published',
+    labels: { store },
+    status: exitCode ? ('error' as const) : ('pass' as const),
+    exitCode,
+    record: `a.${store}.published.jsonl`,
+  });
+  const manifest: SuiteManifest = {
+    suiteSchemaVersion: 2,
+    id: 'suite_X',
+    startedAt: 0,
+    site: 'https://one.example.com',
+    stores: [
+      { name: 'one', site: 'https://one.example.com' },
+      { name: 'two', site: 'https://two.example.com' },
+    ],
+    variants: ['published'],
+    cells: [cell('one', 0), cell('two', 2)],
+    diffs: [],
+    exitCode: 2,
+  };
+  const text = formatSuiteTable(manifest, 'runs/suite_X');
+  expect(text).toMatch(/^a\s+one\s+PASS$/m);
+  expect(text).toMatch(/^a\s+two\s+ERROR \(exit 2\)$/m);
+  expect(text).toContain('  a one published: runs/suite_X/a.one.published.jsonl');
+  expect(text).toContain('  a two published: run did not finish (exit 2)');
 });

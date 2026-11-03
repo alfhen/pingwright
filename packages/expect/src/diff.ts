@@ -1,4 +1,4 @@
-import { stripSandboxPrefix } from '@tagreeve/decoders';
+import { looksLikeValueToken, stripSandboxPrefix } from '@tagreeve/decoders';
 import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@tagreeve/core';
 import { consentFields } from './scenario.ts';
 import { epochForHit } from './evaluate.ts';
@@ -316,13 +316,19 @@ function groupHits(run: RunRecords, options: DiffOptions): Map<string, Group> {
   return groups;
 }
 
+// A UUID has dashes, so the hex test also runs on the segment without them.
+const isValueSegment = (segment: string): boolean =>
+  looksLikeValueToken(segment) || looksLikeValueToken(segment.replaceAll('-', ''));
+
 function pagePath(page: string | null): string {
   if (page === null) return '';
+  let path: string;
   try {
-    return stripSandboxPrefix(new URL(page).pathname);
+    path = stripSandboxPrefix(new URL(page).pathname);
   } catch {
-    return stripSandboxPrefix(page);
+    path = stripSandboxPrefix(page);
   }
+  return path.split('/').map((segment) => (isValueSegment(segment) ? '*' : segment)).join('/');
 }
 
 function consentChanges(a: Hit, b: Hit): ValueChange[] {

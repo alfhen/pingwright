@@ -51,9 +51,9 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 
 `tagreeve run --help` prints this command's own help.
 
-The text summary lists hits per vendor and event, consent epochs, flags (`unknownDestination` and `firstPartySubdomain` grouped by host, and `sandboxPageUrl` grouped by vendor, each with a count and up to three example paths, or one for `sandboxPageUrl`; `possibleRealData` is one line with a count; the `--json` summary keeps every flag), each expectation with PASS, FAIL or WARN (failures show the message; every expectation shows up to five evidence IDs and a count of the rest), and the path of the JSONL file. When a result has a note, a `note:` line with fixed text follows its `PASS`, `WARN` or `FAIL` line. The `--json` summary has the note code in `note` on that result. The text holds no field names or values. The `result` records are appended to that file.
+The text summary lists hits per vendor and event, consent epochs, flags (`unknownDestination` and `firstPartySubdomain` grouped by host, `platformHost` as one line per platform with the request and host counts by purpose, and `sandboxPageUrl` grouped by vendor, each with a count and up to three example paths, or one for `sandboxPageUrl`; `possibleRealData` is one line with a count; the `--json` summary keeps every flag), each expectation with PASS, FAIL or WARN (failures show the message; every expectation shows up to five evidence IDs and a count of the rest), and the path of the JSONL file. When a result has a note, a `note:` line with fixed text follows its `PASS`, `WARN` or `FAIL` line. The `--json` summary has the note code in `note` on that result. The text holds no field names or values. The `result` records are appended to that file.
 
-Tracker list: `--tracker-list <file>` takes a JSON array of `{ "vendor", "host", "paths"?, "source" }` entries, with the same checks as the built-in list. `vendor` is a lowercase key that is not a built-in decoder key (`ga4`, `google-ads`, `meta`, `pinterest`, `sgtm`), `host` is an exact host or `*.domain`, `paths` are path prefixes and `source` is an https link to the vendor's docs. In `stub` mode, a request to a listed path is stubbed for every resource type, and a request to a listed host without paths is stubbed unless it is a script, stylesheet, font or document load. A whole-host image or other request with no query and no body is stubbed but gives no hit. Each other such request becomes a minimal hit with the entry's vendor, the event and page when the URL has a common parameter for them, unknown consent and transport `tracker-list`. A listed vendor is a valid `vendor:` key in the scenario, and its requests are not flagged as `unknownDestination`. A request that a built-in decoder matches stays with that decoder. The file is read before the scenario, and a bad file exits 2.
+Tracker list: `--tracker-list <file>` takes a JSON array of `{ "vendor", "host", "paths"?, "source" }` entries, with the same checks as the built-in list. `vendor` is a lowercase key that is not a built-in decoder key (`ga4`, `google-ads`, `meta`, `meta-capi`, `pinterest`, `sgtm`), `host` is an exact host or `*.domain`, `paths` are path prefixes and `source` is an https link to the vendor's docs. In `stub` mode, a request to a listed path is stubbed for every resource type, and a request to a listed host without paths is stubbed unless it is a script, stylesheet, font or document load. A whole-host image or other request with no query and no body is stubbed but gives no hit. Each other such request becomes a minimal hit with the entry's vendor, the event and page when the URL has a common parameter for them, unknown consent and transport `tracker-list`. A listed vendor is a valid `vendor:` key in the scenario, and its requests are not flagged as `unknownDestination`. A request that a built-in decoder matches stays with that decoder. The file is read before the scenario, and a bad file exits 2.
 
 First-party hosts: the registrable domain of `--site` is first party, so `--site https://www.shop.co.uk` does not flag `shop.co.uk` or `*.shop.co.uk` as `unknownDestination`. Data-carrying requests to those subdomains that no decoder matches are listed as `firstPartySubdomain` and do not fail the run. IP addresses and `localhost` are first party only as the exact `--site` host. Scenario options:
 
@@ -62,7 +62,8 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `cartRequest` | Regular expression matched against request URLs. In an `addToCart` step, a matching request counts as a cart change, for a site whose cart endpoint the built-in check does not know. |
 | `viewport` | `{ width, height }`, integers from 200 to 4000. The same as `--viewport`, which wins. See the `--viewport` row for what it does not change. |
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
-| `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. Use it for custom events that are not meant to produce a hit. |
+| `platformHosts` | `false` flags requests to known platform hosts (Shopify's CDN and telemetry) as `unknownDestination` again. The default is `true`: they get the flag `platformHost`, which is listed in the summary and the report and never fails a run. |
+| `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. The warning covers frame pushes shortly before a navigation and before the run ends. Use it for custom events that are not meant to produce a hit. |
 | `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. A `pagehide` or `visibilitychange` send to a server host is answered in the page, so the cookies it would set are not seen. A passing cookie rule in `server` mode can miss them. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
 | `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData`, `deniedIdentifiers` and `earlyIdentifiers`. `earlyIdentifiers` is `warn` by default and every other check is `fail`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
@@ -187,9 +188,10 @@ Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not
 | --- | --- |
 | `ga4` | `v`, `tid`, `gtm`, `_p`, `_s`, `sid`, `sct`, `seg`, `dl`, `dr`, `dt`, `en`, `cid`, `ul`, `sr`, `_eu`, `_et`, `gcs`, `gcd`, `npa`, `dma`, `dma_cps`, `are`, `frm`, `pscdl`, `tfd`, `ec`, `uaa`, `uab`, `uafvl`, `uam`, `uamb`, `uap`, `uapv`, `uaw`, `_ss`, `_fv`, `_nsi`, `_c`, `_ee`, `_z`, `_gaz`, `tag_exp`, `_tu`, `ngs` |
 | `meta` | `id`, `ev`, `dl`, `rl`, `if`, `ts`, `sw`, `sh`, `v`, `r`, `ec`, `o`, `fbp`, `it`, `coo`, `rqm`, `ler`, `cdl`, `plt`, `pmd[*]`, `expv2[*]`, `cs_est`, `a` |
+| `meta-capi` | `event_name`, `event_time`, `event_id`, `event_source_url`, `action_source` |
 | `sgtm` | `v`, `tid`, `event`, `en`, `dtdc` |
 
-The lists are exported from `@tagreeve/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
+The lists are exported from `@tagreeve/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE`, `META_CAPI_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
 
 ### Rules on cookies
 
@@ -240,7 +242,7 @@ Compares two runs of the same scenario, for example one with a GTM override and 
 
 | Option | Meaning |
 | --- | --- |
-| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. For a Shopify custom pixel the `/web-pixels@<hash>/.../sandbox/<mode>` prefix is stripped from the key, so runs on different Shopify deploys still pair. The record keeps the raw page. Added and removed lines show it as `recorded as <page>` when it differs from the key, and the JSON result has it as `page` on each added, removed and changed hit. A hit with no page uses the URL of the frame that sent it, or an empty page if there is none. |
+| `--by-page` | Adds the page path to the key that pairs hits, so the same event on two pages is compared page by page. For a Shopify custom pixel the `/web-pixels@<hash>/.../sandbox/<mode>` prefix is stripped from the key, so runs on different Shopify deploys still pair. Each path segment that looks like a value (a token, a long hex or digit string, a UUID) becomes `*`, so `/checkouts/cn/<token>` is keyed as `/checkouts/cn/*`. The record keeps the raw page. Added and removed lines show it as `recorded as <page>` when it differs from the key, and the JSON result has it as `page` on each added, removed and changed hit. A hit with no page uses the URL of the frame that sent it, or an empty page if there is none. |
 | `--all-flags` | Shows flag count changes for hosts the scenario allows with `allowUnknownDestination`. They are hidden by default, because platform telemetry hosts often change by one between identical runs, and the summary says how many it hid. The JSON result always has them, with `allowed: true`. |
 | `--json` | Prints the full diff result as JSON instead of the text summary. |
 
@@ -254,7 +256,7 @@ Writes the shape of one run to a small file you can commit, so a later run can b
 
 | Option | Meaning |
 | --- | --- |
-| `--by-page` | Adds the page path to each key, as in `diff`. The path only: no query, no host. Do not use it on pages whose path holds a per-order token, such as a Shopify checkout, because the baseline would drift on every run. |
+| `--by-page` | Adds the page path to each key, as in `diff`. The path only: no query, no host. Segments that look like a value, such as a checkout token, are stored as `*`, so the baseline holds no token. |
 
 The file holds `baselineSchemaVersion`, the `scenario` name, the `site` host (no scheme, port or path), `byPage` and a sorted list of keys. A key is the consent epoch label, the vendor and the event. Under each key are the tuples seen: the four consent states, the raw `gcs` and `gcd` values, the names of the IDs that are present, and a hit count. It holds no hit ID, time, URL, query, cookie or value. There is no `approve` command: to accept a change, save the baseline again and review the file diff in the pull request.
 
@@ -268,7 +270,7 @@ Drift is a key or tuple that is on one side only. A changed consent field or ID 
 
 `baseline` and `diff` answer different questions. `diff` pairs the hits of a key in order and reports each one. A baseline compares sets of tuples, so a reordering of hits is not drift and a new tuple inside a key is.
 
-### `tagreeve suite <dir> --site <url>`
+### `tagreeve suite <dir> (--site <url> | --stores <stores.json>)`
 
 Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
 
@@ -279,7 +281,8 @@ tagreeve suite scenarios/ --site https://staging.example.com \
 
 | Option | Meaning |
 | --- | --- |
-| `--site <url>` | The site to test. Required. |
+| `--site <url>` | The site to test. Give `--site` or `--stores`, never both. |
+| `--stores <file>` | A stores file: run every scenario against each store. See "Several stores". |
 | `--variant <name[=file]>` | A GTM build to test. Can be repeated. `published` means no override and takes no file. `name=file` serves an override file in the `--gtm-override` format. The name matches `^[a-z0-9][a-z0-9_-]*$`, and a name given twice exits 2. Default: `published`. |
 | `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
 | `--with-test-payment` | Also runs scenarios that have a `payment` step. It needs `--allow-test-payment <host>` too, as in `run`. Without both they are `SKIPPED`, which counts as a pass. With both, a failed gate exits 2 before any run. |
@@ -299,6 +302,28 @@ checkout-pay    SKIPPED     SKIPPED
 
 A difference between variants is not a failure. Your rules decide. A run that exits 2 (for example, the banner was not shown) shows `ERROR (exit 2)` and does not stop the suite. A failed or warned cell says what failed: `FAIL: 5 rules, deniedIdentifiers` counts the failed rules and names the failed built-in checks, and `WARN: 1 rule` does the same for warnings. It never prints a rule or a message. The report uses the same text. The suite's exit code is the worst cell, in this order: 2, then 1, then 0. With `--json`, stdout is the manifest instead of the table.
 
+#### Several stores
+
+`--stores` runs the same scenarios against more than one storefront, such as one store per market. The file is JSON:
+
+```json
+{
+  "storesSchemaVersion": 1,
+  "stores": [
+    { "name": "us", "site": "https://shop.example.com" },
+    { "name": "se", "site": "https://shop.example.se", "country": "SE", "vars": { "product": "tee-se" }, "autoconsentRules": "rules-se.json" }
+  ]
+}
+```
+
+A file holds 1 to 50 stores. `name` matches `^[a-z0-9][a-z0-9_-]*$` and is unique. `site` is an http or https URL. `vars` override the vars a scenario declares, and `--var` overrides both. A store var that no scenario declares exits 2 and names the store and the var. `country` sets `identity.country`. A scenario that sets another country gets a warning, and the store's country is used. `autoconsentRules` is a path relative to the stores file, added to `--autoconsent-rules` for that store. An error names the file and the store index, never a value.
+
+Every scenario runs once per store and variant, with one seed. Records are named `<scenario>.<store>.<variant>.jsonl`. Each cell has `labels: { "store": "<name>" }`. The table gets a `store` column after `scenario`, with one row per scenario and store. Diffs compare the variants within one store. Tagreeve does not compare stores with each other.
+
+`--allow-test-payment <host>` still names one host. A payment scenario runs only for the store whose host equals it, and its cells for the other stores are `SKIPPED`.
+
+`suite.json` has `suiteSchemaVersion: 2` and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
+
 ### `tagreeve report <run.jsonl | suite dir> --html <out.html>`
 
 Writes one HTML file that people can read without knowing JSONL. It opens no browser and reads no network. `--html` is required, and the command refuses to overwrite its own input. A missing file, or a file that is not a run record, exits 2, as `diff` does.
@@ -314,7 +339,7 @@ A run report has these parts:
 - **Expectations.** Each result as PASS, WARN, FAIL or CANNOT EVALUATE, with the rule's key names, up to five evidence IDs and, on a failed or warned result, `on failure: fail` or `on failure: warn`. A passing result shows no severity.
 - **Flags** and **fields.** The flag kinds with counts and hosts, and the field names seen on denied hits.
 
-A suite report has these parts, in this order: a title such as `Tagreeve suite: published vs workspace on shop.example.com, 2026-10-31`, a header with the suite ID, the variants and the exit code, a verdict per variant, which adds the number of runs to a built-in check (`built-in check sandboxPageUrl failed in 4 runs`), a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`.
+A suite report has these parts, in this order: a title such as `Tagreeve suite: published vs workspace on shop.example.com, 2026-10-31`, a header with the suite ID, the variants and the exit code, a verdict per variant, which adds the number of runs to a built-in check (`built-in check sandboxPageUrl failed in 4 runs`), a results table, the run sections for each scenario and variant, and last a diff section per variant pair. A flag change with no host reads `unloadGap: 0 -> 1`. `report` reads suite manifests of version 1 and 2. For a suite with stores, the results table has a Store column and a row per scenario and store, the run sections are headed `<scenario> on <store>, <variant>`, the verdict has one line per store and variant, and each diff section names its store.
 
 The marks, worst first:
 

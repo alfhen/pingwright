@@ -82,6 +82,8 @@ export interface RecorderOptions {
   scenario?: string;
   /** Hosts or `*.domain` wildcards treated as first party besides the site's registrable domain. */
   firstPartyHosts?: string[];
+  /** `false` keeps platform hosts as `unknownDestination`. Default: true. */
+  platformHosts?: boolean;
   /** Event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
   /** Stored on the run record as `graceWindowMs`. */
@@ -178,6 +180,7 @@ export class Recorder {
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
   private readonly mainFrameEventIds = new Set<string>();
+  private readonly eventFrames = new Map<string, string>();
   private readonly collectorReports: (CollectorReport | InvalidReport)[] = [];
   private readonly pending = new Set<Promise<unknown>>();
   private readonly steps: Step[] = [];
@@ -297,6 +300,7 @@ export class Recorder {
       if (!event) return;
       this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
       if (source.frame === source.page.mainFrame()) this.mainFrameEventIds.add(event.id);
+      else this.eventFrames.set(event.id, source.frame.url());
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
@@ -795,6 +799,7 @@ export class Recorder {
 
   /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
   async close(): Promise<RunResult> {
+    const closeStartedAt = nodeNow();
     if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
     this.closed = true;
     try {
@@ -818,6 +823,7 @@ export class Recorder {
       networkMode: this.options.networkMode,
       siteUrl: this.options.site,
       firstPartyHosts: this.options.firstPartyHosts,
+      platformHosts: this.options.platformHosts,
       trackers: this.trackers,
       requests,
       hits,
@@ -829,7 +835,7 @@ export class Recorder {
     });
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
-      flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, ignore: this.options.unloadGapIgnore }));
+      flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, runEnd: closeStartedAt, eventFrames: this.eventFrames, requestFrames: new Map(requests.map((r) => [r.id, r.frameUrl])), ignore: this.options.unloadGapIgnore }));
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }
