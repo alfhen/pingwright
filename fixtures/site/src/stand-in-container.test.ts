@@ -128,4 +128,12 @@ describe('stand-in container', () => {
       other.close();
     }
   });
+
+  it('fails a call cleanly when the CA file is gone', async () => {
+    const origin = await start({ NODE_EXTRA_CA_CERTS: join(root, 'missing.pem') });
+    await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(forwarded).toEqual([]);
+    expect(answered).toEqual([]);
+  });
 });
