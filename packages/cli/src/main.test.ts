@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { helpText, type HelpTopic } from './args.ts';
 import { main } from './main.ts';
 
 async function runMain(argv: string[]) {
@@ -40,3 +41,22 @@ test('server-container without a subcommand is a short usage error', async () =>
   expect(r.code).toBe(2);
   expect(r.stderr).toContain('tagreeve server-container --help');
 });
+
+test('diff --help prints the diff options only', async () => {
+  const r = await runMain(['diff', '--help']);
+  expect(r.code).toBe(0);
+  expect(r.stdout).toContain('Usage: tagreeve diff');
+  expect(r.stdout).toContain('--all-flags');
+  expect(r.stdout).not.toContain('--network');
+  expect(r.stderr).toBe('');
+});
+
+test.each(['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'] as HelpTopic[])(
+  '%s --help prints its own usage',
+  async (name) => {
+    const r = await runMain([name, '--help']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe(helpText(name));
+    expect(r.stderr).toBe('');
+  },
+);
