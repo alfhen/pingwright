@@ -120,3 +120,15 @@ test('setCookieNamesOf returns names only, from every Set-Cookie line', () => {
   expect(setCookieNamesOf({ 'Set-Cookie': 'a=secret1; Path=/\nb=secret2', 'content-type': 'x' })).toEqual(['a', 'b']);
   expect(setCookieNamesOf(stubResponse({ resourceType: 'fetch', headers: {} }).headers)).toEqual([]);
 });
+
+test('the Meta Conversions API endpoint is answered with a success body for every resource type', () => {
+  const url = 'https://graph.facebook.com/v21.0/100000000000001/events?access_token=pw-fixture-access-token';
+  for (const resourceType of ['fetch', 'xhr', 'ping']) {
+    const stub = stubResponse({ resourceType, headers: { origin: 'https://shop.example.com' }, url });
+    expect(stub.status).toBe(200);
+    expect(stub.headers['content-type']).toBe('application/json');
+    expect(stub.headers['access-control-allow-origin']).toBe('https://shop.example.com');
+    expect(JSON.parse(stub.body?.toString() ?? '')).toEqual({ events_received: 1, messages: [], fbtrace_id: 'pw-fixture' });
+  }
+  expect(stubResponse({ resourceType: 'fetch', headers: {}, url: 'https://graph.facebook.com/v21.0/1/other' }).status).toBe(204);
+});

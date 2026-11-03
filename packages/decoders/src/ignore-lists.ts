@@ -14,6 +14,9 @@ export const META_BODY_ONLY_IGNORE: readonly string[] = [
   'ler', 'cdl', 'plt', 'pmd[*]', 'expv2[*]', 'cs_est', 'a',
 ];
 
+/** Transport fields every Meta Conversions API event carries. A name may use `*` as a glob. */
+export const META_CAPI_BODY_ONLY_IGNORE: readonly string[] = ['event_name', 'event_time', 'event_id', 'event_source_url', 'action_source'];
+
 /** Transport fields every server-container data client hit carries. A name may use `*` as a glob. */
 export const SGTM_BODY_ONLY_IGNORE: readonly string[] = ['v', 'tid', 'event', 'en', 'dtdc'];
 

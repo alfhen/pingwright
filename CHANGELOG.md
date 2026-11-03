@@ -10,7 +10,7 @@
 
 - `--by-page` keys now replace path segments that look like a value, such as a checkout token, with `*`. A `--by-page` baseline saved on a page with a token drifts once. Save it again.
 
-<!-- M01 -->
+- Adds a `meta-capi` decoder for Meta Conversions API calls (`graph.facebook.com/v<n>/<id>/events`). One hit for each event in `data`. In `stub` mode the endpoint is answered with a success body. Part of #358.
 
 <!-- V01 -->
 
