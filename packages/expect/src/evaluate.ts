@@ -735,8 +735,8 @@ function inEpoch(hit: Hit, selector: string, ctx: Context): boolean {
 }
 
 const UNMATCHED_HEADLINE = 'Expected every hashed identity value to match the run identity.';
-const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail(?:\.\d+)?|sha256_email_address|user_data\.email_address)$/;
-const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone(?:\.\d+)?|sha256_phone_number|user_data\.phone_number)$/;
+const EMAIL_PARAM = /^(?:em|ud\[em\]|hashedEmail|sha256_email_address|user_data\.email_address)$/;
+const PHONE_PARAM = /^(?:ph|ud\[ph\]|hashedPhone|sha256_phone_number|user_data\.phone_number)$/;
 const FIELD_PARAMS: Record<string, (identity: Identity) => string> = {
   'user_data.first_name': (i) => i.firstName,
   'user_data.last_name': (i) => i.lastName,
@@ -775,6 +775,11 @@ function allForms(h: HashForms): string[] {
 
 type HashVerdict = 'plain' | 'match' | 'unhashed' | 'wrong';
 
+/** The field a param belongs to. The Conversions API indexes further values (`user_data.city.1`); every check uses the base. */
+function identityParamName(vendor: string, name: string): string {
+  return vendor === 'meta-capi' ? metaCapiBaseParam(name) : name;
+}
+
 /** Judges one hit param against the run identity. Undefined for a param that is not an identity field or is empty. */
 function hashJudge(identity: Identity): (vendor: string, name: string, value: string) => HashVerdict | undefined {
   const emailHashes = new Set(allForms(hashEmail(identity.email)));
@@ -785,7 +790,7 @@ function hashJudge(identity: Identity): (vendor: string, name: string, value: st
   // so it can match a name or address hash. An email or phone must still be the identity's own.
   const extra = identity.extra ?? [];
   return (vendor, rawName, value) => {
-    const name = vendor === 'meta-capi' ? metaCapiBaseParam(rawName) : rawName;
+    const name = identityParamName(vendor, rawName);
     const field = FIELD_PARAMS[name]?.(identity);
     const accepted = field === undefined ? [] : [field, ...extra];
     const known = EMAIL_PARAM.test(name)
@@ -845,7 +850,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     for (const [name, value] of Object.entries(hit.params)) {
       const verdict = judge(hit.vendor, name, value);
       if (!verdict) continue;
-      const label = fieldLabel(name);
+      const label = fieldLabel(identityParamName(hit.vendor, name));
       if (verdict === 'plain') {
         plainAddressFields.add(label);
         continue;
@@ -1386,19 +1391,29 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 // value elsewhere, keeps its own finding.
 const MAX_EDGE_SHIFT = 5;
 
-function isEdgeShift(a: string, b: string): boolean {
+// The shorter value must never stand alone in the body: a separate value that a longer one contains keeps its own finding.
+function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return long.length - short.length <= MAX_EDGE_SHIFT && long.includes(short);
+  if (long.length - short.length > MAX_EDGE_SHIFT || !long.includes(short)) return false;
+  return bodies.every((raw) => {
+    const text = raw.replaceAll('[]', '');
+    const covered: [number, number][] = [];
+    for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
+    for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
+      if (!covered.some(([from, to]) => i >= from && i + short.length <= to)) return false;
+    }
+    return true;
+  });
 }
 
-function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>): void {
+function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>, bodies: string[]): void {
   const best = (f: { where: Map<string, number> }) => Math.min(...f.where.values());
   const valueOf = (key: string, kind: string) => key.slice(kind.length + 1);
   const fields = [...found].filter(([, f]) => best(f) < 2);
   for (const [key, f] of [...found]) {
     if (best(f) < 2 || [...f.where.keys()].some((w) => w !== 'the body')) continue;
     const value = valueOf(key, f.kind);
-    const twin = fields.find(([k, other]) => other.kind === f.kind && isEdgeShift(valueOf(k, other.kind), value));
+    const twin = fields.find(([k, other]) => other.kind === f.kind && isEdgeShift(valueOf(k, other.kind), value, bodies));
     if (!twin) continue;
     for (const [w, tier] of f.where) twin[1].where.set(w, Math.min(tier, twin[1].where.get(w) ?? tier));
     found.delete(key);
@@ -1451,7 +1466,10 @@ export function findForeignData(requests: Iterable<Request>, hits: readonly Hit[
       }
     }
     if (found.size === 0) continue;
-    mergeEdgeReadings(found);
+    mergeEdgeReadings(
+      found,
+      entry.texts.filter((t) => t.where === 'the body' && !t.leaf).map((t) => t.text),
+    );
     const kinds = [...new Set([...found.values()].map((f) => f.kind))].join(', ');
     const places = new Set<string>();
     for (const { where } of found.values()) {

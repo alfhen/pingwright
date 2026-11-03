@@ -257,6 +257,14 @@ test('possibleRealData keeps a URL email apart from a longer body email that con
   expect(leak!.detail).toMatch(/in note, the URL$/);
 });
 
+test.each([
+  ['an email', 'note=joann@shop.example\nann@shop.example', 'email'],
+  ['a phone', 'note=+1 555 123 4567\n555 123 4567', 'phone'],
+])('possibleRealData keeps two body values apart when one contains the other: %s', (_n, body, kind) => {
+  const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
+});
+
 test('possibleRealData does not read the digits of a JSON path as a phone number', () => {
   const body = JSON.stringify({ sizes: { 100: { 250: { 1000: { q: 1 } } } } });
   expect(body).toContain('"1000"');

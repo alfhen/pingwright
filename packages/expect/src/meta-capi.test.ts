@@ -92,7 +92,13 @@ test('identity.hashesMatch checks the second value of ct and fn', () => {
   const good = sha(identity.email);
   const city = sha(identity.city.toLowerCase());
   expect(run([capiHit(good, { ct: [city, city] })], rule).pass).toBe(true);
-  expect(run([capiHit(good, { ct: [city, identity.city] })], rule).pass).toBe(false);
+  const rawCity = run([capiHit(good, { ct: [city, identity.city] })], rule);
+  expect(rawCity.pass).toBe(false);
+  expect(rawCity.message).toContain('unhashed city');
+  expect(rawCity.message).not.toContain('city.1 ');
+  const wrongCity = run([capiHit(good, { ct: [city, 'c'.repeat(64)] })], rule);
+  expect(wrongCity.message).toContain('Not matching: user_data.city.1.');
+  expect(wrongCity.message).toMatch(/Matching: email\.$/);
   expect(run([capiHit(good, { fn: [sha(identity.firstName.toLowerCase()), 'c'.repeat(64)] })], rule).pass).toBe(false);
   const filtered = run([capiHit(good, { ct: [city, identity.city] })], '{ vendor: meta-capi, ids.hashes.ct.matchesIdentity: true }');
   expect(filtered.pass).toBe(false);
