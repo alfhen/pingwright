@@ -22,6 +22,7 @@ The spec is [docs/design.md](docs/design.md). The current plan is the newest `do
 - Playwright 1.64.1 exactly. `@duckduckgo/autoconsent` 16.51.0 exactly.
 - New dependencies get an exact version that is at least two weeks old.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`. For the docs site (`site/`, built with Astro and Starlight): `pnpm docs:build`, `pnpm docs:test`, and `pnpm docs:preview` to look at it.
+- The home page demo and command panels show recorded runs in `site/demo/`. After a change to the CLI output they show, rerun `pnpm build && node --experimental-transform-types scripts/record-site-demo.ts` and commit the result. The replies in `site/demo/*.reply.md` are hand-written. The docs build fails when one cites a number or ID the record lacks.
 - Browsers can fail to launch inside an agent's command sandbox. Run browser commands outside it.
 
 ## Writing
