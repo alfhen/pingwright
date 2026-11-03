@@ -13,6 +13,7 @@ const manifest: SuiteManifest = {
   variants: ['published', 'workspace'],
   cells: [],
   diffs: [],
+  stores: [],
   exitCode: 0,
 };
 
