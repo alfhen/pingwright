@@ -375,3 +375,41 @@ describe('possibleRedirectHop', () => {
     expect(redirectFlags(request, { networkMode: 'live' })).toEqual([]);
   });
 });
+
+describe('platform hosts', () => {
+  const build = (requests: Request[], platformHosts?: boolean) =>
+    buildFlags({
+      runId: requests[0]!.runId,
+      networkMode: 'stub',
+      siteUrl: 'https://www.shop.example.com/',
+      requests,
+      hits: [],
+      routedRequestIds: new Set(requests.map((r) => r.id)),
+      ...(platformHosts !== undefined && { platformHosts }),
+    });
+  const kinds = (requests: Request[], platformHosts?: boolean) => build(requests, platformHosts).map((f) => f.kind);
+
+  test('a request to a listed Shopify host is a platformHost flag with the same detail', () => {
+    const r = req('https://cdn.shopify.com/s/trekkie.js?v=1', { resourceType: 'fetch' });
+    expect(isUnknownDestination(r, 'www.shop.example.com')).toBe(true);
+    expect(build([r]).map((f) => [f.kind, f.detail])).toEqual([['platformHost', `GET ${r.url}`]]);
+  });
+
+  test('a request to the Shopify telemetry host is a platformHost flag', () => {
+    const r = req('https://monorail-edge.shopifysvc.com/v1/produce?x=1', { resourceType: 'fetch', method: 'POST' });
+    expect(kinds([r])).toEqual(['platformHost']);
+    expect(kinds([r], false)).toEqual(['unknownDestination']);
+  });
+
+  test('an unlisted Shopify subdomain and a third-party payment host stay unknown destinations', () => {
+    const unlisted = req('https://unlisted.shopify.com/x?y=1');
+    const stripe = req('https://js.stripe.com/v3/m?x=1');
+    expect(kinds([unlisted, stripe])).toEqual(['unknownDestination', 'unknownDestination']);
+  });
+
+  test('platformHosts false restores unknownDestination for a listed host', () => {
+    const r = req('https://cdn.shopify.com/s/x?v=1');
+    expect(kinds([r], false)).toEqual(['unknownDestination']);
+    expect(kinds([r], true)).toEqual(['platformHost']);
+  });
+});

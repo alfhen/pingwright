@@ -1,3 +1,4 @@
+import { platformHostFor } from '@tagreeve/decoders';
 import type { Result, ResultNote, RunRecords, Severity } from '@tagreeve/core';
 import { NOTE_TEXT } from './report/model.ts';
 
@@ -33,6 +34,7 @@ export interface Summary {
 const EVIDENCE_CAP = 5;
 const PATH_EXAMPLES = 3;
 const SANDBOX_PATH_EXAMPLES = 1;
+const PURPOSE_ORDER = ['telemetry', 'checkout', 'payments', 'cdn'] as const;
 const GROUPED_KINDS = new Set(['unknownDestination', 'firstPartySubdomain']);
 
 export function countHits(hits: RunRecords['hits']): Summary['hits'] {
@@ -97,6 +99,7 @@ function formatFlags(flags: Summary['flags']): string[] {
       realData += 1;
       continue;
     }
+    if (f.kind === 'platformHost' && platformOf(f)) continue;
     const target = groupTarget(f);
     if (!target) {
       lines.push(`  ${f.kind}: ${f.detail}`);
@@ -115,6 +118,7 @@ function formatFlags(flags: Summary['flags']): string[] {
     lines.push(`  ${kind}: ${host} x${count} (${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''})`);
   }
   if (realData > 0) lines.push(`  possibleRealData: x${realData}`);
+  lines.push(...platformHostLines(flags));
   return lines;
 }
 
@@ -195,4 +199,29 @@ export function formatSummary(summary: Summary): string {
   else lines.push(failed === 0 ? `Result: pass${warnings}` :`Result: fail (${failed} of ${summary.results.length})${warnings}`);
   lines.push(`Record: ${summary.path}`);
   return lines.join('\n');
+}
+
+function platformOf(flag: Summary['flags'][number]) {
+  const url = parseUrl(/\s(\S+)$/.exec(flag.detail)?.[1]);
+  const entry = url && platformHostFor({ url: url.href });
+  return url && entry ? { url, entry } : undefined;
+}
+
+function platformHostLines(flags: Summary['flags']): string[] {
+  const byPlatform = new Map<string, { requests: number; hosts: Set<string>; purposes: Map<string, number> }>();
+  for (const f of flags) {
+    if (f.kind !== 'platformHost') continue;
+    const found = platformOf(f);
+    if (!found) continue;
+    const { url, entry } = found;
+    const group = byPlatform.get(entry.platform) ?? { requests: 0, hosts: new Set(), purposes: new Map() };
+    group.requests += 1;
+    group.hosts.add(url.host);
+    group.purposes.set(entry.purpose, (group.purposes.get(entry.purpose) ?? 0) + 1);
+    byPlatform.set(entry.platform, group);
+  }
+  return [...byPlatform].map(([platform, { requests, hosts, purposes }]) => {
+    const parts = PURPOSE_ORDER.filter((p) => purposes.has(p)).map((p) => `${p} ${purposes.get(p)}`);
+    return `  platformHost: ${platform}, ${requests} ${requests === 1 ? 'request' : 'requests'} to ${hosts.size} ${hosts.size === 1 ? 'host' : 'hosts'} (${parts.join(', ')})`;
+  });
 }

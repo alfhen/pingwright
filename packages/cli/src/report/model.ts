@@ -36,6 +36,8 @@ export interface FlagView {
   kind: string;
   count: number;
   hosts: string[];
+  /** Requests per host, set for `platformHost` only. */
+  hostCounts?: { host: string; count: number }[];
 }
 
 export interface FieldsView {
@@ -240,17 +242,27 @@ function flagViews(records: RunRecords): FlagView[] {
     const host = hostByRecord.get(h.requestId);
     if (host) hostByRecord.set(h.id, host);
   }
-  const byKind = new Map<string, { count: number; hosts: Set<string> }>();
+  const byKind = new Map<string, { count: number; hosts: Map<string, number> }>();
   for (const flag of records.flags) {
-    const entry = byKind.get(flag.kind) ?? { count: 0, hosts: new Set<string>() };
+    const entry = byKind.get(flag.kind) ?? { count: 0, hosts: new Map<string, number>() };
     entry.count++;
     for (const id of flag.recordIds) {
       const host = hostByRecord.get(id);
-      if (host) entry.hosts.add(host);
+      if (host) entry.hosts.set(host, (entry.hosts.get(host) ?? 0) + 1);
     }
     byKind.set(flag.kind, entry);
   }
-  return [...byKind].map(([kind, { count, hosts }]) => ({ kind, count, hosts: [...hosts].sort() })).sort((a, b) => a.kind.localeCompare(b.kind));
+  return [...byKind]
+    .map(([kind, { count, hosts }]): FlagView => {
+      const names = [...hosts.keys()].sort();
+      return {
+        kind,
+        count,
+        hosts: names,
+        ...(kind === 'platformHost' && { hostCounts: names.map((host) => ({ host, count: hosts.get(host)! })) }),
+      };
+    })
+    .sort((a, b) => a.kind.localeCompare(b.kind));
 }
 
 export function buildReportModel(records: RunRecords): ReportModel {

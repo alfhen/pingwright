@@ -365,3 +365,8 @@ test('options.viewport is { width, height } from 200 to 4000', () => {
     expect(() => parseScenario(`start: /\noptions: { viewport: ${bad} }`), bad).toThrow(/options\.viewport/);
   }
 });
+
+test('platformHosts is a boolean', () => {
+  expect(parseScenario('start: /\noptions: { platformHosts: false }').options.platformHosts).toBe(false);
+  expect(() => parseScenario('start: /\noptions: { platformHosts: [a.com] }')).toThrow(/platformHosts/);
+});

@@ -1,5 +1,5 @@
 import { globToRegExp, newId, type DataLayerEvent, type Flag, type Hit, type Id, type Identity, type NetworkMode, type Request, type Response } from '@tagreeve/core';
-import { decoders, isCollectionEndpoint, isSandboxPageUrl, trackerList, type TrackerEntry } from '@tagreeve/decoders';
+import { decoders, isCollectionEndpoint, isSandboxPageUrl, platformHostFor, trackerList, type TrackerEntry } from '@tagreeve/decoders';
 import { findForeignData, hostMatches } from '@tagreeve/expect';
 import { getDomain } from 'tldts';
 import { isKnownVendorCollection } from './stub.ts';
@@ -61,6 +61,8 @@ export interface FlagInput {
   firstPartyHosts?: readonly string[];
   /** The tracker list in force. Default: the built-in list. */
   trackers?: readonly TrackerEntry[];
+  /** `false` flags requests to platform hosts as `unknownDestination`. Default: true, they get `platformHost`. */
+  platformHosts?: boolean;
   requests: readonly Request[];
   hits: readonly Hit[];
   /** When given, requests and hits are scanned for data that is not the identity's. */
@@ -75,13 +77,14 @@ export interface FlagInput {
   redirectHeaderWithoutRedirect?: ReadonlySet<string>;
 }
 
-export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, requests, hits, identity, routedRequestIds, responses = [], handedToChromium = new Set(), redirectHeaderWithoutRedirect = new Set() }: FlagInput): Flag[] {
+export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, trackers = trackerList, platformHosts = true, requests, hits, identity, routedRequestIds, responses = [], handedToChromium = new Set(), redirectHeaderWithoutRedirect = new Set() }: FlagInput): Flag[] {
   const answered = new Set(responses.map((r) => r.requestId));
   const scope = { siteHost: parse(siteUrl)?.hostname ?? '', firstPartyHosts };
   const flags: Flag[] = [];
   for (const req of requests) {
     if (isUnknownDestination(req, scope, trackers)) {
-      flags.push(flag(runId, 'unknownDestination', [req.id], `${req.method} ${req.url}`));
+      const kind = platformHosts && platformHostFor(req) ? 'platformHost' : 'unknownDestination';
+      flags.push(flag(runId, kind, [req.id], `${req.method} ${req.url}`));
     } else if (isFirstPartySubdomain(req, scope, trackers)) {
       flags.push(flag(runId, 'firstPartySubdomain', [req.id], `${req.method} ${req.url}`));
     }

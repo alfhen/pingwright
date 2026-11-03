@@ -181,6 +181,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
       scenario: spec.scenarioName,
       parsed,
       firstPartyHosts: parsed.options.firstPartyHosts,
+      platformHosts: parsed.options.platformHosts,
       unloadGapIgnore: parsed.options.unloadGapIgnore,
       graceWindowMs: parsed.options.graceWindow ?? DEFAULT_GRACE_MS,
       seed: spec.seed,
