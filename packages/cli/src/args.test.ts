@@ -52,6 +52,13 @@ test('other commands', () => {
   expect(parseCli(['--help'])).toEqual({ command: 'help' });
 });
 
+test('server-container build', () => {
+  expect(parseCli(['server-container', 'build'])).toEqual({ command: 'server-container', action: 'build' });
+  expect(() => parseCli(['server-container'])).toThrow('needs a subcommand');
+  expect(() => parseCli(['server-container', 'push'])).toThrow('needs a subcommand');
+  expect(() => parseCli(['server-container', 'build', 'extra'])).toThrow('takes no arguments');
+});
+
 const suiteBase = ['suite', 'dir', '--site', 'https://shop.example.com'];
 
 test('suite defaults to the published variant', () => {

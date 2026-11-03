@@ -361,6 +361,18 @@ tagreeve report runs/suite_<id> --html suite-report.html
 
 `report` for a record from before schema version 2 shows `not recorded` where field names are missing.
 
+### `tagreeve server-container build`
+
+```bash
+tagreeve server-container build
+```
+
+Builds the Docker image that the server container feature runs, and tags it `tagreeve-sgtm:<tagreeve version>`. It prints the image ID. It needs Docker and pulls large images, so it is a command of its own: a run never builds an image. Without Docker it exits 2.
+
+On an arm64 machine (Apple silicon) the image is built here from Google's image, which is amd64 only. Tagreeve holds the Dockerfile in its own code, writes it to a temporary folder and builds from that folder. It pulls Google's image under Google's terms, never pushes an image, and never puts a file of Google's in a place other than your Docker. On an amd64 machine no build is needed: the command prints the Google image reference to pull and use as it is.
+
+The Google image and the base images are pinned by digest. `TAGREEVE_SERVER_CONTAINER_BASE` overrides the Google image reference. It must be a digest reference (`name@sha256:<64 hex>`).
+
 ### `tagreeve install-browser`
 
 Installs Chromium with the Playwright version Tagreeve depends on.

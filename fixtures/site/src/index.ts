@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { resolveContainer } from './containers.ts';
 
 export interface FixtureSite {
@@ -274,3 +275,6 @@ export async function startFixtureSite(): Promise<FixtureSite> {
     },
   };
 }
+
+/** Absolute path of the stand-in server container, for `TAGREEVE_TEST_SERVER_CONTAINER_CMD`. */
+export const standInContainerPath = fileURLToPath(new URL('./stand-in-container.ts', import.meta.url));

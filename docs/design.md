@@ -24,7 +24,7 @@ Tagreeve makes this checkable by a program: a coding agent, a CI job, or a perso
 4. Express expected behaviour as data, and report pass or fail with evidence.
 5. Compare two runs per vendor and per event.
 6. Expose all of this to agents through the CLI, with stable, structured `--json` results.
-7. Be safe by default: fake identities, no payments except the opt-in test payment (§5.4), no hosted service, and known collection endpoints stubbed. Unknown destinations still receive test hits, and every one is flagged (§5.3).
+7. Be safe by default: fake identities, no payments except the opt-in test payment (§5.4), no hosted service (everything runs on the user's machine), and known collection endpoints stubbed. Unknown destinations still receive test hits, and every one is flagged (§5.3).
 
 **Non-goals**
 
@@ -33,7 +33,7 @@ Tagreeve makes this checkable by a program: a coding agent, a CI job, or a perso
 - Explaining why a tag did not fire. GTM exposes no trigger evaluation data outside its own debugger.
 - Changing GTM containers. Agents use a GTM API client for that (§8.2). Tagreeve only takes the values it needs as input.
 - Legal advice on consent. Tagreeve shows what is sent. Whether that is allowed is for the site owner to decide.
-- A hosted service. Every part runs on infrastructure the user controls.
+- A hosted service. Everything runs on the user's machine. The opt-in server container feature runs the user's own container in the user's Docker, and the container downloads its own configuration from Google, as it does everywhere it runs (§8.5).
 
 ## 3. Architecture
 
@@ -46,13 +46,16 @@ flowchart TB
   page --> sgtm["Server GTM"]
   sgtm -->|"tag reports"| sink["Sink"]
   sink --> store
+  page -.->|"opt-in, Docker"| local["Local server<br/>container"]
+  local -.->|"vendor calls"| proxy["Recording proxy"]
+  proxy -.-> store
   store --> decoders["Decoders"]
   decoders --> expect["Expect"]
   expect --> report["Report and diff"]
   report --> front["CLI"]
 ```
 
-The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. The decoders, expectations, report and diff read the store, and the CLI exposes them.
+The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. With the opt-in server container feature, the user's own container runs in Docker on the same machine, and its calls to vendors go through a recording proxy that answers them and writes them to the store. The decoders, expectations, report and diff read the store, and the CLI exposes them.
 
 ## 4. Data model
 
@@ -295,7 +298,7 @@ A server-side tag template with the same job. The server-side `addEventCallback`
 
 ### 8.4 The sink
 
-The server container runs on a remote host and cannot reach the user's machine. The user runs the sink. Tagreeve runs no service. Any HTTPS endpoint that accepts an authenticated POST works.
+A remote server container cannot reach the user's machine. The user runs the sink. Tagreeve runs no service. The opt-in local server container (§8.5) needs no sink: it runs on the user's machine. Any HTTPS endpoint that accepts an authenticated POST works.
 
 | Option | When |
 | --- | --- |
@@ -327,7 +330,7 @@ flowchart LR
 The browser sees the first hop only. Two dotted paths can show the second, and the user runs the endpoint in both.
 
 - **Server tag-firing reporter (§8.3).** A template in the server container reports tag status per event to the sink.
-- **Test sink as the vendor endpoint.** In a test workspace, the server container's vendor tags point at an endpoint the user runs. It records what the server container sent on. Real vendors receive nothing from that workspace only if every vendor tag in it points at the sink. The sink receives full vendor payloads, so runs that use it use the §13 test identities, and the sink reader applies the same value rules as recorded hits.
+- **Test sink as the vendor endpoint.** In a test workspace, the server container's vendor tags point at an endpoint the user runs. It records what the server container sent on. The local server container needs no such workspace: it runs on the user's machine, and its vendor calls are answered by Tagreeve's recording proxy and never forwarded. Real vendors receive nothing from that workspace only if every vendor tag in it points at the sink. The sink receives full vendor payloads, so runs that use it use the §13 test identities, and the sink reader applies the same value rules as recorded hits.
 
 Tagreeve reads either one only through the sink reader (§9). The sink reader is not built. Until it is, a run cannot say what the server container sent on, and the report must not imply it can.
 
@@ -335,7 +338,7 @@ Tagreeve reads either one only through the sink reader (§9). The sink reader is
 
 **`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports and the sink reader ingests them.
 
-**Out of scope.** Stape's logs and the API of any hosted service. Tagreeve runs no hosted service, and each user runs their own sink.
+**Out of scope.** Stape's logs and the API of any hosted service. Tagreeve runs no hosted service. Everything runs on the user's machine. The opt-in server container feature runs the user's own container in the user's Docker, and the container downloads its own configuration from Google, as it always does.
 
 ## 9. Collector and run store
 
@@ -384,7 +387,7 @@ Filters support `vendor`, `event`, `consent.*`, `ids.*`, `page` (with `matches`)
 
 ## 12. Interfaces
 
-**CLI:** `tagreeve run`, `tagreeve diff`, `tagreeve suite`, `tagreeve baseline` (`baseline save`, and `run --baseline` to check a run against it), `tagreeve report` (an HTML file for one run or a suite) and `tagreeve install-browser`. Terminal, JSON and JUnit output of `report` is not built (§15.3).
+**CLI:** `tagreeve run`, `tagreeve diff`, `tagreeve suite`, `tagreeve baseline` (`baseline save`, and `run --baseline` to check a run against it), `tagreeve report` (an HTML file for one run or a suite) `tagreeve server-container build` (builds the image of the opt-in server container feature, never pushes it) and `tagreeve install-browser`. Terminal, JSON and JUnit output of `report` is not built (§15.3).
 
 **CLI only.** Tagreeve has no MCP server. An agent runs the CLI and reads `--json` output and the JSONL record. Every result includes record IDs, the run ID and the step label. Errors say what was expected and what was found.
 
@@ -405,7 +408,7 @@ Real data can still appear through:
 
 The docs and the handoff prompt tell people to use test accounts and test cards.
 
-**Secrets are always redacted:** the run token, sink credentials and any `Authorization` or cookie header values Tagreeve adds.
+**Secrets are always redacted:** the run token, sink credentials, the server container config (the `CONTAINER_CONFIG` value, a secret like `gtmAuth`), the per-run proxy credential and any `Authorization` or cookie header values Tagreeve adds.
 
 **The `gtmAuth` value is redacted in any form.** In `Recorder.close()`, as its last step, the recorder scrubs the value from every string in the records. Decoding and flags run on the raw records first, so a redacted value still has its hit. The built-in checks run in `evaluate`, on the scrubbed records. They read the flags made from the raw records. The scrub decodes before it searches: it URL-decodes and base64-decodes each string recursively, and reads the query strings found inside decoded text. For a query value of `Request.url` or a form body, the whole value becomes `[redacted]`. The URL at the end of a flag's `detail` is scrubbed like `Request.url`. If it is redacted whole, it keeps its origin (`https://host/[redacted]`), unless the origin holds the value. Any other string, including `Hit.params`, `Hit.page`, headers and object fields such as `DataLayerEvent.args`, becomes `[redacted]` whole. CLI output and error messages get the same treatment. Limit: a base64 value glued to unseparated text may not be decoded.
 

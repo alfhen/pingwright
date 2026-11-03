@@ -11,7 +11,7 @@ export class UsageError extends Error {
   }
 }
 
-const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser'];
+const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'];
 
 export function usageHint(command: string | undefined): string {
   return `Run tagreeve ${command ? `${command} ` : ''}--help for the options.`;
@@ -89,7 +89,12 @@ export interface SuiteArgs {
 export const PUBLISHED_VARIANT = 'published';
 const VARIANT_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
-export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
+export interface ServerContainerArgs {
+  command: 'server-container';
+  action: 'build';
+}
+
+export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: 'run' };
 
 export const USAGE = `Usage:
   tagreeve run <scenario.yml> --site <url> [options]
@@ -97,10 +102,13 @@ export const USAGE = `Usage:
   tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite <dir> (--site <url> | --stores <stores.json>) [--variant published] [--variant name=override.json] [options]
+  tagreeve server-container build
   tagreeve install-browser
   tagreeve --version
 
 Run "tagreeve run --help" for the options of run.
+
+server-container build: builds the image for the server container feature on arm64 (Apple silicon) from Google's image. It needs Docker, pulls large images and never pushes. On amd64 it prints the image to use.
 
 Options for suite:
   --site <url>               The site to test. Give --site or --stores
@@ -230,6 +238,11 @@ function parseCommand(argv: string[]): Command {
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');
     return { command: 'install-browser' };
+  }
+  if (command === 'server-container') {
+    if (rest[0] !== 'build') throw new UsageError('server-container needs a subcommand: build');
+    if (rest.length !== 1) throw new UsageError('server-container build takes no arguments');
+    return { command: 'server-container', action: 'build' };
   }
   if (command === 'diff') {
     if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
