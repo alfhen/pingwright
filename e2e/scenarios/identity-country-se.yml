@@ -24,6 +24,9 @@ steps:
     label: pay
   - wait: 7s
     label: thank-you
+  - visit: /sgtm-plain
+    label: plain
+  - wait: 1s
 expect:
   must:
     - { vendor: sgtm, event: purchase, identity.hashesMatch: true }

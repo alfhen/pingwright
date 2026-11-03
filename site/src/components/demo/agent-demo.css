@@ -46,6 +46,12 @@
   }
 }
 
+/* The handoff's sizes assume browser defaults, not Tailwind's preflight. */
+.ad-card,
+.ad-card * {
+  box-sizing: content-box;
+}
+
 .ad-card {
   border: 1px solid var(--line);
   border-radius: 14px;

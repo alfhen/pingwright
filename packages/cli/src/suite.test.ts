@@ -426,15 +426,20 @@ test('diffs compare variants within one store', async () => {
 test('var precedence is the scenario, then the store, then --var', async () => {
   const { dir, out } = await workDir({ 'a.yml': DECLARED });
   const stores = await storesFile(dir, [
-    { name: 'one', site: 'https://one.example.com', vars: { product: 'mug', size: 'l' } },
+    { name: 'one', site: 'https://one.example.com', vars: { product: 'pw-store-var-0001', size: 'l' } },
     { name: 'two', site: 'https://two.example.com' },
   ]);
   const fake = recorder();
-  await suiteCommand(args(dir, out, { site: undefined, stores, vars: { size: 'xl' } }), capture().io, fake);
+  await suiteCommand(args(dir, out, { site: undefined, stores, vars: { size: 'pw-cli-var-0001' } }), capture().io, fake);
   expect(fake.specs.map((s) => s.parsed.vars)).toEqual([
-    { product: 'mug', size: 'xl' },
-    { product: 'tee', size: 'xl' },
+    { product: 'pw-store-var-0001', size: 'pw-cli-var-0001' },
+    { product: 'tee', size: 'pw-cli-var-0001' },
   ]);
+  const files = await readdir(join(out, (await readdir(out))[0]!));
+  const manifestText = await readFile(join(out, (await readdir(out))[0]!, 'suite.json'), 'utf8');
+  expect(files).toContain('suite.json');
+  expect(manifestText).not.toContain('pw-store-var-0001');
+  expect(manifestText).not.toContain('pw-cli-var-0001');
 });
 
 test('a store var that no scenario declares exits 2 and names the store and var, not the value', async () => {
@@ -476,6 +481,7 @@ test('store autoconsent rules are added to the --autoconsent-rules of that store
     { name: 'one', site: 'https://one.example.com', autoconsentRules: 'rules.json' },
     { name: 'two', site: 'https://two.example.com' },
   ]);
+  await writeFile(join(dir, '..', 'rules.json'), '{}');
   const fake = recorder();
   await suiteCommand(args(dir, out, { site: undefined, stores, autoconsentRules: ['global.json'] }), capture().io, fake);
   expect(fake.specs.map((s) => s.autoconsentRules)).toEqual([['global.json', join(dir, '..', 'rules.json')], ['global.json']]);
@@ -508,6 +514,49 @@ test('a payment scenario runs only for the store whose host equals --allow-test-
     if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
     else process.env.XDG_CONFIG_HOME = saved;
   }
+});
+
+async function allowHost(dir: string, host: string): Promise<() => void> {
+  const xdg = join(dir, '..', 'xdg');
+  const hosts = join(xdg, 'tagreeve', 'test-payment-hosts.json');
+  await mkdir(join(hosts, '..'), { recursive: true });
+  await writeFile(hosts, JSON.stringify([host]));
+  await chmod(hosts, 0o600);
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = xdg;
+  return () => {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  };
+}
+
+test('--allow-test-payment that matches no store with --stores, --with-test-payment and a payment scenario exits 2 naming the flag', async () => {
+  const { dir, out } = await workDir({ 'pay.yml': PAYMENT });
+  const stores = await storesFile(dir, [
+    { name: 'local', site: 'http://localhost:4000' },
+    { name: 'other', site: 'http://127.0.0.1:4000' },
+  ]);
+  const restore = await allowHost(dir, 'localhots');
+  try {
+    const fake = recorder();
+    const c = capture();
+    const code = await suiteCommand(args(dir, out, { site: undefined, stores, withTestPayment: true, allowTestPayment: 'localhots' }), c.io, fake);
+    expect(code).toBe(2);
+    expect(c.err()).toContain('--allow-test-payment localhots');
+    expect(c.err()).not.toContain('4000');
+    expect(fake.specs).toEqual([]);
+  } finally {
+    restore();
+  }
+});
+
+test('--allow-test-payment that matches no store is fine without a payment scenario or without --with-test-payment', async () => {
+  const noPayment = await workDir({ 'a.yml': VALID });
+  const stores = await storesFile(noPayment.dir, [{ name: 'local', site: 'http://localhost:4000' }]);
+  expect(await suiteCommand(args(noPayment.dir, noPayment.out, { site: undefined, stores, withTestPayment: true, allowTestPayment: 'localhots' }), capture().io, recorder())).toBe(0);
+  const pay = await workDir({ 'pay.yml': PAYMENT });
+  const stores2 = await storesFile(pay.dir, [{ name: 'local', site: 'http://localhost:4000' }]);
+  expect(await suiteCommand(args(pay.dir, pay.out, { site: undefined, stores: stores2, allowTestPayment: 'localhots' }), capture().io, recorder())).toBe(0);
 });
 
 test('the table names the store in the record and error lines', () => {

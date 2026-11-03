@@ -50,6 +50,21 @@
   --term-muted: #8a9794;
 }
 
+:root {
+  --frame-max: 1280px;
+  --frame-pad: 28px;
+  /* The left edge of a .frame's content, for layouts beside the header that are not inside a .frame. */
+  --frame-start: max(var(--frame-pad), (100% - var(--frame-max)) / 2);
+}
+
+/* The handoff's page frame: 1280px of content with the padding outside it. The header and every home section use it. */
+@utility frame {
+  box-sizing: content-box;
+  max-width: var(--frame-max);
+  margin-inline: auto;
+  padding-inline: var(--frame-pad);
+}
+
 @theme inline {
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
