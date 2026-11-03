@@ -49,7 +49,6 @@ export default function AgentDemo({ data }: Props) {
 
   const sc = data.scenarios.find((s) => s.key === key)!;
   const f = frameAt(sc, T, armed, data.userPrompt);
-  const host = `https://${data.storyHost}`;
   const epochColor = f.epoch === 'denied' ? 'var(--fail)' : f.epoch === 'granted' ? 'var(--mint)' : 'var(--warn)';
 
   return (
@@ -136,7 +135,7 @@ export default function AgentDemo({ data }: Props) {
                     <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                       <b style={{ fontWeight: 600, color: '#E6E6E2' }}>Bash</b>
                       <span style={{ color: 'var(--term-dim)' }}>
-                        (tagreeve run tagreeve/{sc.file} --site {host})
+                        ({sc.command})
                       </span>
                     </span>
                   </div>
