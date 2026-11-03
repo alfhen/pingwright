@@ -1,9 +1,15 @@
-import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, sha256, type Hit, type Request } from '@tagreeve/core';
+import { createIdentity, fieldHashes, hashEmail, hashPhone, newId, scan, sha256, type Hit, type Request } from '@tagreeve/core';
 import { deflateRawSync, gzipSync } from 'node:zlib';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { decodeRequest } from '@tagreeve/decoders';
 import { evaluate, findForeignData } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
+
+// Scanning 100k texts takes minutes, so the stack test below turns the scan off for its one call.
+vi.mock('@tagreeve/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tagreeve/core')>();
+  return { ...actual, scan: vi.fn(actual.scan) };
+});
 
 const runId = newId('run');
 const identity = createIdentity(1);
@@ -244,6 +250,42 @@ test('possibleRealData names the key of a form body and finds a key that is the 
   expect(detail).not.toContain(EMAIL);
 });
 
+test('possibleRealData keeps a URL email apart from a longer body email that contains it', () => {
+  const url = 'https://tracker.example.com/p?e=ann@shop.example';
+  const [leak] = findForeignData([rawRequest(url, 'note=joann@shop.example')], [], identity);
+  expect(leak!.detail).toContain('carries 2 email value(s)');
+  expect(leak!.detail).toMatch(/in note, the URL$/);
+});
+
+test.each([
+  ['an email', 'note=joann@shop.example\nann@shop.example', 'email'],
+  ['a phone', 'note=+1 555 123 4567\n555 123 4567', 'phone'],
+])('possibleRealData keeps two body values apart when one contains the other: %s', (_n, body, kind) => {
+  const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
+});
+
+test('possibleRealData does not read the digits of a JSON path as a phone number', () => {
+  const body = JSON.stringify({ sizes: { 100: { 250: { 1000: { q: 1 } } } } });
+  expect(body).toContain('"1000"');
+  expect(detailsOf(rawRequest(REPLAY, body))).toEqual([]);
+});
+
+test('possibleRealData names a part typed as binary by its field in a text body', () => {
+  const body = `${part('payload', '{"x":"visitor@other-person.example"}', '\r\nContent-Type: application/octet-stream')}--XB--\r\n`;
+  const [detail] = detailsOf(withHeaders(body, MULTIPART));
+  expect(detail).toMatch(/carries 1 email value\(s\).* in payload$/);
+});
+
+test('possibleRealData reads a body of 130000 pairs without overflowing the stack', () => {
+  const scanOff = vi.mocked(scan).mockReturnValue([]);
+  try {
+    expect(() => findForeignData([rawRequest(REPLAY, 'a=1&'.repeat(130_000))], [], identity)).not.toThrow();
+  } finally {
+    scanOff.mockReset();
+  }
+}, 20_000);
+
 test('possibleRealData scans a name-only form body and a plain-text body as one text', () => {
   expect(new URLSearchParams(EMAIL).get(EMAIL)).toBe('');
   expect(detailsOf(rawRequest(REPLAY, EMAIL))[0]).toMatch(/in the body$/);
@@ -402,6 +444,10 @@ test.each([
   ['a JSON unicode escape', '{"e":"\\u00e9visitor@other-person.example"}', 'e'],
   ['a tab escape in an NDJSON line', '{"a":"x\\tvisitor@other-person.example"}\n{"b":1}', 'a'],
   ['a [] joined into the name', 'x[]visitor@other-person.example=1', '(other)'],
+  ['a %5B%5D joined into the name', 'x%5B%5Dvisitor@other-person.example=1', '(other)'],
+  ['a lowercase %5b%5d joined into the name', 'x%5b%5dvisitor@other-person.example=1', '(other)'],
+  ['a long name joined with []', 'abcdef[]visitor@other-person.example=1', '(other)'],
+  ['a long name joined after another field', 'a=1&abcdef[]visitor@other-person.example=1', '(other)'],
 ])('possibleRealData reports one value once when the body and its field read it with different edges: %s', (_n, body, where) => {
   expect(body).toContain('visitor@other-person.example');
   const [leak, ...rest] = findForeignData([rawRequest(REPLAY, body)], [], identity);

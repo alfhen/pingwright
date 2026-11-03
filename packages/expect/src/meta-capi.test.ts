@@ -8,7 +8,7 @@ import { parseScenario } from './scenario.ts';
 const identity = createIdentity(1);
 const runId = newId('run');
 
-function capiHit(em: string): { hit: Hit; req: Request } {
+function capiHit(em: string | string[], more: Record<string, unknown> = {}): { hit: Hit; req: Request } {
   const req: Request = {
     type: 'request',
     id: newId('request'),
@@ -21,7 +21,7 @@ function capiHit(em: string): { hit: Hit; req: Request } {
     frameUrl: 'http://localhost:3000/',
     initiator: null,
     headers: { 'content-type': 'application/json' },
-    postData: JSON.stringify({ data: [{ event_name: 'Purchase', event_id: 'e1', user_data: { em: [em] } }] }),
+    postData: JSON.stringify({ data: [{ event_name: 'Purchase', event_id: 'e1', user_data: { em: Array.isArray(em) ? em : [em], ...more } }] }),
     outcome: 'stubbed',
   };
   const hits = decodeRequest(req);
@@ -45,9 +45,61 @@ test('identity.hashesMatch passes a meta-capi em that is the run identity and fa
   expect(run([bad], rule).pass).toBe(false);
 });
 
-test('a matchesIdentity filter matches neither present nor absent on a meta-capi hit, because the decoder leaves it null', () => {
-  const h = capiHit(createHash('sha256').update(identity.email).digest('hex'));
-  expect(h.hit.ids.hashes?.em?.matchesIdentity).toBeNull();
-  expect(run([h], '{ vendor: meta-capi, ids: { hashes.em.matchesIdentity: present } }').pass).toBe(false);
-  expect(run([h], '{ vendor: meta-capi, ids: { hashes.em.matchesIdentity: absent } }').pass).toBe(false);
+const sha = (v: string) => createHash('sha256').update(v).digest('hex');
+
+test('a matchesIdentity filter is computed from the run identity on a meta-capi hit', () => {
+  const good = capiHit(sha(identity.email));
+  const bad = capiHit('c'.repeat(64));
+  expect(good.hit.ids.hashes?.em?.matchesIdentity).toBeNull();
+  const present = '{ vendor: meta-capi, ids: { hashes.em.matchesIdentity: present } }';
+  const absent = '{ vendor: meta-capi, ids: { hashes.em.matchesIdentity: absent } }';
+  expect(run([good], present).pass).toBe(true);
+  expect(run([good], absent).pass).toBe(false);
+  expect(run([bad], present).pass).toBe(false);
+  expect(run([bad], absent).pass).toBe(true);
+});
+
+test('matchesIdentity is false when any value of a multi-value em does not match', () => {
+  const mixed = capiHit([sha(identity.email), 'c'.repeat(64)]);
+  expect(run([mixed], '{ vendor: meta-capi, ids: { hashes.em.matchesIdentity: absent } }').pass).toBe(true);
+  expect(run([mixed], '{ vendor: meta-capi, ids: { hashes.em.matchesIdentity: present } }').pass).toBe(false);
+});
+
+test('identity.hashesMatch checks every value of a multi-value em', () => {
+  const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
+  const good = sha(identity.email);
+  expect(run([capiHit([good, good])], rule).pass).toBe(true);
+  const wrong = run([capiHit([good, 'c'.repeat(64)])], rule);
+  expect(wrong.pass).toBe(false);
+  expect(wrong.message).toContain('hashedEmail.1');
+  const raw = run([capiHit([good, identity.email])], rule);
+  expect(raw.pass).toBe(false);
+  expect(raw.message).toContain('unhashed email');
+});
+
+test('identity.hashesMatch fails a plain ct, zp or country on a Conversions API event', () => {
+  const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
+  const good = sha(identity.email);
+  expect(run([capiHit(good, { ct: [sha(identity.city.toLowerCase())] })], rule).pass).toBe(true);
+  const plain = run([capiHit(good, { ct: [identity.city] })], rule);
+  expect(plain.pass).toBe(false);
+  expect(plain.message).toContain('unhashed city');
+  expect(run([capiHit(good, { zp: ['00000'] })], rule).pass).toBe(false);
+});
+
+test('identity.hashesMatch checks the second value of ct and fn', () => {
+  const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
+  const good = sha(identity.email);
+  const city = sha(identity.city.toLowerCase());
+  expect(run([capiHit(good, { ct: [city, city] })], rule).pass).toBe(true);
+  const rawCity = run([capiHit(good, { ct: [city, identity.city] })], rule);
+  expect(rawCity.pass).toBe(false);
+  expect(rawCity.message).toContain('unhashed city');
+  expect(rawCity.message).not.toContain('city.1 ');
+  const wrongCity = run([capiHit(good, { ct: [city, 'c'.repeat(64)] })], rule);
+  expect(wrongCity.message).toContain('Not matching: user_data.city.1.');
+  expect(wrongCity.message).toMatch(/Matching: email\.$/);
+  expect(run([capiHit(good, { fn: [sha(identity.firstName.toLowerCase()), 'c'.repeat(64)] })], rule).pass).toBe(false);
+  const filtered = run([capiHit(good, { ct: [city, identity.city] })], '{ vendor: meta-capi, ids.hashes.ct.matchesIdentity: true }');
+  expect(filtered.pass).toBe(false);
 });
