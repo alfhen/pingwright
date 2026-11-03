@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeDocker } from './fake-docker.test-helper.ts';
-import { BASE_ENV, DISTROLESS_IMAGE, DOCKERFILE, GOOGLE_IMAGE, NODE_BUILD_IMAGE, baseImage, buildImage, imageTag, isDigestReference } from './image.ts';
+import { BASE_ENV, DISTROLESS_IMAGE, DOCKERFILE, GOOGLE_IMAGE, NODE_BUILD_IMAGE, baseImage, buildImage, imageTag, isDigestReference, PROBE_HOST, PROBE_SCRIPT } from './image.ts';
 
 const DIGEST = `gcr.io/example/image@sha256:${'b'.repeat(64)}`;
 const cleanup: string[] = [];
@@ -78,5 +78,12 @@ describe('buildImage', () => {
     cleanup.push(fake.dir);
     const result = await buildImage({ version: '1.0.0', arch: 'arm64', env: fake.env({ buildFail: true }) });
     expect(result).toEqual({ status: 'failed', message: 'step failed' });
+  });
+});
+
+describe('PROBE_SCRIPT', () => {
+  it('connects to the address argument and not to the host name', () => {
+    expect(PROBE_SCRIPT).toContain('host: process.argv[1]');
+    expect(PROBE_SCRIPT).toContain(`dns.lookup(${JSON.stringify(PROBE_HOST)}`);
   });
 });

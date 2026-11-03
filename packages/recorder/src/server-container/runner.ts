@@ -3,6 +3,7 @@ import type { ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import http from 'node:http';
+import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 import { hostname } from 'node:os';
 import { isAbsolute } from 'node:path';
@@ -131,6 +132,7 @@ export interface StartOptions {
   readonly image: string;
   readonly serverHosts: readonly string[];
   readonly runId?: string;
+  readonly resolveProbeHost?: (host: string) => Promise<string>;
   readonly env?: NodeJS.ProcessEnv;
   readonly readyTimeoutMs?: number;
   readonly pollMs?: number;
@@ -211,6 +213,10 @@ export async function sweepOrphans(options: SweepOptions = {}): Promise<string[]
     }
   }
   return removed;
+}
+
+async function resolveIPv4(host: string): Promise<string> {
+  return (await lookup(host, { family: 4 })).address;
 }
 
 function probeHealth(origin: string): Promise<boolean> {
@@ -338,7 +344,15 @@ export async function startServerContainer(options: StartOptions): Promise<Serve
     if (created.code !== 0) throw new ServerContainerError('notReady', 'The internal Docker network could not be created.');
     cleanups.push(async () => void (await docker(['network', 'rm', names.network])));
 
-    const probe = await docker(['run', '--rm', '--name', names.probe, '--network', names.network, ...labels, '--entrypoint', 'node', options.image, '-e', PROBE_SCRIPT], {}, 60_000);
+    let probeAddress: string;
+    try {
+      probeAddress = await (options.resolveProbeHost ?? resolveIPv4)(PROBE_HOST);
+    } catch {
+      throw new ServerContainerError('notReady', `${PROBE_HOST} could not be resolved here, so the egress check cannot run. The container was not started.`);
+    }
+    if (!net.isIPv4(probeAddress)) throw new ServerContainerError('notReady', `${PROBE_HOST} did not resolve to an IPv4 address. The container was not started.`);
+
+    const probe = await docker(['run', '--rm', '--name', names.probe, '--network', names.network, ...labels, '--entrypoint', 'node', options.image, '-e', PROBE_SCRIPT, probeAddress], {}, 60_000);
     let outcome: { connect?: unknown; dns?: unknown } | undefined;
     try {
       outcome = JSON.parse(probe.stdout.trim().split('\n').pop() ?? '') as { connect?: unknown; dns?: unknown };

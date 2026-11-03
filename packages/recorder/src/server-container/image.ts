@@ -59,12 +59,16 @@ for (const entry of String(process.env.RELAY_MAP || '').split(',')) {
 /** A host the run talks to anyway, so an open network sends nothing to a third party. */
 export const PROBE_HOST = 'www.googletagmanager.com';
 
-/** Run as `node -e` on the internal network. Prints `{"connect":bool,"dns":bool}`. */
+/**
+ * Run as `node -e SCRIPT ADDRESS` on the internal network. ADDRESS is an IPv4 literal resolved
+ * outside the container, so the connect check tests routing and not DNS.
+ * Prints `{"connect":bool,"dns":bool}`.
+ */
 export const PROBE_SCRIPT = `const net = require('node:net');
 const dns = require('node:dns');
 const result = { connect: false, dns: false };
 const connect = new Promise((resolve) => {
-  const socket = net.connect({ host: ${JSON.stringify(PROBE_HOST)}, port: 443, timeout: 4000 });
+  const socket = net.connect({ host: process.argv[1], port: 443, timeout: 4000 });
   socket.on('connect', () => { result.connect = true; socket.destroy(); resolve(); });
   socket.on('timeout', () => { socket.destroy(); resolve(); });
   socket.on('error', () => resolve());

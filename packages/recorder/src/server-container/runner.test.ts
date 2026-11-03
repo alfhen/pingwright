@@ -48,6 +48,7 @@ function options(script: FakeDockerScript = {}, extra: Partial<StartOptions> = {
     image: IMAGE,
     serverHosts: ['sgtm.example.com'],
     runId: 'r1',
+    resolveProbeHost: () => Promise.resolve('192.0.2.10'),
     env: fake.env(script, { TAGREEVE_SERVER_CONTAINER_CONFIG: CONFIG, ...env }),
     pickPort: () => Promise.resolve(healthPort),
     pollMs: 20,
@@ -140,6 +141,19 @@ describe('startServerContainer', () => {
     expect(runCalls(calls)).toHaveLength(1);
     expect(calls.some((call) => call.argv[0] === 'network' && call.argv[1] === 'rm')).toBe(true);
     expect(calls.some((call) => call.env.CONTAINER_CONFIG !== undefined)).toBe(false);
+  });
+
+  it('passes the probe a resolved IPv4 address to connect to', async () => {
+    await startHealth();
+    await startServerContainer(options()).catch(() => undefined);
+    const probe = runCalls(fake.calls()).find((call) => call.argv.includes(`${NAME_PREFIX}probe-r1`));
+    expect(probe?.argv.at(-1)).toBe('192.0.2.10');
+  });
+
+  it('stops with notReady when the probe host cannot be resolved', async () => {
+    const error = await startServerContainer(options({}, { resolveProbeHost: () => Promise.reject(new Error('nope')) })).catch((e: unknown) => e);
+    expect((error as ServerContainerError).errorClass).toBe('notReady');
+    expect(runCalls(fake.calls())).toHaveLength(0);
   });
 
   it('stops with egressOpen when only the DNS lookup gets out', async () => {
