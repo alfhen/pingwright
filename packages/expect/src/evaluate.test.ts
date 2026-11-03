@@ -382,6 +382,13 @@ test('built-in sandbox page URL check', () => {
   expect(check.evidence).toEqual([bad.hit.id]);
 });
 
+test('the sandboxPageUrl message names the page by host and path only', () => {
+  const bad = hit({ page: `${SANDBOX}?email=pw-test%40example.test&sig=1#frag` });
+  const message = run('start: /', [bad]).find((r) => r.expectation === 'builtin: sandboxPageUrl')!.message;
+  expect(message).not.toMatch(/pw-test|email|sig|frag|\?/);
+  expect(message).toContain(new URL(SANDBOX).host + new URL(SANDBOX).pathname);
+});
+
 test('built-in possibleRealData comes from flags', () => {
   const flag: Flag = { type: 'flag', id: newId('flag'), runId, kind: 'possibleRealData', recordIds: ['req_Y'], detail: 'email in postData' };
   const check = evaluate([flag], parseScenario('start: /')).find((r) => r.expectation === 'builtin: possibleRealData')!;

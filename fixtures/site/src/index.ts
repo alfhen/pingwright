@@ -64,6 +64,7 @@ const pages: Record<string, string> = {
   '/handoff-patched': 'handoff-patched.html',
   '/set-cookie-unstored': 'set-cookie-unstored.html',
   '/set-cookie-already': 'set-cookie-already.html',
+  '/flag-detail': 'flag-detail.html',
   '/meta-early': 'meta-early.html',
   '/meta-early-ids': 'meta-early-ids.html',
   '/container/direct': 'container-direct.html',

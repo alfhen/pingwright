@@ -28,6 +28,8 @@
 
 <!-- H04 -->
 
+- Fix: the text and `--json` summaries show a flag's request with query names only, never values (`?a&b`). A query name that looks like a value reads `(other)`. The `sandboxPageUrl` message names the page by host and path. Records keep the full flag detail otherwise. Path segments are not masked yet. (#679, #801)
+
 <!-- L04 -->
 
 <!-- S04 -->

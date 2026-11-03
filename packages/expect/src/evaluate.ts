@@ -911,6 +911,16 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   return { pass: true, evidence: withHash, message: `Hashed values in ${withHash.length} hit(s) match the run identity.` };
 }
 
+function pageWithoutQuery(page: string | null): string {
+  if (!page) return '';
+  try {
+    const url = new URL(page);
+    return `${url.host}${url.pathname}`;
+  } catch {
+    return page.split(/[?#]/)[0]!;
+  }
+}
+
 function flagHost(flag: Flag, ctx: Context): string {
   const urls = [ctx.requests.get(flag.recordIds[0] ?? '')?.url, /\s(\S+)$/.exec(flag.detail)?.[1]];
   for (const url of urls) {
@@ -977,7 +987,7 @@ function builtInChecks(
     sandboxed.map((h) => h.id),
     sandboxed.length === 0
       ? 'Expected no hit to carry a sandbox URL as its page, found none.'
-      : `Expected no hit to carry a sandbox URL as its page, found ${sandboxed.length}: ${sandboxed[0]!.page}.`,
+      : `Expected no hit to carry a sandbox URL as its page, found ${sandboxed.length}: ${pageWithoutQuery(sandboxed[0]!.page)}.`,
   );
 
   for (const check of [deniedIdentifiersCheck, earlyIdentifiersCheck]) {
