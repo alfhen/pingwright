@@ -111,6 +111,17 @@ export class GtmOverrideFailure extends Error {
   }
 }
 
+/** The server container did not start. The run's JSONL is written, with `Run.serverContainer.error` and the `serverContainerFailed` flag. */
+export class ServerContainerFailure extends Error {
+  constructor(
+    message: string,
+    readonly run: RunResult,
+  ) {
+    super(message);
+    this.name = 'ServerContainerFailure';
+  }
+}
+
 const DEFAULT_OPTIONAL_TIMEOUT_MS = 2000;
 
 const HANDOFF_REMINDER = 'Use test accounts and test cards only. Never enter real personal or payment details.';
@@ -514,6 +525,10 @@ export interface RecordScenarioOptions extends RecorderOptions, PlayOptions {
 export async function recordScenario(options: RecordScenarioOptions): Promise<RunResult> {
   const { parsed, launch = launchRecorder, ...rest } = options;
   const recorder = await launch({ ...rest, headed: rest.headed || hasHandoff(parsed), handoffOverlay: hasHandoff(parsed) });
+  if (recorder.containerFailure) {
+    const { message } = recorder.containerFailure;
+    throw new ServerContainerFailure(message, await recorder.close());
+  }
   try {
     await playScenario(recorder, parsed, rest);
   } catch (error) {

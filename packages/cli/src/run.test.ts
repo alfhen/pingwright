@@ -1,10 +1,10 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import type { RunArgs } from './args.ts';
 import { parseScenario } from '@tagreeve/expect';
-import { resolveNetwork, runCommand } from './run.ts';
+import { prepareServerContainer, resolveNetwork, runCommand } from './run.ts';
 
 test('--var for an inherited name exits 2 as undeclared', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'pw-run-'));
@@ -77,4 +77,69 @@ test('--net-log stays live-only in server mode', () => {
   const { network, err } = resolve('options:\n  serverHosts: [127.0.0.1]\n', { network: 'server', netLog: true });
   expect(network).toBeUndefined();
   expect(err).toContain('--net-log needs --network live');
+});
+
+const FAKE_CONFIG = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
+
+function prepare(args: Parameters<typeof prepareServerContainer>[0], hosts: string[], env: NodeJS.ProcessEnv) {
+  const err: string[] = [];
+  const spec = prepareServerContainer(args, hosts, { stdout: () => undefined, stderr: (t) => err.push(t) }, env);
+  return { spec, err: err.join('') };
+}
+
+test('--server-container is refused outside server mode', () => {
+  const parsed = parseScenario('start: /\noptions:\n  serverHosts: [127.0.0.1]\nsteps:\n  - visit: /\n');
+  const err: string[] = [];
+  const network = resolveNetwork({ network: undefined, netLog: false, serverContainer: true }, parsed, { stdout: () => undefined, stderr: (t) => err.push(t) });
+  expect(network).toBeUndefined();
+  expect(err.join('')).toContain('--server-container needs --network server');
+});
+
+test('--server-container is accepted in server mode', () => {
+  const parsed = parseScenario('start: /\noptions:\n  network: server\n  serverHosts: [127.0.0.1]\nsteps:\n  - visit: /\n');
+  expect(resolveNetwork({ network: undefined, netLog: false, serverContainer: true }, parsed, { stdout: () => undefined, stderr: () => undefined })).toBe('server');
+});
+
+test('a run without the flag never reads the config or the seam', () => {
+  const { spec, err } = prepare({ serverContainerConfig: '/does/not/exist' }, ['127.0.0.1'], { TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: 'not-a-url' });
+  expect(spec).toBeNull();
+  expect(err).toBe('');
+});
+
+test('the config comes from the environment variable and is validated before any browser starts', () => {
+  const ok = prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: FAKE_CONFIG });
+  expect(ok.spec).toMatchObject({ configSource: { kind: 'env' } });
+  const missing = prepare({ serverContainer: true }, ['sgtm.example.com'], {});
+  expect(missing.spec).toBeUndefined();
+  expect(missing.err).toContain('TAGREEVE_SERVER_CONTAINER_CONFIG');
+  const bad = prepare({ serverContainer: true }, ['sgtm.example.com'], { TAGREEVE_SERVER_CONTAINER_CONFIG: 'pw-not-a-config' });
+  expect(bad.spec).toBeUndefined();
+  expect(bad.err).toContain('base64');
+  expect(bad.err).not.toContain('pw-not-a-config');
+});
+
+test('a config file readable by others is refused and the message holds neither the config nor the path', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-config-'));
+  const file = join(dir, 'secret-name-config.txt');
+  await writeFile(file, FAKE_CONFIG);
+  await chmod(file, 0o644);
+  const open = prepare({ serverContainer: true, serverContainerConfig: file }, ['sgtm.example.com'], {});
+  expect(open.spec).toBeUndefined();
+  expect(open.err).toContain('mode 0600');
+  expect(open.err).not.toContain(FAKE_CONFIG);
+  expect(open.err).not.toContain('secret-name');
+  await chmod(file, 0o600);
+  expect(prepare({ serverContainer: true, serverContainerConfig: file }, ['sgtm.example.com'], {}).spec).toMatchObject({ configSource: { kind: 'file', path: file } });
+  expect(prepare({ serverContainer: true, serverContainerConfig: join(dir, 'missing.txt') }, ['sgtm.example.com'], {}).spec).toBeUndefined();
+});
+
+test('the stand-in seam needs no config, and a bad seam value exits 2 without printing it', () => {
+  const env = { TAGREEVE_TEST_SERVER_CONTAINER_CMD: process.execPath };
+  expect(prepare({ serverContainer: true }, ['127.0.0.1'], env).spec).toMatchObject({ configSource: { kind: 'env' } });
+  const hosted = prepare({ serverContainer: true }, ['sgtm.example.com'], env);
+  expect(hosted.spec).toBeUndefined();
+  expect(hosted.err).toContain('loopback');
+  const upstream = prepare({ serverContainer: true }, ['127.0.0.1'], { ...env, TAGREEVE_TEST_SERVER_CONTAINER_UPSTREAM: 'http://pw-secret-host.example.com' });
+  expect(upstream.spec).toBeUndefined();
+  expect(upstream.err).not.toContain('pw-secret-host');
 });

@@ -82,13 +82,15 @@ export function buildFlags({ runId, networkMode, siteUrl, firstPartyHosts, track
   const scope = { siteHost: parse(siteUrl)?.hostname ?? '', firstPartyHosts };
   const flags: Flag[] = [];
   for (const req of requests) {
+    const fromContainer = req.captured === 'serverContainer';
     if (isUnknownDestination(req, scope, trackers)) {
-      const kind = platformHosts && platformHostFor(req) ? 'platformHost' : 'unknownDestination';
-      flags.push(flag(runId, kind, [req.id], `${req.method} ${req.url}`));
-    } else if (isFirstPartySubdomain(req, scope, trackers)) {
+      // The proxy answered this call itself, so a platform host or a first-party host is no reason to treat it differently.
+      const kind = !fromContainer && platformHosts && platformHostFor(req) ? 'platformHost' : 'unknownDestination';
+      flags.push(flag(runId, kind, [req.id], `${fromContainer ? 'from the server container: ' : ''}${req.method} ${req.url}`));
+    } else if (!fromContainer && isFirstPartySubdomain(req, scope, trackers)) {
       flags.push(flag(runId, 'firstPartySubdomain', [req.id], `${req.method} ${req.url}`));
     }
-    if (networkMode !== 'live' && !routedRequestIds.has(req.id) && (isCollectionEndpoint(req, trackers) || isKnownVendorCollection(req))) {
+    if (!fromContainer && networkMode !== 'live' && !routedRequestIds.has(req.id) && (isCollectionEndpoint(req, trackers) || isKnownVendorCollection(req))) {
       const why = req.initiator === 'redirect' ? 'It followed a redirect' : 'It was not routed';
       flags.push(flag(runId, 'stubBypass', [req.id], `${why}, so it was not stubbed: ${req.url}`));
     }

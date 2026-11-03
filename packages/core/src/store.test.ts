@@ -217,6 +217,12 @@ test('Hit.ids can carry hashed identity fields', () => {
   expect(JSON.parse(JSON.stringify(ids))).toEqual(ids);
 });
 
+async function writeRecords(name: string, records: unknown[]): Promise<string> {
+  const path = join(dir, name);
+  await writeFile(path, records.map((r) => JSON.stringify(r) + '\n').join(''));
+  return path;
+}
+
 async function writeLines(name: string, run: Record<string, unknown>): Promise<string> {
   const path = join(dir, name);
   await writeFile(path, JSON.stringify(run) + '\n');
@@ -231,7 +237,28 @@ test('RunWriter stamps the current record schema version', async () => {
   expect(first.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION);
   const warnings: string[] = [];
   const read = await readRun(writer.path, { onWarning: (m) => warnings.push(m) });
-  expect(read.run.recordSchemaVersion).toBe(2);
+  expect(read.run.recordSchemaVersion).toBe(3);
+  expect(warnings).toEqual([]);
+});
+
+test('a version 3 file keeps the server container fields and a version 2 file reads without a warning', async () => {
+  const run: Run = {
+    ...makeRun(),
+    testServerContainer: true,
+    serverContainer: { image: 'stand-in', startedAt: 1, requests: 2, passThrough: { serverjs: 0, config: 1, destination: 1 }, refused: 0, unlinked: 1, error: 'exited' },
+  };
+  const hit = {
+    type: 'hit', id: newId('hit'), runId: run.id, stepId: null, requestId: newId('request'), t: 1, vendor: 'meta-capi', event: 'Purchase',
+    consent: { analytics: 'unknown', ads: 'unknown', adUserData: 'unknown', adPersonalization: 'unknown', raw: {} },
+    ids: {}, page: null, transport: 'fetch', params: {}, via: { hitId: newId('hit'), by: 'eventId', confidence: 'exact' },
+  };
+  const warnings: string[] = [];
+  const read = await readRun(await writeRecords('v3.jsonl', [run, hit]), { onWarning: (m) => warnings.push(m) });
+  expect(read.run.serverContainer).toEqual(run.serverContainer);
+  expect(read.run.testServerContainer).toBe(true);
+  expect(read.hits[0]!.via).toEqual(hit.via);
+  const v2 = await readRun(await writeRecords('v2.jsonl', [{ ...makeRun(), recordSchemaVersion: 2 }]), { onWarning: (m) => warnings.push(m) });
+  expect(v2.run.serverContainer).toBeUndefined();
   expect(warnings).toEqual([]);
 });
 

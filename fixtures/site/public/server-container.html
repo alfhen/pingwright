@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server container</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Server container</h1>
+<p>Sends a Meta pixel <code>Purchase</code> hit with an event ID, then a hit to the mock server container host, which <code>--server-container</code> sends to the local container instead. <code>?email=</code> is the email of the first hit. <code>?extra=1</code> adds a hit with an unrelated event ID and a fake email, and a hit to <code>/data</code>, a path no decoder knows.</p>
+<script>
+(function () {
+  var query = new URLSearchParams(location.search);
+  var eventId = 'pw-event-0001';
+  var email = query.get('email');
+  var pixel = new Image();
+  pixel.src = 'https://www.facebook.com/tr/?id=100000000000001&ev=Purchase&eid=' + eventId + '&dl=' + encodeURIComponent(location.href);
+  function send(path, body) {
+    var url = window.__PW_FIXTURE.sgtmUrl + path;
+    return fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }).catch(function () {});
+  }
+  send('/capi', email ? { event_name: 'Purchase', event_id: eventId, email: email } : { event_name: 'Purchase', event_id: eventId });
+  if (query.get('extra') === '1') {
+    send('/capi', { event_name: 'Purchase', event_id: 'pw-unrelated-0002', email: 'pw-fixture@example.com' });
+    send('/data', { event_name: 'Purchase', event_id: 'pw-data-0003' });
+  }
+})();
+</script>
+</body>
+</html>

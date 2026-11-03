@@ -7,14 +7,13 @@ import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 import { hostname } from 'node:os';
 import { isAbsolute } from 'node:path';
+import type { ServerContainerErrorClass } from '@tagreeve/core';
 import { isLoopbackHost } from '../guard.ts';
 import { Scrubber } from '../gtm-scrub.ts';
 import { NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
 
 export const CONFIG_ENV = 'TAGREEVE_SERVER_CONTAINER_CONFIG';
 export const TEST_COMMAND_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_CMD';
-
-export type ServerContainerErrorClass = 'dockerMissing' | 'imageMissing' | 'configRejected' | 'egressOpen' | 'exited' | 'notReady';
 
 export class ServerContainerError extends Error {
   readonly errorClass: ServerContainerErrorClass;

@@ -539,3 +539,36 @@ test('the table names the store in the record and error lines', () => {
   expect(text).toContain('  a one published: runs/suite_X/a.one.published.jsonl');
   expect(text).toContain('  a two published: run did not finish (exit 2)');
 });
+
+const CONTAINER_SCENARIO = 'start: /\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\noptions: { network: server, serverHosts: [127.0.0.1] }\n';
+
+test('--server-container passes the same spec to every run', async () => {
+  const { dir, out } = await workDir({ 'a.yml': CONTAINER_SCENARIO, 'b.yml': CONTAINER_SCENARIO });
+  const fake = recorder();
+  const saved = process.env.TAGREEVE_SERVER_CONTAINER_CONFIG;
+  process.env.TAGREEVE_SERVER_CONTAINER_CONFIG = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
+  try {
+    expect(await suiteCommand(args(dir, out, { serverContainer: true }), capture().io, fake)).toBe(0);
+  } finally {
+    if (saved === undefined) delete process.env.TAGREEVE_SERVER_CONTAINER_CONFIG;
+    else process.env.TAGREEVE_SERVER_CONTAINER_CONFIG = saved;
+  }
+  expect(fake.specs).toHaveLength(2);
+  expect(fake.specs.every((s) => s.serverContainer?.configSource.kind === 'env')).toBe(true);
+});
+
+test('--server-container with a scenario that is not in server mode exits 2 before any run', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const fake = recorder();
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { serverContainer: true }), c.io, fake)).toBe(2);
+  expect(fake.specs).toEqual([]);
+  expect(c.err()).toContain('--server-container needs --network server');
+});
+
+test('without --server-container no run gets a server container spec', async () => {
+  const { dir, out } = await workDir({ 'a.yml': CONTAINER_SCENARIO });
+  const fake = recorder();
+  expect(await suiteCommand(args(dir, out), capture().io, fake)).toBe(0);
+  expect(fake.specs[0]).not.toHaveProperty('serverContainer');
+});

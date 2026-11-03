@@ -74,6 +74,24 @@ export interface StubDecisionOptions {
   trackers: readonly TrackerEntry[];
 }
 
+const bareHost = (h: string) => h.replace(/^\[|\]$/g, '');
+
+/**
+ * A request to a `serverHosts` host that the local server container answers under `--server-container`:
+ * everything except library loads and script, stylesheet, font and document loads. It does not ask the decoders,
+ * because a first-party container often uses paths that none of them knows.
+ */
+export function isServerContainerRequest(req: Pick<Request, 'url' | 'resourceType'>, serverHosts: readonly string[]): boolean {
+  let url: URL;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/.test(url.protocol) || !hostMatches(bareHost(url.hostname), serverHosts.map(bareHost))) return false;
+  return !isLibraryLoadPath(url.pathname) && !LOADS.has(req.resourceType);
+}
+
 /** A collection request that stub and `server` mode answer locally. `server` mode lets the hosts in `serverHosts` through. */
 export function isStubbedCollection(req: Request, options: StubDecisionOptions): boolean {
   if (!isCollectionEndpoint(req, options.trackers) && !isKnownVendorCollection(req)) return false;

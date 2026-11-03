@@ -4,8 +4,16 @@ import { readRun, type TagreeveRecord, type Result, type Run, type RunRecords } 
 import { parseTrackerList, type TrackerEntry } from '@tagreeve/decoders';
 import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario, type Viewport } from '@tagreeve/expect';
 import {
+  CONFIG_ENV,
+  defaultServerContainerImage,
   GtmOverrideError,
   GtmOverrideFailure,
+  loadContainerConfig,
+  resolveStandInCommand,
+  resolveUpstreamOrigin,
+  ServerContainerError,
+  ServerContainerFailure,
+  ServerContainerUsageError,
   parseGtmOverride,
   parseTestGtmOrigin,
   recordScenario,
@@ -14,13 +22,15 @@ import {
   TEST_GTM_ORIGIN_ENV,
   TEST_LOOPBACK_IS_HOSTED_ENV,
   loopbackIsHostedForTests,
+  type ConfigSource,
   type GtmOverrideInput,
   type TestPayment,
 } from '@tagreeve/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
-import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs } from './args.ts';
+import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs, type SuiteArgs } from './args.ts';
 import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 import { acceptsDeclaration, checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
+import { readVersion } from './version.ts';
 
 export interface Io {
   stdout: (text: string) => void;
@@ -89,6 +99,8 @@ export interface RunSpec {
   gtmOverride: GtmOverrideInput | undefined;
   /** Set once the allow flag and the allowlist file have passed. */
   testPayment?: TestPayment;
+  /** Set once `--server-container` has passed its checks. */
+  serverContainer?: { configSource: ConfigSource; image: string };
   /** Set by `suite`: stored on the record, which is renamed to `<fileStem>.<variant>.jsonl` in `out`. */
   variant?: { name: string; fileStem: string };
 }
@@ -103,9 +115,13 @@ export interface RunOutcome {
 }
 
 /** Applies the network rules shared by `run` and `suite`. Returns undefined after writing the reason to stderr. */
-export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog'>, parsed: Scenario, io: Io): Network | undefined {
+export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog' | 'serverContainer'>, parsed: Scenario, io: Io): Network | undefined {
   const networkMode = args.network ?? parsed.options.network ?? 'stub';
   const serverHosts = parsed.options.serverHosts ?? [];
+  if (args.serverContainer && networkMode !== 'server') {
+    io.stderr('--server-container needs --network server and options.serverHosts in the scenario: the hits to those hosts are what the container receives.\n');
+    return undefined;
+  }
   if (networkMode === 'server') {
     if (serverHosts.length === 0) {
       io.stderr('Network mode "server" needs options.serverHosts in the scenario: the hosts whose requests pass through, such as sgtm.example.com.\n');
@@ -120,6 +136,42 @@ export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog'>, parsed
   }
   if (networkMode === 'live') io.stderr('Warning: live mode. Hits reach real vendor accounts.\n');
   return networkMode;
+}
+
+/**
+ * Checks `--server-container` before any browser starts. Returns `null` when the flag is off, the spec when it can run,
+ * and undefined after writing the reason to stderr. Messages never hold the config, the path of the config or a seam value.
+ */
+export function prepareServerContainer(
+  args: Pick<RunArgs | SuiteArgs, 'serverContainer' | 'serverContainerConfig'>,
+  serverHosts: readonly string[],
+  io: Io,
+  env: NodeJS.ProcessEnv = process.env,
+): RunSpec['serverContainer'] | null | undefined {
+  if (!args.serverContainer) return null;
+  const configSource: ConfigSource = args.serverContainerConfig !== undefined ? { kind: 'file', path: args.serverContainerConfig } : { kind: 'env' };
+  try {
+    const standIn = resolveStandInCommand(env, serverHosts);
+    resolveUpstreamOrigin(env, serverHosts);
+    if (standIn === undefined) {
+      if (configSource.kind === 'env' && !env[CONFIG_ENV]) {
+        io.stderr(`--server-container needs the container config: give --server-container-config <file> or set ${CONFIG_ENV}.\n`);
+        return undefined;
+      }
+      loadContainerConfig(configSource, env);
+    }
+    return { configSource, image: defaultServerContainerImage(readVersion(), env) };
+  } catch (error) {
+    if (error instanceof ServerContainerError || error instanceof ServerContainerUsageError) {
+      io.stderr(`${error.message}\n`);
+      return undefined;
+    }
+    if (error instanceof Error && error.message.startsWith('TAGREEVE_SERVER_CONTAINER_BASE')) {
+      io.stderr(`${error.message}\n`);
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 export function warnTestLoopbackHosted(io: Io): void {
@@ -193,6 +245,7 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
       warn: (text) => io.stderr(`Warning: ${text}\n`),
       trackerList: spec.trackers,
       ...(spec.testPayment && { testPayment: spec.testPayment }),
+      ...(spec.serverContainer && { serverContainer: spec.serverContainer }),
       userAgentOverride: process.env.TAGREEVE_TEST_USER_AGENT || undefined,
     });
     records = result.records;
@@ -200,10 +253,11 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (MISSING_BROWSER.test(message)) return failed('Chromium is not installed. Run `tagreeve install-browser`.\n');
-    let text = `Run failed: ${error instanceof GtmOverrideFailure ? `GTM override: ${message}` : message}\n`;
+    const prefix = error instanceof GtmOverrideFailure ? 'GTM override: ' : error instanceof ServerContainerFailure ? 'Server container: ' : '';
+    let text = `Run failed: ${prefix}${message}\n`;
     const declareHint = spec.testPayment && markerNotDetected(message) && declarationHint(spec, error instanceof StepError ? error.label : undefined);
     if (declareHint) text += `${declareHint}\n`;
-    const written = (error instanceof StepError || error instanceof GtmOverrideFailure) && error.run ? error.run.path : undefined;
+    const written = (error instanceof StepError || error instanceof GtmOverrideFailure || error instanceof ServerContainerFailure) && error.run ? error.run.path : undefined;
     if (written) {
       const kept = variant ? await labelRecord(written, variant, spec.out) : written;
       text += `Record: ${kept}\n`;
@@ -257,6 +311,8 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
 
   const network = resolveNetwork(args, parsed, io);
   if (!network) return 2;
+  const serverContainer = prepareServerContainer(args, parsed.options.serverHosts ?? [], io);
+  if (serverContainer === undefined) return 2;
 
   const gates = await checkTestPaymentGates(parsed, args.site, args.allowTestPayment);
   if (!gates.ok) {
@@ -302,6 +358,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       trackers,
       gtmOverride,
       ...(gates.testPayment && { testPayment: gates.testPayment }),
+      ...(serverContainer && { serverContainer }),
     },
     io,
   );

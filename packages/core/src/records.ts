@@ -26,9 +26,35 @@ export interface CaptureCoverage {
 
 /**
  * Version 1 is the 0.2.0 record shape. Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`,
- * which a version 1 hit does not have. A record with no version is version 0.
+ * which a version 1 hit does not have. Version 3 adds `Request.captured: 'serverContainer'`, `Hit.via`,
+ * `Run.serverContainer` and `Run.testServerContainer`. A record with no version is version 0.
  */
-export const RECORD_SCHEMA_VERSION = 2;
+export const RECORD_SCHEMA_VERSION = 3;
+
+export type ServerContainerErrorClass = 'dockerMissing' | 'imageMissing' | 'configRejected' | 'egressOpen' | 'exited' | 'notReady';
+
+/** What the recording proxy forwarded to Google, by class. */
+export interface ServerContainerPassThrough {
+  serverjs: number;
+  config: number;
+  destination: number;
+}
+
+/** Counts and the image only. Never the config, a container ID or a host name of the container. */
+export interface ServerContainerRecord {
+  /** The image reference, with its digest or ID. */
+  image: string;
+  startedAt: number;
+  /** Calls the container made that were recorded. */
+  requests: number;
+  passThrough: ServerContainerPassThrough;
+  /** `407` answers the proxy sent. */
+  refused: number;
+  /** Hits decoded from container calls that have no `via`. */
+  unlinked: number;
+  /** Set when the container did not start or died. */
+  error?: ServerContainerErrorClass;
+}
 
 export interface GtmOverrideTag {
   id: string;
@@ -82,6 +108,10 @@ export interface Run {
   viewport?: { width: number; height: number };
   /** Set when `TAGREEVE_TEST_LOOPBACK_IS_HOSTED` made the `fill`, `select` and `evaluate` guards treat loopback hosts as hosted. */
   testLoopbackHosted?: true;
+  /** Set when `--server-container` ran the user's server container. */
+  serverContainer?: ServerContainerRecord;
+  /** Set when the stand-in container of `TAGREEVE_TEST_SERVER_CONTAINER_CMD` ran in place of a real one. */
+  testServerContainer?: true;
 }
 
 export interface Step {
@@ -122,8 +152,11 @@ export interface Request {
   failure?: string;
   /** Set when `postData` and the URL's query values were replaced because a person was typing during a handoff. */
   redacted?: 'handoff';
-  /** Absent when a browser hook saw the request. `netlog`: found in Chromium's net log only, so `postData` is null. */
-  captured?: 'netlog';
+  /**
+   * Absent when a browser hook saw the request. `netlog`: found in Chromium's net log only, so `postData` is null.
+   * `serverContainer`: a call the server container made, seen by the recording proxy. It was answered locally.
+   */
+  captured?: 'netlog' | 'serverContainer';
 }
 
 export interface Response {
@@ -149,6 +182,14 @@ export interface HitIds {
   [key: string]: boolean | Record<string, HashedId> | undefined;
 }
 
+export interface HitVia {
+  /** The browser hit this hit most likely came from. */
+  hitId: Id<'hit'>;
+  by: 'eventId' | 'clientId' | 'identity';
+  /** `exact`: the event ID and event name both match one browser hit. `probable`: a shared value. */
+  confidence: 'exact' | 'probable';
+}
+
 export interface Hit {
   type: 'hit';
   id: Id<'hit'>;
@@ -172,6 +213,8 @@ export interface Hit {
   fieldsComplete?: boolean;
   /** The subset of `fields` taken to be identifiers. Names only. */
   idFields?: string[];
+  /** Set on a hit decoded from a server container call that was linked to a browser hit. */
+  via?: HitVia;
 }
 
 export interface DataLayerEvent {
@@ -266,6 +309,7 @@ export type FlagKind =
   | 'stubBypass'
   | 'unloadGap'
   | 'netLogUnreadable'
+  | 'serverContainerFailed'
   | (string & {});
 
 export interface Flag {

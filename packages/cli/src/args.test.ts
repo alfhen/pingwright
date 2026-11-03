@@ -164,3 +164,24 @@ test('run and suite take --allow-test-payment, suite also --with-test-payment', 
   expect(() => parseCli(['run', 's.yml', '--site', 'http://x.test', '--with-test-payment'])).toThrow('not an option of run');
   expect(() => parseCli(['run', 's.yml', '--site', 'http://x.test', '--allow-test-payment'])).toThrow(UsageError);
 });
+
+test('--server-container and --server-container-config are parsed on run and suite', () => {
+  expect(parseCli(['run', 's.yml', '--site', 'http://localhost:3000', '--server-container', '--server-container-config', 'c.txt'])).toMatchObject({
+    command: 'run',
+    serverContainer: true,
+    serverContainerConfig: 'c.txt',
+  });
+  expect(parseCli(['suite', 'dir', '--site', 'http://localhost:3000', '--server-container'])).toMatchObject({ command: 'suite', serverContainer: true });
+});
+
+test('without the flag the args carry no server container field', () => {
+  expect(parseCli(['run', 's.yml', '--site', 'http://localhost:3000'])).not.toHaveProperty('serverContainer');
+  expect(parseCli(['suite', 'dir', '--site', 'http://localhost:3000'])).not.toHaveProperty('serverContainerConfig');
+});
+
+test.each([
+  ['run', ['run', 's.yml', '--site', 'http://localhost:3000']],
+  ['suite', ['suite', 'dir', '--site', 'http://localhost:3000']],
+])('--server-container-config without --server-container is a usage error on %s', (_name, argv) => {
+  expect(() => parseCli([...argv, '--server-container-config', 'c.txt'])).toThrow('--server-container-config needs --server-container');
+});
