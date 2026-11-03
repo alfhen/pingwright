@@ -431,6 +431,6 @@ test('hitShape puts a linked server hit in the epoch of its via hit and an unlin
 });
 
 test('the time of a linked server hit within its via epoch does not change the shape', () => {
-  expect(hitShape(serverRun(250, true))).toEqual(hitShape(serverRun(900, true)));
-  expect(diffRuns(serverRun(250, true), serverRun(900, true))).toEqual({ warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] });
+  expect(hitShape(serverRun(140, true))).toEqual(hitShape(serverRun(250, true)));
+  expect(diffRuns(serverRun(140, true), serverRun(250, true))).toEqual({ warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] });
 });

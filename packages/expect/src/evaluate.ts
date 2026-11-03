@@ -57,6 +57,8 @@ interface Context {
   networkMode?: Run['networkMode'];
   grace: number;
   identity?: Identity;
+  /** Hits that count as inside every epoch, time and consent selector of a rule. */
+  anywhere?: ReadonlySet<string>;
 }
 
 export function evaluate(records: readonly Input[], scenario: Scenario, options: EvaluateOptions = {}): Result[] {
@@ -99,8 +101,10 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
     for (const rule of scenario.expect[kind]) {
       const outcome = evaluateRule(rule, ctx);
       const { pass, evidence, message } = outcome;
-      const note = outcome.note ?? (pass && isScoped(rule) && passRestsOnProbableLink(ctx, (c) => evaluateRuleHits(rule, c).pass) ? 'serverSendProbableLink' : undefined);
-      add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note, isScoped(rule));
+      const passes = (c: Context) => evaluateRuleHits(rule, c).pass;
+      const scoped = isScoped(rule);
+      const note = outcome.note ?? (pass && scoped && passRestsOnProbableLink(ctx, passes) ? 'serverSendProbableLink' : undefined);
+      add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note, scoped && (pass || failureRestsOnProbableLink(ctx, passes)));
     }
 
   builtInChecks(records, scenario, ctx, add);
@@ -113,11 +117,15 @@ const isScoped = (rule: Rule) => Boolean(rule.before || rule.inEpoch || rule.aft
 
 function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
   const outcome = evaluateRuleHits(rule, ctx);
-  if (rule.cookie || !isScoped(rule) || outcome.pass === (rule.kind === 'must')) return outcome;
+  if (rule.cookie || !isScoped(rule)) return outcome;
   const unjudged = ctx.hits.filter((h) => isUnlinkedServerHit(h, ctx.index) && matchesFilter(h, { ...rule.filter, consent: {} }, ctx));
   if (unjudged.length === 0) return outcome;
-  // A failing `must` stays as it is unless the unlinked hits could make it hold.
-  if (rule.kind === 'must' && !evaluateRuleHits(rule, asBrowserHits(ctx, unjudged)).pass) return outcome;
+  if (rule.kind === 'mustNot') {
+    if (!outcome.pass) return outcome;
+  } else if (evaluateRuleHits(rule, { ...ctx, anywhere: new Set(unjudged.map((h) => h.id)) }).pass === outcome.pass) {
+    // In the most favourable place the unlinked hits change nothing, so they do not matter.
+    return outcome;
+  }
   return {
     pass: false,
     evidence: [...outcome.evidence, ...unjudged.map((h) => h.id)],
@@ -145,19 +153,28 @@ function passRestsOnProbableLink(ctx: Context, passes: (ctx: Context) => boolean
   return probable.length > 0 && !passes(asBrowserHits(ctx, probable));
 }
 
+/** True when the failing verdict `passes` gives would change if the probable-linked server hits were placed by their own time or left out. */
+function failureRestsOnProbableLink(ctx: Context, passes: (ctx: Context) => boolean): boolean {
+  const probable = ctx.hits.filter((h) => h.via?.confidence === 'probable' && viaHitOf(h, ctx.index) !== undefined);
+  if (probable.length === 0) return false;
+  const ids = new Set(probable.map((h) => h.id));
+  return passes(asBrowserHits(ctx, probable)) || passes({ ...ctx, hits: ctx.hits.filter((h) => !ids.has(h.id)) });
+}
+
 function evaluateRuleHits(rule: Rule, ctx: Context): RuleOutcome {
   if (rule.cookie) return evaluateCookieRule(rule, rule.cookie, ctx);
-  let hits = ctx.hits.filter((h) => matchesFilter(h, rule.filter, ctx));
+  const anywhere = (h: Hit) => ctx.anywhere?.has(h.id) ?? false;
+  let hits = ctx.hits.filter((h) => matchesFilter(h, anywhere(h) ? { ...rule.filter, consent: {} } : rule.filter, ctx));
   const total = hits.length;
   const narrowed: string[] = [];
 
   if (rule.before) {
-    hits = hits.filter((h) => isBeforeConsent(h, ctx));
+    hits = hits.filter((h) => anywhere(h) || isBeforeConsent(h, ctx));
     narrowed.push('before consent');
   }
   if (rule.inEpoch) {
     const selector = rule.inEpoch;
-    hits = hits.filter((h) => inEpoch(h, selector, ctx));
+    hits = hits.filter((h) => anywhere(h) || inEpoch(h, selector, ctx));
     narrowed.push(`in epoch(${selector})`);
   }
   if (rule.after) {
@@ -168,6 +185,7 @@ function evaluateRuleHits(rule: Rule, ctx: Context): RuleOutcome {
     }
     const from = step.endedAt ?? step.startedAt;
     hits = hits.filter((h) => {
+      if (anywhere(h)) return true;
       const at = judgedAt(h, ctx.index);
       return at !== undefined && at >= from;
     });
@@ -883,7 +901,7 @@ function builtInChecks(
   ctx: Context,
   addResult: (expectation: string, pass: boolean, evidence: string[], message: string, severity?: Severity, note?: ResultNote, timeJudged?: boolean) => void,
 ) {
-  const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote) =>
+  const add = (name: BuiltinName, pass: boolean, evidence: string[], message: string, note?: ResultNote, timeJudged = false) =>
     addResult(
       `builtin: ${name}`,
       pass,
@@ -891,7 +909,7 @@ function builtInChecks(
       message,
       scenario.options.builtins?.[name] ?? DEFAULT_SEVERITY[name] ?? 'fail',
       note,
-      name === 'deniedIdentifiers' || name === 'earlyIdentifiers',
+      timeJudged,
     );
   const flags = records.filter((r) => r.type === 'flag');
 
@@ -929,7 +947,7 @@ function builtInChecks(
       return pass;
     };
     check(scenario, ctx, (name, pass, evidence, message, note) =>
-      add(name, pass, evidence, message, note ?? (pass && passRestsOnProbableLink(ctx, passes) ? 'serverSendProbableLink' : undefined)),
+      add(name, pass, evidence, message, note ?? (pass && passRestsOnProbableLink(ctx, passes) ? 'serverSendProbableLink' : undefined), pass || failureRestsOnProbableLink(ctx, passes)),
     );
   }
 
