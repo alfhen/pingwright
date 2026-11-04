@@ -65,12 +65,12 @@ expect:
       host: [localhost]
       outcome: stubbed
       transport: image
-options: { network: live, seed: 7, consentTimeout: 10s, graceWindow: 100ms, allowUnknownDestination: true }
+options: { network: server, seed: 7, consentTimeout: 10s, graceWindow: 100ms, allowUnknownDestination: true }
 `);
   expect(s.steps).toHaveLength(9);
   expect(s.expect.must[0]).toMatchObject({ inEpoch: 'granted', after: 'after-accept', hashesMatch: true, count: { op: '=', n: 0 } });
   expect(s.expect.must[0]!.filter.page).toEqual({ matches: '^http://localhost' });
-  expect(s.options).toEqual({ network: 'live', seed: 7, consentTimeout: 10_000, graceWindow: 100, allowUnknownDestination: true });
+  expect(s.options).toEqual({ network: 'server', seed: 7, consentTimeout: 10_000, graceWindow: 100, allowUnknownDestination: true });
 });
 
 test('parses counts', () => {
@@ -98,6 +98,13 @@ test('rejects a bad duration, consent answer and network', () => {
   expect(errorOf(`start: /\nsteps:\n  - wait: [soon]\n`)).toContain('steps[0].wait');
   expect(errorOf(`start: /\nsteps:\n  - consent: maybe\n`)).toContain('steps[0].consent');
   expect(errorOf(`start: /\noptions:\n  network: fast\n`)).toMatch(/line 3: options\.network/);
+});
+
+test('options.network accepts stub and server and refuses live', () => {
+  expect(parseScenario(`start: /\noptions:\n  network: stub\nsteps:\n  - visit: /\n`).options.network).toBe('stub');
+  expect(parseScenario(`start: /\noptions:\n  network: server\nsteps:\n  - visit: /\n`).options.network).toBe('server');
+  expect(errorOf(`start: /\noptions:\n  network: live\nsteps:\n  - visit: /\n`)).toContain('options.network: live is not allowed in a scenario. Pass --network live on the command line.');
+  expect(errorOf(`start: /\noptions:\n  network: fast\nsteps:\n  - visit: /\n`)).toContain('must be one of stub, server');
 });
 
 test('requires start and rejects unknown top-level keys', () => {

@@ -4,7 +4,7 @@
 
 <!-- E01 -->
 
-<!-- N06 -->
+- Breaking: a scenario with `options.network: live` now fails to load (exit 2). Move `live` to the command line with `--network live`.
 
 <!-- W06 -->
 

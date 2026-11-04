@@ -35,14 +35,16 @@ test('--net-log is refused when the scenario runs in stub mode', async () => {
   expect(err).toContain('--net-log needs --network live');
 });
 
-test('--net-log is refused when --network stub overrides a live scenario', async () => {
-  const { code, err } = await netLogRun('options:\n  network: live\n', { network: 'stub' });
-  expect(code).toBe(2);
-  expect(err).toContain('--net-log needs --network live');
+test('a scenario with network: live exits 2 and names --network live, also with --network live', async () => {
+  for (const extra of [{}, { network: 'live' as const }]) {
+    const { code, err } = await netLogRun('options:\n  network: live\n', extra);
+    expect(code).toBe(2);
+    expect(err).toContain('options.network: live is not allowed in a scenario. Pass --network live on the command line.');
+  }
 });
 
-test('--net-log is accepted when the scenario sets network: live', async () => {
-  const { err } = await netLogRun('options:\n  network: live\n', {});
+test('--net-log with --network live starts in live mode when the scenario sets no network', async () => {
+  const { err } = await netLogRun('', { network: 'live' });
   expect(err).not.toContain('--net-log needs --network live');
   expect(err).toContain('live mode');
 });

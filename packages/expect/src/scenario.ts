@@ -158,7 +158,7 @@ const BODY_KEYS = ['has', 'only', 'ignore'] as const;
 const MAX_FIELD_NAME = 64;
 const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
 const OUTCOMES = ['passed', 'stubbed', 'failed'];
-const NETWORKS = ['stub', 'server', 'live'];
+const NETWORKS = ['stub', 'server'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff', 'payment'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
@@ -680,7 +680,8 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         const p = ['options', k];
         if (!OPTION_KEYS.includes(k)) fail(p, `unknown option, expected one of ${OPTION_KEYS.join(', ')}`);
         else if (k === 'network') {
-          if (typeof v === 'string' && NETWORKS.includes(v)) options.network = v as NetworkMode;
+          if (v === 'live') fail(p, 'live is not allowed in a scenario. Pass --network live on the command line.');
+          else if (typeof v === 'string' && NETWORKS.includes(v)) options.network = v as NetworkMode;
           else fail(p, `must be one of ${NETWORKS.join(', ')}`);
         } else if (k === 'seed') {
           if (typeof v === 'number' && Number.isInteger(v)) options.seed = v;
