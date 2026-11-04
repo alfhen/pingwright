@@ -5,6 +5,7 @@ import type { TrackerEntry } from '@tagreeve/decoders';
 import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@tagreeve/expect';
 import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
 import type { Network, SuiteArgs } from './args.ts';
+import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { readStores, StoresError, type Store } from './stores.ts';
 import { checkTestPaymentGates } from './test-payment-hosts.ts';
 import { executeRun, prepareServerContainer, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';
@@ -298,6 +299,10 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   if (!overrides) return 2;
   warnTestGtmOrigin(io);
   warnTestLoopbackHosted(io);
+  if (args.out === undefined) {
+    const notice = await oldRunsNotice(process.cwd());
+    if (notice) io.stderr(notice);
+  }
 
   const targets: { store: Store | undefined; site: string }[] = stores.length ? stores.map((store) => ({ store, site: store.site })) : [{ store: undefined, site: args.site! }];
   const allowedHost = args.allowTestPayment === undefined ? undefined : normalizeHost(args.allowTestPayment);
@@ -322,7 +327,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   }
 
   const id = `suite_${ulid()}`;
-  const dir = join(args.out, id);
+  const dir = join(resolveOutDir({ out: args.out, now: new Date() }), id);
   await mkdir(dir, { recursive: true });
   const startedAt = Date.now();
   const variants = args.variants.map((v) => v.name);

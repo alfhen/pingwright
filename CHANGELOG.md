@@ -2,7 +2,7 @@
 
 ## 0.6.0-rc.1
 
-<!-- E01 -->
+- `run` and `suite` write to `tagreeve/runs/<date>/` when you give no `--out`. The old default was `runs/`. If `./runs/` holds records, a note on stderr says so. Pass `--out runs` to keep the old folder.
 
 <!-- N06 -->
 

@@ -39,7 +39,7 @@ test('the vendors, safe by default, the name and the sign-off render in that ord
 
   expect(await safe.locator('h2').textContent()).toBe(safeHeading);
   expect(await safe.getByText('// safe by default').count()).toBe(1);
-  for (const code of ['stub mode', 'fake identity', 'handoff', 'runs/*.jsonl']) expect(await safe.getByText(code, { exact: true }).count(), code).toBe(1);
+  for (const code of ['stub mode', 'fake identity', 'handoff', 'tagreeve/runs/*.jsonl']) expect(await safe.getByText(code, { exact: true }).count(), code).toBe(1);
 
   expect(await name.locator('h2').textContent()).toBe("There's a new sheriff in tag town.");
   expect(await name.getByText(/^Pronounced like "tag reeve"\. Formerly \w+\.$/).count()).toBe(1);
