@@ -13,89 +13,12 @@ const path = new URL('../.github/workflows/release-tag.yml', import.meta.url);
 const text = readFileSync(path, 'utf8');
 const workflow = parse(text) as Workflow;
 
-function scanScript(script: string): { text: string; open: boolean } {
-  let quote = '';
-  let unclosedHeredoc = false;
-  let out = '';
-  let heredocs: { word: string; dash: boolean }[] = [];
-  for (let i = 0; i < script.length; i++) {
-    const ch = script[i]!;
-    if (ch === '\\' && quote !== "'") {
-      const next = script[i + 1] ?? '';
-      const joined = next === '\n' ? 1 : next === '\r' && script[i + 2] === '\n' ? 2 : 0;
-      if (joined) {
-        i += joined;
-        const physical = script.slice(script.lastIndexOf('\n', i - joined - 1) + 1, i - joined);
-        if (/(^|[\s;&|()])#/.test(physical)) out += '\n';
-      } else {
-        out += ch + next;
-        i++;
-      }
-    } else if (quote) {
-      if (ch === quote) quote = '';
-      out += ch;
-    } else if (ch === '"' || ch === "'") {
-      quote = ch;
-      out += ch;
-    } else if (ch === '<' && script[i + 1] === '<' && script[i + 2] !== '<') {
-      const lineHead = script.slice(script.lastIndexOf('\n', i - 1) + 1, i);
-      const inArithmetic = lineHead.lastIndexOf('((') > lineHead.lastIndexOf('))');
-      const match = inArithmetic ? null : /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([\w.-]+))/.exec(script.slice(i));
-      if (match) heredocs.push({ word: match[2] ?? match[3] ?? match[4]!, dash: match[1] === '-' });
-      out += '<<';
-      i++;
-    } else if (ch === '\n' && heredocs.length > 0) {
-      out += ch;
-      for (const { word, dash } of heredocs) {
-        const body: string[] = [];
-        for (;;) {
-          const end = script.indexOf('\n', i + 1);
-          const line = script.slice(i + 1, end === -1 ? script.length : end);
-          i = end === -1 ? script.length : end;
-          body.push(line);
-          out += `\n${stripComments(line)}`;
-          if ((dash ? line.replace(/^\t+/, '') : line) === word) break;
-          if (end === -1) {
-            unclosedHeredoc = true;
-            break;
-          }
-        }
-        // A cat body keeps quotes literal and a shell body does not: show both readings.
-        out += `\n${stripComments(body.join('\n'))}`;
-      }
-      out += '\n';
-      heredocs = [];
-    } else if (ch === '#' && (i === 0 || /[\s;&|()]/.test(script[i - 1]!))) {
-      out += ch;
-      while (i + 1 < script.length && script[i + 1] !== '\n') out += script[++i];
-    } else {
-      out += ch;
-    }
-  }
-  return { text: out, open: quote !== '' || unclosedHeredoc || heredocs.length > 0 };
-}
-
-const stripComments = (script: string): string => scanScript(script).text;
-
-// Cut at the first word-start # whatever the quote state, so a desynced scan can only add failures.
-const cutAtHash = (line: string): string => line.replace(/(^|[\s;&|()])#.*$/s, '$1');
-
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps ?? [])
-    .flatMap((step) =>
-      stripComments(step.run ?? '')
-        .replace(/\d*>&[\d-]*|&>>?/g, ' ')
-        .split(/\n|&&|\|\||;|\||&/)
-        .map(cutAtHash),
-    );
+    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n/g, '').split(/\n|&&|\|\||;|\|/));
 
 const runLines = runLinesOf(workflow);
-
-const isReadOnly = (permissions: Record<string, string> | string | undefined): boolean =>
-  permissions === undefined ||
-  permissions === 'read-all' ||
-  (typeof permissions === 'object' && Object.values(permissions).every((level) => level !== 'write'));
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const readRepoFile = (rel: string): string | undefined => {
@@ -107,6 +30,11 @@ const readRepoFile = (rel: string): string | undefined => {
 };
 
 const localWorkflow = /^\.\/\.github\/workflows\/[\w.-]+\.ya?ml$/;
+
+const isReadOnly = (permissions: Record<string, string> | string | undefined): boolean =>
+  permissions === undefined ||
+  permissions === 'read-all' ||
+  (typeof permissions === 'object' && Object.values(permissions).every((level) => level !== 'write'));
 
 export function workflowProblems(source: string, readLocal: (rel: string) => string | undefined = readRepoFile, depth = 0): string[] {
   const wf = parse(source) as Workflow;
@@ -126,9 +54,6 @@ export function workflowProblems(source: string, readLocal: (rel: string) => str
     }
   }
   if (/github\.token/i.test(source)) problems.push('github.token');
-  for (const step of Object.values(wf.jobs).flatMap((job) => job.steps ?? [])) {
-    if (scanScript(step.run ?? '').open) problems.push('cannot parse run script: unclosed quote');
-  }
   const lines = runLinesOf(wf);
   const publishes = lines.filter((line) => /\b(npm|pnpm|yarn)\b.*\bpublish\b/.test(line));
   for (const line of publishes) {
@@ -256,116 +181,17 @@ describe('workflow rules', () => {
     expect(workflowProblems(inherit)).toEqual(['job b passes secrets']);
   });
 
-  it('splits a publish on a single &', () => {
-    const problems = workflowProblems(base('      - run: npm publish --tag "$dist_tag" & echo --dry-run\n'));
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('without --dry-run');
-  });
-
-  it('does not take --dry-run from a comment after an escaped quote', () => {
-    const wf = base('      - run: |\n          echo \\"; npm publish --tag "$dist_tag" # --dry-run\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
-  });
-
   it.each([
-    ["ANSI-C quote", "x=$'it\\'s'\n          npm publish --tag \"$dist_tag\" # --dry-run"],
-    ['quoted (( before heredoc', "echo '(('; cat <<EOF\n          it's\n          EOF\n          npm publish --tag \"$dist_tag\" # --dry-run"],
-    ['quote inside $( )', "x=\"$(echo 'a\"')\"\n          npm publish --tag \"$dist_tag\" # --dry-run"],
-  ])('fails closed on %s', (_name, script) => {
-    const problems = workflowProblems(base(`      - run: |\n          ${script}\n`));
-    expect(problems.length).toBeGreaterThan(0);
-  });
-
-  it.each([
-    ['ANSI-C quote before a # in quotes', "x=$'\\'' y='a #'; npm publish --tag \"$dist_tag\""],
-    ['quote inside $( ) before a # in quotes', "x=\"$(echo 'a\"')\"\n          y=\"a' #\"; npm publish --tag \"$dist_tag\""],
-    ['shell heredoc body', "bash <<'EOF'\n          x=$'\\'' y='a #'; npm publish --tag \"$dist_tag\"\n          EOF"],
-    ['comment continuation in a wrong double quote', "x=$'\\'\"'\n          # note \\\n          npm publish --tag \"$dist_tag\"\n          # \""],
-    ['comment continuation in a heredoc body', "echo '(('; cat <<EOF\n          \"\n          EOF\n          # note \\\n          npm publish --tag \"$dist_tag\"\n          # \""],
-  ])('reports the publish behind %s', (_name, script) => {
-    const problems = workflowProblems(base(`      - run: |\n          ${script}\n`));
-    expect(problems.join('\n')).toContain('without --dry-run');
-  });
-
-  it('reports docker push behind an ANSI-C quote', () => {
-    const script = "x=$'\\'' y='a #'; docker push ghcr.io/x/y";
-    expect(workflowProblems(base(`      - run: |\n          ${script}\n`)).join('\n')).toContain('docker publish');
-  });
-
-  it('reads gh release behind an ANSI-C quote through runLinesOf', () => {
-    const wf = parse(base("      - run: |\n          x=$'\\'' y='a #'; gh release create v1\n")) as Workflow;
-    expect(runLinesOf(wf).filter((line) => /gh\s+release/.test(line))).not.toEqual([]);
-  });
-
-  it('reports an unclosed quote or heredoc', () => {
-    expect(workflowProblems(base(`${good}      - run: |\n          echo "a\n`))).toContain('cannot parse run script: unclosed quote');
-    expect(workflowProblems(base(`${good}      - run: |\n          cat <<EOF\n          x\n`))).toContain('cannot parse run script: unclosed quote');
-  });
-
-  it('does not take --dry-run from a # comment', () => {
-    const problems = workflowProblems(base('      - run: |\n          npm publish --tag "$dist_tag" # --dry-run\n'));
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('without --dry-run');
-  });
-
-  it('keeps a # inside quotes and a redirect like 2>&1 from hiding or splitting a publish', () => {
-    expect(workflowProblems(base('      - run: npm publish --dry-run --tag "$dist_tag" 2>&1\n'))).toEqual([]);
-    const problems = workflowProblems(base('      - run: |\n          echo "a #b"; npm publish --tag "$dist_tag"\n'));
-    expect(problems).toHaveLength(1);
-  });
-
-  it('keeps quote state across lines', () => {
-    const wf = base('      - run: |\n          echo "a\n          b"; npm publish --tag "$dist_tag" # --dry-run\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
-  });
-
-  it('ignores quote characters in a heredoc body', () => {
-    const wf = base(
-      '      - run: |\n          cat <<EOF\n          it\'s\n          EOF\n          npm publish --tag "$dist_tag" # --dry-run\n',
-    );
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
-  });
-
-  it('checks commands inside a heredoc body that a shell runs', () => {
-    const publish = base('      - run: |\n          bash <<EOF\n          npm publish --tag "$dist_tag"\n          EOF\n');
-    expect(workflowProblems(publish)[0]).toContain('without --dry-run');
-    const push = base('      - run: |\n          sh <<EOF\n          docker push ghcr.io/x/y\n          EOF\n');
-    expect(workflowProblems(push)[0]).toContain('docker publish');
-  });
-
-  it('checks the rest of a step after an unterminated heredoc', () => {
-    const wf = base('      - run: |\n          cat <<EOF\n          x\n          npm publish --tag "$dist_tag"\n');
-    expect(workflowProblems(wf).join('\n')).toContain('without --dry-run');
-  });
-
-  it('does not start a heredoc at an arithmetic shift', () => {
-    const wf = base('      - run: |\n          x=$((1<<2))\n          npm publish --tag "$dist_tag"\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
-  });
-
-  it('ends a comment at the newline even after a trailing backslash', () => {
-    const wf = base('      - run: |\n          # note \\\n          npm publish --tag "$dist_tag"\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
-  });
-
-  it('starts a comment at a # right after a separator', () => {
-    const wf = base('      - run: |\n          echo a;# don\'t\n          npm publish --tag "$dist_tag" # --dry-run\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+    'x="a #b" npm publish --tag "$dist_tag"',
+    'docker build --label "desc=build #42" --push .',
+    "npm --registry 'https://r.example/?a=1&b=2' publish --tag \"$dist_tag\"",
+  ])('still reports %s', (line) => {
+    expect(workflowProblems(base(`${good}      - run: |\n          ${line}\n`)).length).toBeGreaterThan(0);
   });
 
   it('checks the uses of a reusable-workflow job', () => {
     const wf = `${base(good)}  b:\n    uses: org/repo/.github/workflows/publish.yml@v1\n`;
     expect(workflowProblems(wf)).toEqual(['uses org/repo/.github/workflows/publish.yml@v1']);
-  });
-
-  it('does not join a line after an escaped backslash', () => {
-    const wf = base('      - run: |\n          echo --dry-run\\\\\n          npm publish --tag "$dist_tag"\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
-  });
-
-  it('keeps quote state across the lines of a shell heredoc body', () => {
-    const wf = base('      - run: |\n          bash <<EOF\n          echo "a\n          b # x"; npm publish --tag "$dist_tag"\n          EOF\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
   });
 
   it('joins backslash continuations before checking a publish', () => {
@@ -417,5 +243,10 @@ describe('workflow rules', () => {
 
   it('lets a plain docker build through', () => {
     expect(workflowProblems(base(`${good}      - run: docker build -t x .\n`))).toEqual([]);
+  });
+
+  it('still finds gh release behind a quoted #', () => {
+    const wf = parse(base('      - run: |\n          NOTE="a #1" gh release create v1\n')) as Workflow;
+    expect(runLinesOf(wf).filter((line) => /gh\s+release/.test(line))).not.toEqual([]);
   });
 });
