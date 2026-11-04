@@ -40,6 +40,7 @@ const pages: Record<string, string> = {
   '/terms-required': 'terms-required.html',
   '/terms-aria-invalid': 'terms-aria-invalid.html',
   '/terms-none': 'terms-none.html',
+  '/terms-fields': 'terms-fields.html',
   '/handoff/until': 'handoff-until.html',
   '/viewport': 'viewport.html',
   '/pinterest': 'pinterest.html',

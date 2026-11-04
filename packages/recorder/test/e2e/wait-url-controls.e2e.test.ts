@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseScenario } from '@tagreeve/expect';
 import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
+import type { Page } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { launchRecorder, playScenario } from '../../src/index.ts';
 
@@ -23,7 +24,7 @@ afterAll(async () => {
 
 const FAKE_EMAIL = 'pw-fixture@example.com';
 
-async function failureOf(path: string): Promise<string> {
+async function failureOf(path: string, valuesOf?: (page: Page) => Promise<void>): Promise<string> {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   try {
     const scenario = parseScenario(`start: ${path}\nsteps:\n  - click: { role: button, name: Pay now }\n  - wait: { url: "/thank-you*" }\n`);
@@ -34,6 +35,7 @@ async function failureOf(path: string): Promise<string> {
     expect(error).not.toBe('');
     expect(error).not.toContain(FAKE_EMAIL);
     expect(error).not.toContain(encodeURIComponent(FAKE_EMAIL));
+    if (valuesOf) await valuesOf(recorder.context.pages()[0]!);
     return error;
   } finally {
     await recorder.close().catch(() => undefined);
@@ -52,4 +54,19 @@ test('with no blocking control the message is the plain one', async () => {
   const error = await failureOf('/terms-none');
   expect(error).toMatch(/page did not reach \/thank-you\* within \S+$/);
   expect(error).not.toContain('Blocking controls');
+});
+
+test('each signal is read from the real page and no value, placeholder or email is printed', async () => {
+  let cityValue = '';
+  let regionValue = '';
+  const error = await failureOf('/terms-fields', async (page) => {
+    cityValue = await page.inputValue('[name=city]');
+    regionValue = await page.inputValue('[name=region]');
+  });
+  expect(cityValue).toBe('Fakeville');
+  expect(regionValue).toBe('Fakeregion');
+  expect(error).toContain(
+    'Blocking controls: text "Full name" (invalid), text "City" (invalid), text "Region" (aria-invalid), text "promo_code" (invalid), select-one "Country" (invalid), checkbox "Send me the newsletter" (required, not ticked), checkbox "Accept the privacy policy" (required, not ticked).',
+  );
+  for (const secret of ['Fakeville', 'Fakeregion', 'Your city', 'Your region', 'Choose a country', 'Fakeland', 'Nickname', 'token']) expect(error).not.toContain(secret);
 });

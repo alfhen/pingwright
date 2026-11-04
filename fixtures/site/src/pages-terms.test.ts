@@ -15,7 +15,7 @@ afterAll(async () => {
 const page = async (path: string) => (await fetch(site.url + path)).text();
 const file = (name: string) => readFileSync(new URL(`../public/${name}.html`, import.meta.url), 'utf8');
 
-test.each(['terms-required', 'terms-aria-invalid', 'terms-none'])('/%s serves its file with the fake email filled in', async (name) => {
+test.each(['terms-required', 'terms-aria-invalid', 'terms-none', 'terms-fields'])('/%s serves its file with the fake email filled in', async (name) => {
   const html = await page(`/${name}`);
   expect(html).toBe(file(name));
   expect(html).toContain('value="pw-fixture@example.com"');
