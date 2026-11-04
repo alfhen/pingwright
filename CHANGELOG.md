@@ -12,7 +12,7 @@
 
 <!-- M04 -->
 
-- A value that occurs in no form of a body (raw, percent-decoded, JSON-unescaped, base64) no longer merges into a longer one, so the count of other people's values is right. A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
+- A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
 
 <!-- M11 -->
 

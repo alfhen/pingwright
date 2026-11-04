@@ -1421,93 +1421,21 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 
 // The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
 // merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
-// merges, and only when the longer value occurs in some form of the body and the shorter one never stands alone: in a form the
-// longer value is missing from, the text that form was decoded from must hold the longer value. A different value in the URL,
-// or a separate value that a longer one contains, keeps its own finding.
+// merges, and only when the shorter value never stands alone in the body: a different value in the URL, or a longer value
+// elsewhere, keeps its own finding.
+// A shorter value that only ever appears inside a longer one in the raw body is merged into it, even when the two are different values.
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.includes(short)) return false;
-  const strip = (text: string) => text.replace(/\[\]|%5B%5D/gi, '');
-  let occurs = false;
-  let longOccurs = false;
-  const merges = bodies.every((raw) => {
-    for (const [form, parents] of bodyForms(raw)) {
-      const text = strip(form);
-      const covered: [number, number][] = [];
-      for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
-      if (covered.length > 0) longOccurs = true;
-      for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
-        occurs = true;
-        if (covered.some(([from, to]) => i >= from && i + short.length <= to)) continue;
-        if (form === raw || covered.length > 0) return false;
-        if (![...parents].some((parent) => strip(parent).includes(long))) return false;
-      }
+  return bodies.every((raw) => {
+    const text = raw.replace(/\[\]|%5B%5D/gi, '');
+    const covered: [number, number][] = [];
+    for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
+    for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
+      if (!covered.some(([from, to]) => i >= from && i + short.length <= to)) return false;
     }
     return true;
   });
-  return occurs && longOccurs && merges;
-}
-
-// Approximates the forms core's scan reads a body in, each with the texts it was decoded from. Percent runs decode one by one
-// and a bad run stays raw, repeated until the text stops changing, as core's variants() does. Each step is also read with '+'
-// as a space. Base64 is read as core's scan does, without its binary filter: an extra form can only keep two values apart. A
-// base64 form has no parent text, because decoding does not keep positions.
-function base64Readings(text: string): string[] {
-  const out: string[] = [];
-  for (const token of text.match(/[A-Za-z0-9+/_-]{12,}={0,2}/g) ?? []) {
-    const pieces = new Set([token]);
-    if (token.includes('/')) for (const piece of token.split('/')) if (piece.length >= 12) pieces.add(piece);
-    for (const piece of pieces) {
-      const glue = [...piece].flatMap((c, i) => (c === '_' || c === '-' || c === '+' ? [i] : []));
-      const cuts = new Set([piece]);
-      for (const i of glue) {
-        cuts.add(piece.slice(i + 1));
-        cuts.add(piece.slice(0, i));
-      }
-      if (glue.length > 1) cuts.add(piece.slice(glue[0]! + 1, glue[glue.length - 1]));
-      for (const cut of cuts) {
-        for (let offset = 0; offset <= 3; offset++) {
-          const candidate = cut.slice(offset);
-          if (candidate.length < 12) continue;
-          const bytes = Buffer.from(candidate.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-          if (bytes.length >= 8) out.push(bytes.toString('utf8'));
-        }
-      }
-    }
-  }
-  return out;
-}
-
-function bodyForms(raw: string): Map<string, Set<string>> {
-  const forms = new Map<string, Set<string>>([[raw, new Set()]]);
-  const add = (form: string, parent: string | undefined) => {
-    const parents = forms.get(form) ?? new Set<string>();
-    if (parent !== undefined && form !== parent) parents.add(parent);
-    forms.set(form, parents);
-  };
-  const decode = (text: string) =>
-    text.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
-      try {
-        return decodeURIComponent(run);
-      } catch {
-        return run;
-      }
-    });
-  const visited = new Set<string>();
-  const read = (text: string, depth: number, source: string | undefined): void => {
-    let parent = source;
-    for (let step = text; !visited.has(step); step = decode(step)) {
-      visited.add(step);
-      add(step, parent);
-      add(decode(step.replace(/\+/g, ' ')), step);
-      parent = step;
-      if (depth >= 3) continue;
-      for (const decoded of base64Readings(step)) read(decoded, depth + 1, undefined);
-    }
-  };
-  read(raw, 0, raw);
-  add(raw.replace(/\\u([0-9a-f]{4})/gi, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(["\\/])/g, '$1'), raw);
-  return forms;
 }
 
 function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>, bodies: string[]): void {

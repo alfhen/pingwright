@@ -260,10 +260,6 @@ test('possibleRealData keeps a URL email apart from a longer body email that con
 test.each([
   ['an email', 'note=joann@shop.example\nann@shop.example', 'email'],
   ['a phone', 'note=+1 555 123 4567\n555 123 4567', 'phone'],
-  ['a percent-encoded email', 'note=joann%40shop.example\nann%40shop.example', 'email'],
-  ['a percent-encoded phone', 'note=%2B1%20555%20123%204567\n555%20123%204567', 'phone'],
-  ['a double-encoded email', 'note=joann%2540shop.example\nann%2540shop.example', 'email'],
-  ['a percent-encoded email with a stray percent', 'note=joann%40shop.example\nann%40shop.example&d=100%', 'email'],
 ])('possibleRealData keeps two body values apart when one contains the other: %s', (_n, body, kind) => {
   const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
@@ -452,24 +448,13 @@ test.each([
   ['a lowercase %5b%5d joined into the name', 'x%5b%5dvisitor@other-person.example=1', '(other)'],
   ['a long name joined with []', 'abcdef[]visitor@other-person.example=1', '(other)'],
   ['a long name joined after another field', 'a=1&abcdef[]visitor@other-person.example=1', '(other)'],
-  ['a stray percent in another field', 'x%5B%5Dvisitor%40other-person.example=1&d=100%', '(other)'],
-  ['a Latin-1 escape in another field', 'x%5B%5Dvisitor%40other-person.example=1&n=caf%E9', '(other)'],
-  ['a double-encoded @ in a JSON field', '{"e":"line\\nvisitor%2540other-person.example"}', 'e'],
-  ['a double-encoded @ joined into the name', 'a=1&x[]visitor%2540other-person.example=1', '(other)'],
-  ['a triple-encoded @ joined into the name', 'x[]visitor%252540other-person.example=1', '(other)'],
 ])('possibleRealData reports one value once when the body and its field read it with different edges: %s', (_n, body, where) => {
-  expect(body.replace(/%(?:25)*40/g, '@')).toContain('visitor@other-person.example');
+  expect(body).toContain('visitor@other-person.example');
   const [leak, ...rest] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(rest).toHaveLength(0);
   expect(leak!.detail).toContain('carries 1 email value(s)');
   expect(leak!.detail.endsWith(`in ${where}`)).toBe(true);
   expect(leak!.detail).not.toContain('other-person');
-});
-
-test('possibleRealData reports a double-encoded phone with an edge shift once', () => {
-  const [leak, ...rest] = findForeignData([rawRequest(REPLAY, '{"e":"line\\n+1%2520555%2520123%25204567"}')], [], identity);
-  expect(rest).toHaveLength(0);
-  expect(leak!.detail).toContain('carries 1 phone value(s)');
 });
 
 test('possibleRealData still counts two different emails in the body and a field', () => {
@@ -567,29 +552,4 @@ test('hashesMatch does not count Meta custom data as unchecked identity fields',
   const r = evaluate([hit, req], metaRule, { identity })[0]!;
   expect(r.pass).toBe(false);
   expect(r.message).not.toContain('that Tagreeve does not check');
-});
-
-test.each([
-  ['a percent-encoded body value next to a longer hit field from the URL', 'en=x&ann%40shop.example', 'joann%40shop.example'],
-])('possibleRealData keeps a hit field apart from a body value it is not read from: %s', (_n, body, field) => {
-  const req: Request = {
-    ...rawRequest(`https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&en=page_view&ep.note=${field}`, body),
-    method: 'POST',
-  };
-  const hits = decodeRequest(req);
-  expect(hits.length).toBeGreaterThan(0);
-  const [leak] = findForeignData([req], hits, identity);
-  expect(leak!.detail).toContain('carries 2 email value(s)');
-});
-
-test.each([
-  ['a base64 field and a percent-encoded line', `a=${Buffer.from('joann@shop.example').toString('base64')}\nann%40shop.example`, 'email'],
-  ['a JSON-escaped line and a percent-encoded line', '{"a":"joann\\u0040shop.example"}\nann%40shop.example', 'email'],
-  ['a base64 phone and a percent-encoded phone', `a=${Buffer.from('+1 555 123 4567 x').toString('base64')}\n555%20123%204567`, 'phone'],
-  ['a raw email and a base64 line', `a=joann@shop.example\n${Buffer.from('ann@shop.example x').toString('base64')}`, 'email'],
-  ['a raw phone and a base64 line', `a=+1 555 123 4567\n${Buffer.from('555 123 4567 xx').toString('base64')}`, 'phone'],
-  ['a raw email and a glued base64 line', `a=joann@shop.example\nxx_${Buffer.from('ann@shop.example x').toString('base64')}`, 'email'],
-])('possibleRealData keeps two body values apart across decoded forms: %s', (_n, body, kind) => {
-  const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
-  expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
 });
