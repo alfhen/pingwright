@@ -29,6 +29,7 @@ import {
 } from '@tagreeve/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
+import { warnIfNotIgnored } from './git-ignore.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs, type SuiteArgs } from './args.ts';
 import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
@@ -363,6 +364,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     const notice = await oldRunsNotice(process.cwd());
     if (notice) io.stderr(notice);
   }
+  await warnIfNotIgnored(out, io.stderr);
 
   const outcome = await executeRun(
     {

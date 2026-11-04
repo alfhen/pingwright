@@ -1,6 +1,6 @@
 # Project layout
 
-Tagreeve does not make you use a folder layout. These are the folders to use if you want runs to be easy to find and safe to commit. Tagreeve does not create them for you in this release.
+Tagreeve does not make you use a folder layout. These are the folders to use if you want runs to be easy to find and safe to commit. `tagreeve init` makes the scenario and baseline folders and the `.gitignore` line for you.
 
 ```text
 your-repo/
@@ -32,7 +32,9 @@ your-repo/
 
 ## What stays outside the repo
 
-A GTM override file holds the `gtmAuth` value of a workspace. A server container config is a secret too. Keep both files outside the repo, for example in `~/.config/tagreeve/`, and give them mode 0600. The [server container guide](server-container.md) shows how to save the config:
+A GTM override file holds the `gtmAuth` value of a workspace. A server container config is a secret too. Keep both files outside the repo, for example in `~/.config/tagreeve/`, and give them mode 0600. The [server container guide](server-container.md) shows how to save the config.
+
+For the override file:
 
 ```bash
 chmod 600 ~/.config/tagreeve/workspace-override.json

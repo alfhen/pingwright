@@ -47,6 +47,8 @@ test('run defaults', () => {
 test('other commands', () => {
   expect(parseCli(['--version'])).toEqual({ command: 'version' });
   expect(parseCli(['install-browser'])).toEqual({ command: 'install-browser' });
+  expect(parseCli(['init'])).toEqual({ command: 'init' });
+  expect(() => parseCli(['init', 'x'])).toThrow('init takes no arguments');
   expect(parseCli([])).toEqual({ command: 'help' });
   expect(parseCli(['run', '--help'])).toEqual({ command: 'help', topic: 'run' });
   expect(parseCli(['--help'])).toEqual({ command: 'help' });
@@ -207,7 +209,7 @@ test('an unknown option is one short line', () => {
   }
 });
 
-test.each(['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'] as const)('%s --help prints the help of that command', (command) => {
+test.each(['run', 'suite', 'diff', 'baseline', 'report', 'init', 'install-browser', 'server-container'] as const)('%s --help prints the help of that command', (command) => {
   expect(parseCli([command, '--help'])).toEqual({ command: 'help', topic: command });
   expect(helpText(command)).toContain(`Usage: tagreeve ${command}`);
 });
