@@ -307,7 +307,7 @@ describe('recording proxy', () => {
     ).rejects.toThrow(/wildcard/);
   });
 
-  const loopbackName = ['lo0', 'lo'].find((name) => name in networkInterfaces());
+  const loopbackName = ['lo0', 'lo'].find((name) => networkInterfaces()[name]?.some((entry) => entry.family === 'IPv6'));
 
   it.skipIf(!loopbackName)('refuses a scoped unspecified host through the check after listen', async () => {
     const host = `::%${loopbackName}`;
@@ -315,7 +315,7 @@ describe('recording proxy', () => {
     await expect(createRecordingProxy(options)).rejects.toThrow(/wildcard/);
   });
 
-  it.skipIf(!loopbackName)('rejects within 1 s when a client is connected before the address check', async () => {
+  it('rejects within 1 s when a client is connected before the address check', async () => {
     const realListen = http.Server.prototype.listen;
     const realAddress = http.Server.prototype.address;
     let checking = false;
@@ -331,7 +331,10 @@ describe('recording proxy', () => {
       return (realListen as (...a: unknown[]) => http.Server).call(this, port, host, () => {
         const bound = realAddress.call(this) as net.AddressInfo;
         client = net.connect(bound.port, '127.0.0.1');
-        client.on('error', () => {});
+        client.on('error', () => {
+          checking = false;
+          done();
+        });
         client.once('connect', () => {
           setTimeout(() => {
             checking = true;
@@ -341,11 +344,19 @@ describe('recording proxy', () => {
       });
     });
     const started = Date.now();
-    await expect(
-      createRecordingProxy({ host: '127.0.0.1', port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }),
-    ).rejects.toThrow(/wildcard/);
-    expect(Date.now() - started).toBeLessThan(1000);
-    client?.destroy();
+    try {
+      const outcome = await createRecordingProxy({ host: '127.0.0.1', port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }).then(
+        async (opened) => {
+          await opened.close();
+          return undefined;
+        },
+        (error: unknown) => error,
+      );
+      expect(String(outcome)).toMatch(/wildcard/);
+      expect(Date.now() - started).toBeLessThan(1000);
+    } finally {
+      client?.destroy();
+    }
   }, 5000);
 
   it('accepts loopback spellings', async () => {
