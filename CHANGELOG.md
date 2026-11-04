@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+<!-- R05 -->
+
+### Since rc.2
+
+<!-- S05 -->
+
+<!-- K05 -->
+
+<!-- P05 -->
+
 ## 0.5.0-rc.2
 
 Release candidate. Install it with `npm i -g tagreeve@next`.
