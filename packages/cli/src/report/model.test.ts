@@ -220,6 +220,11 @@ test('a hit flagged only through its identifier names is a leak from the deniedI
   expect(model.rows[0]!.segments[0]!.label).toBe('identifiers sent while denied');
 });
 
+test('a rule shows the value of sentBy', () => {
+  const model = buildReportModel(records({ results: [result('mustNot: {"vendor":"ga4","host":"www.google-analytics.com","sentBy":"browser"}', true)] }));
+  expect(model.expectations[0]!.text).toBe('mustNot: vendor: ga4, host: www.google-analytics.com, sentBy: browser');
+});
+
 test('a result that passed has no severity, one that failed or warned has it', () => {
   const model = buildReportModel(records({ results: [result('builtin: a', true, { severity: 'fail' }), result('builtin: b', false), result('builtin: c', false, { severity: 'warn' })] }));
   expect(model.expectations.map((e) => e.severity)).toEqual([undefined, 'fail', 'warn']);

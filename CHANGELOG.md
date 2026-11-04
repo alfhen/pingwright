@@ -6,7 +6,7 @@
 
 ### Since rc.2
 
-<!-- S05 -->
+- `sentBy: browser` or `sentBy: server` in a hit rule selects hits by sender. A browser-only `mustNot` on a Google host no longer fails on the server container's own forwarding with `--server-container` (#900, #902).
 
 <!-- K05 -->
 
