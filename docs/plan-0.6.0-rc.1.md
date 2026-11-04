@@ -85,6 +85,7 @@ Maintainer decisions, 2026-11-03, final. Items marked (this plan) are the plan a
 - **#901.** A container call links exactly by client ID and event name only when exactly one browser hit with the same client ID and event name had its request to the container in flight when the call arrived. Rule 1 (event ID and event name) still ranks first. Ties, and names that differ across vendors, stay `probable`.
 - **#585.** Add the hosts that Shopify's Shop Pay page names: exact hosts, plus `*.shopifysvc.com` as the page writes it. Never `*.myshopify.com`, and not the POS firewall list. Each entry links to the Shopify page. `*.stripe.com` stays out, because it is third party.
 - **Record schema version 4, once.** E02 bumps `recordSchemaVersion` to 4 for `Run.label` and `Run.store`. L06 changes what a `clientId` exact link means, under the same version. The goal 2 fields of rc.2 are added to the same version 4 before 0.6.0 final, so 0.6 has one bump. The suite manifest goes to `suiteSchemaVersion: 3` once, in E02, and E03 and E06 add to it.
+- **The frame of each `dataLayer` push is in version 4 (maintainer, 2026-11-04).** D01 records which frame made each push, so 0.6.0 has one record shape and rc.2's `dataLayer` work (#922) does not change version 4 again. It comes from the adversarial review of #922.
 - **`records.ts` has one owner in wave 2 (this plan).** E02 writes the version 4 docstring for both changes and the new `HitVia.confidence` docstring. L06 does not edit `records.ts`. The L06 review checks that the docstring matches the code.
 - **The site demo is not re-recorded for E01 (this plan).** `scripts/record-site-demo.ts` passes `--out runs`, which is used as given, so the recorded text does not change.
 
@@ -93,7 +94,7 @@ Maintainer decisions, 2026-11-03, final. Items marked (this plan) are the plan a
 ```mermaid
 flowchart LR
   W1["Wave 1: E01, N06, W06, M02, M03, M04, M05, M06, M07, M09, M10, M11"] --> W2["Wave 2: E02, L06, H06"]
-  W2 --> W3["Wave 3: E03"]
+  W2 --> W3["Wave 3: E03, D01"]
   W3 --> W4["Wave 4: E05"]
   W4 --> W5["Wave 5: E04"]
   W5 --> W6["Wave 6: E06"]
@@ -128,10 +129,10 @@ More for rc.1:
 - Each negative test checks first that its input really holds what the check looks for. On a run that exits 2, read the record named by the `Record:` line on stderr.
 - New e2e tests go in new files, unless the entry names an existing file. A CLI e2e that needs its own working directory has its own `execFile` helper and a temporary directory. `e2e/cli-helpers.ts` is not changed.
 - Tests never need a running Docker daemon or the network. E05's tests need the local `git` binary and run `git init` in a temporary directory.
-- Record schema: E02 sets `recordSchemaVersion` to 4, and no other PR changes it. `suiteSchemaVersion` goes to 3 in E02 only. `baselineSchemaVersion` stays 1 and `storesSchemaVersion` stays 1. E04 adds `configSchemaVersion: 1`.
+- Record schema: E02 sets `recordSchemaVersion` to 4, and no other PR changes it. D01 adds `DataLayerEvent.frame` to version 4 in wave 3, before any 0.6 release, and updates the version 4 docstring. `suiteSchemaVersion` goes to 3 in E02 only. `baselineSchemaVersion` stays 1 and `storesSchemaVersion` stays 1. E04 adds `configSchemaVersion: 1`.
 - Every error about a file names the file and the key, never a value from it, as `stores.ts` and `readGtmOverride` do today.
 - A PR that changes CLI output that `site/demo/` shows reruns `pnpm build && node --experimental-transform-types scripts/record-site-demo.ts` and commits the result, as `AGENTS.md` says. With no label, no default file and no config, the summary is unchanged, so the demo should not change.
-- CHANGELOG: the plan PR does not edit `CHANGELOG.md`. After 0.5.0 is released, the main session adds a `## 0.6.0-rc.1` heading above `## 0.5.0` with one marker per PR that has a user-visible change, a blank line between each pair: E01, N06, W06, M02, M04, M10, M11, E02, L06, H06, E03, E05, E04, E06 and R06. Every ID is a letter and two digits, because `scripts/changelog-markers.test.ts` and the "no markers left" tests match only `<!-- [A-Z]\d{2} -->`. Each PR replaces only its own marker. R06 removes leftover markers. M03, M05, M06, M07 and M09 add no CHANGELOG line.
+- CHANGELOG: the plan PR does not edit `CHANGELOG.md`. After 0.5.0 is released, the main session adds a `## 0.6.0-rc.1` heading above `## 0.5.0` with one marker per PR that has a user-visible change, a blank line between each pair: E01, N06, W06, M02, M04, M10, M11, E02, L06, H06, E03, D01, E05, E04, E06 and R06. Every ID is a letter and two digits, because `scripts/changelog-markers.test.ts` and the "no markers left" tests match only `<!-- [A-Z]\d{2} -->`. Each PR replaces only its own marker. R06 removes leftover markers. M03, M05, M06, M07 and M09 add no CHANGELOG line.
 
 ## PRs
 
@@ -263,6 +264,12 @@ Acceptance: the unit tests pass. On the old list both POSTs are `unknownDestinat
 - The text summary has one `Defaults:` line that names each default used, for example `Defaults: tagreeve/trackers.json (tracker list), tagreeve/autoconsent/cookiebot.json (autoconsent rules)`. `--json` has `defaults: [{ setting, path }]`. No line and no key when none was used. `suite.json` has the same list under version 3. Paths are the fixed relative names, never absolute.
 Regression test: unit tests for each default, present and absent, and for a flag that replaces it. The e2e: a temporary working directory with `tagreeve/scenarios/a.yml`, `tagreeve/trackers.json` and `tagreeve/stores.json` (two fixture stores). `tagreeve suite` with no folder and no `--site` runs `a` on each store, and `--json` lists the three defaults. With `--site`, `stores.json` is not used and not listed. Leak check: no absolute path and no home folder in stdout, stderr or `suite.json`.
 Acceptance: the e2e passes. On the old code `suite` with no folder is a usage error, so the test fails.
+
+**D01 The frame of each `dataLayer` push (#922).** Touches: `packages/core/src/records.ts` (`DataLayerEvent.frame` and the version 4 docstring only), `packages/recorder/src/recorder.ts` (the `DATALAYER_BINDING` callback only, which already has `source.frame` and the `frameNumbers` and `eventFrames` maps), `packages/recorder/src/datalayer.ts` (`dataLayerEventFromPayload` takes the frame), `packages/recorder/src/datalayer.test.ts`, `packages/recorder/test/e2e/datalayer-frame.e2e.test.ts` (new), a fixture page that pushes from the top frame and from an embedded frame (`fixtures/site/public/`, its route in `fixtures/site/src/index.ts`, its row in `fixtures/site/README.md`), `docs/design.md` (the §4 `DataLayerEvent` row), `CHANGELOG.md` (the D01 marker).
+- `DataLayerEvent.frame` is `{ main: boolean, n: number }`: `main` is true for the page's main frame, and `n` is the run's frame number from the existing `frameNumbers` map (the same frame keeps one number for the run). Never a URL, a host, a path or a frame name, because a sandbox frame's URL can hold the page path and checkout tokens.
+- A version 3 record has no `frame`; readers treat it as unknown. Nothing else reads the field in rc.1; rc.2's `dataLayer` diff and checks (#922) use it.
+Regression test: a unit test that a payload from an embedded frame gets `main: false` and a stable `n`. The e2e loads the fixture page, which pushes one event from the top frame and one from an embedded frame. Precondition: both pushes are in the record. Assert the top-frame push has `main: true`, the embedded push `main: false` with another `n`, and no frame URL or path in any `DataLayerEvent` field.
+Acceptance: the e2e passes. On the old code `DataLayerEvent` has no `frame`, so it fails.
 
 ### Wave 4
 
