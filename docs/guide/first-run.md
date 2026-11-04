@@ -9,7 +9,7 @@ A coding agent, for example Claude Code, can do these steps for you. Copy the pr
 ## Install
 
 ```bash
-npm i -g tagreeve@next
+npm i -g tagreeve
 tagreeve install-browser
 ```
 

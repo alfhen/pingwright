@@ -5,28 +5,32 @@ import { expect, test } from 'vitest';
 const read = (path: string): string => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf8');
 
 const installProblem = (text: string): string | undefined =>
-  !/npm i -g tagreeve@next(?![\w-])/.test(text)
-    ? 'does not give npm i -g tagreeve@next as the install command'
-    : /npm i -g tagreeve(?![@\w-])|tagreeve[^.\n]*installs `0\.3\.0`/.test(text)
-      ? 'gives a bare tagreeve install or says tagreeve installs 0.3.0'
-      : undefined;
+  /npm i -g tagreeve@next(?![\w-])/.test(text)
+    ? 'gives npm i -g tagreeve@next as the install command'
+    : !/npm i -g tagreeve(?![@\w-])/.test(text)
+      ? 'does not give npm i -g tagreeve as the install command'
+      : /tagreeve[^.\n]*installs `0\.3\.0`/.test(text)
+        ? 'says tagreeve installs 0.3.0'
+        : undefined;
 
 const installSection = (cli: string): string => cli.slice(cli.indexOf('## Install'), cli.indexOf('\n## ', cli.indexOf('## Install') + 1));
 
 const enterAlwaysProblem = (text: string): string | undefined =>
   /Enter in the terminal always works/.test(text) ? 'says Enter always works' : undefined;
 
-test('install text gives npm i -g tagreeve@next and no tagreeve 0.3.0', () => {
+test('install text gives the bare npm i -g tagreeve and no tagreeve 0.3.0', () => {
   expect(installProblem(read('README.md'))).toBeUndefined();
   expect(installProblem(read('docs/guide/first-run.md'))).toBeUndefined();
   expect(installProblem(installSection(read('docs/cli.md')))).toBeUndefined();
   expect(installProblem(read('site/src/lib/prompt.ts'))).toBeUndefined();
 });
 
-test('the install check fails on a bare install or a tagreeve 0.3.0 claim', () => {
-  expect(installProblem('Run `npm i -g tagreeve`.')).toBeDefined();
-  expect(installProblem('`npm i -g tagreeve@next` and `npm i -g tagreeve`.')).toBeDefined();
-  expect(installProblem('`npm i -g tagreeve@next` installs `0.3.0`.')).toBeDefined();
+test('the install check fails on @next, a missing install line or a tagreeve 0.3.0 claim', () => {
+  expect(installProblem('Run `npm i -g tagreeve@next`.')).toBeDefined();
+  expect(installProblem('`npm i -g tagreeve` and `npm i -g tagreeve@next`.')).toBeDefined();
+  expect(installProblem('Install tagreeve.')).toBeDefined();
+  expect(installProblem('`npm i -g tagreeve` installs `0.3.0`.')).toBeDefined();
+  expect(installProblem('Run `npm i -g tagreeve`.')).toBeUndefined();
 });
 
 test('the docs do not say Enter always works', () => {

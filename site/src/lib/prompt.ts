@@ -2,7 +2,7 @@ export const PROMPT = `Set up Tagreeve to test the tracking and the cookie conse
 
 Tagreeve is a command-line tool. It opens my site in a real browser, acts as a visitor, records every tracking request and checks the requests against rules that I write. The docs are at https://tagreeve.dev.
 
-1. Install it with \`npm i -g tagreeve@next\`, then run \`tagreeve install-browser\`. Check that \`tagreeve --version\` works.
+1. Install it with \`npm i -g tagreeve\`, then run \`tagreeve install-browser\`. Check that \`tagreeve --version\` works.
 2. Read https://tagreeve.dev/docs/guide/first-run and https://tagreeve.dev/docs/cli before you write a scenario. Use \`tagreeve run --help\` for the flags. Do not guess flags or step names.
 3. Ask me for the address of my site and the tracking tools it uses, for example GA4, Google Ads, Meta or Pinterest.
 4. Write three scenarios in a \`tagreeve/\` folder: the visitor ignores the cookie banner (\`consent: none\`), accepts it (\`consent: accept\`) and rejects it (\`consent: reject\`). Each scenario opens the home page and one product or content page. Add rules: no Meta or Google Ads hit before consent, no marketing hit after a reject, and the analytics hits that I expect after an accept.
@@ -15,4 +15,4 @@ Rules for you:
 - Do not use \`--network live\` unless I ask for it.
 - Keep the \`runs/\` folder on my machine. Do not commit it or upload it.`;
 
-export const INSTALL_COMMAND = 'npm i -g tagreeve@next';
+export const INSTALL_COMMAND = 'npm i -g tagreeve';

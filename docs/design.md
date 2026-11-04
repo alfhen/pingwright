@@ -1,6 +1,6 @@
 # Tagreeve design
 
-Status: revision 10, for release 0.5.0-rc.2. Milestones 0.1, 0.2, 0.3, 0.4 and 0.5 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0. Revision 10 adds §15.5, the differences in 0.5, and rewrites the 0.5 item of §15 to what was built.
+Status: revision 11, for release 0.5.0. Milestones 0.1, 0.2, 0.3, 0.4 and 0.5 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0. Revision 10 adds §15.5, the differences in 0.5, and rewrites the 0.5 item of §15 to what was built. Revision 11 is the 0.5.0 release: a server workspace runs through its preview-environment config.
 
 ## 1. Problem
 
@@ -288,7 +288,7 @@ Limits:
 - An environment with no version assigned returns 404.
 - Only the test browser is affected.
 
-**Server workspaces.** For an unpublished server container workspace, the caller supplies the server preview header value (`X-Gtm-Server-Preview`). This is planned and not built: no code sends the header (§8.5).
+**Server workspaces.** For an unpublished server container workspace, a run with `--server-container` takes a config built from the workspace's preview environment (§8.5). Sending the `X-Gtm-Server-Preview` header is not built: no code sends it.
 
 ### 8.3 Server tag-firing reporter
 
@@ -336,7 +336,7 @@ With `--server-container`, the container runs on the user's machine and every ve
 - **Server tag-firing reporter (§8.3).** A template in the server container reports tag status per event to the sink.
 - **Test sink as the vendor endpoint.** In a test workspace, the server container's vendor tags point at an endpoint the user runs. It records what the server container sent on. The local server container needs no such workspace: it runs on the user's machine, and its vendor calls are answered by Tagreeve's recording proxy and never forwarded. Real vendors receive nothing from that workspace only if every vendor tag in it points at the sink. The sink receives full vendor payloads, so runs that use it use the §13 test identities, and the sink reader applies the same value rules as recorded hits.
 
-Tagreeve reads either one only through the sink reader (§9). The sink reader is not built. A run with `--server-container` shows what the local container sent on, in the summary and the report. A run without it cannot say what the server container sent on, and the report must not imply it can. The local container does not show Stape-only features, tags that need the hosting layer, unpublished workspaces, or calls that no decoder matched (flagged unknown).
+Tagreeve reads either one only through the sink reader (§9). The sink reader is not built. A run with `--server-container` shows what the local container sent on, in the summary and the report. A run without it cannot say what the server container sent on, and the report must not imply it can. The local container does not show Stape-only features, tags that need the hosting layer, or calls that no decoder matched (flagged unknown). With the live config the local container does not show unpublished workspaces; a config from a server workspace's preview environment serves that workspace.
 
 **Server preview.** `X-Gtm-Server-Preview` puts the traffic in the server container's preview. Only a signed-in person in the GTM UI sees the preview data. Tagreeve cannot read it without the GTM API, which it never calls. The header value is a secret like `gtmAuth`. It must not appear in a record, a log line, an error message or test output. In 0.3 and 0.4 the recorder does not send the header (§15.3).
 
@@ -449,7 +449,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 2. **0.2 (built, `0.2.0`):** GTM override per run (web, including custom loaders), `diff`, `pinterest` decoder, stubbing of known tracker hosts from a curated list, Shopify checkout pattern. See docs/proposal-0.2.md and docs/plan-0.2.md.
 3. **0.3 (built, `0.3.0`):** rules on payload fields (`body.has`, `body.only`) and cookies, the `deniedIdentifiers` check, `suite`, an HTML `report` for one run and for a suite, the Done control for handoff steps, role and `any` locators, a `select` step, a minimal `server` network mode (`serverHosts`), record schema version 2. See docs/plan-0.3.md.
 4. **0.4 (built, `0.4.0-rc.3`):** handoff steps that end by themselves, an opt-in test payment step, baselines for drift checks, a `<W>x<H>` viewport, fake identities by country, server-container visibility described in §8.5, the `possibleRedirectHop` flag, a WebKit probe, the release workflow and the rename to Tagreeve. See docs/plan-0.4.md.
-5. **0.5 (built, `0.5.0-rc.2`):** the local server container (`--server-container`, `server-container build`, the recording proxy and the container calls as decoded hits, #358), the Conversions API decoder, several stores in one suite (#360), `unloadGap` at the end of a run (#261), platform hosts for Shopify (#585, partly), masked page paths in `--by-page` keys and the removal of the old command alias. See docs/plan-0.5.md.
+5. **0.5 (built, `0.5.0`):** the local server container (`--server-container`, `server-container build`, the recording proxy and the container calls as decoded hits, #358), the Conversions API decoder, several stores in one suite (#360), `unloadGap` at the end of a run (#261), platform hosts for Shopify (#585, partly), masked page paths in `--by-page` keys and the removal of the old command alias. See docs/plan-0.5.md.
 6. **Later:** the server tag reporter, the server workspace preview header, the web tag-firing reporter template and expected tag lists (goal 2), `tagreeve init` (goal 8), a full `microsoft-uet` decoder, the Shopify custom pixel bridge, the collector origin bridge and a `mobile` viewport preset (#514).
 
 Deferred: terminal, JSON and JUnit output for `report`, a replay page.
@@ -531,7 +531,7 @@ Where the code in 0.5 differs from the design above. Sections 15.1 to 15.4 still
 - **A container call is a hit.** It is decoded and checked like a browser hit and links to a browser hit by event ID with `Hit.via`. Record schema version is 3.
 - **Not proven:** that the Meta CAPI, Pinterest and Criteo template tags reach the proxy. The 0.5.0-rc.2 field test runs this (Check C0 items 1 to 3).
 - **Not built:** link rule 2 (client ID and event name). A failure through a container call with no event ID, such as the built-in GA4 tag, links as probable and only warns.
-- **Not available locally:** Stape-only hosting features and unpublished server workspaces.
+- **Not available locally:** Stape-only hosting features. With the live config the container does not show an unpublished server workspace; a config from the workspace's preview environment serves it.
 - **`suite --stores`** runs each scenario against several stores. `suite.json` is version 2.
 - **`platformHost`** flags requests to listed Shopify infrastructure hosts instead of `unknownDestination`. The list holds only hosts that a Shopify docs page names, so most Shopify telemetry, checkout and payments hosts are still `unknownDestination`.
 - **`meta-capi`** decodes Conversions API calls. In `stub` mode the endpoint is answered with a success body.
