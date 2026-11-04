@@ -13,8 +13,9 @@ const path = new URL('../.github/workflows/release-tag.yml', import.meta.url);
 const text = readFileSync(path, 'utf8');
 const workflow = parse(text) as Workflow;
 
-function stripComments(script: string): string {
+function scanScript(script: string): { text: string; open: boolean } {
   let quote = '';
+  let unclosedHeredoc = false;
   let out = '';
   let heredocs: { word: string; dash: boolean }[] = [];
   for (let i = 0; i < script.length; i++) {
@@ -50,7 +51,11 @@ function stripComments(script: string): string {
           i = end === -1 ? script.length : end;
           body.push(line);
           out += `\n${stripComments(line)}`;
-          if (end === -1 || (dash ? line.replace(/^\t+/, '') : line) === word) break;
+          if ((dash ? line.replace(/^\t+/, '') : line) === word) break;
+          if (end === -1) {
+            unclosedHeredoc = true;
+            break;
+          }
         }
         // A cat body keeps quotes literal and a shell body does not: show both readings.
         out += `\n${stripComments(body.join('\n'))}`;
@@ -63,8 +68,13 @@ function stripComments(script: string): string {
       out += ch;
     }
   }
-  return out;
+  return { text: out, open: quote !== '' || unclosedHeredoc || heredocs.length > 0 };
 }
+
+const stripComments = (script: string): string => scanScript(script).text;
+
+// Cut at the first word-start # whatever the quote state, so a desynced scan can only add failures.
+const cutAtHash = (line: string): string => line.replace(/(^|[\s;&|()])#.*$/s, '$1');
 
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
@@ -72,7 +82,8 @@ const runLinesOf = (wf: Workflow): string[] =>
     .flatMap((step) =>
       stripComments(step.run ?? '')
         .replace(/\d*>&[\d-]*|&>>?/g, ' ')
-        .split(/\n|&&|\|\||;|\||&/),
+        .split(/\n|&&|\|\||;|\||&/)
+        .map(cutAtHash),
     );
 
 const runLines = runLinesOf(workflow);
@@ -111,6 +122,9 @@ export function workflowProblems(source: string, readLocal: (rel: string) => str
     }
   }
   if (/github\.token/i.test(source)) problems.push('github.token');
+  for (const step of Object.values(wf.jobs).flatMap((job) => job.steps ?? [])) {
+    if (scanScript(step.run ?? '').open) problems.push('cannot parse run script: unclosed quote');
+  }
   const lines = runLinesOf(wf);
   const publishes = lines.filter((line) => /\b(npm|pnpm|yarn)\b.*\bpublish\b/.test(line));
   for (const line of publishes) {
@@ -249,6 +263,20 @@ describe('workflow rules', () => {
     expect(workflowProblems(wf)[0]).toContain('without --dry-run');
   });
 
+  it.each([
+    ["ANSI-C quote", "x=$'it\\'s'\n          npm publish --tag \"$dist_tag\" # --dry-run"],
+    ['quoted (( before heredoc', "echo '(('; cat <<EOF\n          it's\n          EOF\n          npm publish --tag \"$dist_tag\" # --dry-run"],
+    ['quote inside $( )', "x=\"$(echo 'a\"')\"\n          npm publish --tag \"$dist_tag\" # --dry-run"],
+  ])('fails closed on %s', (_name, script) => {
+    const problems = workflowProblems(base(`      - run: |\n          ${script}\n`));
+    expect(problems.length).toBeGreaterThan(0);
+  });
+
+  it('reports an unclosed quote or heredoc', () => {
+    expect(workflowProblems(base(`${good}      - run: |\n          echo "a\n`))).toContain('cannot parse run script: unclosed quote');
+    expect(workflowProblems(base(`${good}      - run: |\n          cat <<EOF\n          x\n`))).toContain('cannot parse run script: unclosed quote');
+  });
+
   it('does not take --dry-run from a # comment', () => {
     const problems = workflowProblems(base('      - run: |\n          npm publish --tag "$dist_tag" # --dry-run\n'));
     expect(problems).toHaveLength(1);
@@ -282,7 +310,7 @@ describe('workflow rules', () => {
 
   it('checks the rest of a step after an unterminated heredoc', () => {
     const wf = base('      - run: |\n          cat <<EOF\n          x\n          npm publish --tag "$dist_tag"\n');
-    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+    expect(workflowProblems(wf).join('\n')).toContain('without --dry-run');
   });
 
   it('does not start a heredoc at an arithmetic shift', () => {
