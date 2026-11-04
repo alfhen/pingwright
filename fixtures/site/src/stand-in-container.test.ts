@@ -41,9 +41,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  errorSpy.mockRestore();
   await standIn?.close();
   standIn = undefined;
+  errorSpy.mockRestore();
   await proxy.close();
   ca.close();
   rmSync(root, { recursive: true, force: true });
