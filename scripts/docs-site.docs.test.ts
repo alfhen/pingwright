@@ -124,10 +124,10 @@ test('the hero copies the setup prompt and the npm command', async () => {
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(PROMPT);
 
   const npmButton = page.locator('button[data-copy-text]');
-  expect(await npmButton.textContent()).toBe('$ npm i -g tagreeve@next');
+  expect(await npmButton.textContent()).toBe('$ npm i -g tagreeve');
   await npmButton.click();
   await expect.poll(() => npmButton.textContent()).toBe('✓ copied');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('npm i -g tagreeve@next');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('npm i -g tagreeve');
   await context.close();
 });
 
@@ -136,7 +136,7 @@ test('the home page has the hero and the footer, and the replay link dispatches 
   const page = await context.newPage();
   await page.goto(`${docsUrl}/`);
   await expect.poll(() => page.locator('h1').textContent()).toContain('"Should only take 5 minutes." Now it does.');
-  expect(await page.getByText('0.5 release candidate · Chromium · MIT').count()).toBe(1);
+  expect(await page.getByText('0.5 · Chromium · MIT').count()).toBe(1);
   expect(await page.getByText('tagreeve · MIT · runs on infrastructure you control').count()).toBe(1);
   await page.evaluate(() => {
     (window as unknown as { replays: number }).replays = 0;

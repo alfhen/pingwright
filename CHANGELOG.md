@@ -2,7 +2,27 @@
 
 ## 0.5.0
 
-<!-- R05 -->
+`npm i -g tagreeve` installs this release. 0.5.0 adds everything in the 0.4.0 and 0.5.0 release candidates (below) and the changes under "Since rc.2". To upgrade from 0.3.0, read the next section.
+
+### What 0.5.0 adds
+
+- Server container: `--server-container` runs your own server container in Docker and records every call it makes to a vendor. Those calls are decoded and checked like browser hits. A hit rule can select by sender with `sentBy`. The guide shows how to test an unpublished server workspace through its preview environment.
+- Checks and rules: the `meta-capi` decoder, the `earlyIdentifiers` check, `from:` on hit and cookie rules, `identity.hashesMatch` over every value of a Conversions API field, and a stricter `unloadGap`.
+- Steps and runs: handoff steps that end by themselves, the opt-in `payment` step for a provider's test card, `--viewport`, and fake identities by country.
+- Several runs: `tagreeve suite --stores` runs each scenario against several stores, and `tagreeve baseline save` with `run --baseline` catches drift in the shape of a run.
+- Output: summaries show query names only and mask value-like path segments, and every command has its own `--help`.
+
+### Upgrading from 0.3.0
+
+- **The package and the command have a new name.** Uninstall the old package, then run `npm i -g tagreeve`, in this order. The steps are in the 0.4.0-rc.1 section below. The command is `tagreeve`. The old command alias is gone.
+- **Environment variables and the config folder.** Variables start with `TAGREEVE_`. The config folder is `$XDG_CONFIG_HOME/tagreeve/`, else `~/.config/tagreeve/`.
+- **Record schema version 3.** Records from 0.3.0 still read. A 0.3 reader warns on a version 3 record. Records keep the key `pingwrightVersion`.
+- **`suite.json` is version 2.** `report` reads versions 1 and 2.
+- **Requests to Shopify infrastructure hosts** (`cdn.shopify.com`, `monorail-edge.shopifysvc.com`) are flagged `platformHost` and no longer fail the `unknownDestination` check. Set `options.platformHosts: false` to get the old behaviour.
+- **A run can show a new warning.** `earlyIdentifiers` is `warn` by default. It does not change the exit code unless you set it to `fail`.
+- **`identity.hashesMatch` is stricter.** It checks every value of a Conversions API `em` or `ph`, and a plain `ct`, `zp` or `country` on such an event fails the check, so a rule that passed can now fail.
+- **`--by-page` keys change.** Path segments that look like a value read `*`. A `--by-page` baseline saved on a page with such a segment drifts once. Save it again.
+- **Summaries show less.** The text and `--json` summaries show a flag's request with query names only. Records keep the full detail.
 
 ### Since rc.2
 
@@ -11,6 +31,36 @@
 - Fix: when the `tagreeve-sgtm` server container image is missing, the message lists the local `tagreeve-sgtm` tags, or says `none`. `suite --server-container` stops with exit 2 before any scenario starts (#898).
 
 - The text and `--json` summaries no longer print a value from a flag's URL. A relative or protocol-relative URL is redacted like an absolute one, a path segment that looks like a value reads `(other)`, and a bare query item reads `(other)`. Records are unchanged (#870, #871, #869, #874, #853).
+
+### Known in 0.5.0
+
+Issues still open that you can meet:
+
+- `--server-container` needs Docker. The container downloads its configuration from Google at every start, so a run needs the network for three Google paths, and Google sees the container's request with your `gtm_auth`.
+- The local container is Google's image. Stape-only features are missing: the custom loader and its domain features, Cookie Keeper, the geo and bot headers Stape adds, store ID headers, request logs and the CDN. With the live config it serves the published version. To test an unpublished server workspace, use a config from its preview environment (see the server container guide).
+- Sends from `pagehide` or `visibilitychange` are answered in the page, also to your `serverHosts`, so the container never gets them. A purchase sent at unload shows no server rows (#816).
+- The Meta Conversions API, Pinterest and Criteo template tags are not yet proven to reach the recording proxy.
+- Link rule 2 (a link by client ID and event name) is not built. Links between container calls and browser hits are exact by event ID only. A leak through a container call with no event ID, such as the built-in GA4 tag, links at best as probable, so it is only a warning (#901).
+- The Shopify platform-host list holds only `cdn.shopify.com` and `monorail-edge.shopifysvc.com`. Other Shopify telemetry, checkout and payments hosts stay `unknownDestination` (#585). Turning `options.platformHosts` off flags those two hosts as `unknownDestination` again, which fails the run (#886).
+- The `payment` step is not confirmed on a real Shopify checkout. The test-mode marker on the page, the expiry format and the card frame paths are inferred. If one does not match, the step fails closed and the error names the frame path and the inputs' attributes. A required terms checkbox at checkout is not covered by the step (#810).
+- The payment step checks the card host before each short fill try. That narrows the window in which typing could go to another host but cannot close it, because Playwright cannot check the host and type in one step (#845).
+- The body scan can still merge two values when the shorter one occurs only in encoded form, so the count and place list are wrong. The request is still flagged (#848).
+- A plain `ct`, `zp` or `country` that does not match on a Conversions API event is reported as hashed (#850).
+- A hit from a redirect hop has no frame id and still matches by frame URL (#879).
+- The suite verdict can hide a check's failure in a run with no leak when another run named a leak (#822).
+- Records keep the full flag detail, including query values. Do not share a record from a page that sends an identifier in a query.
+- The `sandboxPageUrl` message does not mask a path segment of a relative page that holds a space (#920). A flag text for `unloadGap` can be cut short when a dataLayer event name holds `: /` (#918).
+- The server container guide's encode steps can leave an editor backup or swap file with the plain auth string. Delete such files with `plain.txt` (#913).
+- `earlyIdentifiers` is `warn` by default.
+- Playwright's request interception sometimes misses a redirect hop. The `possibleRedirectHop` flag marks a likely miss in `stub` and `server` mode. `live` mode has no such flag.
+- With `--net-log`, requests seen only in the net log are labelled by timing, and an early `srcdoc` iframe request can still read `unload`.
+- `unloadGap` compares dataLayer event names to hit names literally, apart from the GA4 aliases.
+- `--viewport` takes `<W>x<H>` only. A `mobile` preset is not built.
+- `identity.country` has local formats for US, SE, GB and DE. Other countries keep US-shaped data and the run warns.
+- The tag-firing reporter templates, `expectedTags` and `tagreeve init` are planned for 0.6.0.
+- The node-forge bump (#719) waits until node-forge 1.4.2, published 2026-10-27, is two weeks old, so it lands on or after 2026-11-10.
+
+The other open `review-minor` issues are open in the 0.6.0 milestone. They are test gaps, wording and edge cases.
 
 ## 0.5.0-rc.2
 
