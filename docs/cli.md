@@ -43,9 +43,9 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 | `--viewport <W>x<H>` | Sets the browser viewport in CSS pixels, such as `390x844`. Each side is an integer from 200 to 4000. Anything else, including `mobile`, exits 2. Overrides `options.viewport`. It sets the window size only: the user agent and the client hints stay desktop, so a narrow viewport does not make the browser report itself as a mobile device. A site that checks the user agent or the hints still serves its desktop tags. The record has `Run.viewport` and the report header shows `Viewport`. |
 | `--allow-test-payment <host>` | Lets a `payment` step type a payment provider's documented test card. The host must equal the `--site` host and be in the allowlist file. See Test payments. |
 | `--net-log` | Launches Chromium with `--log-net-log` and records collection requests that no browser hook reports: sends from a frame while it unloads, and early sends from a sandboxed `srcdoc` iframe while it loads. They carry `captured: "netlog"` and no body. The initiator is `unload` when the request started after a navigation request (not the first page load or its redirects) and up to 1.5 s after its response, and `netlog` otherwise. An early `srcdoc` send on a later page can still be labelled `unload`. This is a guess from timing. Needs `--network live` on the command line: the command refuses it in `stub` mode with exit code 2, because those requests would leave the machine. The log is written to a private temporary directory, not the output directory, and removed when the run ends, including on SIGINT and SIGTERM. Off by default. See design §5.3. |
-| `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. |
+| `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. Without it, `tagreeve/autoconsent/*.json` is used, sorted by name, when the folder has `.json` files. The flag replaces them. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
-| `--tracker-list <file>` | Adds tracker entries to the built-in list. See below. |
+| `--tracker-list <file>` | Adds tracker entries to the built-in list. See below. Without it, `tagreeve/trackers.json` is used when it exists. The flag replaces it. |
 | `--server-container` | Runs your own server container in Docker and records the calls it makes to vendors. Needs `--network server` (or `options.network: server`) and `options.serverHosts`, or it exits 2. Every non-load request to a `serverHosts` host goes to the local container instead of the live one. These requests are recorded with `outcome: stubbed`, and their response is the local container's. Its vendor calls are decoded and checked like browser hits, answered locally and never sent on, apart from three Google requests that it needs to load its configuration. Each call is a request with `captured: "serverContainer"`, and a hit decoded from it has `via` when it links to a browser hit. The run waits up to 5 s after the last step for late calls. If the container does not start or ends during the run, the record is written with `Run.serverContainer.error` and the flag `serverContainerFailed`, and the exit code is 2. Build the image first on arm64 with `tagreeve server-container build`. |
 | `--server-container-config <file>` | The container config for `--server-container`, in a file with mode 0600. Without it the config is read from `TAGREEVE_SERVER_CONTAINER_CONFIG`. The config is a secret: Tagreeve never prints it or records it. |
 | `--baseline <file>` | Compares the hits of the run with a baseline file made by `tagreeve baseline save`, after the expectations. A key or tuple on one side only is drift and makes the exit code 1. Hits that moved across one consent answer are a warning, not drift. A missing or invalid file exits 2 before the browser starts. See `tagreeve baseline`. |
@@ -307,9 +307,9 @@ Drift is a key or tuple that is on one side only. A changed consent field or ID 
 
 `baseline` and `diff` answer different questions. `diff` pairs the hits of a key in order and reports each one. A baseline compares sets of tuples, so a reordering of hits is not drift and a new tuple inside a key is.
 
-### `tagreeve suite <dir> (--site <url> | --stores <stores.json>)`
+### `tagreeve suite [<dir>] [--site <url> | --stores <stores.json>]`
 
-Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
+Runs every scenario in a directory, once for each GTM build you name, and prints one table. It reads `*.yml` and `*.yaml` files in `<dir>` (not subdirectories). Without `<dir>`, it uses `tagreeve/scenarios/` when that folder exists. Every file is parsed first. If one is not a valid scenario, the command lists the problems and exits 2 before a browser opens.
 
 ```bash
 tagreeve suite scenarios/ --site https://staging.example.com \
@@ -318,12 +318,12 @@ tagreeve suite scenarios/ --site https://staging.example.com \
 
 | Option | Meaning |
 | --- | --- |
-| `--site <url>` | The site to test. Give `--site` or `--stores`, never both. |
-| `--stores <file>` | A stores file: run every scenario against each store. See "Several stores". |
+| `--site <url>` | The site to test. Never together with `--stores`. The site comes from `--site`, then `--stores`, then `tagreeve/stores.json`. With none of them, `suite` exits 2 and names all three. |
+| `--stores <file>` | A stores file: run every scenario against each store. See "Several stores". Without `--site` and `--stores`, `tagreeve/stores.json` is used when it exists. |
 | `--variant <name[=file]>` | A GTM build to test. Can be repeated. `published` means no override and takes no file. `name=file` serves an override file in the `--gtm-override` format. The name matches `^[a-z0-9][a-z0-9_-]*$`, and a name given twice exits 2. Default: `published`. |
 | `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
 | `--with-test-payment` | Also runs scenarios that have a `payment` step. It needs `--allow-test-payment <host>` too, as in `run`. Without both they are `SKIPPED`, which counts as a pass. With both, a failed gate exits 2 before any run. |
-| `--allow-test-payment <host>` | As in `run`. |
+| `--allow-test-payment <host>` | As in `run`. It needs `--site` or `--stores` on the command line. Without them `suite` exits 2 and names the flag, also when `tagreeve/stores.json` holds the host, because a default file never supplies the host a test payment runs on. |
 | `--network`, `--out`, `--label`, `--seed`, `--viewport`, `--var`, `--tracker-list`, `--autoconsent-rules`, `--server-container`, `--server-container-config`, `--json` | As in `run`. Without `--out`, the `suite_<id>/` folder goes in `tagreeve/runs/<YYYY-MM-DD>/` (`<YYYY-MM-DD>-<label>/` with `--label`), and `suite` prints the same note about an older `./runs/`. `--server-container` starts one container for each run, not one for the suite, because each run needs its own capture window. A suite with it is slow. Every scenario must be in server mode. `--gtm-override`, `--headed` and `--net-log` are not options of `suite`. A `--var` that no scenario declares exits 2. |
 
 The runs go one after another, with one browser at a time. The variants of one scenario use the same seed, so they have the same fake identity. Output goes to `<out>/suite_<id>/`: one record per run, named `<scenario>.<variant>.jsonl` (with `--stores`, `<scenario>.<store>.<variant>.jsonl`, see Several stores; each has `Run.variant` set, and `Run.label` with `--label`; with `--stores` it also has `Run.store`), and the manifest `suite.json`. The manifest has the site origin, the variants, one cell per scenario and variant (with `--stores`, per scenario, store and variant) with its status, exit code and record file name, the failed rule count and the failed built-in check names on a failed or warned cell, and the diff counts. It holds no path, no query value, no override file path and no run message.
@@ -359,7 +359,9 @@ Every scenario runs once per store and variant, with one seed. Records are named
 
 `--allow-test-payment <host>` still names one host. A payment scenario runs only for the store whose host equals it, and its cells for the other stores are `SKIPPED`. If no store has that host and a payment scenario would run, `suite` exits 2 and the message names the flag.
 
-`suite.json` has `suiteSchemaVersion: 3`, `label` when `--label` is given, and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
+`suite.json` has `suiteSchemaVersion: 3`, `label` when `--label` is given, `defaults` and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
+
+`defaults` lists each file or folder used because its flag was not given, as `{ setting, path }` with a fixed relative path such as `tagreeve/trackers.json`. The settings are `scenarios`, `trackerList`, `autoconsentRules` (one entry per file) and `stores`. The key is absent when no default was used. The text table and the text summary of `run` show one line, such as `Defaults: tagreeve/trackers.json (tracker list)`, and the `--json` summary of `run` has the same `defaults` list.
 
 ### `tagreeve report <run.jsonl | suite dir> --html <out.html>`
 

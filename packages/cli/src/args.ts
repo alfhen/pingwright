@@ -72,8 +72,9 @@ export interface VariantArg {
 
 export interface SuiteArgs {
   command: 'suite';
-  dir: string;
-  /** Exactly one of `site` and `stores` is set. */
+  /** Absent: `tagreeve/scenarios`, when it exists. */
+  dir?: string;
+  /** At most one of `site` and `stores` is set. With neither, `tagreeve/stores.json` is the default. */
   site?: string;
   stores?: string;
   variants: VariantArg[];
@@ -110,7 +111,7 @@ export const USAGE = `Usage:
   tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
   tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
-  tagreeve suite <dir> (--site <url> | --stores <stores.json>) [--variant published] [--variant name=override.json] [options]
+  tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
   tagreeve server-container build
   tagreeve install-browser
   tagreeve --version
@@ -120,8 +121,8 @@ Run "tagreeve run --help" for the options of run.
 server-container build: builds the image for the server container feature on arm64 (Apple silicon) from Google's image. It needs Docker, pulls large images and never pushes. On amd64 it prints the image to use.
 
 Options for suite:
-  --site <url>               The site to test. Give --site or --stores
-  --stores <file>            A stores.json file: run every scenario against each store (instead of --site)
+  --site <url>               The site to test. Without --site and --stores, tagreeve/stores.json is used
+  --stores <file>            A stores.json file: run every scenario against each store (instead of --site). Default: tagreeve/stores.json
   --variant <name[=file]>    A GTM build to test (repeatable). "published" is the live container; name=file serves an override file. Default: published
   --with-handoff             Also run scenarios with handoff steps, last, headed
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
@@ -138,9 +139,9 @@ Options for run:
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
   --allow-test-payment <host> Let a payment step type a provider's documented test card. The host must equal the --site host and be in the test-payment-hosts.json allowlist
   --net-log                  Capture collection requests no browser hook reports (unload sends, early sandboxed srcdoc sends) from Chromium's net log (needs --network live)
-  --autoconsent-rules <file> Extra autoconsent rules (repeatable)
+  --autoconsent-rules <file> Extra autoconsent rules (repeatable). Default: tagreeve/autoconsent/*.json
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
-  --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
+  --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries). Default: tagreeve/trackers.json
   --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
   --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
   --baseline <file>          Compare the hits with a baseline file and fail on drift
@@ -163,9 +164,9 @@ Options:
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
   --allow-test-payment <host> Let a payment step type a provider's documented test card. The host must equal the --site host and be in the test-payment-hosts.json allowlist
   --net-log                  Capture collection requests no browser hook reports (unload sends, early sandboxed srcdoc sends) from Chromium's net log (needs --network live)
-  --autoconsent-rules <file> Extra autoconsent rules (repeatable)
+  --autoconsent-rules <file> Extra autoconsent rules (repeatable). Default: tagreeve/autoconsent/*.json
   --gtm-override <file>      Serve a GTM workspace build (JSON with container, gtmAuth, gtmPreview, optional loader.replace or loader.match)
-  --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries)
+  --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries). Default: tagreeve/trackers.json
   --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
   --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
   --baseline <file>          Compare the hits with a baseline file made by "tagreeve baseline save" and fail on drift
@@ -178,12 +179,12 @@ Exit codes: 0 pass, 1 failed expectations, 2 usage or run error.
 Scenario format: https://github.com/alfhen/tagreeve/blob/main/docs/design.md#11-expectations
 `;
 
-const SUITE_USAGE = `Usage: tagreeve suite <dir> (--site <url> | --stores <stores.json>) [options]
+const SUITE_USAGE = `Usage: tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [options]
 
-Runs every scenario in <dir> and writes one record per run plus a suite.json.
+Runs every scenario in <dir> (default: tagreeve/scenarios) and writes one record per run plus a suite.json.
 
 Options:
-${USAGE.slice(USAGE.indexOf('  --site <url>               The site to test. Give'), USAGE.indexOf('\nOptions for run:')).trimEnd()}
+${USAGE.slice(USAGE.indexOf('  --site <url>               The site to test. Without'), USAGE.indexOf('\nOptions for run:')).trimEnd()}
   -h, --help                 Show this help
 `;
 
@@ -368,10 +369,9 @@ function parseCommand(argv: string[]): Command {
   }
   if (command !== 'run' && command !== 'suite') throw new UsageError(`Unknown command "${command}"`);
 
-  if (rest.length !== 1) throw new UsageError(command === 'run' ? 'run takes one scenario file' : 'suite takes one scenario directory');
+  if (command === 'run' ? rest.length !== 1 : rest.length > 1) throw new UsageError(command === 'run' ? 'run takes one scenario file' : 'suite takes at most one scenario directory');
   if (command === 'suite') {
     if (values.site !== undefined && values.stores !== undefined) throw new UsageError('--site and --stores cannot be used together');
-    if (values.site === undefined && values.stores === undefined) throw new UsageError('--site or --stores is required');
   } else if (!values.site) {
     throw new UsageError('--site is required');
   }
@@ -415,7 +415,7 @@ function parseCommand(argv: string[]): Command {
     }
     return {
       command: 'suite',
-      dir: rest[0]!,
+      ...(rest[0] !== undefined && { dir: rest[0] }),
       ...(values.site !== undefined && { site: values.site }),
       ...(values.stores !== undefined && { stores: values.stores }),
       variants: parseVariants(values.variant ?? []),

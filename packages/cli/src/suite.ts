@@ -5,6 +5,7 @@ import type { TrackerEntry } from '@tagreeve/decoders';
 import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@tagreeve/expect';
 import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
 import type { Network, SuiteArgs } from './args.ts';
+import { defaultScenarioDir, defaultStores, formatDefaultsLine, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { readStores, StoresError, type Store } from './stores.ts';
 import { checkTestPaymentGates } from './test-payment-hosts.ts';
@@ -55,6 +56,8 @@ export interface SuiteManifest {
   cells: SuiteCell[];
   diffs: SuiteDiff[];
   exitCode: 0 | 1 | 2;
+  /** Files used because their flag was not given. Absent when none. */
+  defaults?: DefaultUsed[];
 }
 
 export interface SuiteDeps {
@@ -136,6 +139,8 @@ export function formatSuiteTable(manifest: SuiteManifest, dir: string): string {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
   const line = (cols: string[]) => cols.map((c, i) => (i === cols.length - 1 ? c : c.padEnd(widths[i]! + 3))).join('').trimEnd();
   const out = [line(header), ...rows.map(line)];
+  const defaultsLine = formatDefaultsLine(manifest.defaults);
+  if (defaultsLine) out.push('', defaultsLine);
   const records = manifest.cells.filter((c) => c.record);
   if (records.length) out.push('', 'Records', ...records.map((c) => `  ${cellName(c)}: ${join(dir, c.record!)}`));
   const unfinished = manifest.cells.filter((c) => c.exitCode === 2);
@@ -245,10 +250,10 @@ function scenarioFor(s: LoadedScenario, store: Store | undefined, argVars: Recor
   return { ...s.parsed, vars: { ...s.parsed.vars, ...declared }, identity };
 }
 
-async function loadStores(args: SuiteArgs, io: Io): Promise<Store[] | undefined> {
-  if (args.stores === undefined) return [];
+async function loadStores(path: string | undefined, io: Io): Promise<Store[] | undefined> {
+  if (path === undefined) return [];
   try {
-    return await readStores(args.stores);
+    return await readStores(path);
   } catch (error) {
     if (!(error instanceof StoresError)) throw error;
     io.stderr(`${error.message}\n`);
@@ -257,22 +262,35 @@ async function loadStores(args: SuiteArgs, io: Io): Promise<Store[] | undefined>
 }
 
 export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { run: executeRun }): Promise<number> {
+  if (args.allowTestPayment !== undefined && args.site === undefined && args.stores === undefined) {
+    io.stderr('--allow-test-payment needs --site or --stores on the command line. A default file never supplies the host a test payment runs on.\n');
+    return 2;
+  }
+  const defaults: DefaultUsed[] = [];
+  const scenarioDir = args.dir ?? (await defaultScenarioDir(defaults));
+  if (scenarioDir === undefined) {
+    io.stderr('suite needs a scenario folder: give <dir> or create tagreeve/scenarios.\n');
+    return 2;
+  }
+  const trackerListPath = await resolveTrackerList(args.trackerList, defaults);
+  const autoconsentRules = await resolveAutoconsentRules(args.autoconsentRules, defaults);
   let trackers: TrackerEntry[] = [];
-  if (args.trackerList !== undefined) {
+  if (trackerListPath !== undefined) {
     try {
-      trackers = await readTrackerList(args.trackerList);
+      trackers = await readTrackerList(trackerListPath);
     } catch (error) {
       io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
       return 2;
     }
   }
-  const stores = await loadStores(args, io);
-  if (!stores) return 2;
-  if (args.site === undefined && !stores.length) {
-    io.stderr('suite needs --site or --stores\n');
+  const storesPath = args.site === undefined ? (args.stores ?? (await defaultStores(defaults))) : undefined;
+  if (args.site === undefined && storesPath === undefined) {
+    io.stderr('suite needs a site: give --site or --stores, or create tagreeve/stores.json.\n');
     return 2;
   }
-  const scenarios = await scan(args.dir, trackers, io);
+  const stores = await loadStores(storesPath, io);
+  if (!stores) return 2;
+  const scenarios = await scan(scenarioDir, trackers, io);
   if (!scenarios) return 2;
 
   const undeclared = undeclaredVars(scenarios, args.vars);
@@ -365,7 +383,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
             headed: false,
             viewport: args.viewport,
             netLog: false,
-            autoconsentRules: [...args.autoconsentRules, ...(store?.autoconsentRules ? [store.autoconsentRules] : [])],
+            autoconsentRules: [...autoconsentRules,...(store?.autoconsentRules ? [store.autoconsentRules] : [])],
             trackers,
             gtmOverride: overrides.get(variant),
             ...(serverContainer && { serverContainer }),
@@ -396,6 +414,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     cells,
     diffs: await diffPairs(cells, variants, storeNames, dir),
     exitCode: suiteExitCode(cells),
+    ...(defaults.length > 0 && { defaults }),
   };
   await writeFile(join(dir, 'suite.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   io.stdout(args.json ? `${JSON.stringify(manifest, null, 2)}\n` : formatSuiteTable(manifest, dir));

@@ -92,9 +92,14 @@ test.each([
   expect(() => parseCli([...suiteBase, ...extra])).toThrow(message);
 });
 
-test('suite takes one directory and needs --site', () => {
-  expect(() => parseCli(['suite', '--site', 'https://x.test'])).toThrow('one scenario directory');
-  expect(() => parseCli(['suite', 'dir'])).toThrow('--site or --stores is required');
+test('suite takes at most one directory and needs no site at parse time', () => {
+  expect(() => parseCli(['suite', 'a', 'b'])).toThrow('at most one scenario directory');
+  expect(parseCli(['suite', 'dir'])).toMatchObject({ command: 'suite', dir: 'dir' });
+  const bare = parseCli(['suite']);
+  expect(bare).toMatchObject({ command: 'suite' });
+  expect(bare).not.toHaveProperty('dir');
+  expect(bare).not.toHaveProperty('site');
+  expect(bare).not.toHaveProperty('stores');
 });
 
 test('suite takes --stores instead of --site, never both, and run refuses it', () => {

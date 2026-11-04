@@ -466,3 +466,10 @@ test('buildSummary carries the run label and omits the key without one', () => {
   expect(buildSummary(records('ca-307'), [], 'p').label).toBe('ca-307');
   expect(buildSummary(records(), [], 'p')).not.toHaveProperty('label');
 });
+
+test('the Defaults line names each default used and is absent without one', () => {
+  const base: Summary = { runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags: [], results: [] };
+  expect(formatSummary(base)).not.toContain('Defaults:');
+  const text = formatSummary({ ...base, defaults: [{ setting: 'trackerList', path: 'tagreeve/trackers.json' }] });
+  expect(text).toContain('Defaults: tagreeve/trackers.json (tracker list)');
+});

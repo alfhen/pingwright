@@ -24,7 +24,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - Shop Pay hosts (`pay.shopify.com`, `shop.app`, `cdn.shopifycloud.com` and `*.shopifysvc.com`) are platform hosts, so their requests get the flag `platformHost` and not `unknownDestination` (#585, #886).
 
-<!-- E03 -->
+- `suite` runs with no folder and no site: it uses `tagreeve/scenarios/`, and `tagreeve/stores.json` for the sites. `run` and `suite` also read `tagreeve/trackers.json` as the tracker list and `tagreeve/autoconsent/*.json` as autoconsent rules when the file or folder exists and the flag is not given. A flag replaces its default. The text summary has a `Defaults:` line, and `--json` and `suite.json` have `defaults: [{ setting, path }]`. `--allow-test-payment` still needs `--site` or `--stores` on the command line, so a default file never supplies the host (#811).
 
 - Each `dataLayer` event records which frame pushed it: `frame` is `{ main, n }`, with no URL (#922).
 

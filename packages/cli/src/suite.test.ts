@@ -696,3 +696,115 @@ test('labelRecord writes the label, the store and the variant on the run line an
   expect(await labelRecord(plain, { out: root })).toBe(plain);
   expect(await readFile(plain, 'utf8')).toBe(before);
 });
+
+async function inProject<T>(files: Record<string, string>, body: (root: string) => Promise<T>): Promise<T> {
+  const root = await mkdtemp(join(tmpdir(), 'pw-suite-proj-'));
+  for (const [name, text] of Object.entries(files)) {
+    await mkdir(join(root, name, '..'), { recursive: true });
+    await writeFile(join(root, name), text);
+  }
+  const before = process.cwd();
+  process.chdir(root);
+  try {
+    return await body(root);
+  } finally {
+    process.chdir(before);
+  }
+}
+
+const STORES = JSON.stringify({
+  storesSchemaVersion: 1,
+  stores: [
+    { name: 'one', site: 'https://one.example.com' },
+    { name: 'two', site: 'https://two.example.com' },
+  ],
+});
+const PROJECT = {
+  'tagreeve/scenarios/a.yml': VALID,
+  'tagreeve/trackers.json': '[]',
+  'tagreeve/stores.json': STORES,
+  'tagreeve/autoconsent/rules.json': '{}',
+};
+
+function bare(extra: Partial<SuiteArgs> = {}): SuiteArgs {
+  const { dir, site, ...rest } = args('', 'out', extra);
+  void dir;
+  void site;
+  return { ...rest, ...extra };
+}
+
+test('suite with no folder and no site uses the default folder, tracker list, rules and stores', async () => {
+  await inProject(PROJECT, async (root) => {
+    const fake = recorder();
+    const c = capture();
+    expect(await suiteCommand(bare({ out: join(root, 'out'), json: true }), c.io, fake)).toBe(0);
+    expect(fake.specs.map((s) => [s.scenarioName, s.site])).toEqual([
+      ['a', 'https://one.example.com'],
+      ['a', 'https://two.example.com'],
+    ]);
+    expect(fake.specs[0]!.autoconsentRules).toEqual(['tagreeve/autoconsent/rules.json']);
+    const manifest = JSON.parse(c.out()) as SuiteManifest;
+    expect(manifest.defaults).toEqual([
+      { setting: 'scenarios', path: 'tagreeve/scenarios' },
+      { setting: 'trackerList', path: 'tagreeve/trackers.json' },
+      { setting: 'autoconsentRules', path: 'tagreeve/autoconsent/rules.json' },
+      { setting: 'stores', path: 'tagreeve/stores.json' },
+    ]);
+    expect(c.out()).not.toContain(root);
+  });
+});
+
+test('the text table has one Defaults line, and none without a default', async () => {
+  await inProject(PROJECT, async (root) => {
+    const c = capture();
+    await suiteCommand(bare({ out: join(root, 'out') }), c.io, recorder());
+    expect(c.out().match(/^Defaults: /gm)).toHaveLength(1);
+    expect(c.out()).toContain('tagreeve/stores.json (stores)');
+  });
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const c = capture();
+  await suiteCommand(args(dir, out), c.io, recorder());
+  expect(c.out()).not.toContain('Defaults:');
+});
+
+test('a flag replaces its default, --site means stores.json is not used, and no key is written without defaults', async () => {
+  await inProject(PROJECT, async (root) => {
+    const fake = recorder();
+    const c = capture();
+    const a = bare({ out: join(root, 'out'), json: true, site: 'https://flag.example.com', trackerList: 'tagreeve/trackers.json', autoconsentRules: ['other.json'] });
+    expect(await suiteCommand(a, c.io, fake)).toBe(0);
+    expect(fake.specs.map((s) => s.site)).toEqual(['https://flag.example.com']);
+    expect(fake.specs[0]!.autoconsentRules).toEqual(['other.json']);
+    expect((JSON.parse(c.out()) as SuiteManifest).defaults).toEqual([{ setting: 'scenarios', path: 'tagreeve/scenarios' }]);
+  });
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const c = capture();
+  await suiteCommand(args(dir, out, { json: true }), c.io, recorder());
+  expect(JSON.parse(c.out())).not.toHaveProperty('defaults');
+});
+
+test('suite with no site and no stores file, or no folder, names what is missing', async () => {
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID }, async () => {
+    const c = capture();
+    expect(await suiteCommand(bare(), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('--site');
+    expect(c.err()).toContain('--stores');
+    expect(c.err()).toContain('tagreeve/stores.json');
+  });
+  await inProject({}, async () => {
+    const c = capture();
+    expect(await suiteCommand(bare({ site: 'https://x.example.com' }), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('tagreeve/scenarios');
+  });
+});
+
+test('--allow-test-payment needs --site or --stores on the command line, also when tagreeve/stores.json holds the host', async () => {
+  const stores = JSON.stringify({ storesSchemaVersion: 1, stores: [{ name: 'local', site: 'http://localhost:3000' }] });
+  await inProject({ ...PROJECT, 'tagreeve/stores.json': stores }, async (root) => {
+    const fake = recorder();
+    const c = capture();
+    expect(await suiteCommand(bare({ out: join(root, 'out'), allowTestPayment: 'localhost' }), c.io, fake)).toBe(2);
+    expect(c.err()).toContain('--allow-test-payment');
+    expect(fake.specs).toEqual([]);
+  });
+});
