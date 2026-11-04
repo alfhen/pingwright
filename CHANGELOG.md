@@ -6,7 +6,7 @@
 
 <!-- N06 -->
 
-<!-- W06 -->
+- When a `wait: { url }` step times out, the message lists the controls that block submission on every open page: an unticked required checkbox, a control that fails validation, or one marked `aria-invalid`. Each entry shows the role or type, the name and the reason, never a value (#810, #827).
 
 - A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 

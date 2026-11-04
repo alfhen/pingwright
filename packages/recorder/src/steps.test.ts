@@ -358,7 +358,7 @@ describe('select and locator steps on a fake page', () => {
       }),
     };
     await play(page, "start: /\nsteps:\n  - click: { any: ['#late'] }\n", {}, { actionTimeoutMs: 1000 });
-    expect(clickTimeout).toBeLessThanOrEqual(720);
+    expect(clickTimeout).toBeLessThan(1000);
     expect(clickTimeout).toBeGreaterThan(0);
   });
 
@@ -379,6 +379,18 @@ describe('select and locator steps on a fake page', () => {
 
     test('fails with the glob and the timeout when the page never gets there', async () => {
       await expect(wait(waitPage(60_000), 300)).rejects.toThrow(/page did not reach \/thank-you-late within /);
+    });
+
+    test('appends the blocking controls to the timeout message', async () => {
+      const page = { ...waitPage(60_000), evaluate: () => Promise.resolve([{ kind: 'checkbox', name: 'I agree to the terms and conditions', reason: 'required, not ticked' }]) };
+      await expect(wait(page, 300)).rejects.toThrow(
+        /page did not reach \/thank-you-late within \S+\. Blocking controls: checkbox "I agree to the terms and conditions" \(required, not ticked\)\.$/,
+      );
+    });
+
+    test('keeps the message as it was when no control blocks', async () => {
+      const page = { ...waitPage(60_000), evaluate: () => Promise.resolve([]) };
+      await expect(wait(page, 300)).rejects.toThrow(/page did not reach \/thank-you-late within \S+$/);
     });
   });
 

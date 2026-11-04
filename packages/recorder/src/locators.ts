@@ -1,5 +1,5 @@
 import type { Locator as ScenarioLocator } from '@tagreeve/expect';
-import type { Locator, Page } from 'playwright';
+import type { BrowserContext, Locator, Page } from 'playwright';
 
 const ROLE_FAMILIES = ['button', 'radio', 'checkbox', 'link', 'tab', 'option'];
 const MAX_LISTED = 10;
@@ -131,4 +131,96 @@ export async function timeoutMessage(page: Page, firstLine: string, requested?: 
   } catch {
     return firstLine;
   }
+}
+
+type BlockReason = 'required, not ticked' | 'invalid' | 'aria-invalid';
+
+interface BlockingControl {
+  kind: string;
+  name: string;
+  reason: BlockReason;
+}
+
+/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. */
+function readBlockingControls(): BlockingControl[] {
+  const found: BlockingControl[] = [];
+  const validationText = 'input, select, textarea, option, [role="alert"], [aria-live], [aria-invalid="true"], [aria-errormessage], .error, .invalid, .error-message';
+  const messageIds = new Set<string>();
+  for (const holder of document.querySelectorAll('[aria-errormessage], [aria-describedby]')) {
+    for (const id of `${holder.getAttribute('aria-errormessage') ?? ''} ${holder.getAttribute('aria-describedby') ?? ''}`.split(/\s+/)) if (id) messageIds.add(id);
+  }
+  const cleanText = (source: Element): string => {
+    if (messageIds.has(source.id) || source.matches(validationText)) return '';
+    const copy = source.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll(validationText).forEach((n) => n.remove());
+    copy.querySelectorAll('[id]').forEach((n) => messageIds.has(n.id) && n.remove());
+    return copy.textContent ?? '';
+  };
+  const nameOf = (el: Element): string => {
+    const aria = el.getAttribute('aria-label');
+    if (aria?.trim()) return aria;
+    const ids = el.getAttribute('aria-labelledby');
+    if (ids) {
+      const text = ids
+        .split(/\s+/)
+        .map((id) => {
+          const source = document.getElementById(id);
+          return source ? cleanText(source) : '';
+        })
+        .join(' ')
+        .trim();
+      if (text) return text;
+    }
+    const labels = (el as HTMLInputElement).labels;
+    if (labels && labels.length > 0) {
+      const text = [...labels]
+        .map(cleanText)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (text) return text;
+    }
+    return el.getAttribute('name') ?? '';
+  };
+  for (const el of document.querySelectorAll('input, select, textarea, [aria-invalid="true"]')) {
+    if (el instanceof HTMLInputElement && (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' || el.type === 'reset' || el.type === 'image')) continue;
+    const input = el as HTMLInputElement;
+    const checkbox = el instanceof HTMLInputElement && el.type === 'checkbox';
+    let reason: BlockReason | undefined;
+    if (checkbox && !input.checked && input.willValidate && (input.required || el.getAttribute('aria-required') === 'true')) reason = 'required, not ticked';
+    else if ('validity' in el && input.willValidate && input.validity.valid === false) reason = 'invalid';
+    else if (el.getAttribute('aria-invalid') === 'true') reason = 'aria-invalid';
+    if (!reason) continue;
+    const kind = el instanceof HTMLInputElement ? el.type : (el.getAttribute('role') ?? el.tagName.toLowerCase());
+    found.push({ kind, name: nameOf(el), reason });
+    if (found.length >= 10) break;
+  }
+  return found;
+}
+
+const DIAGNOSTIC_DEADLINE_MS = 3000;
+
+/** Playwright's `evaluate` has no timeout, and a page that stopped responding would hold the original timeout error back. */
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('diagnostic timed out')), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** Controls on the top-level document of each open page that block a form from submitting: kind, name and reason. Never a value, a placeholder or an error text, and never a frame. */
+export async function blockingControls(context: BrowserContext): Promise<string[]> {
+  const listed: string[] = [];
+  for (const page of context.pages()) {
+    try {
+      const controls = await withDeadline(page.evaluate(readBlockingControls), DIAGNOSTIC_DEADLINE_MS);
+      for (const c of controls) {
+        const name = visibleName(String(c.name));
+        listed.push(`${c.kind}${name ? ` "${name}"` : ''} (${c.reason})`);
+      }
+    } catch {}
+    if (listed.length >= MAX_LISTED) break;
+  }
+  return listed.slice(0, MAX_LISTED);
 }
