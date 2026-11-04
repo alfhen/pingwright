@@ -8,7 +8,7 @@
 
 - `sentBy: browser` or `sentBy: server` in a hit rule selects hits by sender. A browser-only `mustNot` on a Google host no longer fails on the server container's own forwarding with `--server-container` (#900, #902).
 
-<!-- K05 -->
+- Fix: when the `tagreeve-sgtm` server container image is missing, the message lists the local `tagreeve-sgtm` tags, or says `none`. `suite --server-container` stops with exit 2 before any scenario starts (#898).
 
 - The text and `--json` summaries no longer print a value from a flag's URL. A relative or protocol-relative URL is redacted like an absolute one, a path segment that looks like a value reads `(other)`, and a bare query item reads `(other)`. Records are unchanged (#870, #871, #869, #874, #853).
 

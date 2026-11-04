@@ -15,6 +15,8 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 
    On amd64 the command prints Google's image reference and builds nothing. Pull that reference with `docker pull`. Without the pull, the first run exits 2 because the image is missing.
 
+   When a `tagreeve-sgtm` image is missing, the message lists the `tagreeve-sgtm` tags that exist on your machine, or says `none`. After an upgrade you see the old tag there and need the new one. `suite --server-container` checks the image once, before any scenario starts, and exits 2 if it is missing.
+
    On Apple silicon (arm64), Google's image is amd64 only, so the command rebuilds it for arm64 in your own Docker. The image tag holds the Tagreeve version, so run the command again after each Tagreeve upgrade. Tagreeve never pushes an image.
 3. Get the container config. In the Google Tag Manager admin, open your server container, then Admin, then Container settings, then "Manually provision tagging server". The page shows a long config string. Copy it. Below, `<container-config>` stands for that string.
 4. Save the config to a file that only you can read, in a folder outside any repository. A folder under your home directory works:
