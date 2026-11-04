@@ -6,7 +6,7 @@ import { Scrubber } from './gtm-scrub.ts';
 import { HANDOFF_REQUIRED, SENSITIVE_WRITE_TRAP, isGuardExemptHost, isSensitiveField, type FieldAttributes } from './guard.ts';
 import { conditionHolds, describeCondition, formatDuration, watchCondition } from './conditions.ts';
 import { HANDOFF_WAKE_EVENT, waitForHandoff, type HandoffEnd } from './handoff-overlay.ts';
-import { resolveLocator, timeoutMessage } from './locators.ts';
+import { blockingControls, resolveLocator, timeoutMessage } from './locators.ts';
 import { runPayment, type TestPayment } from './payment.ts';
 import { launchRecorder, type Recorder, type RecorderOptions, type RunResult, type StepActivity } from './recorder.ts';
 
@@ -360,7 +360,11 @@ async function waitForUrl(recorder: Recorder, url: UrlMatcher, timeout: number):
   const condition = { url };
   const deadline = Date.now() + timeout;
   while (!(await conditionHolds(recorder.context, condition))) {
-    if (Date.now() >= deadline) throw new Error(`page did not reach ${describeCondition(condition)} within ${formatDuration(timeout)}`);
+    if (Date.now() >= deadline) {
+      const message = `page did not reach ${describeCondition(condition)} within ${formatDuration(timeout)}`;
+      const blocking = await blockingControls(recorder.context);
+      throw new Error(blocking.length === 0 ? message : `${message}. Blocking controls: ${blocking.join(', ')}.`);
+    }
     await recorder.wait(100);
   }
 }

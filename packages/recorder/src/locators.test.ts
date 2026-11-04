@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { controlsFromSnapshot, resolveLocator, timeoutMessage, visibleName } from './locators.ts';
+import { blockingControls, controlsFromSnapshot, resolveLocator, timeoutMessage, visibleName } from './locators.ts';
 
 describe('visibleName', () => {
   test('hides an email, a 6+ digit run and a hash-shaped name', () => {
@@ -203,5 +203,46 @@ describe('a role locator timeout', () => {
       for (const secret of secrets) expect(out).not.toContain(secret);
       expect(out).toContain('"Buy now"');
     }
+  });
+});
+
+describe('blockingControls', () => {
+  const contextOf = (...pages: unknown[][]) => ({ pages: () => pages.map((raw) => ({ evaluate: () => Promise.resolve(raw) })) }) as never;
+
+  test('lists each signal with its reason', async () => {
+    const out = await blockingControls(
+      contextOf([
+        { kind: 'checkbox', name: 'I agree to the terms and conditions', reason: 'required, not ticked' },
+        { kind: 'email', name: 'Email', reason: 'invalid' },
+        { kind: 'checkbox', name: 'Newsletter', reason: 'aria-invalid' },
+      ]),
+    );
+    expect(out).toEqual(['checkbox "I agree to the terms and conditions" (required, not ticked)', 'email "Email" (invalid)', 'checkbox "Newsletter" (aria-invalid)']);
+  });
+
+  test('prints a name that looks like an email as (hidden)', async () => {
+    const out = await blockingControls(contextOf([{ kind: 'text', name: 'pw-fixture@example.com', reason: 'invalid' }]));
+    expect(out).toEqual(['text "(hidden)" (invalid)']);
+  });
+
+  test('prints no value, placeholder or error text that comes with a control', async () => {
+    const out = await blockingControls(contextOf([{ kind: 'text', name: 'City', reason: 'invalid', value: 'Fakeville', placeholder: 'Your city', error: 'Enter a city' }]));
+    expect(out).toEqual(['text "City" (invalid)']);
+  });
+
+  test('leaves out the name when there is none', async () => {
+    expect(await blockingControls(contextOf([{ kind: 'checkbox', name: '', reason: 'aria-invalid' }]))).toEqual(['checkbox (aria-invalid)']);
+  });
+
+  test('walks every page and lists at most ten', async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => ({ kind: 'text', name: `A${i}`, reason: 'invalid' }));
+    const out = await blockingControls(contextOf(eight, eight));
+    expect(out).toHaveLength(10);
+    expect(out[8]).toBe('text "A0" (invalid)');
+  });
+
+  test('skips a page that cannot be read', async () => {
+    const context = { pages: () => [{ evaluate: () => Promise.reject(new Error('closed')) }, { evaluate: () => Promise.resolve([{ kind: 'text', name: 'City', reason: 'invalid' }]) }] } as never;
+    expect(await blockingControls(context)).toEqual(['text "City" (invalid)']);
   });
 });
