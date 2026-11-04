@@ -54,7 +54,7 @@ test('the guide explains the workspace preview config with placeholders only', (
   expect(guide.match(/id=GTM-PWTEST1&env=<env id>&auth=<auth>/g)?.length).toBe(2);
   expect(guide).toContain('gtm_preview');
   expect(guide).toContain('gtm_auth');
-  expect(guide).toContain('base64 < plain.txt > ~/.config/tagreeve/sgtm-workspace-config.txt');
+  expect(guide).toContain("tr -d '\\r\\n' < plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt");
   expect(guide).toContain('umask 077');
   for (const line of guide.split('\n')) {
     if (/\b(tagreeve|base64|echo|printf)\b/.test(line)) expect(line, line).not.toMatch(/auth=/);

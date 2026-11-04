@@ -66,10 +66,10 @@ Build the config without putting `<auth>` in a command line, where your shell ke
 2. Encode it into the config file:
 
    ```bash
-   (umask 077; base64 < plain.txt > ~/.config/tagreeve/sgtm-workspace-config.txt)
+   (umask 077; tr -d '\r\n' < plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt)
    ```
 
-   On Linux, use `base64 -w0` so the output is one line.
+   The `tr` drops the editor's final newline, which would otherwise become part of the auth value. On Linux, use `base64 -w0` so the output is one line.
 3. Delete `plain.txt`.
 
 Pass the config file with `--server-container-config`, as in step 6. Keep it as secret as in step 4: mode 0600, outside any repository. Tagreeve gives the config to the container as it is, so the run serves the workspace build.
