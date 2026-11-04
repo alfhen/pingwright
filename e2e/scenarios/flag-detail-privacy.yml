@@ -3,4 +3,6 @@ steps:
   - wait: 3s
   - evaluate: "fetch('https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&en=page_view&dl=' + encodeURIComponent('/web-pixels@0.0.0-fixture/sandbox/modern/account/pw-flag.user@example.test?email=pw-flag.user@example.test&sid=pwfake-cookie-value-0001'), { mode: 'no-cors' }).then(function () { return true; })"
   - wait: 2s
+  - visit: /stub-bypass?email=pw-flag.user%40example.test&h=34b6319597f5649a26a95fff3b8cbd56ddb809f5b88647df59523a8d5f51979c&sid=pwfake-cookie-value-0001
+  - wait: 3s
 options: { seed: 1 }

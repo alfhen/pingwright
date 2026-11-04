@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Redirect from a child frame</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Redirect from a child frame</h1>
+<p>Loads a child frame whose document request redirects to <code>/g/collect</code> on the fixture host, carrying the page query. Chromium follows the redirect without routing it, so every run in <code>stub</code> mode has a <code>stubBypass</code> flag. No banner, no tags.</p>
+<script>
+  var frame = document.createElement('iframe');
+  frame.style.cssText = 'width:0;height:0;border:0';
+  frame.src = '/stub-bypass/hop' + location.search;
+  document.body.appendChild(frame);
+</script>
+</body>
+</html>
