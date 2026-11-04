@@ -1443,8 +1443,9 @@ function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   return occurs && merges;
 }
 
-// Approximates the forms core's scan reads a body in. Percent runs decode one by one and a bad run stays raw, as in
-// core's tryUrlDecode. Base64 is tried on whole tokens at offset 0 only.
+// Approximates the forms core's scan reads a body in. Percent runs decode one by one and a bad run stays raw, repeated until
+// the text stops changing, as core's variants() does. Each step is also read with '+' as a space. Base64 is tried on whole
+// tokens at offset 0 only, up to core's depth.
 function bodyForms(raw: string): string[] {
   const forms = new Set([raw]);
   const decode = (text: string) =>
@@ -1455,13 +1456,21 @@ function bodyForms(raw: string): string[] {
         return run;
       }
     });
-  forms.add(decode(raw));
-  forms.add(decode(raw.replace(/\+/g, ' ')));
+  const visited = new Set<string>();
+  const read = (text: string, depth: number): void => {
+    for (let step = text; !visited.has(step); step = decode(step)) {
+      visited.add(step);
+      forms.add(step);
+      forms.add(decode(step.replace(/\+/g, ' ')));
+      if (depth >= 3) continue;
+      for (const token of step.match(/[A-Za-z0-9+/_-]{16,}={0,2}/g) ?? []) {
+        const bytes = Buffer.from(token, 'base64');
+        if (bytes.length) read(bytes.toString('utf8'), depth + 1);
+      }
+    }
+  };
+  read(raw, 0);
   forms.add(raw.replace(/\\u([0-9a-f]{4})/gi, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(["\\/])/g, '$1'));
-  for (const token of raw.match(/[A-Za-z0-9+/_-]{16,}={0,2}/g) ?? []) {
-    const bytes = Buffer.from(token, 'base64');
-    if (bytes.length) forms.add(bytes.toString('utf8'));
-  }
   return [...forms];
 }
 
