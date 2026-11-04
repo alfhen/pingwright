@@ -367,7 +367,7 @@ With `--baseline`, a cell has `baseline: { file, drift, added, removed, countCha
 
 `suite.json` has `suiteSchemaVersion: 3`, `label` when `--label` is given, `defaults` and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
 
-`defaults` lists each file or folder used because its flag was not given, as `{ setting, path }` with a fixed relative path such as `tagreeve/trackers.json`. The settings are `scenarios`, `trackerList`, `autoconsentRules` (one entry per file) and `stores`. The key is absent when no default was used. The text table and the text summary of `run` show one line, such as `Defaults: tagreeve/trackers.json (tracker list)`, and the `--json` summary of `run` has the same `defaults` list.
+`defaults` lists each file or folder used because its flag was not given, as `{ setting, path }` with a fixed relative path such as `tagreeve/trackers.json`. The settings are `scenarios`, `trackerList`, `autoconsentRules` (one entry per file), `stores`, `config` and `baseline`. A bare `--baseline` gives the file (`run`) or the folder (`suite`). The key is absent when no default was used. The text table and the text summary of `run` show one line, such as `Defaults: tagreeve/trackers.json (tracker list)`, and the `--json` summary of `run` has the same `defaults` list.
 
 ### `tagreeve report <run.jsonl | suite dir> --html <out.html>`
 
