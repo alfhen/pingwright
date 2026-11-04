@@ -4,7 +4,7 @@
 
 - `run` and `suite` write to `tagreeve/runs/<date>/` when you give no `--out`. The old default was `runs/`. If `./runs/` holds records, a note on stderr says so. Pass `--out runs` to keep the old folder.
 
-<!-- N06 -->
+- Breaking: a scenario with `options.network: live` now fails to load (exit 2). Move `live` to the command line with `--network live`.
 
 - When a `wait: { url }` step times out, the message lists the controls that block submission on every open page: an unticked required checkbox, a control that fails validation, or one marked `aria-invalid`. Each entry shows the role or type, the name and the reason, never a value (#810, #827).
 
