@@ -2,13 +2,13 @@
 
 ## 0.6.0-rc.1
 
-<!-- E01 -->
+- `run` and `suite` write to `tagreeve/runs/<date>/` when you give no `--out`. The old default was `runs/`. If `./runs/` holds records, a note on stderr says so. Pass `--out runs` to keep the old folder.
 
 - Breaking: a scenario with `options.network: live` now fails to load (exit 2). Move `live` to the command line with `--network live`.
 
 <!-- W06 -->
 
-<!-- M02 -->
+- A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
 <!-- M04 -->
 

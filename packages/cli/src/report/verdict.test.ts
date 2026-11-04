@@ -102,3 +102,10 @@ test('server container hits that are unlinked or on a probable link are named', 
   expect(sentence([m])).toBe('no leaks; 1 server container hit could not be linked to a browser hit; 2 server container hits placed by a probable link');
   expect(sentence([model([])])).toBe('no leaks');
 });
+
+test('a check named by one model still counts in a model that did not name it', () => {
+  const named = model([check('FAIL', 'deniedIdentifiers')], [{ vendor: 'ga4', label: IDENTIFIER_LEAK }]);
+  const unnamed = model([check('FAIL', 'deniedIdentifiers')]);
+  expect(sentence([named, unnamed], true)).toContain('built-in check deniedIdentifiers failed in 1 run');
+  expect(sentence([named], true)).not.toContain('built-in check');
+});

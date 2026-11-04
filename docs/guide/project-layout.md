@@ -38,12 +38,14 @@ Tagreeve never prints either value or writes it to a record.
 
 ## Where runs go
 
-The default for `--out` is still `runs` in this release. Write the folder out on every command, so records land in the ignored folder:
+Without `--out`, a run writes to `tagreeve/runs/<YYYY-MM-DD>/`, which is in the ignored folder. A suite writes its `suite_<id>/` folder there. Give `--out` to choose a folder yourself:
 
 ```bash
 tagreeve run tagreeve/scenarios/checkout.yml --site https://staging.example.com \
   --out tagreeve/runs/2026-11-03-ca-307-live
 ```
+
+If `./runs/` holds records from an older version, `run` and `suite` print a note. Pass `--out runs` to keep using that folder.
 
 ## Naming a run folder
 

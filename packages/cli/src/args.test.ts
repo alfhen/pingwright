@@ -34,7 +34,7 @@ test('--net-log is parsed with any network flag; the run command checks the mode
 test('run defaults', () => {
   expect(parseCli(['run', 's.yml', '--site', 'https://example.com'])).toMatchObject({
     network: undefined,
-    out: 'runs',
+    out: undefined,
     seed: undefined,
     headed: false,
     netLog: false,
@@ -62,7 +62,7 @@ test('server-container build', () => {
 const suiteBase = ['suite', 'dir', '--site', 'https://shop.example.com'];
 
 test('suite defaults to the published variant', () => {
-  expect(parseCli(suiteBase)).toMatchObject({ command: 'suite', dir: 'dir', variants: [{ name: 'published' }], out: 'runs', withHandoff: false, json: false });
+  expect(parseCli(suiteBase)).toMatchObject({ command: 'suite', dir: 'dir', variants: [{ name: 'published' }], out: undefined, withHandoff: false, json: false });
 });
 
 test('suite parses variants, name=file and the options of run', () => {
@@ -191,7 +191,14 @@ test.each([
 test('an unknown option is one short line', () => {
   for (const argv of [['run', 's.yml', '--site', 'http://x.test', '--bogus'], ['--bogus'], ['diff', '-x']]) {
     const flag = argv.find((a) => a === '--bogus' || a === '-x')!;
-    expect(() => parseCli(argv)).toThrow(`Unknown option ${flag}.`);
+    let error: unknown;
+    try {
+      parseCli(argv);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(`Unknown option ${flag}.`);
   }
 });
 

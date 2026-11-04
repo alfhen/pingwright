@@ -103,7 +103,7 @@ Node 22.18 or later. `npm i -g tagreeve` installs the newest release. Other ways
    ```
 
 4. `tagreeve run scenario.yml --site https://staging.example.com`
-5. Read the summary, and the full record in `runs/run_<id>.jsonl`.
+5. Read the summary, and the full record in `tagreeve/runs/<date>/run_<id>.jsonl`.
 
 `consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys are `ga4`, `google-ads`, `meta`, `meta-capi`, `pinterest`, `sgtm`, and every vendor on the tracker list (`linkedin`, `microsoft-uet`, `reddit`) or in a `--tracker-list` file. A scenario that names any other vendor is rejected when it is parsed.
 
@@ -122,14 +122,14 @@ Run one scenario against the published container and against an unpublished work
 2. Run the scenario twice:
 
    ```bash
-   tagreeve run scenario.yml --site https://staging.example.com --out runs/published
-   tagreeve run scenario.yml --site https://staging.example.com --out runs/workspace --gtm-override override.json
+   tagreeve run scenario.yml --site https://staging.example.com --out tagreeve/runs/published
+   tagreeve run scenario.yml --site https://staging.example.com --out tagreeve/runs/workspace --gtm-override override.json
    ```
 
 3. Compare the two records:
 
    ```bash
-   tagreeve diff runs/published/run_<id>.jsonl runs/workspace/run_<id>.jsonl
+   tagreeve diff tagreeve/runs/published/run_<id>.jsonl tagreeve/runs/workspace/run_<id>.jsonl
    ```
 
 `diff` lists added, removed and changed hits per consent epoch, vendor and event, and changed flag counts per host. Add `--by-page` to pair hits page by page, or `--json` for the full result. It exits 0 whether or not the runs differ; the exit code of each `run` tells you whether its rules passed.
@@ -142,11 +142,11 @@ Run a folder of scenarios against the published container and an unpublished wor
 
 ```bash
 tagreeve suite scenarios/ --site https://staging.example.com \
-  --variant published --variant workspace=override.json --out runs
-tagreeve report runs/suite_<id> --html suite-report.html
+  --variant published --variant workspace=override.json
+tagreeve report tagreeve/runs/<date>/suite_<id> --html suite-report.html
 ```
 
-`suite` runs every `*.yml` file in the folder once per variant, and prints a table with the result of each run and the diff between the variants. The runs and a `suite.json` manifest go to `runs/suite_<id>/`. The exit code is 2 if a run did not finish, 1 if an expectation failed, else 0. A scenario with a `handoff` step is skipped unless you add `--with-handoff`. To cover several storefronts, give `--stores stores.json` instead of `--site`. Every scenario then runs once per store. `report` writes one HTML file with a timeline per vendor and consent state, the expectations, the flags and the diff. It has names and counts only, no script and no network request. `tagreeve report runs/run_<id>.jsonl --html report.html` makes the report for one run. Details are in [docs/cli.md](docs/cli.md).
+`suite` runs every `*.yml` file in the folder once per variant, and prints a table with the result of each run and the diff between the variants. The runs and a `suite.json` manifest go to `tagreeve/runs/<date>/suite_<id>/`. The exit code is 2 if a run did not finish, 1 if an expectation failed, else 0. A scenario with a `handoff` step is skipped unless you add `--with-handoff`. To cover several storefronts, give `--stores stores.json` instead of `--site`. Every scenario then runs once per store. `report` writes one HTML file with a timeline per vendor and consent state, the expectations, the flags and the diff. It has names and counts only, no script and no network request. `tagreeve report tagreeve/runs/<date>/run_<id>.jsonl --html report.html` makes the report for one run. Details are in [docs/cli.md](docs/cli.md).
 
 ## Rules and steps added in 0.3
 
