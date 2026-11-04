@@ -32,6 +32,30 @@ export const platformHosts: readonly PlatformHostEntry[] = [
     purpose: 'telemetry',
     source: 'https://shopify.dev/docs/storefronts/headless/hydrogen/analytics/validation',
   },
+  {
+    platform: 'shopify',
+    host: 'pay.shopify.com',
+    purpose: 'payments',
+    source: 'https://shopify.dev/docs/api/commerce-components/pay',
+  },
+  {
+    platform: 'shopify',
+    host: 'shop.app',
+    purpose: 'payments',
+    source: 'https://shopify.dev/docs/api/commerce-components/pay',
+  },
+  {
+    platform: 'shopify',
+    host: 'cdn.shopifycloud.com',
+    purpose: 'cdn',
+    source: 'https://shopify.dev/docs/api/commerce-components/pay',
+  },
+  {
+    platform: 'shopify',
+    host: '*.shopifysvc.com',
+    purpose: 'telemetry',
+    source: 'https://shopify.dev/docs/api/commerce-components/pay',
+  },
 ];
 
 function hostMatches(pattern: string, hostname: string): boolean {

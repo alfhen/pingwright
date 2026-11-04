@@ -20,7 +20,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 <!-- L06 -->
 
-<!-- H06 -->
+- Shop Pay hosts (`pay.shopify.com`, `shop.app`, `cdn.shopifycloud.com` and `*.shopifysvc.com`) are platform hosts, so their requests get the flag `platformHost` and not `unknownDestination` (#585, #886).
 
 <!-- E03 -->
 
