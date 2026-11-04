@@ -17,7 +17,9 @@ function stripComment(line: string): string {
   let quote = '';
   for (let i = 0; i < line.length; i++) {
     const ch = line[i]!;
-    if (quote) {
+    if (ch === '\\' && quote !== "'") {
+      i++;
+    } else if (quote) {
       if (ch === quote) quote = '';
     } else if (ch === '"' || ch === "'") {
       quote = ch;
@@ -208,6 +210,11 @@ describe('workflow rules', () => {
     const problems = workflowProblems(base('      - run: npm publish --tag "$dist_tag" & echo --dry-run\n'));
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('without --dry-run');
+  });
+
+  it('does not take --dry-run from a comment after an escaped quote', () => {
+    const wf = base('      - run: |\n          echo \\"; npm publish --tag "$dist_tag" # --dry-run\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
   });
 
   it('does not take --dry-run from a # comment', () => {
