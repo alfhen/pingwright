@@ -17,6 +17,18 @@ function tagreeve(cwd: string, args: string[]): Promise<{ stdout: string; stderr
   });
 }
 
+const today = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+function gitExit(cwd: string, args: string[]): Promise<number> {
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd }, (error) => resolve(error ? ((error as { code?: unknown }).code as number) || 1 : 0));
+  });
+}
+
 const runArgs = (extra: string[]) => ['run', scenario('from-label'), '--site', site.url, '--json', ...extra];
 
 test('in a git work tree, init stops the warning, and --out records warns once', async () => {
@@ -30,7 +42,15 @@ test('in a git work tree, init stops the warning, and --out records warns once',
   expect((await tagreeve(cwd, ['init'])).stdout).toContain('Skipped .gitignore');
   expect(await readFile(join(cwd, '.gitignore'), 'utf8')).toBe('/tagreeve/runs/\n');
 
+  const before = today();
   const quiet = await tagreeve(cwd, runArgs([]));
+  const after = today();
+  expect(quiet.code, quiet.stderr).toBeLessThanOrEqual(1);
+  const recorded = (JSON.parse(quiet.stdout) as { path: string }).path;
+  const date = [before, after].find((d) => recorded.includes(join('tagreeve', 'runs', d)));
+  expect(date, recorded).toBeDefined();
+  expect((await readdir(join(cwd, 'tagreeve', 'runs', date!))).some((n) => /^run_.*\.jsonl$/.test(n))).toBe(true);
+  expect(await gitExit(cwd, ['check-ignore', '-q', recorded])).toBe(0);
   expect(quiet.stderr).not.toContain(WARNING);
 
   const loud = await tagreeve(cwd, runArgs(['--out', 'records']));
@@ -42,7 +62,9 @@ test('in a git work tree, init stops the warning, and --out records warns once',
 
 test('outside a git work tree there is no warning', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'tagreeve-init-'));
+  expect(await gitExit(cwd, ['rev-parse', '--is-inside-work-tree'])).not.toBe(0);
   const outside = await tagreeve(cwd, runArgs(['--out', 'records']));
+  expect(outside.code, outside.stderr).toBeLessThanOrEqual(1);
   expect(outside.stderr).not.toContain(WARNING);
   expect((await readdir(join(cwd, 'records'))).some((n) => /^run_.*\.jsonl$/.test(n))).toBe(true);
   await rm(cwd, { recursive: true, force: true });
