@@ -30,7 +30,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - New command `tagreeve init`: it makes `tagreeve/scenarios/` and `tagreeve/baselines/` and adds `/tagreeve/runs/` to `.gitignore`. `run` and `suite` now print a warning when the record folder is in a git work tree and not ignored (#811).
 
-<!-- E04 -->
+- New file `tagreeve/config.yml`, and `--config <file>` to read another one. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys, and no error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
 
 <!-- E06 -->
 

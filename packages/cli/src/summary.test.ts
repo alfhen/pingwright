@@ -473,3 +473,10 @@ test('the Defaults line names each default used and is absent without one', () =
   const text = formatSummary({ ...base, defaults: [{ setting: 'trackerList', path: 'tagreeve/trackers.json' }] });
   expect(text).toContain('Defaults: tagreeve/trackers.json (tracker list)');
 });
+
+test('the Defaults line names the project config first, and a --config path is not a default', () => {
+  const base: Summary = { runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags: [], results: [] };
+  const text = formatSummary({ ...base, defaults: [{ setting: 'config', path: 'tagreeve/config.yml' }, { setting: 'trackerList', path: 'tagreeve/trackers.json' }] });
+  expect(text).toContain('Defaults: tagreeve/config.yml (project config), tagreeve/trackers.json (tracker list)');
+  expect(formatSummary({ ...base, defaults: [{ setting: 'config', path: 'tagreeve/config.yml' }] })).toContain('Defaults: tagreeve/config.yml (project config)');
+});

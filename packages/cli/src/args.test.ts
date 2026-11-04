@@ -110,11 +110,20 @@ test('suite takes --stores instead of --site, never both, and run refuses it', (
   expect(parsed).not.toHaveProperty('site');
   expect(() => parseCli(['suite', 'dir', '--stores', 's.json', '--site', 'https://x.test'])).toThrow('cannot be used together');
   expect(() => parseCli(['run', 's.yml', '--site', 'https://x.test', '--stores', 's.json'])).toThrow('--stores is not an option of run');
-  expect(() => parseCli(['run', 's.yml', '--stores', 's.json'])).toThrow('--site is required');
+  expect(() => parseCli(['run', 's.yml', '--stores', 's.json'])).toThrow('--stores is not an option of run');
+});
+
+test('run needs no site at parse time and both commands take --config', () => {
+  const run = parseCli(['run', 's.yml']);
+  expect(run).toMatchObject({ command: 'run', scenario: 's.yml' });
+  expect(run).not.toHaveProperty('site');
+  expect(run).not.toHaveProperty('config');
+  expect(parseCli(['run', 's.yml', '--config', 'other.yml'])).toMatchObject({ config: 'other.yml' });
+  expect(parseCli(['suite', '--config', 'other.yml'])).toMatchObject({ command: 'suite', config: 'other.yml' });
+  expect(parseCli(['suite'])).not.toHaveProperty('config');
 });
 
 test.each([
-  [['run', 's.yml'], '--site is required'],
   [['run', '--site', 'http://x.test'], 'one scenario file'],
   [['run', 's.yml', '--site', 'ftp://x.test'], 'http or https'],
   [['run', 's.yml', '--site', 'nope'], 'http or https'],

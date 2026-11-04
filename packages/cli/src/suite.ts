@@ -2,15 +2,16 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { readRun, ulid } from '@tagreeve/core';
 import type { TrackerEntry } from '@tagreeve/decoders';
-import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@tagreeve/expect';
+import { diffRuns, mergeOptions, parseScenario, ScenarioError, type Scenario, type ScenarioOptions } from '@tagreeve/expect';
 import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
 import type { Network, SuiteArgs } from './args.ts';
-import { defaultScenarioDir, defaultStores, formatDefaultsLine, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
+import { DEFAULT_STORES, defaultScenarioDir, defaultStores, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { warnIfNotIgnored } from './git-ignore.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
+import { formatDefaults, type DefaultEntry } from './project-config.ts';
 import { readStores, StoresError, type Store } from './stores.ts';
 import { checkTestPaymentGates } from './test-payment-hosts.ts';
-import { executeRun, prepareServerContainer, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';
+import { executeRun, loadConfigOrReport, prepareServerContainer, readGtmOverride, readTrackerList, resolveNetwork, warnTestGtmOrigin, warnTestLoopbackHosted, type Io, type RunOutcome, type RunSpec } from './run.ts';
 
 export type CellStatus = 'pass' | 'warn' | 'fail' | 'error' | 'skipped';
 
@@ -58,7 +59,7 @@ export interface SuiteManifest {
   diffs: SuiteDiff[];
   exitCode: 0 | 1 | 2;
   /** Files used because their flag was not given. Absent when none. */
-  defaults?: DefaultUsed[];
+  defaults?: DefaultEntry[];
 }
 
 export interface SuiteDeps {
@@ -140,7 +141,7 @@ export function formatSuiteTable(manifest: SuiteManifest, dir: string): string {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
   const line = (cols: string[]) => cols.map((c, i) => (i === cols.length - 1 ? c : c.padEnd(widths[i]! + 3))).join('').trimEnd();
   const out = [line(header), ...rows.map(line)];
-  const defaultsLine = formatDefaultsLine(manifest.defaults);
+  const defaultsLine = formatDefaults(manifest.defaults);
   if (defaultsLine) out.push('', defaultsLine);
   const records = manifest.cells.filter((c) => c.record);
   if (records.length) out.push('', 'Records', ...records.map((c) => `  ${cellName(c)}: ${join(dir, c.record!)}`));
@@ -152,7 +153,7 @@ export function formatSuiteTable(manifest: SuiteManifest, dir: string): string {
   return `${out.join('\n')}\n`;
 }
 
-async function scan(dir: string, trackers: TrackerEntry[], io: Io): Promise<LoadedScenario[] | undefined> {
+async function scan(dir: string, trackers: TrackerEntry[], configOptions: ScenarioOptions, io: Io): Promise<LoadedScenario[] | undefined> {
   let names: string[];
   try {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -174,6 +175,7 @@ async function scan(dir: string, trackers: TrackerEntry[], io: Io): Promise<Load
     seen.add(name);
     try {
       const parsed = parseScenario(await readFile(join(dir, file), 'utf8'), trackers.map((t) => t.vendor));
+      parsed.options = mergeOptions(configOptions, parsed.options);
       for (const warning of parsed.warnings) io.stderr(`Warning: ${file}: ${warning}\n`);
       loaded.push({ name, parsed, handoff: hasHandoff(parsed), payment: hasPayment(parsed) });
     } catch (error) {
@@ -267,6 +269,9 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     io.stderr('--allow-test-payment needs --site or --stores on the command line. A default file never supplies the host a test payment runs on.\n');
     return 2;
   }
+  const config = await loadConfigOrReport(args.config, io);
+  if (!config.ok) return 2;
+  const loaded = config.loaded;
   const defaults: DefaultUsed[] = [];
   const scenarioDir = args.dir ?? (await defaultScenarioDir(defaults));
   if (scenarioDir === undefined) {
@@ -284,14 +289,22 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
       return 2;
     }
   }
-  const storesPath = args.site === undefined ? (args.stores ?? (await defaultStores(defaults))) : undefined;
-  if (args.site === undefined && storesPath === undefined) {
+  const configSite = args.site === undefined && args.stores === undefined ? loaded?.config.site : undefined;
+  const site = args.site ?? configSite;
+  let storesPath: string | undefined;
+  if (site === undefined) {
+    storesPath = args.stores ?? (await defaultStores(defaults));
+  } else if (configSite !== undefined && (await defaultStores([])) !== undefined) {
+    io.stderr(`${loaded!.path} sets site and ${DEFAULT_STORES} exists. Give --site or --stores to say which one to use.\n`);
+    return 2;
+  }
+  if (site === undefined && storesPath === undefined) {
     io.stderr('suite needs a site: give --site or --stores, or create tagreeve/stores.json.\n');
     return 2;
   }
   const stores = await loadStores(storesPath, io);
   if (!stores) return 2;
-  const scenarios = await scan(scenarioDir, trackers, io);
+  const scenarios = await scan(scenarioDir, trackers, loaded?.config.options ?? {}, io);
   if (!scenarios) return 2;
 
   const undeclared = undeclaredVars(scenarios, args.vars);
@@ -309,7 +322,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
 
   const networks = new Map<string, Network>();
   for (const s of scenarios) {
-    const network = resolveNetwork({ network: args.network, netLog: false, serverContainer: args.serverContainer }, s.parsed, io);
+    const network = resolveNetwork({ network: args.network, netLog: false, serverContainer: args.serverContainer }, s.parsed, io, loaded?.path);
     if (!network) return 2;
     networks.set(s.name, network);
   }
@@ -320,12 +333,12 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   if (!overrides) return 2;
   warnTestGtmOrigin(io);
   warnTestLoopbackHosted(io);
-  if (args.out === undefined) {
+  if (args.out === undefined && loaded?.config.out === undefined) {
     const notice = await oldRunsNotice(process.cwd());
     if (notice) io.stderr(notice);
   }
 
-  const targets: { store: Store | undefined; site: string }[] = stores.length ? stores.map((store) => ({ store, site: store.site })) : [{ store: undefined, site: args.site! }];
+  const targets: { store: Store | undefined; site: string }[] = stores.length ? stores.map((store) => ({ store, site: store.site })) : [{ store: undefined, site: site! }];
   const allowedHost = args.allowTestPayment === undefined ? undefined : normalizeHost(args.allowTestPayment);
   const paymentKey = (scenario: string, store: Store | undefined) => JSON.stringify([scenario, store?.name]);
   const testPayments = new Map<string, TestPayment>();
@@ -348,7 +361,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   }
 
   const id = `suite_${ulid()}`;
-  const outFolder = resolveOutDir({ out: args.out, now: new Date(), label: args.label });
+  const outFolder = resolveOutDir({ out: args.out, now: new Date(), label: args.label, base: loaded?.config.out });
   await warnIfNotIgnored(outFolder, io.stderr);
   const dir = join(outFolder, id);
   await mkdir(dir, { recursive: true });
@@ -406,6 +419,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     (scenarios.findIndex((s) => s.name === c.scenario) * Math.max(storeNames.length, 1) + Math.max(storeNames.indexOf(c.labels.store ?? ''), 0)) * variants.length + variants.indexOf(c.variant);
   cells.sort((a, b) => position(a) - position(b));
 
+  const listed: DefaultEntry[] = [...(loaded?.defaultUsed ? [loaded.defaultUsed] : []), ...defaults];
   const manifest: SuiteManifest = {
     suiteSchemaVersion: 3,
     id,
@@ -417,7 +431,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     cells,
     diffs: await diffPairs(cells, variants, storeNames, dir),
     exitCode: suiteExitCode(cells),
-    ...(defaults.length > 0 && { defaults }),
+    ...(listed.length > 0 && { defaults: listed }),
   };
   await writeFile(join(dir, 'suite.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   io.stdout(args.json ? `${JSON.stringify(manifest, null, 2)}\n` : formatSuiteTable(manifest, dir));

@@ -11,7 +11,7 @@ test('--var for an inherited name exits 2 as undeclared', async () => {
   const scenario = join(dir, 's.yaml');
   await writeFile(scenario, 'start: /\nvars:\n  product: tee\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n');
   const err: string[] = [];
-  const code = await runCommand({ scenario, vars: { constructor: '1' }, out: dir } as unknown as RunArgs, {
+  const code = await runCommand({ scenario, site: 'http://127.0.0.1:9', vars: { constructor: '1' }, out: dir } as unknown as RunArgs, {
     stdout: () => undefined,
     stderr: (t) => err.push(t),
   });
@@ -24,7 +24,7 @@ async function netLogRun(options: string, extra: Partial<RunArgs>) {
   const scenario = join(dir, 's.yaml');
   await writeFile(scenario, `start: /\n${options}steps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n`);
   const err: string[] = [];
-  const args = { scenario, vars: {}, out: dir, netLog: true, gtmOverride: join(dir, 'missing.json'), ...extra } as unknown as RunArgs;
+  const args = { scenario, site: 'http://127.0.0.1:9', vars: {}, out: dir, netLog: true, gtmOverride: join(dir, 'missing.json'), ...extra } as unknown as RunArgs;
   const code = await runCommand(args, { stdout: () => undefined, stderr: (t) => err.push(t) });
   return { code, err: err.join('') };
 }

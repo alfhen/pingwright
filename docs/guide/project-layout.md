@@ -12,6 +12,7 @@ your-repo/
         server-checkout.yml
     baselines/                  # committed
       checkout.json
+    config.yml                  # committed, the project config
     trackers.json               # committed, the default for --tracker-list
     stores.json                 # committed, the default for suite --stores
     autoconsent/                # committed, *.json is the default for --autoconsent-rules
@@ -23,6 +24,7 @@ your-repo/
 ## What to commit
 
 - `tagreeve/scenarios/` holds your scenario files. Commit them.
+- `tagreeve/config.yml` holds the site, the record folder and the scenario options that every run shares. Commit it. It never holds a secret: Tagreeve refuses the keys that could. See "Project config" in the [CLI reference](../cli.md).
 - `tagreeve/baselines/` holds the files from `tagreeve baseline save`. Commit them, so a review shows when the expected behaviour changes.
 - `tagreeve/runs/` holds records, reports and suite folders. A record has the pages you visited and the requests they made, so do not commit it. Add this line to `.gitignore`:
 
