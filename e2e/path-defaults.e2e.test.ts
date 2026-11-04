@@ -106,24 +106,43 @@ test('--allow-test-payment is refused with no site on the command line, even whe
   }
 }, 180_000);
 
-test('run with no --tracker-list loads tagreeve/trackers.json and names it; --tracker-list replaces it', async () => {
+test('run loads the default tracker list and autoconsent rules and names them; the flags replace them', async () => {
   const cwd = await project(site.url);
   try {
+    const rules = join(cwd, 'tagreeve', 'autoconsent', 'a.json');
+    await mkdir(join(cwd, 'tagreeve', 'autoconsent'));
+    await writeFile(rules, '{"autoconsent": []}');
     const scenario = join(cwd, 'tagreeve', 'scenarios', 'a.yml');
     const json = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--json']);
     expect(json.code, json.stderr).toBe(0);
     const summary = JSON.parse(json.stdout) as { defaults?: { setting: string; path: string }[] };
-    expect(summary.defaults).toEqual([{ setting: 'trackerList', path: 'tagreeve/trackers.json' }]);
+    expect(summary.defaults).toEqual([
+      { setting: 'trackerList', path: 'tagreeve/trackers.json' },
+      { setting: 'autoconsentRules', path: 'tagreeve/autoconsent/a.json' },
+    ]);
 
     const text = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out')]);
     expect(text.code, text.stderr).toBe(0);
-    expect(text.stdout).toContain('Defaults: tagreeve/trackers.json (tracker list)');
+    expect(text.stdout).toContain('Defaults: tagreeve/trackers.json (tracker list), tagreeve/autoconsent/a.json (autoconsent rules)');
+
+    await writeFile(rules, '{}');
+    const broken = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--json']);
+    expect(broken.code).toBe(2);
+    expect(broken.stderr).toContain('tagreeve/autoconsent/a.json');
+    await writeFile(rules, '{"autoconsent": []}');
 
     const own = join(cwd, 'own.json');
     await writeFile(own, JSON.stringify([{ vendor: 'tiktok', host: 'tiktok.localhost', source: 'https://example.com/tiktok-pixel-docs' }]));
     const explicit = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--tracker-list', own, '--json']);
     expect(explicit.code, explicit.stderr).toBe(0);
-    expect((JSON.parse(explicit.stdout) as { defaults?: unknown }).defaults).toBeUndefined();
+    expect((JSON.parse(explicit.stdout) as { defaults?: { setting: string }[] }).defaults?.map((d) => d.setting)).toEqual(['autoconsentRules']);
+
+    await writeFile(rules, '{}');
+    const ownRules = join(cwd, 'own-rules.json');
+    await writeFile(ownRules, '{"autoconsent": []}');
+    const flagged = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--autoconsent-rules', ownRules, '--json']);
+    expect(flagged.code, flagged.stderr).toBe(0);
+    expect((JSON.parse(flagged.stdout) as { defaults?: { setting: string }[] }).defaults?.map((d) => d.setting)).toEqual(['trackerList']);
 
     await writeFile(join(cwd, 'tagreeve', 'trackers.json'), '[]');
     const missing = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--json']);
