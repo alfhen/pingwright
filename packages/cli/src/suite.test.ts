@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rename, writeFile } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newId, RunWriter, type Run } from '@tagreeve/core';
+import { createFakeDocker } from '../../recorder/src/server-container/fake-docker.test-helper.ts';
 import { expect, test } from 'vitest';
 import type { SuiteArgs } from './args.ts';
 import type { RunOutcome, RunSpec } from './run.ts';
@@ -621,6 +622,26 @@ test('--server-container passes the same spec to every run', async () => {
   }
   expect(fake.specs).toHaveLength(2);
   expect(fake.specs.every((s) => s.serverContainer?.configSource.kind === 'env')).toBe(true);
+});
+
+test('--server-container with a missing image exits 2 before any scenario and prints the message once', async () => {
+  const { dir, out } = await workDir({ 'a.yml': CONTAINER_SCENARIO, 'b.yml': CONTAINER_SCENARIO });
+  const fake = recorder();
+  const docker = createFakeDocker();
+  const c = capture();
+  const env = { ...docker.env({ noImage: true, images: ['0.4.0'] }), TAGREEVE_SERVER_CONTAINER_CONFIG: Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64') };
+  const saved = { ...process.env };
+  Object.assign(process.env, env);
+  delete process.env.TAGREEVE_TEST_SERVER_CONTAINER_CMD;
+  try {
+    expect(await suiteCommand(args(dir, out, { serverContainer: true }), c.io, fake)).toBe(2);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  expect(fake.specs).toEqual([]);
+  expect(c.err().match(/is not available/g)).toHaveLength(1);
+  expect(c.err()).toContain('tagreeve server-container build');
 });
 
 test('--server-container with a scenario that is not in server mode exits 2 before any run', async () => {

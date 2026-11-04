@@ -8,7 +8,7 @@
 
 <!-- S05 -->
 
-<!-- K05 -->
+- Fix: when the `tagreeve-sgtm` server container image is missing, the message lists the local `tagreeve-sgtm` tags, or says `none`. `suite --server-container` stops with exit 2 before any scenario starts (#898).
 
 <!-- P05 -->
 

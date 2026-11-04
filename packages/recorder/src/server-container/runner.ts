@@ -10,7 +10,7 @@ import { isAbsolute } from 'node:path';
 import type { ServerContainerErrorClass } from '@tagreeve/core';
 import { isLoopbackHost } from '../guard.ts';
 import { Scrubber } from '../gtm-scrub.ts';
-import { baseImage, checkDockerPresent, DOCKER_NEEDED_MESSAGE, imageTag, isDigestReference, NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
+import { baseImage, checkDockerPresent, DOCKER_NEEDED_MESSAGE, IMAGE_REPOSITORY, imageTag, isDigestReference, NAME_PREFIX, NODE_BIN, OWNER_HOST_LABEL, OWNER_PID_LABEL, PROBE_HOST, PROBE_SCRIPT, RELAY_SCRIPT, runDocker } from './image.ts';
 
 export const CONFIG_ENV = 'TAGREEVE_SERVER_CONTAINER_CONFIG';
 export const TEST_COMMAND_ENV = 'TAGREEVE_TEST_SERVER_CONTAINER_CMD';
@@ -278,8 +278,17 @@ export async function checkServerContainerHost(options: HostCheckOptions): Promi
     throw new ServerContainerError('egressOpen', `Docker Engine ${docker.serverVersion} forwards DNS from internal networks (CVE-2024-29018). Upgrade Docker to ${MIN_ENGINE_MAJOR} or newer.`);
   }
   if ((await runDocker(['image', 'inspect', '--format', '{{.Id}}', options.image], { env })).code !== 0) {
-    throw new ServerContainerError('imageMissing', `The image ${options.image} is not available. Run: tagreeve server-container build`);
+    throw new ServerContainerError('imageMissing', await imageMissingMessage(options.image, env));
   }
+}
+
+async function imageMissingMessage(image: string, env: NodeJS.ProcessEnv): Promise<string> {
+  const plain = `The image ${image} is not available. Run: tagreeve server-container build`;
+  if (!image.startsWith(`${IMAGE_REPOSITORY}:`)) return plain;
+  const list = await runDocker(['image', 'ls', '--format', '{{.Tag}}', IMAGE_REPOSITORY], { env, timeoutMs: 30_000 });
+  if (list.code !== 0) return plain;
+  const tags = list.stdout.split('\n').map((line) => line.trim()).filter((tag) => tag !== '' && tag !== '<none>');
+  return `The image ${image} is not available. Local ${IMAGE_REPOSITORY} images: ${tags.length > 0 ? tags.join(', ') : 'none'}. Run: tagreeve server-container build`;
 }
 
 /**
