@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.6.0-rc.1
+
+<!-- E01 -->
+
+<!-- N06 -->
+
+<!-- W06 -->
+
+<!-- M02 -->
+
+<!-- M04 -->
+
+<!-- M10 -->
+
+<!-- M11 -->
+
+<!-- E02 -->
+
+<!-- L06 -->
+
+<!-- H06 -->
+
+<!-- E03 -->
+
+<!-- D01 -->
+
+<!-- E05 -->
+
+<!-- E04 -->
+
+<!-- E06 -->
+
+<!-- R06 -->
+
 ## 0.5.0
 
 `npm i -g tagreeve` installs this release. 0.5.0 adds everything in the 0.4.0 and 0.5.0 release candidates (below) and the changes under "Since rc.2". To upgrade from 0.3.0, read the next section.
