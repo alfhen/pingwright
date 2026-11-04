@@ -3,7 +3,7 @@ const safety = [
   { code: 'stub mode', title: 'Known endpoints stay local', body: 'Known collection endpoints are recorded and answered locally. An unknown destination fails the run, but its request can still reach the vendor.' },
   { code: 'fake identity', title: 'Fake people only', body: 'Every run invents a visitor. Any other email, phone or hash in the record is flagged.' },
   { code: 'handoff', title: 'No log-ins, no real payments', body: 'A person does those steps. Test cards only, opt-in, with three checks before anything is paid.' },
-  { code: 'runs/*.jsonl', title: 'Your data stays yours', body: 'No hosted service, no account. Records are JSONL on your machine.' },
+  { code: 'tagreeve/runs/**/*.jsonl', title: 'Your data stays yours', body: 'No hosted service, no account. Records are JSONL on your machine.' },
 ];
 ---
 

@@ -77,6 +77,6 @@ export const ANNOT: Annotation[] = [
     key: 'rec',
     title: 'Record',
     body: 'One JSON object per line: run, step, request, hit, consentEpoch, flag, result…',
-    lines: ['Record: runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl'],
+    lines: ['Record: tagreeve/runs/2026-11-03/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl'],
   },
 ];

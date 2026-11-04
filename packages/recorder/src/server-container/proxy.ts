@@ -258,6 +258,7 @@ export async function createRecordingProxy(options: RecordingProxyOptions): Prom
   });
   const address = server.address();
   if (address && typeof address === 'object' && isUnspecifiedHost(address.address)) {
+    for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     throw new Error('The proxy must not listen on a wildcard address.');
   }

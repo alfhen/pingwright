@@ -29,7 +29,7 @@ Expectations
   PASS builtin: earlyIdentifiers
   PASS builtin: possibleRealData
 Result: fail (3 of 6)
-Record: runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
+Record: tagreeve/runs/2026-11-03/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
 The summary has five parts:
@@ -96,7 +96,7 @@ The [CLI page](../cli.md) lists the options that change these checks. One of the
 The record file is a JSONL file. Each line is one JSON object, and its `type` says what it is: `run`, `step`, `request`, `response`, `hit`, `dataLayerEvent`, `consentEpoch`, `flag`, `checkpoint` and `result`. Every record has an `id` that starts with a short prefix, such as `hit_`. The summary prints these IDs as evidence. Search the record file for an ID to see the whole line. This finds the first evidence hit from the summary above:
 
 ```bash
-grep hit_01M66G9M2S992B5DF1MZ15ZQ08 runs/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
+grep hit_01M66G9M2S992B5DF1MZ15ZQ08 tagreeve/runs/2026-11-03/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
 Programs can read the file, or the output of `tagreeve run --json`. The [design](../design.md#4-data-model) lists every field.
@@ -115,7 +115,7 @@ flowchart TB
 `tagreeve diff` pairs the hits of run A with the hits of run B, and lists hits that were added, removed or changed.
 
 ```bash
-tagreeve diff runs/a/run_A.jsonl runs/b/run_B.jsonl
+tagreeve diff tagreeve/runs/a/run_A.jsonl tagreeve/runs/b/run_B.jsonl
 ```
 
 This part of a diff comes from two different scenarios: run A rejected the banner and run B gave no answer. Normally both runs use the same scenario.

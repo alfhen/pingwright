@@ -11,6 +11,8 @@ const CONTAINER_URL = `https://www.googletagmanager.com/server.js?id=GTM-PWTEST1
 const DESTINATION_URL = 'https://www.googletagmanager.com/s/gtag/destination?id=G-PWTEST0001';
 const TRIGGER_PATHS = new Set(['/g/collect', '/pixel', '/capi']);
 const MAX_DELAY_MS = 5000;
+const SOCKET_TIMEOUT_MS = 10_000;
+const CLOSE_WAIT_MS = 2000;
 export const FIXTURE_CONFIG = Buffer.from(`id=GTM-PWTEST1&env=1&auth=${FIXTURE_AUTH}`).toString('base64');
 
 export interface StandInEnv {
@@ -34,11 +36,14 @@ interface HitFields {
  * Stands in for a real server container without Docker. Like the real image it reads only the
  * upper-case HTTP_PROXY, tunnels with CONNECT, and trusts only NODE_EXTRA_CA_CERTS.
  */
-export function createStandIn(env: StandInEnv): { listen(): Promise<number>; close(): Promise<void> } {
+export function createStandIn(env: StandInEnv, options: { readonly socketTimeoutMs?: number } = {}): { listen(): Promise<number>; close(): Promise<void> } {
   const proxyUrl = env.HTTP_PROXY ? new URL(env.HTTP_PROXY) : undefined;
   let ready = false;
   const pending = new Set<Promise<unknown>>();
   const timers = new Set<NodeJS.Timeout>();
+  const open = new Set<{ destroy(): unknown }>();
+  const socketTimeoutMs = options.socketTimeoutMs ?? SOCKET_TIMEOUT_MS;
+  let closing = false;
   let ca: string | undefined;
 
   function track<T>(work: Promise<T>): Promise<T> {
@@ -51,28 +56,55 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
   }
 
   function viaProxy(method: string, target: string, body?: string): Promise<Reply> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolveReply, rejectReply) => {
       if (!proxyUrl || ca === undefined) {
-        reject(new Error('HTTP_PROXY and NODE_EXTRA_CA_CERTS are needed'));
+        rejectReply(new Error('HTTP_PROXY and NODE_EXTRA_CA_CERTS are needed'));
         return;
       }
+      if (closing) {
+        rejectReply(new Error('the stand-in is closing'));
+        return;
+      }
+      const parts = new Set<{ destroy(): unknown }>();
+      const use = <T extends { destroy(): unknown }>(part: T): T => {
+        parts.add(part);
+        open.add(part);
+        return part;
+      };
+      const release = () => {
+        clearTimeout(timer);
+        for (const part of parts) open.delete(part);
+      };
+      const resolve = (reply: Reply) => {
+        release();
+        resolveReply(reply);
+      };
+      const reject = (error: Error) => {
+        release();
+        rejectReply(error);
+      };
+      const timer = setTimeout(() => {
+        reject(new Error('the proxy call timed out'));
+        for (const part of parts) part.destroy();
+      }, socketTimeoutMs);
       const url = new URL(target);
       const auth = Buffer.from(`${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`).toString('base64');
-      const connect = http.request({
+      const connect = use(http.request({
         host: proxyUrl.hostname,
         port: Number(proxyUrl.port),
         method: 'CONNECT',
         path: `${url.hostname}:443`,
         headers: { 'Proxy-Authorization': `Basic ${auth}` },
-      });
+      }));
       connect.on('error', reject);
       connect.on('connect', (response, socket) => {
+        use(socket);
         if (response.statusCode !== 200) {
           socket.destroy();
           reject(new Error(`the proxy answered ${response.statusCode}`));
           return;
         }
-        const secure = tls.connect({ socket, host: url.hostname, servername: url.hostname, ca });
+        const secure = use(tls.connect({ socket, host: url.hostname, servername: url.hostname, ca }));
         secure.on('error', reject);
         const headers: Record<string, string | number> = body === undefined ? {} : { 'content-type': 'text/plain', 'content-length': Buffer.byteLength(body) };
         // The agent hands out only the tunnel, and the lookup fails, so a request can never open a direct connection.
@@ -202,7 +234,18 @@ export function createStandIn(env: StandInEnv): { listen(): Promise<number>; clo
     close: async () => {
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
-      while (pending.size > 0) await Promise.allSettled([...pending]);
+      const drained = (async () => {
+        while (pending.size > 0) await Promise.allSettled([...pending]);
+      })();
+      let giveUp: NodeJS.Timeout | undefined;
+      const patience = new Promise<void>((resolve) => {
+        giveUp = setTimeout(resolve, CLOSE_WAIT_MS);
+      });
+      await Promise.race([drained, patience]);
+      clearTimeout(giveUp);
+      closing = true;
+      for (const part of open) part.destroy();
+      await drained;
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
