@@ -105,14 +105,16 @@ test('baseline save with one path names the file after the scenario and the stor
   expect(drift.code, drift.stderr).toBe(1);
   expect(drift.stdout).toMatch(/cart\s+b\s+FAIL \(baseline drift\)/);
   expect(drift.stdout).toMatch(/home\s+b\s+PASS/);
-  const { text, cells: driftCells } = await readManifest(join(work, 'drift'));
+  const { dir: driftDir, text, cells: driftCells } = await readManifest(join(work, 'drift'));
   const cart = driftCells.find((c) => c.scenario === 'cart' && c.labels.store === 'b')!;
   expect(cart).toMatchObject({ status: 'fail', exitCode: 1, baseline: { file: 'cart.b.json', drift: true, added: 1 } });
   expect(driftCells.filter((c) => c.baseline?.drift)).toHaveLength(1);
   expect(JSON.parse(text)).toMatchObject({ suiteSchemaVersion: 3, exitCode: 1 });
+  const driftRecord = await readFile(join(driftDir, cart.record!), 'utf8');
+  const secrets = ['7777777777.8888888888', '7777777777'];
+  for (const secret of secrets) expect(driftRecord).toContain(secret);
   for (const output of [drift.stdout, drift.stderr, text]) {
-    expect(output).not.toContain('7777777777');
-    expect(output).not.toContain('pw-fixture@example.com');
+    for (const secret of secrets) expect(output).not.toContain(secret);
   }
 
   const without = await node(['suite', suiteDir, '--stores', storesFile, '--out', join(work, 'without')]);
