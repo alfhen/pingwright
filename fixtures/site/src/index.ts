@@ -66,6 +66,7 @@ const pages: Record<string, string> = {
   '/set-cookie-unstored': 'set-cookie-unstored.html',
   '/set-cookie-already': 'set-cookie-already.html',
   '/flag-detail': 'flag-detail.html',
+  '/stub-bypass': 'stub-bypass.html',
   '/meta-early': 'meta-early.html',
   '/meta-early-ids': 'meta-early-ids.html',
   '/container/direct': 'container-direct.html',
@@ -120,6 +121,9 @@ function shopHandler(config: string) {
     if (path === '/fixture-config.js') {
       res.writeHead(200, { 'content-type': contentTypes['.js']!, 'cache-control': 'no-store' });
       res.end(config);
+    } else if (path === '/stub-bypass/hop') {
+      const query = new URL(req.url ?? '/', 'http://localhost').search.slice(1);
+      res.writeHead(302, { location: `/g/collect?v=2&tid=G-PWTEST0001&en=page_view&${query}`, 'cache-control': 'no-store' }).end();
     } else if (path === '/session/start') {
       res.writeHead(204, { 'set-cookie': '_pwid=pwfake-0001; Path=/; Max-Age=3600; SameSite=Lax', 'cache-control': 'no-store' }).end();
     } else if (path === '/session/unstored') {
