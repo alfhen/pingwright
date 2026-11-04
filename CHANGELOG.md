@@ -68,7 +68,7 @@ Issues still open that you can meet:
 - `unloadGap` can miss a real gap. A push that a frame sends after its own navigation started is grouped with the next document, so a hit from that document covers it (#958).
 - A `wait` step calls the page for its list of blocking controls with no time limit. On a busy page the step can run past its timeout or hang before it reports (#989).
 - `init` prints Node's error with the absolute path and does not say what it did (#1048). `init --json` exits 0 with text, not JSON (#1051). The old-runs notice prints a literal `<date>` instead of the folder (#971).
-- `network: stub` and `server` mode can still let a hit reach a real vendor account, for an unknown destination in `stub` and for a hosted `serverHosts` host in `server`. The line in `docs/cli.md` that says a committed scenario cannot do this is too strong (#982).
+- `network: stub` and `server` mode can still let a hit reach a real vendor account, for an unknown destination in `stub` and for a hosted `serverHosts` host in `server`.
 - `baseline save` does not check the scenario or variant in a record. A shared or hand-edited record with a name like `../../x` makes it write outside `tagreeve/baselines/`. Read a record from someone else before you save a baseline from it (#1069).
 - Records keep the full flag detail, including query values. Do not share a record from a page that sends an identifier in a query.
 - The `sandboxPageUrl` message does not mask a path segment of a relative page that holds a space (#920). A flag text for `unloadGap` can be cut short when a dataLayer event name holds `: /` (#918).

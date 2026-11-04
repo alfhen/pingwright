@@ -29,7 +29,7 @@ Agent-first testing for tags and consent. Tagreeve plays a visitor in a real bro
 >
 > **In 0.4.0-rc.1:** a `handoff` step can end at a URL or an element (`until`, `settle`, `timeout`); a `payment` step types a provider's test card on a store you allow, with three opt-in checks; `tagreeve baseline save` and `run --baseline` catch drift in the shape of a run; `--viewport <W>x<H>`; `identity.country` picks the format of the fake identity (US, SE, GB, DE); optional `fill` entries; a `possibleRedirectHop` flag; and the rename to Tagreeve. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.4.0-rc.1".
 >
-> **Not built yet:** the tag-firing reporter templates and `expectedTags`, `tagreeve init`, a Shopify bridge, a full Microsoft UET decoder, a `mobile` viewport preset, Firefox and WebKit. There is no MCP server: Tagreeve is a CLI, and agents read `--json`.
+> **Not built yet:** the tag-firing reporter templates and `expectedTags`, a Shopify bridge, a full Microsoft UET decoder, a `mobile` viewport preset, Firefox and WebKit. There is no MCP server: Tagreeve is a CLI, and agents read `--json`.
 
 ## Why
 

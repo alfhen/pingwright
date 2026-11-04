@@ -64,7 +64,7 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | Option | Meaning |
 | --- | --- |
 | `cartRequest` | Regular expression matched against request URLs. In an `addToCart` step, a matching request counts as a cart change, for a site whose cart endpoint the built-in check does not know. |
-| `network` | `stub` or `server`, the same as `--network`, which wins. `live` is not allowed in a scenario (it is a scenario error that names `--network live`). `stub` still lets an unknown destination through and `server` lets a hosted `serverHosts` host through, so a committed scenario can reach a real vendor account (#982). |
+| `network` | `stub` or `server`, the same as `--network`, which wins. `live` is not allowed in a scenario (it is a scenario error that names `--network live`). `stub` still lets an unknown destination through and `server` lets a hosted `serverHosts` host through, so a committed scenario can reach a real vendor account. |
 | `viewport` | `{ width, height }`, integers from 200 to 4000. The same as `--viewport`, which wins. See the `--viewport` row for what it does not change. |
 | `firstPartyHosts` | List of hosts or `*.domain` wildcards that are also first party, for example `['i.guim.co.uk', '*.shopifycdn.com']`. A wildcard matches subdomains, not the bare domain. |
 | `platformHosts` | `false` flags requests to known platform hosts (Shopify's CDN and telemetry hosts, and the hosts of Shop Pay: `cdn.shopify.com`, `monorail-edge.shopifysvc.com`, `*.shopifysvc.com`, `cdn.shopifycloud.com`, `pay.shopify.com` and `shop.app`) as `unknownDestination` again. The default is `true`: they get the flag `platformHost`, which is listed in the summary and the report and never fails a run. |
