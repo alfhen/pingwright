@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { LABEL_PATTERN } from './out-dir.ts';
 import { parseViewportText, VIEWPORT_HINT, type Viewport } from '@tagreeve/expect';
 
 export class UsageError extends Error {
@@ -25,6 +26,7 @@ export interface RunArgs {
   site: string;
   network: Network | undefined;
   out: string | undefined;
+  label?: string;
   seed: number | undefined;
   headed: boolean;
   viewport?: Viewport;
@@ -77,6 +79,7 @@ export interface SuiteArgs {
   variants: VariantArg[];
   network: Network | undefined;
   out: string | undefined;
+  label?: string;
   seed: number | undefined;
   withHandoff: boolean;
   withTestPayment: boolean;
@@ -123,12 +126,13 @@ Options for suite:
   --with-handoff             Also run scenarios with handoff steps, last, headed
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
   --allow-test-payment <host> The host that may run test payments. It must equal the --site host and be in the test-payment-hosts.json allowlist
-  --network, --out, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --server-container, --server-container-config, --json work as in run
+  --network, --out, --label, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --server-container, --server-container-config, --json work as in run
 
 Options for run:
   --site <url>               The site to test (required)
   --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
   --out <dir>                Directory for the JSONL record (default: tagreeve/runs/<date>)
+  --label <name>             Name this run: 1 to 40 lowercase letters, digits or hyphens. Stored on the record and added to the default folder name
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
@@ -153,6 +157,7 @@ Options:
   --site <url>               The site to test (required)
   --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
   --out <dir>                Directory for the JSONL record (default: tagreeve/runs/<date>)
+  --label <name>             Name this run: 1 to 40 lowercase letters, digits or hyphens. Stored on the record and added to the default folder name
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
@@ -264,6 +269,7 @@ const OPTIONS = {
   stores: { type: 'string' },
   network: { type: 'string' },
   out: { type: 'string' },
+  label: { type: 'string' },
   seed: { type: 'string' },
   headed: { type: 'boolean' },
   viewport: { type: 'string' },
@@ -391,6 +397,9 @@ function parseCommand(argv: string[]): Command {
     viewport = parseViewportText(values.viewport);
     if (!viewport) throw new UsageError(`--viewport must be ${VIEWPORT_HINT}, got "${values.viewport}"`);
   }
+  if (values.label !== undefined && !LABEL_PATTERN.test(values.label)) {
+    throw new UsageError(`--label must be 1 to 40 lowercase letters, digits or hyphens, got "${values.label}"`);
+  }
   if (values['server-container-config'] !== undefined && !values['server-container']) {
     throw new UsageError('--server-container-config needs --server-container');
   }
@@ -412,6 +421,7 @@ function parseCommand(argv: string[]): Command {
       variants: parseVariants(values.variant ?? []),
       network,
       out: values.out,
+      ...(values.label !== undefined && { label: values.label }),
       seed,
       withHandoff: values['with-handoff'] ?? false,
       withTestPayment: values['with-test-payment'] ?? false,
@@ -434,6 +444,7 @@ function parseCommand(argv: string[]): Command {
     site: values.site!,
     network,
     out: values.out,
+    ...(values.label !== undefined && { label: values.label }),
     seed,
     headed: values.headed ?? false,
     ...(viewport && { viewport }),

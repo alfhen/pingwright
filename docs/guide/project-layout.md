@@ -49,10 +49,10 @@ If `./runs/` holds records from an older version, `run` and `suite` print a note
 
 ## Naming a run folder
 
-Use `<date>-<ticket or topic>-<target>`. The date is the day of the run. The target says what was tested:
+Give the run a label with `--label`, such as `--label ca-307-live`. Tagreeve puts the date in front: `tagreeve/runs/2026-11-03-ca-307-live/`. The label is also stored in the record. Use `<ticket or topic>-<target>`. The target says what was tested:
 
-- `2026-11-03-ca-307-live` is a run for ticket CA-307 against the published containers.
-- `2026-11-10-ca-311-ws` is a run for ticket CA-311 against a workspace, before publishing it.
+- `ca-307-live` is a run for ticket CA-307 against the published containers.
+- `ca-311-ws` is a run for ticket CA-311 against a workspace, before publishing it.
 
 ## Suite reads one level
 

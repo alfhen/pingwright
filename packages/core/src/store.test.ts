@@ -237,7 +237,7 @@ test('RunWriter stamps the current record schema version', async () => {
   expect(first.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION);
   const warnings: string[] = [];
   const read = await readRun(writer.path, { onWarning: (m) => warnings.push(m) });
-  expect(read.run.recordSchemaVersion).toBe(3);
+  expect(read.run.recordSchemaVersion).toBe(4);
   expect(warnings).toEqual([]);
 });
 

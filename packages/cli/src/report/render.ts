@@ -165,6 +165,7 @@ export function runHeader(h: ReportModel['header']): [string, string][] {
     ['Record schema', String(h.schemaVersion)],
   ];
   if (h.viewport) header.splice(3, 0, ['Viewport', h.viewport]);
+  if (h.label) header.splice(1, 0, ['Label', h.label]);
   if (h.variant) header.splice(1, 0, ['Variant', h.variant]);
   return header;
 }

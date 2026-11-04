@@ -27,9 +27,10 @@ export interface CaptureCoverage {
 /**
  * Version 1 is the 0.2.0 record shape. Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`,
  * which a version 1 hit does not have. Version 3 adds `Request.captured: 'serverContainer'`, `Hit.via`,
- * `Run.serverContainer` and `Run.testServerContainer`. A record with no version is version 0.
+ * `Run.serverContainer` and `Run.testServerContainer`. Version 4 adds `Run.label` and `Run.store`, and a
+ * `Hit.via` with `by: 'clientId'` may be `exact`. A record with no version is version 0.
  */
-export const RECORD_SCHEMA_VERSION = 3;
+export const RECORD_SCHEMA_VERSION = 4;
 
 export type ServerContainerErrorClass = 'dockerMissing' | 'imageMissing' | 'configRejected' | 'egressOpen' | 'exited' | 'notReady';
 
@@ -104,6 +105,10 @@ export interface Run {
   graceWindowMs?: number;
   /** The suite variant this run belongs to. A name, never a file path. */
   variant?: string;
+  /** From `--label`: 1 to 40 lowercase letters, digits or hyphens. */
+  label?: string;
+  /** The store name of a `suite --stores` cell. */
+  store?: string;
   /** The viewport that was asked for. Absent means the Playwright default. */
   viewport?: { width: number; height: number };
   /** Set when `TAGREEVE_TEST_LOOPBACK_IS_HOSTED` made the `fill`, `select` and `evaluate` guards treat loopback hosts as hosted. */
@@ -186,7 +191,10 @@ export interface HitVia {
   /** The browser hit this hit most likely came from. */
   hitId: Id<'hit'>;
   by: 'eventId' | 'clientId' | 'identity';
-  /** `exact`: the event ID and event name both match one browser hit. `probable`: a shared value. */
+  /**
+   * `exact` is proven: by event ID and event name, or by client ID and event name on the one browser hit
+   * whose request to the container was in flight. `probable`: a shared value.
+   */
   confidence: 'exact' | 'probable';
 }
 

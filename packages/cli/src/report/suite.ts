@@ -40,7 +40,7 @@ export interface DiffView {
 }
 
 export interface SuiteReportModel {
-  header: { id: string; startedAt: string; host: string; stores: string[]; variants: string[]; exitCode: number };
+  header: { id: string; label?: string; startedAt: string; host: string; stores: string[]; variants: string[]; exitCode: number };
   warnings: string[];
   scenarios: { name: string; cells: SuiteCellView[] }[];
   diffs: DiffView[];
@@ -118,6 +118,7 @@ export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords):
   return {
     header: {
       id: manifest.id,
+      ...(manifest.label !== undefined && { label: manifest.label }),
       startedAt: new Date(manifest.startedAt).toISOString(),
       host: hostOf(manifest.site),
       stores: storeNames,
@@ -155,8 +156,9 @@ function isManifest(value: unknown): value is SuiteManifest {
   if (typeof value !== 'object' || value === null) return false;
   const m = value as Record<string, unknown>;
   return (
-    (m.suiteSchemaVersion === 1 || m.suiteSchemaVersion === 2) &&
+    (m.suiteSchemaVersion === 1 || m.suiteSchemaVersion === 2 || m.suiteSchemaVersion === 3) &&
     typeof m.id === 'string' &&
+    (m.label === undefined || typeof m.label === 'string') &&
     typeof m.startedAt === 'number' &&
     Number.isFinite(m.startedAt) &&
     typeof m.site === 'string' &&
@@ -296,6 +298,7 @@ export function renderSuiteReport(model: SuiteReportModel): string {
   return page(`<h1>${escapeHtml(title)}</h1>
 ${definitionList([
   ['Suite', h.id],
+  ...(h.label === undefined ? [] : [['Label', h.label] as [string, string]]),
   ['Started', h.startedAt],
   ['Site host', h.host],
   ...(h.stores.length ? [['Stores', h.stores.join(', ')] as [string, string]] : []),

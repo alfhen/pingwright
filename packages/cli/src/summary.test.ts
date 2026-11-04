@@ -454,3 +454,15 @@ test('a buildSummary flag with a relative page leaks nothing', () => {
   const summary = buildSummary(records, [], 'p');
   for (const output of [JSON.stringify(summary), formatSummary(summary)]) expect(output).not.toMatch(/example\.test|pw-test|pwfake-cookie/);
 });
+
+test('the summary has a Label line only when the run has a label', () => {
+  const base: Summary = { runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags: [], results: [] };
+  expect(formatSummary({ ...base, label: 'ca-307' }).split('\n')[0]).toBe('Label: ca-307');
+  expect(formatSummary(base)).not.toContain('Label:');
+});
+
+test('buildSummary carries the run label and omits the key without one', () => {
+  const records = (label?: string) => ({ run: { id: 'run_1', ...(label && { label }) }, hits: [], consentEpochs: [], flags: [] }) as unknown as RunRecords;
+  expect(buildSummary(records('ca-307'), [], 'p').label).toBe('ca-307');
+  expect(buildSummary(records(), [], 'p')).not.toHaveProperty('label');
+});
