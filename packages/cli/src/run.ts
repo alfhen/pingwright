@@ -28,6 +28,7 @@ import {
   type TestPayment,
 } from '@tagreeve/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
+import { resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs, type SuiteArgs } from './args.ts';
 import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
@@ -296,10 +297,13 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io.stderr(`Cannot read ${args.scenario}: ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
+  const defaults: DefaultUsed[] = [];
+  const trackerListPath = await resolveTrackerList(args.trackerList, defaults);
+  const autoconsentRules = await resolveAutoconsentRules(args.autoconsentRules, defaults);
   let trackers: TrackerEntry[] = [];
-  if (args.trackerList !== undefined) {
+  if (trackerListPath !== undefined) {
     try {
-      trackers = await readTrackerList(args.trackerList);
+      trackers = await readTrackerList(trackerListPath);
     } catch (error) {
       io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
       return 2;
@@ -372,7 +376,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       headed: args.headed,
       viewport: args.viewport,
       netLog: args.netLog,
-      autoconsentRules: args.autoconsentRules,
+      autoconsentRules,
       trackers,
       gtmOverride,
       ...(gates.testPayment && { testPayment: gates.testPayment }),
@@ -381,6 +385,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io,
   );
   if (!outcome.summary) return outcome.code;
+  if (defaults.length) outcome.summary.defaults = defaults;
   let code: 0 | 1 = outcome.code === 1 ? 1 : 0;
   if (baseline && outcome.path) {
     applyBaseline(outcome.summary, compareBaseline(baseline, await readRun(outcome.path)));

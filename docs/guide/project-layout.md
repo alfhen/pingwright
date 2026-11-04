@@ -12,6 +12,10 @@ your-repo/
         server-checkout.yml
     baselines/                  # committed
       checkout.json
+    trackers.json               # committed, the default for --tracker-list
+    stores.json                 # committed, the default for suite --stores
+    autoconsent/                # committed, *.json is the default for --autoconsent-rules
+      cookiebot.json
     runs/                       # ignored
       2026-11-03-ca-307-live/
 ```
@@ -56,4 +60,4 @@ Give the run a label with `--label`, such as `--label ca-307-live`. Tagreeve put
 
 ## Suite reads one level
 
-`tagreeve suite tagreeve/scenarios/` runs the `*.yml` and `*.yaml` files at the top level of the folder. It does not look into subfolders. Put scenarios that need a server container in a subfolder such as `server/` and run them with `tagreeve run`. The suite skips the subfolder without a message. Scenarios with a handoff step can stay at the top level: the suite shows them as SKIPPED, and runs them with `--with-handoff`.
+`tagreeve suite` with no folder uses `tagreeve/scenarios/`, and with no `--site` or `--stores` it uses `tagreeve/stores.json`. `tagreeve suite tagreeve/scenarios/` runs the `*.yml` and `*.yaml` files at the top level of the folder. It does not look into subfolders. Put scenarios that need a server container in a subfolder such as `server/` and run them with `tagreeve run`. The suite skips the subfolder without a message. Scenarios with a handoff step can stay at the top level: the suite shows them as SKIPPED, and runs them with `--with-handoff`.
