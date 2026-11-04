@@ -62,8 +62,12 @@ Issues still open that you can meet:
 - The body scan can still merge two values when the shorter one occurs only in encoded form, so a count and place list can be wrong. The request is still flagged (#848).
 - `possibleRealData` gives 38 to 72 warnings per run on a Shopify storefront. They do not change the exit code, but they bury other findings (#1017).
 - `suite --baseline` compares two cells with one file when their baseline names are equal, for example scenario `a.workspace.yml` on the published variant and `a.yml` on variant `workspace` (#1068).
-- The warning that records are not git-ignored fires when an ignore rule like `records/**` matches the files but not the folder (#1047).
-- A second YAML document in `tagreeve/config.yml` is ignored without a message (#1062).
+- The warning that records are not git-ignored fires when an ignore rule like `records/**` matches the files but not the folder (#1047). It also fires when the repo ignores records by file pattern, like `*.jsonl`, and not the folder (#1054).
+- A second YAML document in `tagreeve/config.yml` is ignored without a message (#1062). Quoted and block-scalar keys pass the plain-YAML check, and a key with an escaped newline can forge a second config-error line on stderr (#1063).
+- A default lookup, such as `tagreeve/autoconsent`, ignores a filesystem error and skips a symlinked file without a message. The run goes on without your rules (#1040).
+- `unloadGap` can miss a real gap. A push that a frame sends after its own navigation started is grouped with the next document, so a hit from that document covers it (#958).
+- A `wait` step calls the page for its list of blocking controls with no time limit. On a busy page the step can run past its timeout or hang before it reports (#989).
+- `init` prints Node's error with the absolute path and does not say what it did (#1048). `init --json` exits 0 with text, not JSON (#1051). The old-runs notice prints a literal `<date>` instead of the folder (#971).
 - `network: stub` and `server` mode can still let a hit reach a real vendor account, for an unknown destination in `stub` and for a hosted `serverHosts` host in `server`. The line in `docs/cli.md` that says a committed scenario cannot do this is too strong (#982).
 - `baseline save` does not check the scenario or variant in a record. A shared or hand-edited record with a name like `../../x` makes it write outside `tagreeve/baselines/`. Read a record from someone else before you save a baseline from it (#1069).
 - Records keep the full flag detail, including query values. Do not share a record from a page that sends an identifier in a query.
@@ -77,7 +81,7 @@ Issues still open that you can meet:
 - The tag-firing reporter templates and `expectedTags` are not built. They come in 0.6.0-rc.2 with the dataLayer and Consent Mode checks.
 - The node-forge bump (#719) waits until node-forge 1.4.2, published 2026-10-27, is two weeks old, so it lands on or after 2026-11-10.
 
-The other open `review-minor` issues are open in the 0.6.0 milestone. Those not named above do not change what you see in a run or what you can rely on.
+The other open `review-minor` issues are open in the 0.6.0 milestone.
 
 ## 0.5.0
 
@@ -139,7 +143,7 @@ Issues still open that you can meet:
 - The tag-firing reporter templates, `expectedTags` and `tagreeve init` are planned for 0.6.0.
 - The node-forge bump (#719) waits until node-forge 1.4.2, published 2026-10-27, is two weeks old, so it lands on or after 2026-11-10.
 
-The other open `review-minor` issues are open in the 0.6.0 milestone. Those not named above do not change what you see in a run or what you can rely on.
+The other open `review-minor` issues are open in the 0.6.0 milestone.
 
 ## 0.5.0-rc.2
 
