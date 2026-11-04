@@ -27,8 +27,8 @@ import {
   type GtmOverrideInput,
   type TestPayment,
 } from '@tagreeve/recorder';
-import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
-import { resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
+import { BaselineError, baselineFileName, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
+import { DEFAULT_BASELINES, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { warnIfNotIgnored } from './git-ignore.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { NET_LOG_NEEDS_LIVE, UsageError, type Network, type RunArgs, type SuiteArgs } from './args.ts';
@@ -360,9 +360,14 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   }
 
   let baseline: BaselineFile | undefined;
-  if (args.baseline !== undefined) {
+  let baselinePath = args.baseline;
+  if (args.baselineDefault) {
+    baselinePath = `${DEFAULT_BASELINES}/${baselineFileName(basename(args.scenario))}`;
+    defaults.push({ setting: 'baseline', path: baselinePath });
+  }
+  if (baselinePath !== undefined) {
     try {
-      baseline = await readBaseline(args.baseline);
+      baseline = await readBaseline(baselinePath);
     } catch (error) {
       if (!(error instanceof BaselineError)) throw error;
       io.stderr(`${error.message}\n`);

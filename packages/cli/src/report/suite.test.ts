@@ -447,3 +447,17 @@ test('a version 3 manifest with a label is accepted and the label is escaped in 
   expect(html).not.toContain('<i>');
   expect(renderSuiteReport(buildSuiteModel(manifest, loaded))).not.toContain('<dt>Label</dt>');
 });
+
+test('a cell with baseline drift reads FAIL (baseline drift) with names and counts only', () => {
+  const drifted: SuiteManifest = {
+    ...manifest,
+    suiteSchemaVersion: 3,
+    cells: [
+      { scenario: 'checkout', variant: 'published', labels: {}, status: 'fail', exitCode: 1, record: 'checkout.published.jsonl', baseline: { file: 'checkout.json', drift: true, added: 2, removed: 1, countChanges: 0 } },
+    ],
+    variants: ['published'],
+  };
+  const html = renderSuiteReport(buildSuiteModel(drifted, loaded));
+  expect(html).toContain('FAIL (baseline drift)');
+  expect(html).toContain('Baseline drift from checkout.json: 2 added, 1 removed, 0 count changes.');
+});

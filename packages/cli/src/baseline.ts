@@ -1,7 +1,9 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { readRun, type RunRecords } from '@tagreeve/core';
 import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey, type ShapeMove } from '@tagreeve/expect';
-import type { BaselineArgs } from './args.ts';
+import { PUBLISHED_VARIANT, type BaselineArgs } from './args.ts';
+import { DEFAULT_BASELINES } from './defaults.ts';
 import type { Io } from './run.ts';
 import type { BaselineSummary } from './summary.ts';
 
@@ -109,7 +111,19 @@ function describeMove(m: ShapeMove): string {
   return `moved ${m.vendor} ${m.event || '(no event)'} from ${m.from} to ${m.to}${page}${hits}. This is not drift.${early}`;
 }
 
-const scenarioName = (name: string) => name.replace(/\.ya?ml$/, '');
+export const scenarioName = (name: string) => name.replace(/\.ya?ml$/, '');
+
+/** `<scenario>[.<store>][.<variant>].json`. The variant is left out for `published`, so `run` and a published-only suite share a name. */
+export function baselineFileName(scenario: string, store?: string, variant?: string): string {
+  return [scenarioName(scenario), store, variant === PUBLISHED_VARIANT ? undefined : variant].filter(Boolean).join('.') + '.json';
+}
+
+export function defaultBaselineName(run: RunRecords['run']): string {
+  if (run.variant !== undefined && (run.recordSchemaVersion ?? 0) < 4) {
+    throw new BaselineError('This record is from a suite and was made before record schema version 4, so it does not name its store. Give the baseline path.');
+  }
+  return baselineFileName(run.scenario, run.store, run.variant);
+}
 
 /** The baseline decides `byPage`, so the new run is shaped the way the file was. A different scenario or site is a warning, not an error. */
 export function compareBaseline(baseline: BaselineFile, records: RunRecords): BaselineSummary {
@@ -144,8 +158,13 @@ export async function baselineCommand(args: BaselineArgs, io: Io): Promise<numbe
     io.stderr(`Warning: ${args.input} is truncated at line ${records.truncatedAtLine}. The baseline lacks the later records.\n`);
   }
   const baseline = buildBaseline(records, args.byPage);
-  await writeFile(args.output, `${JSON.stringify(baseline, null, 2)}\n`);
+  let output = args.output;
+  if (output === undefined) {
+    output = join(DEFAULT_BASELINES, defaultBaselineName(records.run));
+    await mkdir(DEFAULT_BASELINES, { recursive: true });
+  }
+  await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`);
   const hits = baseline.keys.reduce((n, k) => n + k.tuples.reduce((m, t) => m + t.count, 0), 0);
-  io.stdout(`Baseline ${args.output}: ${baseline.keys.length} keys, ${hits} hits\n`);
+  io.stdout(`Baseline ${output}: ${baseline.keys.length} keys, ${hits} hits\n`);
   return 0;
 }
