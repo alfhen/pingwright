@@ -13,7 +13,10 @@ interface Manifest {
   defaults?: { setting: string; path: string }[];
 }
 
-const SCENARIO = 'start: /\nsteps:\n  - consent: accept\n  - visit: /products/fake-tee\nexpect:\n  must: []\n  mustNot: []\noptions: { seed: 1, allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }\n';
+const scenarioWith = (mustNot: string): string =>
+  `start: /\nsteps:\n  - consent: accept\n  - visit: /products/fake-tee\nexpect:\n  must: []\n  mustNot: ${mustNot}\noptions: { seed: 1, allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }\n`;
+// Parses only when tagreeve/trackers.json is loaded, because tiktok is defined only there.
+const SCENARIO = scenarioWith('[{ vendor: tiktok }]');
 
 function tagreeve(cwd: string, args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
@@ -100,5 +103,33 @@ test('--allow-test-payment is refused with no site on the command line, even whe
   } finally {
     await rm(cwd, { recursive: true, force: true });
     await rm(xdg, { recursive: true, force: true });
+  }
+}, 180_000);
+
+test('run with no --tracker-list loads tagreeve/trackers.json and names it; --tracker-list replaces it', async () => {
+  const cwd = await project(site.url);
+  try {
+    const scenario = join(cwd, 'tagreeve', 'scenarios', 'a.yml');
+    const json = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--json']);
+    expect(json.code, json.stderr).toBe(0);
+    const summary = JSON.parse(json.stdout) as { defaults?: { setting: string; path: string }[] };
+    expect(summary.defaults).toEqual([{ setting: 'trackerList', path: 'tagreeve/trackers.json' }]);
+
+    const text = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out')]);
+    expect(text.code, text.stderr).toBe(0);
+    expect(text.stdout).toContain('Defaults: tagreeve/trackers.json (tracker list)');
+
+    const own = join(cwd, 'own.json');
+    await writeFile(own, JSON.stringify([{ vendor: 'tiktok', host: 'tiktok.localhost', source: 'https://example.com/tiktok-pixel-docs' }]));
+    const explicit = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--tracker-list', own, '--json']);
+    expect(explicit.code, explicit.stderr).toBe(0);
+    expect((JSON.parse(explicit.stdout) as { defaults?: unknown }).defaults).toBeUndefined();
+
+    await writeFile(join(cwd, 'tagreeve', 'trackers.json'), '[]');
+    const missing = await tagreeve(cwd, ['run', scenario, '--site', site.url, '--out', join(cwd, 'out'), '--json']);
+    expect(missing.code).toBe(2);
+    expect(missing.stderr).toContain('tiktok');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
   }
 }, 180_000);
