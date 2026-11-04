@@ -29,7 +29,9 @@ function stripComments(script: string): string {
       quote = ch;
       out += ch;
     } else if (ch === '<' && script[i + 1] === '<' && script[i + 2] !== '<') {
-      const match = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([\w.-]+))/.exec(script.slice(i));
+      const lineHead = script.slice(script.lastIndexOf('\n', i - 1) + 1, i);
+      const inArithmetic = lineHead.lastIndexOf('((') > lineHead.lastIndexOf('))');
+      const match = inArithmetic ? null : /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([\w.-]+))/.exec(script.slice(i));
       if (match) heredocs.push({ word: match[2] ?? match[3] ?? match[4]!, dash: match[1] === '-' });
       out += '<<';
       i++;
@@ -40,9 +42,11 @@ function stripComments(script: string): string {
           const end = script.indexOf('\n', i + 1);
           const line = script.slice(i + 1, end === -1 ? script.length : end);
           i = end === -1 ? script.length : end;
+          out += `\n${stripComments(line)}`;
           if (end === -1 || (dash ? line.replace(/^\t+/, '') : line) === word) break;
         }
       }
+      out += '\n';
       heredocs = [];
     } else if (ch === '#' && (i === 0 || /[\s;&|()]/.test(script[i - 1]!))) {
       while (i + 1 < script.length && script[i + 1] !== '\n') i++;
@@ -57,7 +61,8 @@ const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps ?? [])
     .flatMap((step) =>
-      stripComments((step.run ?? '').replace(/\\\r?\n/g, ''))
+      stripComments(step.run ?? '')
+        .replace(/\\\r?\n/g, '')
         .replace(/\d*>&[\d-]*|&>>?/g, ' ')
         .split(/\n|&&|\|\||;|\||&/),
     );
@@ -257,6 +262,28 @@ describe('workflow rules', () => {
     const wf = base(
       '      - run: |\n          cat <<EOF\n          it\'s\n          EOF\n          npm publish --tag "$dist_tag" # --dry-run\n',
     );
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+  });
+
+  it('checks commands inside a heredoc body that a shell runs', () => {
+    const publish = base('      - run: |\n          bash <<EOF\n          npm publish --tag "$dist_tag"\n          EOF\n');
+    expect(workflowProblems(publish)[0]).toContain('without --dry-run');
+    const push = base('      - run: |\n          sh <<EOF\n          docker push ghcr.io/x/y\n          EOF\n');
+    expect(workflowProblems(push)[0]).toContain('docker publish');
+  });
+
+  it('checks the rest of a step after an unterminated heredoc', () => {
+    const wf = base('      - run: |\n          cat <<EOF\n          x\n          npm publish --tag "$dist_tag"\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+  });
+
+  it('does not start a heredoc at an arithmetic shift', () => {
+    const wf = base('      - run: |\n          x=$((1<<2))\n          npm publish --tag "$dist_tag"\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+  });
+
+  it('ends a comment at the newline even after a trailing backslash', () => {
+    const wf = base('      - run: |\n          # note \\\n          npm publish --tag "$dist_tag"\n');
     expect(workflowProblems(wf)[0]).toContain('without --dry-run');
   });
 
