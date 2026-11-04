@@ -1,10 +1,10 @@
 {
   "expectation": "mustNot: {\"vendor\":[\"meta\",\"google-ads\"],\"before\":\"consent\"}",
   "pass": false,
-  "message": "Expected no matching hits before consent, found 2 matching hits (8 before narrowing).",
+  "message": "Expected no matching hits before consent, found 2 matching hits (7 before narrowing).",
   "evidence": [
-    "hit_01M6FCPCWWB6RJ46R07RPRZ6CA",
-    "hit_01M6FCPCWXCMS1ZWP6YR9KYMRR"
+    "hit_01M6JHKEA68KH5NQ19ZC151K64",
+    "hit_01M6JHKEA72KHPNVE7F7H552JY"
   ],
   "severity": "fail"
 }

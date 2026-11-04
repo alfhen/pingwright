@@ -2,7 +2,7 @@ Hits
   ga4: page_view x6, user_engagement x1
   sgtm: (no event) x2
   meta: PageView x2, AddToCart x1
-  google-ads: page_view x2, view_item x1, source_update x1, add_to_cart x1
+  google-ads: page_view x2, view_item x1, add_to_cart x1
 Consent epochs
   undecided (2.6 s)
   denied (to end)
@@ -11,18 +11,18 @@ Flags
   sandboxPageUrl: ga4 x2 (/web-pixels@0.0.0-fixture/sandbox/modern/)
 Expectations
   FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}
-       Expected no matching hits before consent, found 2 matching hits (8 before narrowing).
-       evidence: hit_01M6FCPCWWB6RJ46R07RPRZ6CA, hit_01M6FCPCWXCMS1ZWP6YR9KYMRR
+       Expected no matching hits before consent, found 2 matching hits (7 before narrowing).
+       evidence: hit_01M6JHKEA68KH5NQ19ZC151K64, hit_01M6JHKEA72KHPNVE7F7H552JY
   FAIL mustNot: {"vendor":"meta","in":"epoch(denied)"}
        Expected no matching hits in epoch(denied), found 2 matching hits (3 before narrowing).
-       evidence: hit_01M6FCPCWXCMS1ZWP6YR9KYMRX, hit_01M6FCPCWY43XTZNAAXRG3HAPH
+       evidence: hit_01M6JHKEA72KHPNVE7F7H552K2, hit_01M6JHKEA8037GQP0W59GTRSRQ
   PASS builtin: unknownDestination
-       evidence: flg_01M6FCPCX0FC3BB30QS7AFWXJE, flg_01M6FCPCX0FC3BB30QS7AFWXJF
+       evidence: flg_01M6JHKEAA7RMHBQVDV28XRCTR, flg_01M6JHKEAA7RMHBQVDV28XRCTS
   WARN builtin: sandboxPageUrl
-       Expected no hit to carry a sandbox URL as its page, found 2: https://staging.northwind.example/web-pixels@0.0.0-fixture/sandbox/modern/.
-       evidence: hit_01M6FCPCWWB6RJ46R07RPRZ6C9, hit_01M6FCPCWXCMS1ZWP6YR9KYMRV
+       Expected no hit to carry a sandbox URL as its page, found 2: staging.northwind.example/web-pixels@0.0.0-fixture/sandbox/modern/.
+       evidence: hit_01M6JHKEA68KH5NQ19ZC151K63, hit_01M6JHKEA72KHPNVE7F7H552K1
   PASS builtin: deniedIdentifiers
   PASS builtin: earlyIdentifiers
   PASS builtin: possibleRealData
 Result: fail (2 of 7) with 1 warning
-Record: runs/run_01M6FCP6JP11GQV3GDB8EJR9K0.jsonl
+Record: runs/run_01M6JHK80RA37B9DFSBJSW65FP.jsonl

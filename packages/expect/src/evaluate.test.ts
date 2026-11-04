@@ -805,3 +805,13 @@ test('a scoped sentBy: browser rule gets no probable-link note, and a sentBy: se
   expect(browserRule.note).toBeUndefined();
   expect(rule('expect:\n  mustNot:\n    - { vendor: meta-capi, sentBy: server, in: epoch(denied) }', records).note).toBe('serverSendProbableLink');
 });
+
+test.each([
+  ['a relative page', '/web-pixels@abc/sandbox/modern/account/pw-test%40example.test?email=pw-test%40example.test', '/web-pixels@abc/sandbox/modern/account/(other)'],
+  ['a protocol-relative page', '//shop.example.com/web-pixels@abc/sandbox/modern/orders/0123456789abcdef0123456789abcdef?sid=1', 'shop.example.com/web-pixels@abc/sandbox/modern/orders/(other)'],
+  ['an absolute page', 'https://shop.example.com/web-pixels@abc/sandbox/modern/account/pw-test@example.test', 'shop.example.com/web-pixels@abc/sandbox/modern/account/(other)'],
+])('the sandboxPageUrl message masks value-like path segments of %s', (_form, page, shown) => {
+  const message = run('start: /', [hit({ page })]).find((r) => r.expectation === 'builtin: sandboxPageUrl')!.message;
+  expect(message).toContain(shown);
+  expect(message).not.toMatch(/pw-test|0123456789abcdef|email|sid/);
+});

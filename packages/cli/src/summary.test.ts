@@ -383,19 +383,73 @@ test('a value-like query name is shown as (other)', () => {
   expect(redactFlagDetail('GET https://user:secret@t.example.net/a')).toBe('GET https://t.example.net/a');
 });
 
-test('redacting twice changes nothing', () => {
-  const once = redactFlagDetail(`GET https://t.example.net/a?${HASH}&x=${EMAIL}`);
-  expect(redactFlagDetail(once)).toBe(once);
+test('the summary of a name=value URL is the same after buildSummary then formatFlags', () => {
+  const detail = `GET https://t.example.net/a?email=${EMAIL}&h=${HASH}&sid=pwfake-cookie-value-0001`;
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [{ kind: 'stubBypass', detail }], steps: [] } as unknown as RunRecords;
+  const summary = buildSummary(records, [], 'p');
+  expect(summary.flags[0]!.detail).toBe('GET https://t.example.net/a?email&h&sid');
+  expect(formatSummary(summary)).toContain('stubBypass: GET https://t.example.net/a?email&h&sid\n');
 });
 
-test('the text summary redacts an ungrouped flag detail and keeps the grouped lines', () => {
+test('the text summary prints a built summary without values and keeps the grouped lines', () => {
   const flags = [
     { kind: 'stubBypass', detail: `It was not routed, so it was not stubbed: https://px.example.net/c?u=${EMAIL}` },
     { kind: 'unknownDestination', detail: `GET https://t.example.net/a?email=${EMAIL}` },
     { kind: 'platformHost', detail: `GET https://www.googletagmanager.com/gtag/js?id=${EMAIL}` },
   ];
-  const text = formatSummary({ runId: 'r', path: 'p', pass: true, ok: true, hits: {}, epochs: [], flags, results: [] });
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags, steps: [] } as unknown as RunRecords;
+  const text = formatSummary(buildSummary(records, [], 'p'));
   expect(text).toContain('stubBypass: It was not routed, so it was not stubbed: https://px.example.net/c?u');
   expect(text).toContain('unknownDestination: t.example.net x1 (/a)');
   expect(text).not.toMatch(/example\.test|pw-test/);
+});
+
+const FAKE_EMAIL = 'pw-test.user@example.test';
+const PHONE = '+15555550123';
+
+test.each([
+  ['absolute', 'GET https://t.example.net/a/b?email=1&x=2', 'GET https://t.example.net/a/b?email&x'],
+  ['protocol-relative', 'GET //t.example.net/a?email=1&x=2', 'GET //t.example.net/a?email&x'],
+  ['relative', 'GET /a/b?email=1&x=2#frag', 'GET /a/b?email&x'],
+  ['relative after a colon', 'It was not routed, so it was not stubbed: /px?email=1', 'It was not routed, so it was not stubbed: /px?email'],
+  ['with a space in the query', 'GET https://t.example.net/a?email=a b&x=c d', 'GET https://t.example.net/a?email&x'],
+  ['with a space in the path', 'GET https://t.example.net/a/b c/d?x=1', 'GET https://t.example.net/a/(other)/d?x'],
+  ['a space in the query name', 'GET /a?pw fake name=1', 'GET /a?(other)'],
+])('redactFlagDetail redacts a %s URL', (_form, detail, shown) => {
+  expect(redactFlagDetail(detail)).toBe(shown);
+});
+
+test.each([
+  ['relative', `ga4 received /web-pixels@abc/sandbox/modern/account/${FAKE_EMAIL}?email=${FAKE_EMAIL} as the page`, 'ga4 received /web-pixels@abc/sandbox/modern/account/(other)?email as the page'],
+  ['protocol-relative', 'meta received //shop.example.com/web-pixels@abc/sandbox/modern/?sid=pwfake-cookie-value-0001 as the page', 'meta received //shop.example.com/web-pixels@abc/sandbox/modern/?sid as the page'],
+  ['with a space', 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/cart?q=a b c as the page', 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/cart?q as the page'],
+])('the sandboxPageUrl page is redacted when it is %s', (_form, detail, shown) => {
+  expect(redactFlagDetail(detail)).toBe(shown);
+});
+
+test('a path segment that holds an email, a phone or a hash reads (other)', () => {
+  const detail = `GET https://t.example.net/account/${FAKE_EMAIL}/${encodeURIComponent(PHONE)}/${HASH}/orders`;
+  expect(redactFlagDetail(detail)).toBe('GET https://t.example.net/account/(other)/(other)/(other)/orders');
+});
+
+test('a sandbox prefix keeps its web-pixels hash and mode', () => {
+  expect(redactFlagDetail(`ga4 received https://shop.example.com/web-pixels@${'a1b2c3'.repeat(6)}/custom/web-pixel-1@1/sandbox/modern/cart/${HASH} as the page`)).toBe(
+    `ga4 received https://shop.example.com/web-pixels@${'a1b2c3'.repeat(6)}/custom/web-pixel-1@1/sandbox/modern/cart/(other) as the page`,
+  );
+});
+
+test('a bare query item reads (other) and a name=value item shows its name', () => {
+  expect(redactFlagDetail('GET https://t.example.net/a?pwfake-cookie-value-0001')).toBe('GET https://t.example.net/a?(other)');
+  expect(redactFlagDetail('GET https://t.example.net/a?ok=1&pwfake-cookie-value-0001')).toBe('GET https://t.example.net/a?ok&(other)');
+});
+
+test('a percent-encoded separator in a query name does not split it', () => {
+  expect(redactFlagDetail('GET https://t.example.net/a?k%26sid%3Dpwfake-cookie-value-0001=1&ok=2')).toBe('GET https://t.example.net/a?(other)&ok');
+});
+
+test('a buildSummary flag with a relative page leaks nothing', () => {
+  const detail = `ga4 received /web-pixels@abc/sandbox/modern/account/${FAKE_EMAIL}?email=${FAKE_EMAIL}&sid=pwfake-cookie-value-0001 as the page`;
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [{ kind: 'sandboxPageUrl', detail }], steps: [] } as unknown as RunRecords;
+  const summary = buildSummary(records, [], 'p');
+  for (const output of [JSON.stringify(summary), formatSummary(summary)]) expect(output).not.toMatch(/example\.test|pw-test|pwfake-cookie/);
 });

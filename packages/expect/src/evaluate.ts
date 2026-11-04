@@ -26,7 +26,7 @@ import {
   binaryShare,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, maskValuePath, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -922,10 +922,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
 function pageWithoutQuery(page: string | null): string {
   if (!page) return '';
   try {
-    const url = new URL(page);
-    return `${url.host}${url.pathname}`;
+    const url = new URL(page.startsWith('//') ? `http:${page}` : page);
+    return `${url.host}${maskValuePath(url.pathname, '(other)')}`;
   } catch {
-    return page.split(/[?#]/)[0]!;
+    return maskValuePath(page.split(/[?#]/)[0]!, '(other)');
   }
 }
 
