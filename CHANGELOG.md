@@ -18,7 +18,7 @@ Release candidate. Install it with `npm i -g tagreeve@next`.
 
 - Breaking: a scenario with `options.network: live` now fails to load (exit 2). Move `live` to the command line with `--network live`.
 
-- When a `wait: { url }` step times out, the message lists the controls that block submission on every open page: an unticked required checkbox, a control that fails validation, or one marked `aria-invalid`. Each entry shows the role or type, the name and the reason, never a value (#810, #827).
+- When a `wait: { url }` step times out, the message lists the controls that block submission on every open page: an unticked required checkbox, a control that fails validation, or one marked `aria-invalid`. Each entry shows the role or type, the name and the reason. The name comes from a label heuristic, so a control's error text can still repeat a typed value (#810, #827, #1005).
 
 - A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
@@ -53,7 +53,8 @@ Issues still open that you can meet:
 - Sends from `pagehide` or `visibilitychange` are answered in the page, also to your `serverHosts`, so the container never gets them.
 - The Meta Conversions API, Pinterest and Criteo template tags are not yet proven to reach the recording proxy.
 - The exact link by client ID and event name is proven only when the container answers the browser after its tags send. If the built-in GA4 client answers first, these calls stay `probable` and only warn. The field test of this release shows which it is.
-- A rule 2 link can miss a concurrent container request that has another event name (#1029).
+- An exact client ID link can go to the wrong browser hit when another request to the container, with another event name or no decoded hit, is in flight. A leak through that call can then pass instead of warn (#1029).
+- The names in a `wait` timeout message come from a label heuristic. Error text without a listed marker can still get into a name, for example one that repeats a typed fake-identity value (#1005, #986). Building the name clones the label in the page, which can run custom-element constructors or start image fetches that the record then shows (#988).
 - The Shopify terms checkbox signal in a `wait` timeout message is not confirmed on a real checkout. The list of controls also includes any invalid control on the page, also outside the submitted form, and a disabled required checkbox (#990, #994).
 - The Shopify platform-host list holds only hosts that a Shopify docs page names. Other Shopify hosts stay `unknownDestination`.
 - The `payment` step is not confirmed on a real Shopify checkout. The test-mode marker on the page, the expiry format and the card frame paths are inferred. If one does not match, the step fails closed and the error names the frame path and the inputs' attributes.
@@ -63,6 +64,8 @@ Issues still open that you can meet:
 - `suite --baseline` compares two cells with one file when their baseline names are equal, for example scenario `a.workspace.yml` on the published variant and `a.yml` on variant `workspace` (#1068).
 - The warning that records are not git-ignored fires when an ignore rule like `records/**` matches the files but not the folder (#1047).
 - A second YAML document in `tagreeve/config.yml` is ignored without a message (#1062).
+- `network: stub` and `server` mode can still let a hit reach a real vendor account, for an unknown destination in `stub` and for a hosted `serverHosts` host in `server`. The line in `docs/cli.md` that says a committed scenario cannot do this is too strong (#982).
+- `baseline save` does not check the scenario or variant in a record. A shared or hand-edited record with a name like `../../x` makes it write outside `tagreeve/baselines/`. Read a record from someone else before you save a baseline from it (#1069).
 - Records keep the full flag detail, including query values. Do not share a record from a page that sends an identifier in a query.
 - The `sandboxPageUrl` message does not mask a path segment of a relative page that holds a space (#920). A flag text for `unloadGap` can be cut short when a dataLayer event name holds `: /` (#918).
 - The server container guide's encode steps can leave an editor backup or swap file with the plain auth string. Delete such files with `plain.txt` (#913).
@@ -74,7 +77,7 @@ Issues still open that you can meet:
 - The tag-firing reporter templates and `expectedTags` are not built. They come in 0.6.0-rc.2 with the dataLayer and Consent Mode checks.
 - The node-forge bump (#719) waits until node-forge 1.4.2, published 2026-10-27, is two weeks old, so it lands on or after 2026-11-10.
 
-The other open `review-minor` issues are open in the 0.6.0 milestone. They are test gaps, wording and edge cases.
+The other open `review-minor` issues are open in the 0.6.0 milestone. Those not named above do not change what you see in a run or what you can rely on.
 
 ## 0.5.0
 
@@ -136,7 +139,7 @@ Issues still open that you can meet:
 - The tag-firing reporter templates, `expectedTags` and `tagreeve init` are planned for 0.6.0.
 - The node-forge bump (#719) waits until node-forge 1.4.2, published 2026-10-27, is two weeks old, so it lands on or after 2026-11-10.
 
-The other open `review-minor` issues are open in the 0.6.0 milestone. They are test gaps, wording and edge cases.
+The other open `review-minor` issues are open in the 0.6.0 milestone. Those not named above do not change what you see in a run or what you can rely on.
 
 ## 0.5.0-rc.2
 
