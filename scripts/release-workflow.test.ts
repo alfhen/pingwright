@@ -13,32 +13,34 @@ const path = new URL('../.github/workflows/release-tag.yml', import.meta.url);
 const text = readFileSync(path, 'utf8');
 const workflow = parse(text) as Workflow;
 
-function stripComment(line: string): string {
+function stripComments(script: string): string {
   let quote = '';
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!;
+  let out = '';
+  for (let i = 0; i < script.length; i++) {
+    const ch = script[i]!;
     if (ch === '\\' && quote !== "'") {
+      out += ch + (script[i + 1] ?? '');
       i++;
     } else if (quote) {
       if (ch === quote) quote = '';
+      out += ch;
     } else if (ch === '"' || ch === "'") {
       quote = ch;
-    } else if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]!))) {
-      return line.slice(0, i);
+      out += ch;
+    } else if (ch === '#' && (i === 0 || /\s/.test(script[i - 1]!))) {
+      while (i + 1 < script.length && script[i + 1] !== '\n') i++;
+    } else {
+      out += ch;
     }
   }
-  return line;
+  return out;
 }
 
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps ?? [])
     .flatMap((step) =>
-      (step.run ?? '')
-        .replace(/\\\r?\n/g, '')
-        .split('\n')
-        .map(stripComment)
-        .join('\n')
+      stripComments((step.run ?? '').replace(/\\\r?\n/g, ''))
         .replace(/\d*>&[\d-]*|&>>?/g, ' ')
         .split(/\n|&&|\|\||;|\||&/),
     );
