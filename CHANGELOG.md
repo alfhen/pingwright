@@ -2,6 +2,8 @@
 
 ## 0.6.0-rc.1
 
+Not released yet. The newest release is 0.5.0, below.
+
 - `run` and `suite` write to `tagreeve/runs/<date>/` when you give no `--out`. The old default was `runs/`. If `./runs/` holds records, a note on stderr says so. Pass `--out runs` to keep the old folder.
 
 - Breaking: a scenario with `options.network: live` now fails to load (exit 2). Move `live` to the command line with `--network live`.
