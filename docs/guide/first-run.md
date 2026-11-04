@@ -15,6 +15,16 @@ tagreeve install-browser
 
 The first command installs the `tagreeve` command. The second installs Chromium, the browser that Tagreeve drives. Both steps are needed once per machine. The [CLI page](../cli.md) lists other ways to install.
 
+## Set up the folders
+
+In the folder of your project, run:
+
+```bash
+tagreeve init
+```
+
+It makes `tagreeve/scenarios/` and `tagreeve/baselines/`, and adds `/tagreeve/runs/` to `.gitignore` so records stay out of your repo. It writes no scenario.
+
 ## Write a scenario
 
 A scenario is a YAML file. Save this as `scenario.yml`:

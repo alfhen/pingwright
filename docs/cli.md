@@ -415,6 +415,12 @@ On an arm64 machine (Apple silicon) the image is built here from Google's image,
 
 The Google image and the base images are pinned by digest. `TAGREEVE_SERVER_CONTAINER_BASE` overrides the Google image reference. It must be a digest reference (`name@sha256:<64 hex>`).
 
+### `tagreeve init`
+
+Sets up the folders in the current directory. It makes `tagreeve/scenarios/` and `tagreeve/baselines/`, and adds `/tagreeve/runs/` to `./.gitignore`. It skips the line when git already ignores `tagreeve/runs/`, or when `.gitignore` already has it. It writes no scenario and no config file, never overwrites a file, and prints what it created or skipped. It exits 0.
+
+`run` and `suite` print one warning on stderr when the record folder is inside a git work tree and git does not ignore it: `Warning: <folder> is not in .gitignore. Records hold full request bodies; do not commit them. Run tagreeve init or add the folder to .gitignore.` The warning never fails a run. It is silent outside a git work tree, or when `git` is not installed.
+
 ### `tagreeve install-browser`
 
 Installs Chromium with the Playwright version Tagreeve depends on.

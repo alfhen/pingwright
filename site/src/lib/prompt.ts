@@ -5,7 +5,7 @@ Tagreeve is a command-line tool. It opens my site in a real browser, acts as a v
 1. Install it with \`npm i -g tagreeve\`, then run \`tagreeve install-browser\`. Check that \`tagreeve --version\` works.
 2. Read https://tagreeve.dev/docs/guide/first-run and https://tagreeve.dev/docs/cli before you write a scenario. Use \`tagreeve run --help\` for the flags. Do not guess flags or step names.
 3. Ask me for the address of my site and the tracking tools it uses, for example GA4, Google Ads, Meta or Pinterest.
-4. Write three scenarios in a \`tagreeve/\` folder: the visitor ignores the cookie banner (\`consent: none\`), accepts it (\`consent: accept\`) and rejects it (\`consent: reject\`). Each scenario opens the home page and one product or content page. Add rules: no Meta or Google Ads hit before consent, no marketing hit after a reject, and the analytics hits that I expect after an accept.
+4. Run \`tagreeve init\` in my project folder. Write three scenarios in \`tagreeve/scenarios/\`: the visitor ignores the cookie banner (\`consent: none\`), accepts it (\`consent: accept\`) and rejects it (\`consent: reject\`). Each scenario opens the home page and one product or content page. Add rules: no Meta or Google Ads hit before consent, no marketing hit after a reject, and the analytics hits that I expect after an accept.
 5. Run each scenario with \`tagreeve run <file> --site <address>\`. Keep the default network mode, \`stub\`, so no tracking hit leaves my machine.
 6. Show me a short table: the scenario, the result, and each failed rule with its evidence IDs. Explain each failure in plain words. Tell me if it looks like a real problem on my site or a rule that needs a change.
 

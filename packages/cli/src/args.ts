@@ -12,7 +12,7 @@ export class UsageError extends Error {
   }
 }
 
-const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'install-browser', 'server-container'] as const;
+const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'init', 'install-browser', 'server-container'] as const;
 
 export function usageHint(command: string | undefined): string {
   return `Run tagreeve ${command ? `${command} ` : ''}--help for the options.`;
@@ -102,7 +102,7 @@ export interface ServerContainerArgs {
   action: 'build';
 }
 
-export type Command = RunArgs | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
+export type Command = RunArgs | { command: 'init' } | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
 
 export type HelpTopic = (typeof COMMANDS)[number];
 
@@ -112,6 +112,7 @@ export const USAGE = `Usage:
   tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
+  tagreeve init
   tagreeve server-container build
   tagreeve install-browser
   tagreeve --version
@@ -217,6 +218,14 @@ Options:
   -h, --help                 Show this help
 `;
 
+const INIT_USAGE = `Usage: tagreeve init
+
+Makes tagreeve/scenarios/ and tagreeve/baselines/ in the current directory, and adds /tagreeve/runs/ to ./.gitignore unless the work tree already ignores it. It writes no scenario, never overwrites a file and says what it did or skipped. It takes no options.
+
+Options:
+  -h, --help                 Show this help
+`;
+
 const INSTALL_BROWSER_USAGE = `Usage: tagreeve install-browser
 
 Installs the Chromium that Tagreeve drives. It takes no options.
@@ -239,6 +248,7 @@ const HELP_TEXT: Record<HelpTopic, string> = {
   diff: DIFF_USAGE,
   baseline: BASELINE_USAGE,
   report: REPORT_USAGE,
+  init: INIT_USAGE,
   'install-browser': INSTALL_BROWSER_USAGE,
   'server-container': SERVER_CONTAINER_USAGE,
 };
@@ -344,6 +354,10 @@ function parseCommand(argv: string[]): Command {
     return { command: 'help', topic: command as HelpTopic };
   }
   if (values.help || command === undefined) return { command: 'help' };
+  if (command === 'init') {
+    if (rest.length) throw new UsageError('init takes no arguments');
+    return { command: 'init' };
+  }
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');
     return { command: 'install-browser' };

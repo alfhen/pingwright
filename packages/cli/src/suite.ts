@@ -6,6 +6,7 @@ import { diffRuns, parseScenario, ScenarioError, type Scenario } from '@tagreeve
 import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
 import type { Network, SuiteArgs } from './args.ts';
 import { defaultScenarioDir, defaultStores, formatDefaultsLine, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
+import { warnIfNotIgnored } from './git-ignore.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { readStores, StoresError, type Store } from './stores.ts';
 import { checkTestPaymentGates } from './test-payment-hosts.ts';
@@ -347,7 +348,9 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   }
 
   const id = `suite_${ulid()}`;
-  const dir = join(resolveOutDir({ out: args.out, now: new Date(), label: args.label }), id);
+  const outFolder = resolveOutDir({ out: args.out, now: new Date(), label: args.label });
+  await warnIfNotIgnored(outFolder, io.stderr);
+  const dir = join(outFolder, id);
   await mkdir(dir, { recursive: true });
   const startedAt = Date.now();
   const variants = args.variants.map((v) => v.name);

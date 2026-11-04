@@ -28,7 +28,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - Each `dataLayer` event records which frame pushed it: `frame` is `{ main, n }`, with no URL (#922).
 
-<!-- E05 -->
+- New command `tagreeve init`: it makes `tagreeve/scenarios/` and `tagreeve/baselines/` and adds `/tagreeve/runs/` to `.gitignore`. `run` and `suite` now print a warning when the record folder is in a git work tree and not ignored (#811).
 
 <!-- E04 -->
 

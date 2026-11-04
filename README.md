@@ -89,7 +89,7 @@ Node 22.18 or later. `npm i -g tagreeve` installs the newest release. Other ways
 ## Quick start
 
 1. `npm i -g tagreeve`
-2. `tagreeve install-browser`
+2. `tagreeve install-browser`. In a project folder, `tagreeve init` makes `tagreeve/scenarios/` and `tagreeve/baselines/` and keeps `tagreeve/runs/` out of git.
 3. Write `scenario.yml`:
 
    ```yaml

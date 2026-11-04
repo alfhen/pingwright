@@ -1,0 +1,49 @@
+import { execFile } from 'node:child_process';
+import { readFile, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { expect, test } from 'vitest';
+import { root, scenario, site } from './cli-helpers.ts';
+
+const cli = join(root, 'dist/cli.js');
+const WARNING = 'is not in .gitignore';
+
+function tagreeve(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve) => {
+    execFile(process.execPath, [cli, ...args], { cwd }, (error, stdout, stderr) => {
+      const code = (error as { code?: unknown } | null)?.code;
+      resolve({ stdout, stderr, code: error ? (typeof code === 'number' ? code : 1) : 0 });
+    });
+  });
+}
+
+const runArgs = (extra: string[]) => ['run', scenario('from-label'), '--site', site.url, '--json', ...extra];
+
+test('in a git work tree, init stops the warning, and --out records warns once', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'tagreeve-init-'));
+  await new Promise<void>((resolve, reject) => execFile('git', ['init', '-q', cwd], (error) => (error ? reject(error) : resolve())));
+
+  const init = await tagreeve(cwd, ['init']);
+  expect(init.code).toBe(0);
+  expect(init.stdout).toContain('Created tagreeve/scenarios/');
+  expect(await readFile(join(cwd, '.gitignore'), 'utf8')).toBe('/tagreeve/runs/\n');
+  expect((await tagreeve(cwd, ['init'])).stdout).toContain('Skipped .gitignore');
+  expect(await readFile(join(cwd, '.gitignore'), 'utf8')).toBe('/tagreeve/runs/\n');
+
+  const quiet = await tagreeve(cwd, runArgs([]));
+  expect(quiet.stderr).not.toContain(WARNING);
+
+  const loud = await tagreeve(cwd, runArgs(['--out', 'records']));
+  expect(loud.stderr.split(WARNING).length - 1).toBe(1);
+  expect(loud.stderr).toContain('Warning: records is not in .gitignore');
+  expect((await readdir(join(cwd, 'records'))).some((n) => /^run_.*\.jsonl$/.test(n))).toBe(true);
+  await rm(cwd, { recursive: true, force: true });
+}, 180_000);
+
+test('outside a git work tree there is no warning', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'tagreeve-init-'));
+  const outside = await tagreeve(cwd, runArgs(['--out', 'records']));
+  expect(outside.stderr).not.toContain(WARNING);
+  expect((await readdir(join(cwd, 'records'))).some((n) => /^run_.*\.jsonl$/.test(n))).toBe(true);
+  await rm(cwd, { recursive: true, force: true });
+}, 120_000);
