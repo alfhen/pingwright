@@ -1,6 +1,6 @@
 # Plan for 0.6.0-rc.1
 
-The first release candidate of 0.6.0 gives a project a standard home. Records go to `tagreeve/runs/<date>/` by default, a run can carry a label, `tagreeve init` sets up the folders, `tagreeve/config.yml` holds shared defaults, and `suite --baseline` checks every cell against its saved baseline (#811). It also makes `live` a command-line choice only (#815), names the form controls that block a checkout when a `wait: { url }` times out (#810), links a server container's GA4 forwarding exactly when the recorder can prove it (#901), adds the Shop Pay hosts to the platform host list (#585), and fixes the open `review-minor` issues.
+The first release candidate of 0.6.0 gives a project a standard home. Records go to `tagreeve/runs/<date>/` by default, a run can carry a label, `tagreeve init` sets up the folders, `tagreeve/config.yml` holds shared defaults, and `suite --baseline` checks every cell against its saved baseline (#811). It also makes `live` a command-line choice only (#815), names the form controls that block a checkout when a `wait: { url }` times out (#810), links a server container's GA4 forwarding exactly when the recorder can prove it (#901), adds the Shop Pay hosts to the platform host list (#585), and fixes the still-valid `review-minor` batches (M2 to M11).
 
 0.6.0-rc.1 starts after 0.5.0 is released. Every entry branches from `main` with the 0.5.0 work in it: S05 (`sentBy`), K05, G05 (the workspace preview guide), P05 (the summary privacy batch that was M1 in the triage) and R05.
 
@@ -39,6 +39,14 @@ Waiting, not in rc.1:
 | Issue | Why |
 | --- | --- |
 | #719 | `node-forge` 1.4.2 is two weeks old on 2026-11-10 at 14:09 UTC. It cannot land before then. |
+
+Not in rc.1. These `review-minor` issues were open on 2026-11-04 and no entry fixes them. They stay open for a later batch between waves:
+
+| Issues | Why |
+| --- | --- |
+| #693, #727, #729, #730, #749 to #752, #759, #760, #763, #764, #766, #835 to #839, #857, #865 to #867 | The site and demo batch. It touches `site/` and `site/demo/`, which no rc.1 entry changes. #730 (Astro 7 needs Node 22.22, AGENTS.md says 22.18) goes first in that batch. |
+| #906, #908 to #910, #912 to #914, #916, #918 to #920 | Follow-ups from the 0.5.0 work (K05, G05, S05, P05). They are filed after the triage. M3 and L06 may fix #909, #910, #914 and #916 in passing, but only when the file is already in their Touches line. |
+| #893 | An R05 input. R05 owns it. |
 
 Folded into a feature entry, so that no two entries in one wave share a file:
 
@@ -268,7 +276,7 @@ Acceptance: the e2e passes. On the old code `init` is an unknown command, so the
 
 ### Wave 5
 
-**E4 `tagreeve/config.yml` and `--config` (#811).** Touches: `packages/cli/src/project-config.ts` (new), `packages/cli/src/project-config.test.ts` (new), `packages/expect/src/scenario.ts` (export the option validators that the config reuses, and a `mergeOptions(config, scenario)`), `packages/expect/src/scenario.test.ts`, `packages/cli/src/args.ts` (`--config`, and `--site` no longer required at parse time), `packages/cli/src/args.test.ts`, `packages/cli/src/run.ts` and `packages/cli/src/suite.ts` (load the config, merge, pass the sources on), `packages/cli/src/out-dir.ts` (the config base for the dated folder), `packages/cli/src/out-dir.test.ts`, `packages/cli/src/summary.ts`, `packages/cli/src/summary.test.ts`, `e2e/project-config.e2e.test.ts` (new), `docs/cli.md` (a new "Project config" section and the `--config` rows), `docs/design.md` (the §11 options paragraph, §12 and one §13 sentence on what the config may not hold), `docs/guide/project-layout.md` (the layout block at the top and "What to commit"), `CHANGELOG.md` (the E4 marker).
+**E4 `tagreeve/config.yml` and `--config` (#811).** Touches: `packages/expect/src/project-config.ts` (new: `parseProjectConfig(text, file)` with line-aware YAML errors, built on one `parseOptions(raw, path)` that `parseScenario` also calls, and `mergeOptions(config, scenario)`; `yaml` stays a dependency of expect only), `packages/expect/src/project-config.test.ts` (new), `packages/expect/src/scenario.ts` (extract `parseOptions`), `packages/expect/src/scenario.test.ts`, `packages/expect/src/index.ts` (the exports), `packages/cli/src/project-config.ts` (new: finds and reads the file, applies the refused keys and the flag precedence, reports the sources), `packages/cli/src/project-config.test.ts` (new), `packages/cli/src/args.ts` (`--config`, and `--site` no longer required at parse time), `packages/cli/src/args.test.ts`, `packages/cli/src/run.ts` and `packages/cli/src/suite.ts` (load the config, merge, pass the sources on), `packages/cli/src/out-dir.ts` (the config base for the dated folder), `packages/cli/src/out-dir.test.ts`, `packages/cli/src/summary.ts`, `packages/cli/src/summary.test.ts`, `e2e/project-config.e2e.test.ts` (new), `docs/cli.md` (a new "Project config" section and the `--config` rows), `docs/design.md` (the §11 options paragraph, §12 and one §13 sentence on what the config may not hold), `docs/guide/project-layout.md` (the layout block at the top and "What to commit"), `CHANGELOG.md` (the E4 marker).
 - The file is `./tagreeve/config.yml` in the current directory, never a parent folder. `--config <file>` replaces it. A missing `--config` file exits 2.
 - Keys: `configSchemaVersion: 1` (required), `site` (an http or https URL with no userinfo), `out` (a folder), and `options` with `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`, checked by the scenario's own validators. `serverHosts` only says which hosts are the user's server; it passes nothing through on its own, because `server` mode still needs `--network server` on the command line.
 - Refused, each with exit 2 and a message that names the key and never the value: `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride`, and any unknown key.
@@ -295,6 +303,7 @@ Acceptance: the e2e passes. On the old code `suite --baseline` is a usage error 
 ### Release
 
 **R06 Release prep.** Touches: `package.json` (the version), `packages/cli/src/summary.test.ts` (the `readVersion()` line only), `docs/cli.md` (the version sentence), `CHANGELOG.md` (intro line, leftover markers, a "Known in 0.6.0-rc.1" list), `README.md` (status block and install line), `docs/design.md` (the status line and its revision, §15 item 6 and a new §15.6 "Differences in 0.6"), `site/src/components/home/Hero.astro` and `scripts/docs-site.docs.test.ts` (the release pill), and any other test or doc that pins `0.5.0` as the current version.
+- If L06 has not merged, R06 removes the rule-2 text from the `RECORD_SCHEMA_VERSION` and `HitVia.confidence` docstrings in `packages/core/src/records.ts`, and that file is in R06's Touches for that case.
 - Version `0.6.0-rc.1`. The install line is `npm i -g tagreeve@next`.
 - The CHANGELOG section has an "Upgrading from 0.5.0" list: the new default `--out`, a scenario with `network: live` no longer loads, and record schema version 4.
 - The Known list cites only open issues. It says goal 2 is not built (rc.2), that #719 waits for 2026-11-10 if not yet landed, that the #901 rule depends on the container answering after its tags send, that the Shopify terms checkbox signal is not confirmed on a real checkout (#810), and that the platform host list holds only hosts a Shopify page names (#585).
