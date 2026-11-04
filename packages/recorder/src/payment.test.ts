@@ -47,6 +47,10 @@ interface Setup {
   inputs?: FakeInput[];
   /** The first fill tries fail with a Playwright timeout; the frames move to this URL after the first of them. */
   slowFill?: { tries: number; moveTo?: string };
+  /** The frame navigates to this URL while the first fill is under way, whether the fill is a handle fill or a locator fill. */
+  navigateDuringFill?: string;
+  /** The frame navigates to this URL while the input handle is being resolved, so the handle belongs to the new document. */
+  navigateDuringResolve?: string;
   failFill?: boolean;
   failFillAt?: number;
   fillMessage?: (value: string) => string;
@@ -59,7 +63,7 @@ const GOOD_FRAME = 'http://127.0.0.1:4000/card-frame';
 function fake(setup: Setup = {}) {
   const log: string[] = [];
   const { url = 'http://localhost:3000/checkout/test-payment', marker = 'inside', frameUrl = GOOD_FRAME, failFill = false, failFillAt = 0, counts = [1] } = setup;
-  const frames = (setup.frames ?? [{ url: frameUrl }]).map((f, i) => ({ name: `f${i}`, visible: true, url: GOOD_FRAME, ...f }));
+  const frames = (setup.frames ?? [{ url: frameUrl }]).map((f, i) => ({ name: `f${i}`, visible: true, url: GOOD_FRAME, generation: 0, ...f }));
   let fills = 0;
   let countCalls = 0;
   let slowTries = 0;
@@ -71,7 +75,23 @@ function fake(setup: Setup = {}) {
       },
     }),
   };
-  const element = (frame: (typeof frames)[number], selector: string) => ({
+  let navigated = 0;
+  const navigate = (frame: (typeof frames)[number], to: string): void => {
+    frame.url = to;
+    frame.generation++;
+  };
+  const element = (frame: (typeof frames)[number], selector: string) => {
+    const typeInto = async (input: string, value: string, options?: { timeout?: number }): Promise<void> => {
+      if (setup.slowFill && slowTries < setup.slowFill.tries) {
+        slowTries++;
+        log.push(`try ${options?.timeout}`);
+        if (setup.slowFill.moveTo) for (const f of frames) navigate(f, setup.slowFill.moveTo);
+        throw Object.assign(new Error('locator.fill: Timeout 500ms exceeded.'), { name: 'TimeoutError' });
+      }
+      log.push(`fill ${selector} ${input} ${value} @${frame.name}`);
+      if (failFill && fills++ === failFillAt) throw new Error(setup.fillMessage?.(value) ?? `locator.fill: Timeout. fill("${value}")`);
+    };
+    return {
     isVisible: async () => frame.visible,
     evaluateHandle: async () => container,
     contentFrame: async () =>
@@ -83,24 +103,30 @@ function fake(setup: Setup = {}) {
               filter: () => ({
                 count: async () => {
                   const count = counts[Math.min(countCalls++, counts.length - 1)]!;
-                  if (setup.moveFramesAfterCount) for (const f of frames) f.url = setup.moveFramesAfterCount;
+                  if (setup.moveFramesAfterCount) for (const f of frames) navigate(f, setup.moveFramesAfterCount);
                   return count;
                 },
                 evaluateAll: async () => setup.inputs ?? [],
+                elementHandle: async () => {
+                  if (setup.navigateDuringResolve) navigate(frame, setup.navigateDuringResolve);
+                  const bound = frame.generation;
+                  return {
+                    fill: async (value: string, options?: { timeout?: number }) => {
+                      if (setup.navigateDuringFill && !navigated++) navigate(frame, setup.navigateDuringFill);
+                      if (frame.generation !== bound) throw new Error('elementHandle.fill: Element is not attached to the DOM');
+                      await typeInto(input, value, options);
+                    },
+                  };
+                },
                 fill: async (value: string, options?: { timeout?: number }) => {
-                  if (setup.slowFill && slowTries < setup.slowFill.tries) {
-                    slowTries++;
-                    log.push(`try ${options?.timeout}`);
-                    if (setup.slowFill.moveTo) for (const f of frames) f.url = setup.slowFill.moveTo;
-                    throw Object.assign(new Error('locator.fill: Timeout 500ms exceeded.'), { name: 'TimeoutError' });
-                  }
-                  log.push(`fill ${selector} ${input} ${value} @${frame.name}`);
-                  if (failFill && fills++ === failFillAt) throw new Error(setup.fillMessage?.(value) ?? `locator.fill: Timeout. fill("${value}")`);
+                  if (setup.navigateDuringFill && !navigated++) navigate(frame, setup.navigateDuringFill);
+                  await typeInto(input, value, options);
                 },
               }),
             }),
           },
-  });
+    };
+  };
   const page = {
     url: () => {
       log.push('url');
@@ -257,6 +283,37 @@ describe('duplicate frames and inputs', () => {
     const { error, log } = await play({ slowFill: { tries: 1e9 }, timeout: 700 });
     expect(error?.message).toContain('card field number could not be filled: locator.fill: Timeout');
     expect(fills(log)).toEqual([]);
+  });
+
+  test('a frame that navigates during a fill try that would succeed gets nothing typed', async () => {
+    const { error, log, record } = await play({ navigateDuringFill: 'http://127.0.0.1:4000/elsewhere.html' });
+    expect(fills(log)).toEqual([]);
+    expect(error?.message).toContain('card field number could not be filled: ');
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a frame that navigates to an unchecked document before the input handle exists gets nothing typed', async () => {
+    const { error, log, record } = await play({ navigateDuringResolve: 'http://127.0.0.1:4000/elsewhere.html' });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(fills(log)).toEqual([]);
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a frame that moves to another host before the count reason gives the gone-frame reason and names no host', async () => {
+    const { error } = await play({ counts: [2], moveFramesAfterCount: 'http://other-card-host.invalid/card-frame', timeout: 0 });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(error?.message).not.toContain('other-card-host');
+  });
+
+  test('a typed value in an input attribute of the count reason is scrubbed', async () => {
+    const inputs = [
+      { name: CARD, autocomplete: 'cc-number', type: 'text' },
+      { name: 'x', autocomplete: 'cc-number', type: 'text' },
+    ];
+    const { error } = await play({ counts: [2], inputs, timeout: 300 });
+    expect(error?.message).toContain('2 visible inputs match');
+    expect(error?.message).toContain('[name=[value] autocomplete=cc-number');
+    expect(error?.message).not.toContain(CARD);
   });
 
   test('a frame that moves to another host after the count gets nothing typed', async () => {
