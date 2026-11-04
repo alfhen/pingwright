@@ -7,6 +7,7 @@ import { createFakeDocker } from '../../recorder/src/server-container/fake-docke
 import { expect, test } from 'vitest';
 import type { SuiteArgs } from './args.ts';
 import { labelRecord, type RunOutcome, type RunSpec } from './run.ts';
+import { buildBaseline } from './baseline.ts';
 import { cellText, formatSuiteTable, suiteCommand, suiteExitCode, type SuiteManifest } from './suite.ts';
 
 const VALID = 'start: /\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
@@ -807,4 +808,92 @@ test('--allow-test-payment needs --site or --stores on the command line, also wh
     expect(c.err()).toContain('--allow-test-payment');
     expect(fake.specs).toEqual([]);
   });
+});
+
+const BASELINE_STATE = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' } as const;
+
+async function cellRecord(root: string, name: string, events: string[]) {
+  const runId = newId('run');
+  const run = { type: 'run', id: runId, recordSchemaVersion: 4, scenario: name, site: 'https://shop.example.com', startedAt: 0, variant: 'published' };
+  const epoch = { type: 'consentEpoch', id: newId('consentEpoch'), runId, startT: 0, endT: null, source: 'test', label: 'undecided', state: BASELINE_STATE };
+  const hits = events.map((event, i) => ({
+    type: 'hit', id: newId('hit'), runId, stepId: null, requestId: newId('request'), t: i, vendor: 'ga4', event,
+    consent: { ...BASELINE_STATE, raw: {} }, ids: {}, page: 'https://shop.example.com/', transport: 'GET', params: {},
+  }));
+  const path = join(root, `${name}-${events.join('-')}.jsonl`);
+  await writeFile(path, [run, epoch, ...hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  return path;
+}
+
+async function saveBaseline(folder: string, file: string, events: string[]) {
+  const record = await cellRecord(await mkdtemp(join(tmpdir(), 'pw-base-rec-')), 'base', events);
+  const { readRun } = await import('@tagreeve/core');
+  await mkdir(folder, { recursive: true });
+  await writeFile(join(folder, file), JSON.stringify(buildBaseline(await readRun(record), false)));
+}
+
+test('suite --baseline marks a drifting cell FAIL, exits 1 and records the counts in the manifest', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
+  const folder = join(dir, '..', 'baselines');
+  await saveBaseline(folder, 'a.json', ['page_view']);
+  await saveBaseline(folder, 'b.json', ['page_view']);
+  const events: Record<string, string[]> = { a: ['page_view'], b: ['page_view', 'add_to_cart'] };
+  const rec = recorder(async (spec) => ({ code: 0, summary: pass.summary, path: await cellRecord(spec.out, spec.scenarioName, events[spec.scenarioName]!) }));
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { baseline: folder }), c.io, rec)).toBe(1);
+  expect(c.out()).toMatch(/b\s+FAIL \(baseline drift\)/);
+  expect(c.out()).toMatch(/a\s+PASS\n/);
+  expect(c.out()).toContain('b published: b.json: 1 added, 0 removed, 0 count changes');
+  const manifest = JSON.parse(await readFile(join(out, (await readdir(out))[0]!, 'suite.json'), 'utf8')) as SuiteManifest;
+  expect(manifest.suiteSchemaVersion).toBe(3);
+  expect(manifest.exitCode).toBe(1);
+  const cell = (name: string) => manifest.cells.find((x) => x.scenario === name)!;
+  expect(cell('b')).toMatchObject({ status: 'fail', exitCode: 1, baseline: { file: 'b.json', drift: true, added: 1, removed: 0, countChanges: 0 } });
+  expect(cell('a')).toMatchObject({ status: 'pass', exitCode: 0, baseline: { file: 'a.json', drift: false } });
+});
+
+test('without --baseline the same drifting cell passes', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const rec = recorder(async (spec) => ({ code: 0, summary: pass.summary, path: await cellRecord(spec.out, spec.scenarioName, ['page_view', 'add_to_cart']) }));
+  expect(await suiteCommand(args(dir, out), capture().io, rec)).toBe(0);
+});
+
+test('suite --baseline exits 2 before any run and lists every missing file, store and variant names included', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
+  const folder = join(dir, '..', 'baselines');
+  await saveBaseline(folder, 'a.se.json', ['page_view']);
+  const stores = join(dir, '..', 'stores.json');
+  await writeFile(stores, JSON.stringify({ storesSchemaVersion: 1, stores: [{ name: 'se', site: 'https://se.example.com' }] }));
+  const rec = recorder();
+  const c = capture();
+  const code = await suiteCommand(args(dir, out, { site: undefined, stores, baseline: folder, variants: [{ name: 'published' }] }), c.io, rec);
+  expect(code).toBe(2);
+  expect(rec.specs).toHaveLength(0);
+  expect(c.err()).toContain(join(folder, 'b.se.json'));
+  expect(c.err()).not.toContain('a.se.json');
+  await expect(readdir(out)).rejects.toThrow();
+});
+
+test('a skipped handoff scenario needs no baseline file', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'h.yml': HANDOFF });
+  const folder = join(dir, '..', 'baselines');
+  await saveBaseline(folder, 'a.json', ['page_view']);
+  const rec = recorder(async (spec) => ({ code: 0, summary: pass.summary, path: await cellRecord(spec.out, spec.scenarioName, ['page_view']) }));
+  expect(await suiteCommand(args(dir, out, { baseline: folder }), capture().io, rec)).toBe(0);
+});
+
+test('a bare --baseline uses tagreeve/baselines and names it in the defaults', async () => {
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID }, async (root) => {
+    await saveBaseline(join(root, 'tagreeve/baselines'), 'a.json', ['page_view']);
+    const rec = recorder(async (spec) => ({ code: 0, summary: pass.summary, path: await cellRecord(spec.out, spec.scenarioName, ['page_view']) }));
+    const c = capture();
+    expect(await suiteCommand(bare({ site: 'https://shop.example.com', baselineDefault: true, out: join(root, 'out') }), c.io, rec)).toBe(0);
+    expect(c.out()).toContain('tagreeve/baselines (baseline)');
+  });
+});
+
+test('cell text for a drifting cell', () => {
+  expect(cellText({ status: 'fail', exitCode: 1, baseline: { drift: true } })).toBe('FAIL (baseline drift)');
+  expect(cellText({ status: 'fail', exitCode: 1, failed: { rules: 1, checks: [] }, baseline: { drift: true } })).toBe('FAIL: 1 rule, baseline drift');
+  expect(cellText({ status: 'pass', exitCode: 0, baseline: { drift: false } })).toBe('PASS');
 });

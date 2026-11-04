@@ -1,8 +1,8 @@
 import { readdir, stat } from 'node:fs/promises';
 
-export type DefaultSetting = 'scenarios' | 'trackerList' | 'autoconsentRules' | 'stores';
+export type DefaultSetting = 'scenarios' | 'trackerList' | 'autoconsentRules' | 'stores' | 'baseline';
 
-/** A file or folder used because its flag was not given. `path` is always one of the fixed relative names. */
+/** A file or folder used because its flag was not given. `path` is a fixed relative name; a baseline path ends in the scenario's file name. */
 export interface DefaultUsed {
   setting: DefaultSetting;
   path: string;
@@ -12,12 +12,14 @@ export const DEFAULT_SCENARIOS = 'tagreeve/scenarios';
 export const DEFAULT_TRACKER_LIST = 'tagreeve/trackers.json';
 export const DEFAULT_AUTOCONSENT_DIR = 'tagreeve/autoconsent';
 export const DEFAULT_STORES = 'tagreeve/stores.json';
+export const DEFAULT_BASELINES = 'tagreeve/baselines';
 
 const SETTING_TEXT: Record<DefaultSetting, string> = {
   scenarios: 'scenario folder',
   trackerList: 'tracker list',
   autoconsentRules: 'autoconsent rules',
   stores: 'stores',
+  baseline: 'baseline',
 };
 
 async function isKind(path: string, kind: 'file' | 'directory'): Promise<boolean> {

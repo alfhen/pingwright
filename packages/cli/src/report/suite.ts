@@ -3,7 +3,7 @@ import { diffRuns } from '@tagreeve/expect';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { flagChangeLabel } from '../diff.ts';
-import { cellText, type SuiteCell, type SuiteManifest } from '../suite.ts';
+import { cellText, type CellBaseline, type SuiteCell, type SuiteManifest } from '../suite.ts';
 import { buildReportModel, type ReportModel } from './model.ts';
 import { addFindings, emptyFindings, findingsSentence } from './verdict.ts';
 import { definitionList, escapeHtml, page, runHeader, runSections } from './render.ts';
@@ -15,6 +15,8 @@ export interface SuiteCellView {
   status: string;
   exitCode: number;
   failed?: { rules: number; checks: string[] };
+  /** Set when the suite ran with `--baseline`. */
+  baseline?: CellBaseline;
   /** Undefined when the manifest names no record or the record could not be read. */
   model: ReportModel | undefined;
 }
@@ -98,7 +100,7 @@ export function buildSuiteModel(manifest: SuiteManifest, records: SuiteRecords):
         const loaded = records.get(recordKey(name, variant, store));
         if (!loaded && cell.status !== 'skipped') warnings.push(`${label}: no record, so the run is not in this report`);
         if (loaded?.truncatedAtLine) warnings.push(`${label}: record is truncated at line ${loaded.truncatedAtLine}, so later records are missing from this report`);
-        return [{ ...(store !== undefined && { store }), variant, status: cell.status, exitCode: cell.exitCode, ...(cell.failed && { failed: cell.failed }), model: loaded && buildReportModel(loaded) }];
+        return [{ ...(store !== undefined && { store }), variant, status: cell.status, exitCode: cell.exitCode, ...(cell.failed && { failed: cell.failed }), ...(cell.baseline && { baseline: cell.baseline }), model: loaded && buildReportModel(loaded) }];
       }),
     ),
   }));
@@ -152,6 +154,12 @@ function isLabels(value: unknown): boolean {
   return value === undefined || (typeof value === 'object' && value !== null && Object.values(value).every((v) => typeof v === 'string'));
 }
 
+function isBaselineField(value: unknown): boolean {
+  if (value === undefined) return true;
+  const b = value as Record<string, unknown> | null;
+  return typeof b === 'object' && b !== null && typeof b.file === 'string' && typeof b.drift === 'boolean' && [b.added, b.removed, b.countChanges].every((n) => typeof n === 'number');
+}
+
 function isManifest(value: unknown): value is SuiteManifest {
   if (typeof value !== 'object' || value === null) return false;
   const m = value as Record<string, unknown>;
@@ -169,7 +177,7 @@ function isManifest(value: unknown): value is SuiteManifest {
     Array.isArray(m.cells) &&
     m.cells.every((c: unknown) => {
       const cell = c as Record<string, unknown> | null;
-      return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number' && isFailedField(cell.failed) && isLabels(cell.labels);
+      return typeof cell === 'object' && cell !== null && typeof cell.scenario === 'string' && typeof cell.variant === 'string' && typeof cell.status === 'string' && typeof cell.exitCode === 'number' && isFailedField(cell.failed) && isLabels(cell.labels) && isBaselineField(cell.baseline);
     })
   );
 }
@@ -263,7 +271,7 @@ function overview(model: SuiteReportModel): string {
       (stores.length ? stores : [undefined]).map((store) => {
         const cells = model.header.variants.map((v) => {
           const cell = s.cells.find((c) => c.store === store && c.variant === v);
-          return `<td>${cell ? escapeHtml(cellText({ status: cell.status as SuiteCell['status'], exitCode: cell.exitCode as SuiteCell['exitCode'], failed: cell.failed })) : ''}</td>`;
+          return `<td>${cell ? escapeHtml(cellText({ status: cell.status as SuiteCell['status'], exitCode: cell.exitCode as SuiteCell['exitCode'], failed: cell.failed, baseline: cell.baseline })) : ''}</td>`;
         });
         return `<tr><th scope="row">${escapeHtml(s.name)}</th>${store === undefined ? '' : `<td>${escapeHtml(store)}</td>`}${cells.join('')}</tr>`;
       }),
@@ -286,7 +294,7 @@ export function renderSuiteReport(model: SuiteReportModel): string {
       const cells = s.cells
         .map((c) => {
           const where = c.store === undefined ? `${s.name} (${c.variant})` : `${s.name} on ${c.store}, ${c.variant}`;
-          const title = `<h3>${escapeHtml(where)}: ${escapeHtml(c.status.toUpperCase())}</h3>`;
+          const title = `<h3>${escapeHtml(where)}: ${escapeHtml(c.status.toUpperCase())}</h3>${c.baseline?.drift ? `<p class="warn-box">Baseline drift from ${escapeHtml(c.baseline.file)}: ${c.baseline.added} added, ${c.baseline.removed} removed, ${c.baseline.countChanges} count changes.</p>` : ''}`;
           if (!c.model) return `${title}<p class="empty">${c.status === 'skipped' ? 'Skipped.' : 'No record to show.'}</p>`;
           return `${title}${definitionList(runHeader(c.model.header))}${runSections(c.model, 'h4')}`;
         })

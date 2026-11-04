@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { newId, type Hit, type RunRecords } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
-import { buildBaseline, compareBaseline, parseBaseline } from './baseline.ts';
+import { baselineCommand, buildBaseline, compareBaseline, defaultBaselineName, parseBaseline } from './baseline.ts';
 import { main } from './main.ts';
 import { formatSummary, type Summary } from './summary.ts';
 
@@ -90,9 +90,11 @@ test('the summary shows the Baseline block and a failing result on drift', () =>
 test('parses baseline save and run --baseline', () => {
   expect(parseCli(['baseline', 'save', 'r.jsonl', 'b.json', '--by-page'])).toEqual({ command: 'baseline', input: 'r.jsonl', output: 'b.json', byPage: true });
   expect(() => parseCli(['baseline', 'r.jsonl', 'b.json'])).toThrow(UsageError);
-  expect(() => parseCli(['baseline', 'save', 'r.jsonl'])).toThrow(UsageError);
+  expect(parseCli(['baseline', 'save', 'r.jsonl'])).toEqual({ command: 'baseline', input: 'r.jsonl', byPage: false });
+  expect(() => parseCli(['baseline', 'save'])).toThrow(UsageError);
+  expect(() => parseCli(['baseline', 'save', 'r.jsonl', 'b.json', 'c.json'])).toThrow(UsageError);
   expect(parseCli(['run', 's.yml', '--site', 'http://localhost:1', '--baseline', 'b.json'])).toMatchObject({ baseline: 'b.json' });
-  expect(() => parseCli(['suite', 'd', '--site', 'http://localhost:1', '--baseline', 'b.json'])).toThrow(UsageError);
+  expect(parseCli(['suite', 'd', '--site', 'http://localhost:1', '--baseline', 'dir'])).toMatchObject({ baseline: 'dir' });
 });
 
 test('run exits 2 for a missing or invalid baseline before the browser launches', async () => {
@@ -235,4 +237,41 @@ test('the compare output holds no email, hash or cookie value, with a moved hit 
   expect(result.changes.some((c) => c.startsWith('added ga4 add_to_cart'))).toBe(true);
   const output = JSON.stringify(result);
   for (const secret of secrets) expect(output).not.toContain(secret);
+});
+
+function named(extra: Partial<RunRecords['run']>): RunRecords['run'] {
+  return { ...makeRun([]).run, recordSchemaVersion: 4, scenario: 'checkout', ...extra };
+}
+
+test('defaultBaselineName: no store, a store, published, workspace', () => {
+  expect(defaultBaselineName(named({}))).toBe('checkout.json');
+  expect(defaultBaselineName(named({ scenario: 'checkout.yml' }))).toBe('checkout.json');
+  expect(defaultBaselineName(named({ store: 'se' }))).toBe('checkout.se.json');
+  expect(defaultBaselineName(named({ store: 'se', variant: 'published' }))).toBe('checkout.se.json');
+  expect(defaultBaselineName(named({ variant: 'published' }))).toBe('checkout.json');
+  expect(defaultBaselineName(named({ store: 'se', variant: 'workspace' }))).toBe('checkout.se.workspace.json');
+  expect(defaultBaselineName(named({ variant: 'workspace' }))).toBe('checkout.workspace.json');
+});
+
+test('a suite cell record of schema version 3 has no store, so it needs an explicit path', () => {
+  expect(() => defaultBaselineName(named({ recordSchemaVersion: 3, variant: 'published' }))).toThrow('Give the baseline path');
+  expect(defaultBaselineName(named({ recordSchemaVersion: 3 }))).toBe('checkout.json');
+});
+
+test('baseline save with one path writes tagreeve/baselines/<name> and makes the folder', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const record = join(root, 'run.jsonl');
+  const records = makeRun(['page_view']);
+  await writeFile(record, [records.run, ...records.consentEpochs, ...records.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const before = process.cwd();
+  process.chdir(root);
+  try {
+    const stdout: string[] = [];
+    const code = await baselineCommand({ command: 'baseline', input: record, byPage: false }, { stdout: (t) => void stdout.push(t), stderr: () => undefined });
+    expect(code).toBe(0);
+    expect(stdout.join('')).toContain('Baseline tagreeve/baselines/s.json:');
+    expect(JSON.parse(await readFile(join(root, 'tagreeve/baselines/s.json'), 'utf8'))).toMatchObject({ baselineSchemaVersion: 1, scenario: 's.yml' });
+  } finally {
+    process.chdir(before);
+  }
 });

@@ -37,6 +37,8 @@ export interface RunArgs {
   autoconsentRules: string[];
   gtmOverride: string | undefined;
   baseline: string | undefined;
+  /** A bare `--baseline`: compare with `tagreeve/baselines/<name>`. */
+  baselineDefault?: true;
   trackerList: string | undefined;
   serverContainer?: boolean;
   serverContainerConfig?: string;
@@ -47,7 +49,8 @@ export interface RunArgs {
 export interface BaselineArgs {
   command: 'baseline';
   input: string;
-  output: string;
+  /** Absent: `tagreeve/baselines/<name>`. */
+  output?: string;
   byPage: boolean;
 }
 
@@ -91,6 +94,10 @@ export interface SuiteArgs {
   viewport?: Viewport;
   autoconsentRules: string[];
   trackerList: string | undefined;
+  /** Compare each cell with its file in this folder. */
+  baseline?: string;
+  /** A bare `--baseline`: the folder is `tagreeve/baselines`. */
+  baselineDefault?: true;
   serverContainer?: boolean;
   serverContainerConfig?: string;
   vars: Record<string, string>;
@@ -112,7 +119,7 @@ export type HelpTopic = (typeof COMMANDS)[number];
 export const USAGE = `Usage:
   tagreeve run <scenario.yml> [--site <url>] [options]
   tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
-  tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
+  tagreeve baseline save <run.jsonl> [<baseline.json>] [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
   tagreeve init
@@ -132,6 +139,7 @@ Options for suite:
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
   --allow-test-payment <host> The host that may run test payments. It must equal the --site host and be in the test-payment-hosts.json allowlist
   --config <file>            The project config, instead of tagreeve/config.yml
+  --baseline [<folder>]      Compare each cell with its baseline file in the folder (default: tagreeve/baselines) and fail on drift. Bare, put it last
   --network, --out, --label, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --server-container, --server-container-config, --json work as in run
 
 Options for run:
@@ -150,7 +158,7 @@ Options for run:
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries). Default: tagreeve/trackers.json
   --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
   --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
-  --baseline <file>          Compare the hits with a baseline file and fail on drift
+  --baseline [<file>]        Compare the hits with a baseline file and fail on drift. Bare, put it last: tagreeve/baselines/<scenario>.json
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
 `;
@@ -176,7 +184,7 @@ Options:
   --tracker-list <file>      Extra tracker hosts to stub and decode (JSON array of entries). Default: tagreeve/trackers.json
   --server-container         Run your own server container in Docker and record the calls it makes to vendors. Needs --network server and options.serverHosts. See docs/cli.md
   --server-container-config <file> The container config (mode 0600). Or set TAGREEVE_SERVER_CONTAINER_CONFIG
-  --baseline <file>          Compare the hits with a baseline file made by "tagreeve baseline save" and fail on drift
+  --baseline [<file>]        Compare the hits with a baseline file made by "tagreeve baseline save" and fail on drift. Bare, put it last: tagreeve/baselines/<scenario>.json
   --var <k=v>                Scenario variable (repeatable)
   --json                     Print a JSON summary on stdout
   -h, --help                 Show this help
@@ -206,9 +214,9 @@ Options:
   -h, --help                 Show this help
 `;
 
-const BASELINE_USAGE = `Usage: tagreeve baseline save <run.jsonl> <baseline.json> [options]
+const BASELINE_USAGE = `Usage: tagreeve baseline save <run.jsonl> [<baseline.json>] [options]
 
-Saves the hit tuples of a run as a baseline file. Pass the file to "tagreeve run --baseline".
+Saves the hit tuples of a run as a baseline file. Without <baseline.json> the file is tagreeve/baselines/<scenario>[.<store>][.<variant>].json. Pass it to "tagreeve run --baseline" or "tagreeve suite --baseline".
 
 Options:
   --by-page                  Add the page path to each key
@@ -341,11 +349,19 @@ export function parseCli(argv: string[]): Command {
   }
 }
 
+const BARE_BASELINE = '\0bare';
+
+/** A `--baseline` at the end, or before another option, has no value. parseArgs would refuse it, so it gets a marker value. */
+function markBareBaseline(argv: string[]): string[] {
+  const end = argv.indexOf('--');
+  return argv.map((token, i) => (token === '--baseline' && (end < 0 || i < end) && (i === argv.length - 1 || argv[i + 1]!.startsWith('-')) ? `--baseline=${BARE_BASELINE}` : token));
+}
+
 function parseCommand(argv: string[]): Command {
   let parsed;
   try {
     parsed = parseArgs({
-      args: argv,
+      args: markBareBaseline(argv),
       allowPositionals: true,
       options: OPTIONS,
     });
@@ -355,6 +371,7 @@ function parseCommand(argv: string[]): Command {
     throw new UsageError(error instanceof Error ? error.message : String(error));
   }
   const { values, positionals } = parsed;
+  const baseline = { bare: values.baseline === BARE_BASELINE, value: values.baseline === BARE_BASELINE ? undefined : values.baseline };
   if (values.version) return { command: 'version' };
   const [command, ...rest] = positionals;
   if (values.help && command !== undefined && (COMMANDS as readonly string[]).includes(command)) {
@@ -380,8 +397,8 @@ function parseCommand(argv: string[]): Command {
   }
   if (command === 'baseline') {
     if (rest[0] !== 'save') throw new UsageError('baseline needs a subcommand: save');
-    if (rest.length !== 3) throw new UsageError('baseline save takes a JSONL file and a baseline file');
-    return { command: 'baseline', input: rest[1]!, output: rest[2]!, byPage: values['by-page'] ?? false };
+    if (rest.length !== 2 && rest.length !== 3) throw new UsageError('baseline save takes a JSONL file and an optional baseline file');
+    return { command: 'baseline', input: rest[1]!, ...(rest[2] !== undefined && { output: rest[2] }), byPage: values['by-page'] ?? false };
   }
   if (command === 'report') {
     if (rest.length !== 1) throw new UsageError('report takes one JSONL file or one suite directory');
@@ -429,7 +446,7 @@ function parseCommand(argv: string[]): Command {
     vars[entry.slice(0, eq)] = entry.slice(eq + 1);
   }
   if (command === 'suite') {
-    for (const flag of ['baseline', 'gtm-override', 'headed', 'net-log'] as const) {
+    for (const flag of ['gtm-override', 'headed', 'net-log'] as const) {
       if (values[flag] !== undefined) throw new UsageError(`--${flag} is not an option of suite`);
     }
     return {
@@ -449,6 +466,8 @@ function parseCommand(argv: string[]): Command {
       ...(viewport && { viewport }),
       autoconsentRules: values['autoconsent-rules'] ?? [],
       trackerList: values['tracker-list'],
+      ...(baseline.value !== undefined && { baseline: baseline.value }),
+      ...(baseline.bare && { baselineDefault: true as const }),
       ...(values['server-container'] && { serverContainer: true }),
       ...(values['server-container-config'] !== undefined && { serverContainerConfig: values['server-container-config'] }),
       vars,
@@ -474,7 +493,8 @@ function parseCommand(argv: string[]): Command {
     autoconsentRules: values['autoconsent-rules'] ?? [],
     gtmOverride: values['gtm-override'],
     trackerList: values['tracker-list'],
-    baseline: values.baseline,
+    baseline: baseline.value,
+    ...(baseline.bare && { baselineDefault: true as const }),
     ...(values['server-container'] && { serverContainer: true }),
     ...(values['server-container-config'] !== undefined && { serverContainerConfig: values['server-container-config'] }),
     vars,

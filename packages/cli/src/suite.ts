@@ -5,7 +5,8 @@ import type { TrackerEntry } from '@tagreeve/decoders';
 import { diffRuns, mergeOptions, parseScenario, ScenarioError, type Scenario, type ScenarioOptions } from '@tagreeve/expect';
 import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
 import type { Network, SuiteArgs } from './args.ts';
-import { DEFAULT_STORES, defaultScenarioDir, defaultStores, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
+import { baselineFileName, BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
+import { DEFAULT_BASELINES, DEFAULT_STORES, defaultScenarioDir, defaultStores, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { warnIfNotIgnored } from './git-ignore.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { formatDefaults, type DefaultEntry } from './project-config.ts';
@@ -25,6 +26,17 @@ export interface SuiteCell {
   failed?: { rules: number; checks: string[] };
   /** File name inside the suite directory. Absent when the run wrote none. */
   record?: string;
+  /** Set with `--baseline` on a cell that ran and wrote a record. Names and counts only. */
+  baseline?: CellBaseline;
+}
+
+export interface CellBaseline {
+  /** The baseline file name, without its folder. */
+  file: string;
+  drift: boolean;
+  added: number;
+  removed: number;
+  countChanges: number;
 }
 
 export interface SuiteStore {
@@ -101,11 +113,13 @@ function failedOf(outcome: RunOutcome, status: CellStatus): SuiteCell['failed'] 
 }
 
 /** The text of a cell in the terminal table and in the report. Never a rule's text or a message. */
-export function cellText(cell: Pick<SuiteCell, 'status' | 'exitCode' | 'failed'>): string {
+export function cellText(cell: Pick<SuiteCell, 'status' | 'exitCode' | 'failed'> & { baseline?: Pick<CellBaseline, 'drift'> }): string {
   if (cell.status === 'error') return `ERROR (exit ${cell.exitCode})`;
   const label = cell.status.toUpperCase();
   const { rules = 0, checks = [] } = cell.failed ?? {};
-  const parts = [rules > 0 && `${rules} rule${rules === 1 ? '' : 's'}`, ...checks].filter(Boolean);
+  const drift = cell.baseline?.drift === true;
+  const parts = [rules > 0 && `${rules} rule${rules === 1 ? '' : 's'}`, ...checks, drift && 'baseline drift'].filter(Boolean);
+  if (drift && parts.length === 1) return `${label} (baseline drift)`;
   return parts.length ? `${label}: ${parts.join(', ')}` : label;
 }
 
@@ -145,6 +159,10 @@ export function formatSuiteTable(manifest: SuiteManifest, dir: string): string {
   if (defaultsLine) out.push('', defaultsLine);
   const records = manifest.cells.filter((c) => c.record);
   if (records.length) out.push('', 'Records', ...records.map((c) => `  ${cellName(c)}: ${join(dir, c.record!)}`));
+  const drifted = manifest.cells.filter((c) => c.baseline?.drift);
+  if (drifted.length) {
+    out.push('', 'Baseline drift', ...drifted.map((c) => `  ${cellName(c)}: ${c.baseline!.file}: ${c.baseline!.added} added, ${c.baseline!.removed} removed, ${c.baseline!.countChanges} count changes`));
+  }
   const unfinished = manifest.cells.filter((c) => c.exitCode === 2);
   if (unfinished.length) {
     out.push('', 'Errors', ...unfinished.map((c) => `  ${cellName(c)}: run did not finish (exit 2), ${c.record ? `details in ${join(dir, c.record)}` : 'details in the stderr above'}`));
@@ -360,6 +378,34 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
     }
   }
 
+  const baselineDir = args.baseline ?? (args.baselineDefault ? DEFAULT_BASELINES : undefined);
+  if (args.baselineDefault) defaults.push({ setting: 'baseline', path: DEFAULT_BASELINES });
+  const baselines = new Map<string, BaselineFile>();
+  const baselineFor = (scenario: string, store: Store | undefined, variant: string) => baselineFileName(scenario, store?.name, variant);
+  if (baselineDir !== undefined) {
+    const missing: string[] = [];
+    const unreadable: string[] = [];
+    for (const s of scenarios) {
+      for (const { store } of targets) {
+        if ((s.handoff && !args.withHandoff) || (s.payment && !testPayments.has(paymentKey(s.name, store)))) continue;
+        for (const variant of args.variants.map((v) => v.name)) {
+          const file = baselineFor(s.name, store, variant);
+          if (baselines.has(file) || missing.includes(join(baselineDir, file))) continue;
+          try {
+            baselines.set(file, await readBaseline(join(baselineDir, file)));
+          } catch (error) {
+            if (!(error instanceof BaselineError)) throw error;
+            (error.message.includes('ENOENT') ? missing : unreadable).push(error.message.includes('ENOENT') ? join(baselineDir, file) : error.message);
+          }
+        }
+      }
+    }
+    if (missing.length || unreadable.length) {
+      io.stderr(`${[...(missing.length ? ['Baseline files missing:', ...missing.map((m) => `  ${m}`)] : []), ...unreadable].join('\n')}\nSave them with "tagreeve baseline save <record>", or run the suite without --baseline.\n`);
+      return 2;
+    }
+  }
+
   const id = `suite_${ulid()}`;
   const outFolder = resolveOutDir({ out: args.out, now: new Date(), label: args.label, base: loaded?.config.out });
   await warnIfNotIgnored(outFolder, io.stderr);
@@ -408,9 +454,22 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
           },
           io,
         );
-        const status = statusOf(outcome);
-        const failed = failedOf(outcome, status);
-        cells.push({ ...cell, status, exitCode: outcome.code, ...(failed && { failed }), ...(outcome.path && { record: basename(outcome.path) }) });
+        let status = statusOf(outcome);
+        let failed = failedOf(outcome, status);
+        let exitCode = outcome.code;
+        let compared: CellBaseline | undefined;
+        const expected = baselines.get(baselineFor(s.name, store, variant));
+        if (expected && outcome.path) {
+          const result = compareBaseline(expected, await readRun(outcome.path));
+          for (const warning of result.warnings) io.stderr(`Warning: ${cellName(cell)}: ${warning}\n`);
+          compared = { file: baselineFor(s.name, store, variant), drift: result.drift, added: result.added, removed: result.removed, countChanges: result.countChanges };
+          if (result.drift && status !== 'error') {
+            if (status === 'warn') failed = undefined;
+            status = 'fail';
+            if (exitCode === 0) exitCode = 1;
+          }
+        }
+        cells.push({ ...cell, status, exitCode, ...(failed && { failed }), ...(outcome.path && { record: basename(outcome.path) }), ...(compared && { baseline: compared }) });
       }
     }
   }

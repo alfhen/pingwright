@@ -247,3 +247,15 @@ test.each([
   }
   expect(helpText(argv[0] as 'run' | 'suite')).toContain('--label');
 });
+
+test('a bare --baseline at the end, or before another option, means the default; a value is the path', () => {
+  const site = ['--site', 'http://localhost:1'];
+  expect(parseCli(['run', 's.yml', ...site, '--baseline'])).toMatchObject({ baselineDefault: true, baseline: undefined });
+  expect(parseCli(['run', 's.yml', '--baseline', '--json', ...site])).toMatchObject({ baselineDefault: true, baseline: undefined, json: true });
+  expect(parseCli(['run', 's.yml', ...site, '--baseline', 'b.json'])).toMatchObject({ baseline: 'b.json' });
+  expect(parseCli(['run', 's.yml', ...site, '--baseline', 'b.json'])).not.toHaveProperty('baselineDefault');
+  expect(parseCli(['run', 's.yml', ...site])).not.toHaveProperty('baselineDefault');
+  expect(parseCli(['suite', ...site, '--baseline'])).toMatchObject({ baselineDefault: true });
+  expect(parseCli(['suite', ...site, '--baseline'])).not.toHaveProperty('baseline');
+  expect(parseCli(['suite', 'dir', ...site, '--baseline', 'folder'])).toMatchObject({ dir: 'dir', baseline: 'folder' });
+});
