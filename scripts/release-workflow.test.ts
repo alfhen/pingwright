@@ -16,6 +16,7 @@ const workflow = parse(text) as Workflow;
 function stripComments(script: string): string {
   let quote = '';
   let out = '';
+  let heredocs: { word: string; dash: boolean }[] = [];
   for (let i = 0; i < script.length; i++) {
     const ch = script[i]!;
     if (ch === '\\' && quote !== "'") {
@@ -27,7 +28,23 @@ function stripComments(script: string): string {
     } else if (ch === '"' || ch === "'") {
       quote = ch;
       out += ch;
-    } else if (ch === '#' && (i === 0 || /\s/.test(script[i - 1]!))) {
+    } else if (ch === '<' && script[i + 1] === '<' && script[i + 2] !== '<') {
+      const match = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([\w.-]+))/.exec(script.slice(i));
+      if (match) heredocs.push({ word: match[2] ?? match[3] ?? match[4]!, dash: match[1] === '-' });
+      out += '<<';
+      i++;
+    } else if (ch === '\n' && heredocs.length > 0) {
+      out += ch;
+      for (const { word, dash } of heredocs) {
+        for (;;) {
+          const end = script.indexOf('\n', i + 1);
+          const line = script.slice(i + 1, end === -1 ? script.length : end);
+          i = end === -1 ? script.length : end;
+          if (end === -1 || (dash ? line.replace(/^\t+/, '') : line) === word) break;
+        }
+      }
+      heredocs = [];
+    } else if (ch === '#' && (i === 0 || /[\s;&|()]/.test(script[i - 1]!))) {
       while (i + 1 < script.length && script[i + 1] !== '\n') i++;
     } else {
       out += ch;
@@ -229,6 +246,23 @@ describe('workflow rules', () => {
     expect(workflowProblems(base('      - run: npm publish --dry-run --tag "$dist_tag" 2>&1\n'))).toEqual([]);
     const problems = workflowProblems(base('      - run: |\n          echo "a #b"; npm publish --tag "$dist_tag"\n'));
     expect(problems).toHaveLength(1);
+  });
+
+  it('keeps quote state across lines', () => {
+    const wf = base('      - run: |\n          echo "a\n          b"; npm publish --tag "$dist_tag" # --dry-run\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+  });
+
+  it('ignores quote characters in a heredoc body', () => {
+    const wf = base(
+      '      - run: |\n          cat <<EOF\n          it\'s\n          EOF\n          npm publish --tag "$dist_tag" # --dry-run\n',
+    );
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+  });
+
+  it('starts a comment at a # right after a separator', () => {
+    const wf = base('      - run: |\n          echo a;# don\'t\n          npm publish --tag "$dist_tag" # --dry-run\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
   });
 
   it('checks the uses of a reusable-workflow job', () => {
