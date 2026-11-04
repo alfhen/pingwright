@@ -194,7 +194,7 @@ export async function runPayment(
   const typed = typedValues(provider, card, identity);
   for (const [index, field] of runtime.fields.entries()) {
     try {
-      await fillVerified(found[index]!.element, field, runtime.cardHost, valueOf(field.kind, provider, card, identity), timeout);
+      await fillVerified(found[index]!.element, field, runtime.cardHost, valueOf(field.kind, provider, card, identity), timeout, typed);
     } catch (error) {
       throw new Error(`card field ${field.kind} could not be filled: ${reasonOf(error, typed)}`);
     }
@@ -202,10 +202,12 @@ export async function runPayment(
   }
 }
 
+const GONE_FRAME = 'the card frame is gone or not served from the card host';
+
 async function frameStillServed(element: ElementHandle, cardHost: string, field: CardField): Promise<Frame> {
   const frame = await element.contentFrame();
   if (!frame || hostOf(frame.url()) !== cardHost || !field.path.test(pathOf(frame.url()))) {
-    throw new OwnReason('the card frame is gone or not served from the card host');
+    throw new OwnReason(GONE_FRAME);
   }
   return frame;
 }
@@ -214,34 +216,40 @@ const FILL_TRY_MS = 500;
 
 /**
  * Types into the one visible input of the frame that the frame check verified.
- * Locator.fill waits for the input to be actionable, and a Frame object stays the same when its iframe navigates.
- * So each fill is a short try inside the poll loop, and the host and path are checked again before every try.
- * One long fill would type into a document that arrived during the wait.
+ * The input is resolved to an ElementHandle first and the host and path are checked after that. A handle belongs to the document it was resolved in,
+ * so a navigation before the check leaves a handle on a document the check rejects, and a navigation after it detaches the handle and the fill fails.
+ * Locator.fill would resolve again in whatever document arrives, so it never types.
+ * Each fill is a short try inside the poll loop, so one long wait cannot outlive the check.
  */
-async function fillVerified(element: ElementHandle, field: CardField, cardHost: string, value: string, timeout: number): Promise<void> {
+async function fillVerified(element: ElementHandle, field: CardField, cardHost: string, value: string, timeout: number, typed: string[]): Promise<void> {
   const deadline = Date.now() + timeout;
+  const tryMs = (): number => Math.max(1, Math.min(FILL_TRY_MS, deadline - Date.now()));
   for (;;) {
     const frame = await frameStillServed(element, cardHost, field);
     const inputs = frame.locator(field.input).filter({ visible: true });
     const count = await inputs.count();
     if (count === 1) {
-      await frameStillServed(element, cardHost, field);
       try {
-        await inputs.fill(value, { timeout: Math.max(1, Math.min(FILL_TRY_MS, deadline - Date.now())) });
+        const handle = await inputs.elementHandle({ timeout: tryMs() });
+        await frameStillServed(element, cardHost, field);
+        await handle.fill(value, { timeout: tryMs() });
         return;
       } catch (error) {
         if (!(error instanceof Error && error.name === 'TimeoutError') || Date.now() >= deadline) throw error;
         continue;
       }
     }
-    if (Date.now() >= deadline) throw new OwnReason(await countReason(frame, count));
+    if (Date.now() >= deadline) {
+      const current = await frameStillServed(element, cardHost, field).catch(() => undefined);
+      throw new OwnReason(current ? await countReason(current, count, typed) : GONE_FRAME);
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
 /** The frame's path and the name, autocomplete and type of each visible input. Never a value, a placeholder or a label. */
-async function countReason(frame: Frame, count: number): Promise<string> {
-  const attribute = (v: string | null): string => (v ?? '').replace(/\s+/g, ' ').slice(0, 40);
+async function countReason(frame: Frame, count: number, typed: string[]): Promise<string> {
+  const attribute = (v: string | null): string => scrub((v ?? '').replace(/\s+/g, ' '), typed).slice(0, 40);
   let inputs = ' none visible';
   try {
     const seen = await frame
@@ -270,10 +278,13 @@ class OwnReason extends Error {}
  */
 function reasonOf(error: unknown, typed: string[]): string {
   if (error instanceof OwnReason) return error.message;
-  const first = (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
+  return scrub((error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '', typed) || 'unknown error';
+}
+
+function scrub(text: string, typed: string[]): string {
   const pattern = (value: string): RegExp => {
     const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(value.length < 4 ? `(?<!\\d)${escaped}(?!\\d)` : escaped, 'g');
   };
-  return typed.reduce((text, value) => text.replace(pattern(value), '[value]'), first).trim() || 'unknown error';
+  return typed.reduce((out, value) => out.replace(pattern(value), '[value]'), text).trim();
 }
