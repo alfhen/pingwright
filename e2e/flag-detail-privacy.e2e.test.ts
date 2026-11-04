@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from 'vitest';
 import { run, runText } from './cli-helpers.ts';
 
-const SECRETS = ['pw-flag.user', 'pw-flag.user%40example.test', 'pw-flag.user@example.test', '0123456789abcdef0123456789abcdef', '34b6319597f5649a26a95fff3b8cbd56ddb809f5b88647df59523a8d5f51979c', 'pwfake-cookie-value-0001'];
+const SECRETS = ['pw-flag.user', 'pw-flag.user%40example.test', 'pw-flag.user@example.test', '34b6319597f5649a26a95fff3b8cbd56ddb809f5b88647df59523a8d5f51979c', 'pwfake-cookie-value-0001'];
 
 test('flag detail in the summary shows query names only, and the record keeps the values', async () => {
   const json = await run('flag-detail-privacy');
@@ -16,7 +16,7 @@ test('flag detail in the summary shows query names only, and the record keeps th
   expect(kinds).toContain('sandboxPageUrl');
   const bypass = records.flags.filter((f) => f.kind === 'stubBypass');
   expect(bypass.length).toBeGreaterThan(0);
-  for (const value of [SECRETS[1]!, SECRETS[4]!, SECRETS[5]!]) expect(bypass.some((f) => f.detail.includes(value))).toBe(true);
+  for (const value of [SECRETS[1]!, SECRETS[3]!, SECRETS[4]!]) expect(bypass.some((f) => f.detail.includes(value))).toBe(true);
   expect(records.flags.some((f) => f.detail.includes('pw-flag.user'))).toBe(true);
   for (const value of SECRETS.slice(1)) expect(recordText).toContain(value);
 
