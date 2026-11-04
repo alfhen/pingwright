@@ -18,6 +18,9 @@ export interface FakeDockerScript {
   /** Output of `docker network ls`. */
   networks?: string;
   gateway?: string;
+  /** Tag lines `docker image ls` prints. */
+  images?: string[];
+  listFail?: boolean;
 }
 
 export interface FakeDockerCall {
@@ -56,6 +59,9 @@ if (c === 'version') out(cfg.version || '27.0.3');
 else if (c === 'image' && d === 'inspect') {
   if (cfg.noImage) process.exit(1);
   out('sha256:' + 'a'.repeat(64));
+} else if (c === 'image' && d === 'ls') {
+  if (cfg.listFail) process.exit(1);
+  for (const tag of cfg.images || []) out(tag);
 } else if (c === 'build') {
   if (cfg.buildFail) {
     console.error('step failed');

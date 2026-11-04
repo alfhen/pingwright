@@ -179,6 +179,35 @@ describe('startServerContainer', () => {
     expect(error.message).toContain('tagreeve server-container build');
   });
 
+  describe('the missing image message', () => {
+    const check = async (image: string, script: Parameters<typeof fake.env>[0]) =>
+      (await checkServerContainerHost({ image, env: fake.env(script) }).catch((e: unknown) => e)) as ServerContainerError;
+    const listCalls = () => fake.calls().filter((call) => call.argv[0] === 'image' && call.argv[1] === 'ls');
+
+    it('lists the local tagreeve-sgtm tags', async () => {
+      const error = await check('tagreeve-sgtm:0.5.0', { noImage: true, images: ['0.5.0-rc.2', '0.5.0-rc.1'] });
+      expect(error.errorClass).toBe('imageMissing');
+      expect(error.message).toBe('The image tagreeve-sgtm:0.5.0 is not available. Local tagreeve-sgtm images: 0.5.0-rc.2, 0.5.0-rc.1. Run: tagreeve server-container build');
+      expect(listCalls()[0]?.argv).toEqual(['image', 'ls', '--format', '{{.Tag}}', 'tagreeve-sgtm']);
+    });
+
+    it('says none when no tag exists', async () => {
+      const error = await check('tagreeve-sgtm:0.5.0', { noImage: true, images: ['<none>'] });
+      expect(error.message).toContain('Local tagreeve-sgtm images: none.');
+    });
+
+    it('keeps the plain message when the list call fails', async () => {
+      const error = await check('tagreeve-sgtm:0.5.0', { noImage: true, listFail: true });
+      expect(error.message).toBe('The image tagreeve-sgtm:0.5.0 is not available. Run: tagreeve server-container build');
+    });
+
+    it('keeps the plain message and lists nothing for another image', async () => {
+      const error = await check(`gcr.io/cloud-tagging-10302018/gtm-cloud-image@sha256:${'b'.repeat(64)}`, { noImage: true, images: ['0.5.0'] });
+      expect(error.message).toMatch(/^The image gcr\.io\/\S+ is not available\. Run: tagreeve server-container build$/);
+      expect(listCalls()).toEqual([]);
+    });
+  });
+
   it('classifies a missing docker command', async () => {
     const error = (await startServerContainer({ ...options(), env: { PATH: work, TAGREEVE_SERVER_CONTAINER_CONFIG: CONFIG } }).catch((e: unknown) => e)) as ServerContainerError;
     expect(error.errorClass).toBe('dockerMissing');

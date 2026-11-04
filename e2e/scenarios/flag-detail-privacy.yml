@@ -1,4 +1,6 @@
 start: /flag-detail?email=pw-flag.user%40example.test&h=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&sid=pwfake-cookie-value-0001
 steps:
   - wait: 3s
+  - evaluate: "fetch('https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&en=page_view&dl=' + encodeURIComponent('/web-pixels@0.0.0-fixture/sandbox/modern/account/pw-flag.user@example.test?email=pw-flag.user@example.test&sid=pwfake-cookie-value-0001'), { mode: 'no-cors' }).then(function () { return true; })"
+  - wait: 2s
 options: { seed: 1 }

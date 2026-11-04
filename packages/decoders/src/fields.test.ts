@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { MAX_POST_DATA, newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { decodeRequest } from './index.ts';
-import { bodyEntries, guardFieldName, looksLikeValueToken, multipartPartName, multipartParts, splitMultipart } from './fields.ts';
+import { bodyEntries, guardFieldName, isValueSegment, looksLikeValueToken, multipartPartName, multipartParts, splitMultipart } from './fields.ts';
 import { identifierClass, identifierSignal } from './identifiers.ts';
 
 test('multipartParts splits a body into headers and bodies, and returns null without a boundary', () => {
@@ -237,4 +237,17 @@ test('looksLikeValueToken flags value shapes and ignores the character check', (
   expect(looksLikeValueToken('Z2NwLXVzLWVhc3QxOjAxSFBXVEVTVDAw')).toBe(true);
   expect(looksLikeValueToken('about.html')).toBe(false);
   expect(looksLikeValueToken('fake-tee')).toBe(false);
+});
+
+test.each([
+  ['pw-fixture@example.com', true],
+  ['a%20b', true],
+  ['0123456789abcdef0123456789abcdef', true],
+  ['123e4567-e89b-12d3-a456-426614174000', true],
+  ['tel.555.555.0123.home', true],
+  ['fake-tee', false],
+  ['about.html', false],
+  ['', false],
+])('isValueSegment(%s)', (segment, expected) => {
+  expect(isValueSegment(segment)).toBe(expected);
 });

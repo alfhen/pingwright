@@ -14,4 +14,4 @@ Legal is right. While the banner is still open, two marketing tags already fire:
 
 GA4 behaves: it sends page_view with consent denied, as it should.
 
-Evidence: hit_…1FMT, hit_…E5Q2, hit_…E5Q6, hit_…W7CS, hit_…W7CT. Most likely a Meta and an Ads tag on All Pages without a consent check.
+Evidence: hit_…G3ZX, hit_…KSCG, hit_…KSCM, hit_…NE05, hit_…NE06. Most likely a Meta and an Ads tag on All Pages without a consent check.

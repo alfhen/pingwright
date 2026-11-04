@@ -215,6 +215,14 @@ test('byPage masks email, percent-encoded and phone segments', () => {
   expect(keys.sort()).toEqual(['/account/*', '/account/*', '/account/*', '/account/*', '/account/*', '/account/*', '/account/fake-tee']);
 });
 
+test('byPage masks a phone segment that only the value-shape check catches', () => {
+  const a = makeRun();
+  addHit(a, { page: 'https://shop.example.com/account/tel.555.555.0123.home' });
+  addHit(a, { page: 'https://shop.example.com/account/fake-tee' });
+  const keys = diffRuns(a, makeRun(), { byPage: true }).removed.map((h) => h.key.page).sort();
+  expect(keys).toEqual(['/account/*', '/account/fake-tee']);
+});
+
 test('byPage groups a hit without a page by its frame URL, else under an empty page', () => {
   const a = makeRun();
   const b = makeRun();

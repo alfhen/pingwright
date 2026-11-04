@@ -784,3 +784,34 @@ test('effectiveConsentAt gives the evaluator state for a hit near a boundary, wi
   const own = hit({ vendor: 'ga4', t: 980, consent: { ...allUnknown, analytics: 'granted' } });
   expect(effectiveConsentAt(own.hit, epochs, 50)).toMatchObject({ analytics: 'granted', ads: 'unknown' });
 });
+
+test('sentBy selects browser hits or server container hits, and no sentBy selects both', () => {
+  const browserHit = hit({ vendor: 'ga4', t: 100 });
+  const serverHit = hit({ vendor: 'ga4', t: 200 }, { captured: 'serverContainer', url: 'https://www.google-analytics.com/g/collect' });
+  const records = [browserHit, serverHit, epoch(0, null, 'undecided')];
+  const evidence = (filter: string) => rule(`expect:\n  must:\n    - { vendor: ga4, ${filter} }`, records).evidence;
+  expect(evidence('sentBy: browser')).toEqual([browserHit.hit.id]);
+  expect(evidence('sentBy: server')).toEqual([serverHit.hit.id]);
+  expect(evidence('count: 2')).toHaveLength(2);
+  expect(rule('expect:\n  mustNot:\n    - { vendor: ga4, host: www.google-analytics.com, sentBy: browser }', records).pass).toBe(true);
+  expect(rule('expect:\n  mustNot:\n    - { vendor: ga4, host: www.google-analytics.com }', records).pass).toBe(false);
+});
+
+test('a scoped sentBy: browser rule gets no probable-link note, and a sentBy: server rule still does', () => {
+  const via = hit({ vendor: 'meta', t: 1500 });
+  const sent = hit({ vendor: 'meta-capi', t: 500, via: { hitId: via.hit.id, by: 'eventId', confidence: 'probable' } }, { captured: 'serverContainer' });
+  const records = [via, sent, epoch(0, 1000, denied), epoch(1000, null, granted)];
+  const browserRule = rule('expect:\n  mustNot:\n    - { vendor: meta-capi, sentBy: browser, in: epoch(denied) }', records);
+  expect(browserRule.note).toBeUndefined();
+  expect(rule('expect:\n  mustNot:\n    - { vendor: meta-capi, sentBy: server, in: epoch(denied) }', records).note).toBe('serverSendProbableLink');
+});
+
+test.each([
+  ['a relative page', '/web-pixels@abc/sandbox/modern/account/pw-test%40example.test?email=pw-test%40example.test', '/web-pixels@abc/sandbox/modern/account/(other)'],
+  ['a protocol-relative page', '//shop.example.com/web-pixels@abc/sandbox/modern/orders/0123456789abcdef0123456789abcdef?sid=1', 'shop.example.com/web-pixels@abc/sandbox/modern/orders/(other)'],
+  ['an absolute page', 'https://shop.example.com/web-pixels@abc/sandbox/modern/account/pw-test@example.test', 'shop.example.com/web-pixels@abc/sandbox/modern/account/(other)'],
+])('the sandboxPageUrl message masks value-like path segments of %s', (_form, page, shown) => {
+  const message = run('start: /', [hit({ page })]).find((r) => r.expectation === 'builtin: sandboxPageUrl')!.message;
+  expect(message).toContain(shown);
+  expect(message).not.toMatch(/pw-test|0123456789abcdef|email|sid/);
+});

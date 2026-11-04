@@ -27,6 +27,13 @@ export function looksLikeValueToken(segment: string): boolean {
   return DIGEST_TOKEN.test(segment) && /[A-Z]/.test(segment) && /[a-z]/.test(segment) && /\d/.test(segment);
 }
 
+// A UUID has dashes, so the hex test also runs on the segment without them.
+export function isValueSegment(segment: string): boolean {
+  if (looksLikeValueToken(segment) || looksLikeValueToken(segment.replaceAll('-', ''))) return true;
+  if (segment.includes('@') || /%[0-9a-fA-F]{2}/.test(segment)) return true;
+  return valueKinds(segment).size > 0;
+}
+
 function looksLikeValue(segment: string): boolean {
   return !NAME_CHARS.test(segment) || looksLikeValueToken(segment);
 }

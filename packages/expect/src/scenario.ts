@@ -26,6 +26,8 @@ export interface Filter {
   transport?: string[];
   host?: string[];
   outcome?: RequestOutcome[];
+  /** Without it a rule matches hits from both senders. */
+  sentBy?: 'browser' | 'server';
   params: Record<string, string>;
 }
 
@@ -149,7 +151,7 @@ export class ScenarioError extends Error {
   }
 }
 
-const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after', 'from']);
+const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after', 'from', 'sentBy']);
 const GROUP_KEYS = ['consent', 'ids', 'params', 'identity', 'body'] as const;
 const COOKIE_RULE_KEYS = ['cookie', 'before', 'in', 'after', 'from'];
 const BODY_KEYS = ['has', 'only', 'ignore'] as const;
@@ -616,6 +618,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       } else if (k === 'event' || k === 'transport' || k === 'host') {
         const l = list(k, v);
         if (l) filter[k] = l;
+      } else if (k === 'sentBy') {
+        if (v === 'browser' || v === 'server') filter.sentBy = v;
+        else fail(p, 'must be browser or server');
       } else if (k === 'outcome') {
         const l = list(k, v, OUTCOMES);
         if (l) filter.outcome = l as RequestOutcome[];

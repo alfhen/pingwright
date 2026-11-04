@@ -26,7 +26,7 @@ import {
   binaryShare,
   globToRegExp,
 } from '@tagreeve/core';
-import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, maskValuePath, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -50,6 +50,8 @@ interface Context {
   hits: Hit[];
   requests: Map<string, Request>;
   index: JudgeIndex;
+  /** Fixed before `asBrowserHits` rewrites requests, so `sentBy` keeps its meaning in a counterfactual. */
+  serverHitIds: ReadonlySet<string>;
   epochs: EvalEpoch[];
   steps: Step[];
   responses: Response[];
@@ -66,10 +68,12 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
   const runId = runRecord?.id ?? records.find((r) => 'runId' in r)?.runId ?? newId('run');
   const allHits = records.filter((r): r is Hit => r.type === 'hit');
   const allRequests = new Map(records.filter((r): r is Request => r.type === 'request').map((r) => [r.id, r]));
+  const index = judgeIndex(allHits, allRequests);
   const ctx: Context = {
     hits: allHits,
     requests: allRequests,
-    index: judgeIndex(allHits, allRequests),
+    index,
+    serverHitIds: new Set(allHits.filter((h) => isServerHit(h, index)).map((h) => h.id)),
     epochs: records
       .filter((r): r is EvalEpoch => r.type === 'consentEpoch')
       .sort((a, b) => a.startT - b.startT),
@@ -492,6 +496,7 @@ function describeSelector(filter: Filter): string {
     filter.transport && 'transport',
     filter.page && 'page',
     filter.outcome && 'outcome',
+    filter.sentBy && 'sentBy',
     Object.keys(filter.ids).length > 0 && 'ids',
     Object.keys(filter.params).length > 0 && 'params',
     Object.keys(filter.consent).length > 0 && 'consent',
@@ -541,6 +546,7 @@ function matchesFilter(hit: Hit, f: Filter, ctx: Context): boolean {
     if (hit.page === null) return false;
     if ('equals' in f.page ? hit.page !== f.page.equals : !new RegExp(f.page.matches).test(hit.page)) return false;
   }
+  if (f.sentBy && ctx.serverHitIds.has(hit.id) !== (f.sentBy === 'server')) return false;
   if (f.transport && !f.transport.includes(hit.transport)) return false;
   for (const [name, want] of Object.entries(f.params)) if (hit.params[name] !== want) return false;
   if (f.host || f.outcome) {
@@ -916,10 +922,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
 function pageWithoutQuery(page: string | null): string {
   if (!page) return '';
   try {
-    const url = new URL(page);
-    return `${url.host}${url.pathname}`;
+    const url = new URL(page.startsWith('//') ? `http:${page}` : page);
+    return `${url.host}${maskValuePath(url.pathname, '(other)')}`;
   } catch {
-    return page.split(/[?#]/)[0]!;
+    return maskValuePath(page.split(/[?#]/)[0]!, '(other)');
   }
 }
 

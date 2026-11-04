@@ -53,7 +53,7 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 
 `tagreeve run --help` prints this command's own help.
 
-With `--server-container`, the text summary has a `Server container` line, for example `Server container: image ok; 7 vendor calls, 5 linked exactly, 1 probable, 1 unlinked; 3 requests forwarded to Google`, followed by what the local container does not show. A failed container reads `failed (<error class>)`, and the stand-in container of the test seam reads `stand-in container (test seam)`. `--json` has `serverContainer` with `calls`, `exact`, `probable`, `unlinked`, `forwarded` and, when the container failed, `error`. The text summary lists hits per vendor and event, consent epochs, flags (`unknownDestination` and `firstPartySubdomain` grouped by host, `platformHost` as one line per platform with the request count, the host count and the request count by purpose, and `sandboxPageUrl` grouped by vendor, each with a count and up to three example paths, or one for `sandboxPageUrl`; `possibleRealData` is one line with a count; the `--json` summary keeps every flag), each expectation with PASS, FAIL or WARN (failures show the message; every expectation shows up to five evidence IDs and a count of the rest), and the path of the JSONL file. When a result has a note, a `note:` line with fixed text follows its `PASS`, `WARN` or `FAIL` line. The `--json` summary has the note code in `note` on that result. The text holds no field values. A flag's request, in the text and in `--json`, reads `METHOD scheme://host/path?name&name`: query names only, never values, and a value-like query name reads `(other)`. Path segments are not masked. The record keeps the full flag detail. The `result` records are appended to that file.
+With `--server-container`, the text summary has a `Server container` line, for example `Server container: image ok; 7 vendor calls, 5 linked exactly, 1 probable, 1 unlinked; 3 requests forwarded to Google`, followed by what the local container does not show. A failed container reads `failed (<error class>)`, and the stand-in container of the test seam reads `stand-in container (test seam)`. `--json` has `serverContainer` with `calls`, `exact`, `probable`, `unlinked`, `forwarded` and, when the container failed, `error`. The text summary lists hits per vendor and event, consent epochs, flags (`unknownDestination` and `firstPartySubdomain` grouped by host, `platformHost` as one line per platform with the request count, the host count and the request count by purpose, and `sandboxPageUrl` grouped by vendor, each with a count and up to three example paths, or one for `sandboxPageUrl`; `possibleRealData` is one line with a count; the `--json` summary keeps every flag), each expectation with PASS, FAIL or WARN (failures show the message; every expectation shows up to five evidence IDs and a count of the rest), and the path of the JSONL file. When a result has a note, a `note:` line with fixed text follows its `PASS`, `WARN` or `FAIL` line. The `--json` summary has the note code in `note` on that result. The text holds no field values. A flag's request, in the text and in `--json`, reads `METHOD scheme://host/path?name&name`: query names only, never values, and a value-like query name or a bare query item reads `(other)`, and so does a path segment that looks like a value, such as an email, a phone number or a hash. The URL can be absolute, protocol-relative or relative. The URL runs to the end of the detail, or to ` as the page` in a `<vendor> received <url> as the page` detail, so a space inside it does not end it. The record keeps the full flag detail. The `result` records are appended to that file.
 
 Tracker list: `--tracker-list <file>` takes a JSON array of `{ "vendor", "host", "paths"?, "source" }` entries, with the same checks as the built-in list. `vendor` is a lowercase key that is not a built-in decoder key (`ga4`, `google-ads`, `meta`, `meta-capi`, `pinterest`, `sgtm`), `host` is an exact host or `*.domain`, `paths` are path prefixes and `source` is an https link to the vendor's docs. In `stub` mode, a request to a listed path is stubbed for every resource type, and a request to a listed host without paths is stubbed unless it is a script, stylesheet, font or document load. A whole-host image or other request with no query and no body is stubbed but gives no hit. Each other such request becomes a minimal hit with the entry's vendor, the event and page when the URL has a common parameter for them, unknown consent and transport `tracker-list`. A listed vendor is a valid `vendor:` key in the scenario, and its requests are not flagged as `unknownDestination`. A request that a built-in decoder matches stays with that decoder. The file is read before the scenario, and a bad file exits 2.
 
@@ -194,6 +194,23 @@ Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not
 | `sgtm` | `v`, `tid`, `event`, `en`, `dtdc` |
 
 The lists are exported from `@tagreeve/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE`, `META_CAPI_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
+
+### Rules by sender
+
+With `--server-container`, the container's own calls to vendors are decoded as hits too. `sentBy` in a hit rule picks who sent the hit.
+
+```yaml
+expect:
+  mustNot:
+    - { vendor: ga4, host: region1.google-analytics.com, sentBy: browser }
+  must:
+    - { vendor: ga4, host: region1.google-analytics.com, sentBy: server }
+```
+
+- `sentBy: browser` matches hits from requests the browser sent. `sentBy: server` matches hits decoded from a server container call. Without `sentBy` a rule matches both. Any other value is a scenario error that names the rule.
+- It works in `must` and `mustNot`, with every other filter key. Cookie rules do not take it.
+- Without `--server-container` no hit comes from the container, so `sentBy: server` matches nothing.
+- A `sentBy: browser` rule never judges a server container call, so the notes `serverSendUnlinked` and `serverSendProbableLink` do not apply to it.
 
 ### Rules from a step
 
