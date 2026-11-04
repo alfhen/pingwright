@@ -31,6 +31,9 @@ test('a checkout_completed push from a srcdoc frame shortly before the run ends 
   expect(other).toBeDefined();
   const otherRequest = records!.requests.find((r) => r.id === other!.requestId);
   expect(otherRequest!.frameUrl).toBe('about:srcdoc');
+  const push = records!.dataLayerEvents.find((e) => e.event === 'checkout_completed');
+  expect(other!.t).toBeGreaterThanOrEqual(push!.t);
+  expect(other!.t).toBeLessThan(records!.steps.at(-1)!.endedAt!);
   const gaps = records!.flags.filter((f) => f.kind === 'unloadGap');
   expect(gaps).toHaveLength(1);
   expect(gaps[0]!.detail).toContain('"checkout_completed"');

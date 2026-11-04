@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>fixture frame navigation</title></head>
+<body>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  var again = window.name === 'pw-navigated';
+  setTimeout(function () {
+    if (!again) {
+      window.dataLayer.push({ event: 'add_to_cart' });
+      window.name = 'pw-navigated';
+      location.href = location.href;
+    } else {
+      fetch('https://sgtm.tagreeve.invalid/g/collect?v=2&tid=G-PWTEST0001&cid=3333333333.4444444444&gcs=G100&en=other_frame_ga', { method: 'POST', mode: 'no-cors', body: '' }).catch(function () {});
+    }
+  }, 400);
+</script>
+</body>
+</html>

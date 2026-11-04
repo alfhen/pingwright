@@ -45,6 +45,8 @@ const pages: Record<string, string> = {
   '/unload-beacons-bare': 'unload-beacons-bare.html',
   '/unload-gap': 'unload-gap.html',
   '/unload-gap-checkout': 'unload-gap-checkout.html',
+  '/unload-gap-frame-nav': 'unload-gap-frame-nav.html',
+  '/unload-gap-frame-nav-frame': 'unload-gap-frame-nav-frame.html',
   '/unload-request-body': 'unload-request-body.html',
   '/compressed-beacon': 'compressed-beacon.html',
   '/body-paths': 'body-paths.html',

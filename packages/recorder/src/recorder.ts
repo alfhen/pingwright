@@ -861,6 +861,8 @@ export class Recorder {
       postData: body,
       outcome: 'passed',
     });
+    const frameId = this.requestFrameIds.get(first.id);
+    if (frameId !== undefined) this.requestFrameIds.set(record.id, frameId);
     return record;
   }
 
