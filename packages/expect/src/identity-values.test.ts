@@ -568,3 +568,25 @@ test('hashesMatch does not count Meta custom data as unchecked identity fields',
   expect(r.pass).toBe(false);
   expect(r.message).not.toContain('that Tagreeve does not check');
 });
+
+test.each([
+  ['a percent-encoded body value next to a longer hit field from the URL', 'en=x&ann%40shop.example', 'joann%40shop.example'],
+])('possibleRealData keeps a hit field apart from a body value it is not read from: %s', (_n, body, field) => {
+  const req: Request = {
+    ...rawRequest(`https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&en=page_view&ep.note=${field}`, body),
+    method: 'POST',
+  };
+  const hits = decodeRequest(req);
+  expect(hits.length).toBeGreaterThan(0);
+  const [leak] = findForeignData([req], hits, identity);
+  expect(leak!.detail).toContain('carries 2 email value(s)');
+});
+
+test.each([
+  ['a base64 field and a percent-encoded line', `a=${Buffer.from('joann@shop.example').toString('base64')}\nann%40shop.example`, 'email'],
+  ['a JSON-escaped line and a percent-encoded line', '{"a":"joann\\u0040shop.example"}\nann%40shop.example', 'email'],
+  ['a base64 phone and a percent-encoded phone', `a=${Buffer.from('+1 555 123 4567 x').toString('base64')}\n555%20123%204567`, 'phone'],
+])('possibleRealData keeps two body values apart across decoded forms: %s', (_n, body, kind) => {
+  const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
+});

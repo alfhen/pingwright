@@ -1421,33 +1421,43 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 
 // The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
 // merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
-// merges, and only when the shorter value occurs in some form of the body and never stands alone in any form: a different value
-// in the URL, or a separate value that a longer one contains, keeps its own finding.
+// merges, and only when the longer value occurs in some form of the body and the shorter one never stands alone: in a form the
+// longer value is missing from, the text that form was decoded from must hold the longer value. A different value in the URL,
+// or a separate value that a longer one contains, keeps its own finding.
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.includes(short)) return false;
+  const strip = (text: string) => text.replace(/\[\]|%5B%5D/gi, '');
   let occurs = false;
-  const merges = bodies.every((raw) =>
-    bodyForms(raw).every((form) => {
-      const text = form.replace(/\[\]|%5B%5D/gi, '');
+  let longOccurs = false;
+  const merges = bodies.every((raw) => {
+    for (const [form, parents] of bodyForms(raw)) {
+      const text = strip(form);
       const covered: [number, number][] = [];
       for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
+      if (covered.length > 0) longOccurs = true;
       for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
         occurs = true;
-        const standsAlone = !covered.some(([from, to]) => i >= from && i + short.length <= to);
-        if (standsAlone && (form === raw || covered.length > 0)) return false;
+        if (covered.some(([from, to]) => i >= from && i + short.length <= to)) continue;
+        if (form === raw || covered.length > 0) return false;
+        if (![...parents].some((parent) => strip(parent).includes(long))) return false;
       }
-      return true;
-    }),
-  );
-  return occurs && merges;
+    }
+    return true;
+  });
+  return occurs && longOccurs && merges;
 }
 
-// Approximates the forms core's scan reads a body in. Percent runs decode one by one and a bad run stays raw, repeated until
-// the text stops changing, as core's variants() does. Each step is also read with '+' as a space. Base64 is tried on whole
-// tokens at offset 0 only, up to core's depth.
-function bodyForms(raw: string): string[] {
-  const forms = new Set([raw]);
+// Approximates the forms core's scan reads a body in, each with the texts it was decoded from. Percent runs decode one by one
+// and a bad run stays raw, repeated until the text stops changing, as core's variants() does. Each step is also read with '+'
+// as a space. Base64 is tried on whole tokens at offset 0 only, up to core's depth.
+function bodyForms(raw: string): Map<string, Set<string>> {
+  const forms = new Map<string, Set<string>>([[raw, new Set()]]);
+  const add = (form: string, parent: string) => {
+    const parents = forms.get(form) ?? new Set<string>();
+    if (form !== parent) parents.add(parent);
+    forms.set(form, parents);
+  };
   const decode = (text: string) =>
     text.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
       try {
@@ -1457,21 +1467,23 @@ function bodyForms(raw: string): string[] {
       }
     });
   const visited = new Set<string>();
-  const read = (text: string, depth: number): void => {
+  const read = (text: string, depth: number, source: string): void => {
+    let parent = source;
     for (let step = text; !visited.has(step); step = decode(step)) {
       visited.add(step);
-      forms.add(step);
-      forms.add(decode(step.replace(/\+/g, ' ')));
+      add(step, parent);
+      add(decode(step.replace(/\+/g, ' ')), step);
+      parent = step;
       if (depth >= 3) continue;
       for (const token of step.match(/[A-Za-z0-9+/_-]{16,}={0,2}/g) ?? []) {
         const bytes = Buffer.from(token, 'base64');
-        if (bytes.length) read(bytes.toString('utf8'), depth + 1);
+        if (bytes.length) read(bytes.toString('utf8'), depth + 1, step);
       }
     }
   };
-  read(raw, 0);
-  forms.add(raw.replace(/\\u([0-9a-f]{4})/gi, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(["\\/])/g, '$1'));
-  return [...forms];
+  read(raw, 0, raw);
+  add(raw.replace(/\\u([0-9a-f]{4})/gi, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(["\\/])/g, '$1'), raw);
+  return forms;
 }
 
 function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>, bodies: string[]): void {
