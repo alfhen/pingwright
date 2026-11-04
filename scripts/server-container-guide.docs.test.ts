@@ -17,13 +17,15 @@ function tagreeveCommands(markdown: string): string[] {
 }
 
 export function unsafeFileTargets(markdown: string): string[] {
-  const snippets = [...markdown.matchAll(/```[a-z]*\n([\s\S]*?)```/g)].map((m) => m[1]!);
-  const prose = markdown.replace(/```[a-z]*\n[\s\S]*?```/g, '');
+  const fence = /(```|~~~)[a-z]*\n([\s\S]*?)\1/g;
+  const snippets = [...markdown.matchAll(fence)].map((m) => m[2]!);
+  const prose = markdown.replace(fence, '');
   snippets.push(...[...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]!));
   const targets: string[] = [];
   for (const snippet of snippets) {
-    const text = snippet.replace(/\d*>&[\d-]*/g, ' ');
+    const text = snippet.replace(/\\\n/g, ' ').replace(/\d*>&(?:\d+|-)/g, ' ');
     for (const m of text.matchAll(/(?:^|[^<>-])>>?\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
+    for (const m of text.matchAll(/(?:^|[\s;|(])>&([^\s;|&)<>]+)/g)) targets.push(m[1]!);
     for (const m of text.matchAll(/\bchmod\s+([^;|&)\n]+)/g)) {
       const words = m[1]!.trim().split(/\s+/);
       while (words.length && /^(-[RvcfHLP]+|--[a-z-]+(=.*)?)$/.test(words[0]!)) words.shift();
@@ -78,6 +80,9 @@ test.each([
   ['a relative chmod in a fence', '```bash\nchmod -R 600 a.txt ~/ok.txt\n```', ['a.txt']],
   ['a relative chmod whose mode starts with a dash', '```bash\nchmod -w sgtm-config.txt\n```', ['sgtm-config.txt']],
   ['a relative encode target', '```bash\n(umask 077; tr -d x < plain.txt | base64 > workspace.txt)\n```', ['workspace.txt']],
+  ['a tilde fence', '~~~bash\ncat > sgtm-config.txt\n~~~', ['sgtm-config.txt']],
+  ['a redirect with >&', '```bash\ncat >&sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['a chmod after a continuation', '```bash\nchmod \\\n  600 sgtm-config.txt\n```', ['sgtm-config.txt']],
   ['home targets and stderr redirects', '```bash\ncat > ~/a 2>&1\nchmod 600 ~/a\n```', []],
 ])('the target check catches %s', (_name, markdown, expected) => {
   expect(unsafeFileTargets(markdown)).toEqual(expected);

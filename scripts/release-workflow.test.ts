@@ -61,6 +61,7 @@ export function workflowProblems(source: string, readLocal: (rel: string) => str
     if (!line.includes('--tag "$dist_tag"')) problems.push(`publish without --tag "$dist_tag": ${line.trim()}`);
   }
   for (const line of lines) {
+    if (/gh\s+release/.test(line)) problems.push(`gh release: ${line.trim()}`);
     if (/docker\s+(push|login)\b/.test(line) || (/\bbuild\b/.test(line) && /--push\b/.test(line))) {
       problems.push(`docker publish: ${line.trim()}`);
     }
@@ -243,6 +244,12 @@ describe('workflow rules', () => {
 
   it('lets a plain docker build through', () => {
     expect(workflowProblems(base(`${good}      - run: docker build -t x .\n`))).toEqual([]);
+  });
+
+  it('fails gh release in a nested workflow', () => {
+    const nested = base(`${good}      - run: gh release create v1\n`);
+    const wf = base('', 'permissions:\n  contents: read\n').replace('jobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n', 'jobs:\n  a:\n    uses: ./.github/workflows/build.yml\n');
+    expect(workflowProblems(wf, () => nested)).toEqual(['./.github/workflows/build.yml: gh release: gh release create v1']);
   });
 
   it('still finds gh release behind a quoted #', () => {
