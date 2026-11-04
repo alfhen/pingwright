@@ -95,6 +95,16 @@ test('identity.hashesMatch fails a plain ct, zp or country on a Conversions API 
   expect(zip.message).not.toContain('hashed postal code values');
 });
 
+test('identity.hashesMatch counts a Conversions API hit once however many plain address fields it carries', () => {
+  const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
+  const good = sha(identity.email);
+  const bad = capiHit(good, { ct: ['nowhere'], zp: ['00000'], country: ['zz'] });
+  const result = run([capiHit(good), bad], rule);
+  expect(result.pass).toBe(false);
+  expect(result.message).toContain('(1 of 2 hits)');
+  expect(result.evidence).toEqual([bad.hit.id]);
+});
+
 test('identity.hashesMatch checks the second value of ct and fn', () => {
   const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
   const good = sha(identity.email);

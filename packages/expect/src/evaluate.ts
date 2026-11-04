@@ -855,6 +855,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     let seen = false;
     let bad = false;
     let raw = false;
+    let plainHit = false;
     if (hit.vendor === 'meta') {
       for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(guardFieldName(id));
     }
@@ -865,7 +866,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       if (verdict === 'plain') {
         if (hit.vendor === 'meta-capi') {
           plainCapiFields.add(label);
-          plainCapi.push(hit.id);
+          plainHit = true;
         } else plainAddressFields.add(label);
         continue;
       }
@@ -886,6 +887,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     if (seen) withHash.push(hit.id);
     if (bad) wrong.push(hit.id);
     if (raw) unhashed.push(hit.id);
+    if (plainHit) plainCapi.push(hit.id);
   }
   const several = hits.length > 1;
   const they = several ? 'they' : 'it';
