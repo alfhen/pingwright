@@ -102,7 +102,7 @@ Server container: image ok; 7 vendor calls, 5 linked exactly, 1 probable, 1 unli
 
 The report gives each server vendor its own row, for example `Google Ads (google-ads), sent by the server container`. Each call in a row is placed in the consent epoch of the browser hit it is linked to, so one row can span several epochs. Calls with no link are in an unlinked column after the last epoch. Notes on a result tell you how far to trust that link:
 
-- `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not by an event ID. A probable link can warn but cannot fail a run.
+- `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not proven. A probable link can warn but cannot fail a run. A client ID link is exact only when the call has the same client ID and event name as one browser hit whose request to the container was still waiting for its answer. That needs a container that answers after its tags send. Two such hits, or a container that answers first, leave the link probable.
 - `serverSendUnlinked`: no browser hit was found for the call. A check that depends on consent cannot judge it, so that check warns.
 
 A rule that should judge only the browser, or only the container, takes `sentBy: browser` or `sentBy: server`. A browser-only `mustNot` on a Google host then ignores the container's own calls. See [Rules by sender](../cli.md#rules-by-sender).

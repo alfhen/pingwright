@@ -65,11 +65,19 @@ interface Facts {
   onServerHost: boolean;
 }
 
+/** When a browser request was sent to the container and when its answer arrived, in the clock that stamps container calls. */
+export interface InFlightWindow {
+  sentAt: number;
+  answeredAt: number;
+}
+
 export interface LinkInput {
   hits: readonly Hit[];
   requests: readonly Request[];
   serverHosts: readonly string[];
   identity: Identity | null;
+  /** By request ID. A request with no answer time is not here, so it never counts as in flight. */
+  inFlight?: ReadonlyMap<string, InFlightWindow>;
 }
 
 function sharedKind(server: Facts, browser: Facts): 'eventId' | 'clientId' | 'identity' | undefined {
@@ -82,10 +90,12 @@ function sharedKind(server: Facts, browser: Facts): 'eventId' | 'clientId' | 'id
 /**
  * Adds `via` to each hit decoded from a server container call. The proxy cannot see which browser hit led to a call,
  * so the first rule that fits decides: (1) the event ID and event name match exactly one browser hit, `exact`;
- * (2) a shared value, `probable`: the latest earlier hit to a `serverHosts` host, else the latest earlier browser hit.
+ * (2) the client ID and event name match exactly one browser hit to a `serverHosts` host whose request to the container
+ * was in flight when the call arrived, `exact`; two or more such hits give no exact link;
+ * (3) a shared value, `probable`: the latest earlier hit to a `serverHosts` host, else the latest earlier browser hit.
  * No match leaves the hit unlinked. Browser hits are returned as they are.
  */
-export function linkServerHits({ hits, requests, serverHosts, identity }: LinkInput): Hit[] {
+export function linkServerHits({ hits, requests, serverHosts, identity, inFlight }: LinkInput): Hit[] {
   const byId = new Map(requests.map((r) => [r.id, r]));
   const facts: Facts[] = hits.map((hit) => {
     const request = byId.get(hit.requestId);
@@ -105,6 +115,18 @@ export function linkServerHits({ hits, requests, serverHosts, identity }: LinkIn
     if (!isServer(f)) return f.hit;
     const exact = f.eventId === undefined ? [] : browser.filter((b) => b.eventId === f.eventId && b.hit.event === f.hit.event);
     if (exact.length === 1) return { ...f.hit, via: { hitId: exact[0]!.hit.id, by: 'eventId', confidence: 'exact' } };
+    const callAt = f.request?.t;
+    const live =
+      callAt === undefined || f.hit.event === null
+        ? []
+        : browser.filter((b) => {
+            const window = inFlight?.get(b.hit.requestId);
+            if (!window || !b.onServerHost || b.hit.event !== f.hit.event) return false;
+            if (callAt < window.sentAt || callAt >= window.answeredAt) return false;
+            for (const id of f.clientIds) if (b.clientIds.has(id)) return true;
+            return false;
+          });
+    if (live.length === 1) return { ...f.hit, via: { hitId: live[0]!.hit.id, by: 'clientId', confidence: 'exact' } };
     const earlier = browser.flatMap((b) => {
       const by = b.hit.t <= f.hit.t ? sharedKind(f, b) : undefined;
       return by ? [{ b, by }] : [];

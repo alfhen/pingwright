@@ -54,7 +54,7 @@ import { redactHeaders } from './redact.ts';
 import { runSelfTest } from './selftest.ts';
 import { isKnownVendorCollection, isServerContainerRequest, isStubbedCollection, setCookieNameOf, setCookieNamesOf, stubResponse } from './stub.ts';
 import { QUIET_MS, startServerContainerSession, waitForQuiet, type ServerContainerSession } from './server-container/capture.ts';
-import { linkServerHits } from './server-container/link.ts';
+import { linkServerHits, type InFlightWindow } from './server-container/link.ts';
 import { ServerContainerError, type ConfigSource } from './server-container/runner.ts';
 import { onTerminate } from './terminate.ts';
 import { UNLOAD_BINDING, UNLOAD_FLUSH, unloadInitScript, type UnloadSendPayload } from './unload.ts';
@@ -195,6 +195,8 @@ export class Recorder {
   private readonly extraRequests: Request[] = [];
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
+  /** Memory only: never a record field. */
+  private readonly containerFlights = new Map<string, InFlightWindow>();
   private readonly handedToChromium = new Set<string>();
   private readonly redirectHeaderWithoutRedirect = new Set<string>();
   private readonly selfRecorded = new WeakSet<PwRequest>();
@@ -631,6 +633,7 @@ export class Recorder {
     void _host;
     record.outcome = 'stubbed';
     this.stubRecorded.add(record.id);
+    const sentAt = nodeNow();
     let client: APIRequestContext | undefined;
     try {
       client = await playwrightRequest.newContext();
@@ -640,6 +643,7 @@ export class Recorder {
         data: original.postDataBuffer() ?? undefined,
         maxRedirects: 0,
       });
+      this.containerFlights.set(record.id, { sentAt, answeredAt: nodeNow() });
       this.recordApiResponse(record, response);
       await route.fulfill({ response });
     } catch (error) {
@@ -1013,7 +1017,7 @@ export class Recorder {
     }
     const requests = [...this.requests.values(), ...this.extraRequests];
     let hits: Hit[] = requests.flatMap((r) => decodeRequest(r, undefined, this.trackers));
-    if (this.session) hits = linkServerHits({ hits, requests, serverHosts: this.options.serverHosts ?? [], identity: this.run.identity });
+    if (this.session) hits = linkServerHits({ hits, requests, serverHosts: this.options.serverHosts ?? [], identity: this.run.identity, inFlight: this.containerFlights });
     const flags = buildFlags({
       runId: this.runId,
       networkMode: this.options.networkMode,
