@@ -176,8 +176,8 @@ function readBlockingControls(): BlockingControl[] {
     const input = el as HTMLInputElement;
     const checkbox = el instanceof HTMLInputElement && el.type === 'checkbox';
     let reason: BlockReason | undefined;
-    if (checkbox && !input.checked && (input.required || el.getAttribute('aria-required') === 'true')) reason = 'required, not ticked';
-    else if ('validity' in el && input.validity.valid === false) reason = 'invalid';
+    if (checkbox && !input.checked && input.willValidate && (input.required || el.getAttribute('aria-required') === 'true')) reason = 'required, not ticked';
+    else if ('validity' in el && input.willValidate && input.validity.valid === false) reason = 'invalid';
     else if (el.getAttribute('aria-invalid') === 'true') reason = 'aria-invalid';
     if (!reason) continue;
     const kind = el instanceof HTMLInputElement ? el.type : (el.getAttribute('role') ?? el.tagName.toLowerCase());
