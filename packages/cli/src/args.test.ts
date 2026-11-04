@@ -191,7 +191,14 @@ test.each([
 test('an unknown option is one short line', () => {
   for (const argv of [['run', 's.yml', '--site', 'http://x.test', '--bogus'], ['--bogus'], ['diff', '-x']]) {
     const flag = argv.find((a) => a === '--bogus' || a === '-x')!;
-    expect(() => parseCli(argv)).toThrow(`Unknown option ${flag}.`);
+    let error: unknown;
+    try {
+      parseCli(argv);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(`Unknown option ${flag}.`);
   }
 });
 
