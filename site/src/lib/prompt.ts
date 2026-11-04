@@ -13,6 +13,6 @@ Rules for you:
 - Never type real personal data. Tagreeve makes a fake visitor for each run.
 - Never automate a payment or a log-in. Use a \`handoff\` step and ask me to do that part.
 - Do not use \`--network live\` unless I ask for it.
-- Keep the \`runs/\` folder on my machine. Do not commit it or upload it.`;
+- Keep the \`tagreeve/runs/\` folder on my machine. Do not commit it or upload it.`;
 
 export const INSTALL_COMMAND = 'npm i -g tagreeve';

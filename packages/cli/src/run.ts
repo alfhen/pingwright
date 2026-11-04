@@ -28,6 +28,7 @@ import {
   type TestPayment,
 } from '@tagreeve/recorder';
 import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
+import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
 import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs, type SuiteArgs } from './args.ts';
 import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 import { acceptsDeclaration, checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
@@ -341,6 +342,11 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   }
   warnTestGtmOrigin(io);
   warnTestLoopbackHosted(io);
+  const out = resolveOutDir({ out: args.out, now: new Date() });
+  if (args.out === undefined) {
+    const notice = await oldRunsNotice(process.cwd());
+    if (notice) io.stderr(notice);
+  }
 
   const outcome = await executeRun(
     {
@@ -348,7 +354,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       scenarioName: basename(args.scenario),
       network,
       site: args.site,
-      out: args.out,
+      out,
       seed: args.seed,
       headed: args.headed,
       viewport: args.viewport,

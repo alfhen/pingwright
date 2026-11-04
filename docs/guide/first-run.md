@@ -50,7 +50,7 @@ Replace the address with your own site. Use a test copy of your site when you ca
 flowchart TB
   a["scenario.yml<br/>and --site"] --> b["tagreeve run"]
   b --> c["Chromium plays<br/>the visitor"]
-  c --> d["Text summary,<br/>record file<br/>runs/run_ID.jsonl,<br/>exit code 0, 1 or 2"]
+  c --> d["Text summary,<br/>record file<br/>tagreeve/runs/DATE/run_ID.jsonl,<br/>exit code 0, 1 or 2"]
 ```
 
 `tagreeve run` plays the scenario in Chromium, then prints a summary, writes a record file and sets the exit code.

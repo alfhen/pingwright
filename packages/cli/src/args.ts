@@ -24,7 +24,7 @@ export interface RunArgs {
   scenario: string;
   site: string;
   network: Network | undefined;
-  out: string;
+  out: string | undefined;
   seed: number | undefined;
   headed: boolean;
   viewport?: Viewport;
@@ -76,7 +76,7 @@ export interface SuiteArgs {
   stores?: string;
   variants: VariantArg[];
   network: Network | undefined;
-  out: string;
+  out: string | undefined;
   seed: number | undefined;
   withHandoff: boolean;
   withTestPayment: boolean;
@@ -128,7 +128,7 @@ Options for suite:
 Options for run:
   --site <url>               The site to test (required)
   --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
-  --out <dir>                Directory for the JSONL record (default: runs)
+  --out <dir>                Directory for the JSONL record (default: tagreeve/runs/<date>)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
@@ -152,7 +152,7 @@ and writes one JSONL record.
 Options:
   --site <url>               The site to test (required)
   --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
-  --out <dir>                Directory for the JSONL record (default: runs)
+  --out <dir>                Directory for the JSONL record (default: tagreeve/runs/<date>)
   --seed <n>                 Seed for the fake identity
   --headed                   Show the browser window
   --viewport <W>x<H>         Browser viewport in CSS pixels, such as 390x844. Overrides options.viewport. The user agent stays desktop
@@ -188,7 +188,7 @@ Compares the hits of two run records. It exits 0 whether or not they differ.
 
 Options:
   --by-page                  Add the page path to each key
-  --all-flags                Also show flag count changes for hosts allowed by allowUnknownDestination (hidden by default)
+  --all-flags                Also show flag count changes for hosts allowed by allowUnknownDestination and for platform hosts (hidden by default)
   --json                     Print the full diff result as JSON
   -h, --help                 Show this help
 `;
@@ -411,7 +411,7 @@ function parseCommand(argv: string[]): Command {
       ...(values.stores !== undefined && { stores: values.stores }),
       variants: parseVariants(values.variant ?? []),
       network,
-      out: values.out ?? 'runs',
+      out: values.out,
       seed,
       withHandoff: values['with-handoff'] ?? false,
       withTestPayment: values['with-test-payment'] ?? false,
@@ -433,7 +433,7 @@ function parseCommand(argv: string[]): Command {
     scenario: rest[0]!,
     site: values.site!,
     network,
-    out: values.out ?? 'runs',
+    out: values.out,
     seed,
     headed: values.headed ?? false,
     ...(viewport && { viewport }),
