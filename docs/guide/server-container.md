@@ -113,6 +113,7 @@ With `--json`, the same counts are in the `serverContainer` field. If the contai
 
 - Stape-only hosting features: the custom loader and its domain features, Cookie Keeper, the geo and bot headers Stape adds in front of the container, store ID headers, request logs and the CDN. A cookie that Cookie Keeper would set, or a header a tag reads from the hosting layer, is missing.
 - Unpublished workspaces with the live config. The container loads the published version. For a workspace, use a config from its preview environment (see "Test an unpublished workspace").
+- Sends from `pagehide` or `visibilitychange`. The page gets the answer, also for a `serverHosts` host, so the container never receives the hit and makes no vendor call for it.
 - Calls to a host that no decoder knows. They are recorded and flagged as unknown destinations.
 
 Tags that Stape ships as templates, such as the Data Client and the Facebook client, are part of your container and do run. The calls of template tags such as Meta Conversions API, Pinterest and Criteo are not yet proven to reach the proxy.
