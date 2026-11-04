@@ -521,3 +521,9 @@ describe('server container hits', () => {
     expect(model.rows.some((r) => r.server)).toBe(false);
   });
 });
+
+test('the header carries the run label and has no key without one', () => {
+  const base = records();
+  expect(buildReportModel({ ...base, run: { ...base.run, label: 'ca-307' } }).header.label).toBe('ca-307');
+  expect(buildReportModel(base).header).not.toHaveProperty('label');
+});

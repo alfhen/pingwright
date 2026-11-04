@@ -437,3 +437,13 @@ test('the suite title names the variants, host and date, and the run title the s
   expect(run).toContain('<title>Tagreeve run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</title>');
   expect(run).toContain('<h1>Tagreeve run: checkout &lt;i&gt; on shop.example.com, 2027-01-15</h1>');
 });
+
+test('a version 3 manifest with a label is accepted and the label is escaped in the header', () => {
+  const labelled: SuiteManifest = { ...manifest, suiteSchemaVersion: 3, label: 'a<i>b' };
+  const model = buildSuiteModel(labelled, loaded);
+  expect(model.header.label).toBe('a<i>b');
+  const html = renderSuiteReport(model);
+  expect(html).toContain('<dt>Label</dt><dd>a&lt;i&gt;b</dd>');
+  expect(html).not.toContain('<i>');
+  expect(renderSuiteReport(buildSuiteModel(manifest, loaded))).not.toContain('<dt>Label</dt>');
+});

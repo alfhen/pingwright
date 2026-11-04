@@ -53,6 +53,7 @@ export interface ReportModel {
   header: {
     scenario: string;
     variant: string | undefined;
+    label?: string;
     runId: string;
     startedAt: string;
     networkMode: string;
@@ -354,6 +355,7 @@ export function buildReportModel(records: RunRecords): ReportModel {
     header: {
       scenario: run.scenario,
       variant: run.variant,
+      ...(run.label !== undefined && { label: run.label }),
       runId: run.id,
       startedAt: new Date(run.startedAt).toISOString(),
       networkMode: run.networkMode,

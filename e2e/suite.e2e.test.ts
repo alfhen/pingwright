@@ -64,7 +64,7 @@ test('two scenarios by two variants: four cells, the workspace event as added, t
   expect(r.code, r.stderr).toBe(1);
 
   const manifest = JSON.parse(r.stdout) as Manifest;
-  expect(manifest).toMatchObject({ suiteSchemaVersion: 2, variants: ['published', 'workspace'], exitCode: 1 });
+  expect(manifest).toMatchObject({ suiteSchemaVersion: 3, variants: ['published', 'workspace'], exitCode: 1 });
   expect(manifest.site).toBe(new URL(site.url).origin);
   const status = (scenario: string, variant: string) => manifest.cells.find((c) => c.scenario === scenario && c.variant === variant)?.status;
   expect(manifest.cells).toHaveLength(4);

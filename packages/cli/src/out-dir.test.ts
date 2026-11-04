@@ -27,6 +27,13 @@ test('the default folder uses the local date', () => {
   expect(resolveOutDir({ out: undefined, now })).toBe(join('tagreeve', 'runs', '2026-11-04'));
 });
 
+test('a label is added to the default folder name and ignored with --out', () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  process.env.TZ = 'UTC';
+  expect(resolveOutDir({ out: undefined, now, label: 'ca-307-live' })).toBe(join('tagreeve', 'runs', '2026-11-04-ca-307-live'));
+  expect(resolveOutDir({ out: 'o', now, label: 'ca-307-live' })).toBe('o');
+});
+
 test('no notice without a runs folder', async () => {
   expect(await oldRunsNotice(dir)).toBeUndefined();
 });

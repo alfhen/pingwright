@@ -27,6 +27,8 @@ export interface ServerContainerSummary {
 
 export interface Summary {
   runId: string;
+  /** From `--label`. */
+  label?: string;
   path: string;
   /** Every result passed, warnings included, and the run shows no baseline drift. */
   pass: boolean;
@@ -97,6 +99,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
   const serverContainer = serverContainerOf(records);
   return {
     runId: records.run.id,
+    ...(records.run.label !== undefined && { label: records.run.label }),
     path,
     pass: results.every((r) => r.pass),
     ok: results.every(passesGate),
@@ -228,6 +231,7 @@ function serverContainerLines(summary: Summary): string[] {
 
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
+  if (summary.label !== undefined) lines.push(`Label: ${summary.label}`);
   if (summary.testPayment) {
     const { provider, host, testMode } = summary.testPayment;
     lines.push(`TEST PAYMENT: ${provider} on ${host} (test mode ${testMode === 'declared' ? 'declared' : 'on page'})`);

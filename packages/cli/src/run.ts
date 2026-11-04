@@ -91,6 +91,10 @@ export interface RunSpec {
   network: Network;
   site: string;
   out: string;
+  /** From `--label`. Written to `Run.label`. */
+  label?: string;
+  /** Set by `suite --stores`. Written to `Run.store`. */
+  store?: string;
   seed: number | undefined;
   headed: boolean;
   /** From `--viewport`. It wins over `options.viewport`. */
@@ -185,12 +189,20 @@ export function warnTestGtmOrigin(io: Io): void {
   if (origin) io.stderr(`Warning: ${TEST_GTM_ORIGIN_ENV} is set. gtm.js is fetched from ${origin}. This is for tests only.\n`);
 }
 
-async function labelRecord(path: string, variant: NonNullable<RunSpec['variant']>, out: string): Promise<string> {
+export async function labelRecord(path: string, spec: Pick<RunSpec, 'label' | 'store' | 'variant' | 'out'>): Promise<string> {
+  const { label, store, variant, out } = spec;
+  if (label === undefined && store === undefined && !variant) return path;
   const text = await readFile(path, 'utf8');
   const newline = text.indexOf('\n');
-  const run = { ...(JSON.parse(text.slice(0, newline)) as Run), variant: variant.name };
-  const target = join(out, `${variant.fileStem}.${variant.name}.jsonl`);
+  const run = {
+    ...(JSON.parse(text.slice(0, newline)) as Run),
+    ...(label !== undefined && { label }),
+    ...(store !== undefined && { store }),
+    ...(variant && { variant: variant.name }),
+  };
   await writeFile(path, `${JSON.stringify(run)}${text.slice(newline)}`);
+  if (!variant) return path;
+  const target = join(out, `${variant.fileStem}.${variant.name}.jsonl`);
   await rename(path, target);
   return target;
 }
@@ -259,17 +271,17 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
     if (declareHint) text += `${declareHint}\n`;
     const written = (error instanceof StepError || error instanceof GtmOverrideFailure || error instanceof ServerContainerFailure) && error.run ? error.run.path : undefined;
     if (written) {
-      const kept = variant ? await labelRecord(written, variant, spec.out) : written;
+      const kept = await labelRecord(written, spec);
       text += `Record: ${kept}\n`;
       return { ...failed(text), path: kept };
     }
     return failed(text);
   }
 
-  if (variant) {
-    path = await labelRecord(path, variant, spec.out);
-    records.run.variant = variant.name;
-  }
+  path = await labelRecord(path, spec);
+  if (spec.label !== undefined) records.run.label = spec.label;
+  if (spec.store !== undefined) records.run.store = spec.store;
+  if (variant) records.run.variant = variant.name;
   let results: Result[] = evaluate(allRecords(records), parsed);
   if (scrubber) results = scrubber.deep(results);
   await appendFile(path, results.map((r) => JSON.stringify(r) + '\n').join(''));
@@ -342,7 +354,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   }
   warnTestGtmOrigin(io);
   warnTestLoopbackHosted(io);
-  const out = resolveOutDir({ out: args.out, now: new Date() });
+  const out = resolveOutDir({ out: args.out, now: new Date(), label: args.label });
   if (args.out === undefined) {
     const notice = await oldRunsNotice(process.cwd());
     if (notice) io.stderr(notice);
@@ -355,6 +367,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       network,
       site: args.site,
       out,
+      ...(args.label !== undefined && { label: args.label }),
       seed: args.seed,
       headed: args.headed,
       viewport: args.viewport,

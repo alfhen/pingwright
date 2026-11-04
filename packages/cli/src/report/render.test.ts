@@ -313,3 +313,10 @@ test('a server container row is labelled, marks probable links and carries the c
 test('a report of a run with no server hit has no caveat', () => {
   expect(renderReport(buildReportModel(records()))).not.toContain('Stape-only');
 });
+
+test('the header shows the label, escaped, and nothing without one', () => {
+  const base = records();
+  const html = renderReport(buildReportModel({ ...base, run: { ...base.run, label: 'ca-307', variant: 'ws' } }));
+  expect(html).toMatch(/<dt>Variant<\/dt><dd>ws<\/dd>\s*<dt>Label<\/dt><dd>ca-307<\/dd>/);
+  expect(renderReport(buildReportModel(base))).not.toContain('<dt>Label</dt>');
+});

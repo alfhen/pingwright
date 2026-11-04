@@ -218,3 +218,16 @@ test('suite help lists the suite options', () => {
   expect(helpText('suite')).toContain('--with-handoff');
   expect(helpText('suite')).toContain('--stores');
 });
+
+test.each([
+  ['run', ['run', 's.yml', '--site', 'http://x.test']],
+  ['suite', ['suite', 'dir', '--site', 'http://x.test']],
+])('--label on %s takes 1 to 40 lowercase letters, digits and hyphens', (_name, argv) => {
+  expect(parseCli([...argv, '--label', 'a'.repeat(40)])).toMatchObject({ label: 'a'.repeat(40) });
+  expect(parseCli([...argv, '--label', 'ca-307-live'])).toMatchObject({ label: 'ca-307-live' });
+  expect(parseCli(argv)).not.toHaveProperty('label');
+  for (const bad of ['a'.repeat(41), 'Bad_Label', '', 'a b']) {
+    expect(() => parseCli([...argv, '--label', bad])).toThrow(`--label must be 1 to 40 lowercase letters, digits or hyphens, got "${bad}"`);
+  }
+  expect(helpText(argv[0] as 'run' | 'suite')).toContain('--label');
+});

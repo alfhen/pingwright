@@ -80,7 +80,7 @@ afterAll(async () => {
 });
 
 test('two scenarios on two stores and two variants make eight cells labelled with the store', () => {
-  expect(manifest.suiteSchemaVersion).toBe(2);
+  expect(manifest.suiteSchemaVersion).toBe(3);
   expect(manifest.stores.map((s) => s.name)).toEqual(['a', 'b']);
   expect(manifest.cells).toHaveLength(8);
   for (const scenario of ['first', 'second']) {

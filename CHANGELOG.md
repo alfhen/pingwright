@@ -16,7 +16,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - Fixed: `unloadGap` no longer counts a redirected GA4 hit from the top frame as a hit from an embedded frame that has the same URL, so a missing hit is flagged (#879, #880, #881, #882).
 
-<!-- E02 -->
+- `run` and `suite` take `--label <name>` (1 to 40 lowercase letters, digits or hyphens). The default folder becomes `tagreeve/runs/<date>-<label>/`, `Run.label` holds the label, and the summary, `--json` and the HTML report show it. A `suite --stores` cell record has `Run.store`. Record schema version is 4 and `suite.json` is version 3 (#811).
 
 <!-- L06 -->
 

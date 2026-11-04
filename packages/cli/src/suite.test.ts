@@ -6,7 +6,7 @@ import { newId, RunWriter, type Run } from '@tagreeve/core';
 import { createFakeDocker } from '../../recorder/src/server-container/fake-docker.test-helper.ts';
 import { expect, test } from 'vitest';
 import type { SuiteArgs } from './args.ts';
-import type { RunOutcome, RunSpec } from './run.ts';
+import { labelRecord, type RunOutcome, type RunSpec } from './run.ts';
 import { cellText, formatSuiteTable, suiteCommand, suiteExitCode, type SuiteManifest } from './suite.ts';
 
 const VALID = 'start: /\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
@@ -215,7 +215,7 @@ test('the manifest holds no path, query, override file path or auth value', asyn
   const [suiteDir] = await readdir(out);
   const text = await readFile(join(out, suiteDir!, 'suite.json'), 'utf8');
   const manifest = JSON.parse(text) as SuiteManifest;
-  expect(manifest).toMatchObject({ suiteSchemaVersion: 2, site: 'https://shop.example.com', stores: [], variants: ['published', 'ws'], exitCode: 0 });
+  expect(manifest).toMatchObject({ suiteSchemaVersion: 3, site: 'https://shop.example.com', stores: [], variants: ['published', 'ws'], exitCode: 0 });
   expect(manifest.cells).toHaveLength(2);
   expect(manifest.cells[0]).toMatchObject({ scenario: 'a', variant: 'published', labels: {}, status: 'pass', exitCode: 0 });
   for (const forbidden of [file, 'secret-place', FAKE_AUTH, '/some/path', 'token=abc']) {
@@ -368,6 +368,7 @@ test('--stores runs every scenario against every store with a store label and fi
   const c = capture();
   const variants = [{ name: 'published' }, { name: 'ws' }];
   expect(await suiteCommand(args(dir, out, { site: undefined, stores, variants }), c.io, fake)).toBe(0);
+  expect(fake.specs.map((s) => s.store)).toEqual(['se', 'se', 'de', 'de', 'se', 'se', 'de', 'de']);
   expect(fake.specs.map((s) => [s.scenarioName, s.site, s.variant])).toEqual([
     ['a', 'https://shop.example.se/path?token=abc', { name: 'published', fileStem: 'a.se' }],
     ['a', 'https://shop.example.se/path?token=abc', { name: 'ws', fileStem: 'a.se' }],
@@ -380,7 +381,7 @@ test('--stores runs every scenario against every store with a store label and fi
   ]);
   expect(new Set(fake.specs.filter((s) => s.scenarioName === 'a').map((s) => s.seed)).size).toBe(1);
   const manifest = await manifestOf(out);
-  expect(manifest.suiteSchemaVersion).toBe(2);
+  expect(manifest.suiteSchemaVersion).toBe(3);
   expect(manifest.site).toBe('https://shop.example.se');
   expect(manifest.stores).toEqual([
     { name: 'se', site: 'https://shop.example.se' },
@@ -658,4 +659,40 @@ test('without --server-container no run gets a server container spec', async () 
   const fake = recorder();
   expect(await suiteCommand(args(dir, out), capture().io, fake)).toBe(0);
   expect(fake.specs[0]).not.toHaveProperty('serverContainer');
+});
+
+test('--label goes to the manifest, the out folder and every spec', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID });
+  const fake = recorder();
+  expect(await suiteCommand(args(dir, out, { label: 'ca-307' }), capture().io, fake)).toBe(0);
+  expect(fake.specs.map((s) => s.label)).toEqual(['ca-307']);
+  expect((await manifestOf(out)).label).toBe('ca-307');
+  const none = recorder();
+  await suiteCommand(args(dir, join(out, 'again')), capture().io, none);
+  expect(none.specs[0]).not.toHaveProperty('label');
+  expect(await manifestOf(join(out, 'again'))).not.toHaveProperty('label');
+});
+
+test('labelRecord writes the label, the store and the variant on the run line and renames only a variant cell', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pw-label-'));
+  const writeRun = async (name: string): Promise<string> => {
+    const path = join(root, name);
+    await writeFile(path, `${JSON.stringify({ type: 'run', id: 'run_1', scenario: 's' })}\n{"type":"step","id":"step_1"}\n`);
+    return path;
+  };
+  const labelled = await labelRecord(await writeRun('a.jsonl'), { label: 'x', out: root });
+  expect(labelled).toBe(join(root, 'a.jsonl'));
+  const [first, second] = (await readFile(labelled, 'utf8')).split('\n');
+  expect(JSON.parse(first!)).toMatchObject({ id: 'run_1', label: 'x' });
+  expect(JSON.parse(first!)).not.toHaveProperty('variant');
+  expect(second).toBe('{"type":"step","id":"step_1"}');
+
+  const moved = await labelRecord(await writeRun('b.jsonl'), { label: 'x', store: 'se', variant: { name: 'ws', fileStem: 'a.se' }, out: root });
+  expect(moved).toBe(join(root, 'a.se.ws.jsonl'));
+  expect(JSON.parse((await readFile(moved, 'utf8')).split('\n')[0]!)).toMatchObject({ label: 'x', store: 'se', variant: 'ws' });
+
+  const plain = await writeRun('c.jsonl');
+  const before = await readFile(plain, 'utf8');
+  expect(await labelRecord(plain, { out: root })).toBe(plain);
+  expect(await readFile(plain, 'utf8')).toBe(before);
 });

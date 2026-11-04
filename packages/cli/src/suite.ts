@@ -43,8 +43,10 @@ export interface SuiteDiff {
 }
 
 export interface SuiteManifest {
-  suiteSchemaVersion: 1 | 2;
+  suiteSchemaVersion: 1 | 2 | 3;
   id: string;
+  /** From `--label`. */
+  label?: string;
   startedAt: number;
   site: string;
   /** Empty without `--stores`, and in a version 1 manifest. */
@@ -327,7 +329,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   }
 
   const id = `suite_${ulid()}`;
-  const dir = join(resolveOutDir({ out: args.out, now: new Date() }), id);
+  const dir = join(resolveOutDir({ out: args.out, now: new Date(), label: args.label }), id);
   await mkdir(dir, { recursive: true });
   const startedAt = Date.now();
   const variants = args.variants.map((v) => v.name);
@@ -357,6 +359,8 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
             network: networks.get(s.name)!,
             site,
             out: dir,
+            ...(args.label !== undefined && { label: args.label }),
+            ...(store && { store: store.name }),
             seed,
             headed: false,
             viewport: args.viewport,
@@ -382,8 +386,9 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   cells.sort((a, b) => position(a) - position(b));
 
   const manifest: SuiteManifest = {
-    suiteSchemaVersion: 2,
+    suiteSchemaVersion: 3,
     id,
+    ...(args.label !== undefined && { label: args.label }),
     startedAt,
     site: new URL(targets[0]!.site).origin,
     stores: stores.map((st) => ({ name: st.name, site: new URL(st.site).origin })),
