@@ -1,4 +1,5 @@
 import { newId, type DataLayerEvent, type Hit, type Request, type Response } from '@tagreeve/core';
+import { platformHostFor } from '@tagreeve/decoders';
 import { describe, expect, test } from 'vitest';
 import { buildFlags, buildUnloadGapFlags, isFirstPartySubdomain, isUnknownDestination, type FrameRef } from './flags.ts';
 
@@ -417,6 +418,14 @@ describe('platform hosts', () => {
     const r = req('https://monorail-edge.shopifysvc.com/v1/produce?x=1', { resourceType: 'fetch', method: 'POST' });
     expect(kinds([r])).toEqual(['platformHost']);
     expect(kinds([r], false)).toEqual(['unknownDestination']);
+  });
+
+  test('a POST to a Shop Pay host is a platformHost flag with its purpose', () => {
+    const pay = req('https://pay.shopify.com/api/x?a=1', { resourceType: 'fetch', method: 'POST' });
+    const otlp = req('https://otlp-http-production.shopifysvc.com/v1/traces', { resourceType: 'fetch', method: 'POST' });
+    expect(kinds([pay, otlp])).toEqual(['platformHost', 'platformHost']);
+    expect([pay, otlp].map((r) => platformHostFor(r)?.purpose)).toEqual(['payments', 'telemetry']);
+    expect(kinds([pay, otlp], false)).toEqual(['unknownDestination', 'unknownDestination']);
   });
 
   test('an unlisted Shopify subdomain and a third-party payment host stay unknown destinations', () => {
