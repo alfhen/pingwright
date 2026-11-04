@@ -27,8 +27,8 @@ export interface CaptureCoverage {
 /**
  * Version 1 is the 0.2.0 record shape. Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`,
  * which a version 1 hit does not have. Version 3 adds `Request.captured: 'serverContainer'`, `Hit.via`,
- * `Run.serverContainer` and `Run.testServerContainer`. Version 4 adds `Run.label` and `Run.store`, and a
- * `Hit.via` with `by: 'clientId'` may be `exact`. A record with no version is version 0.
+ * `Run.serverContainer` and `Run.testServerContainer`. Version 4 adds `Run.label` and `Run.store`.
+ * A record with no version is version 0.
  */
 export const RECORD_SCHEMA_VERSION = 4;
 
@@ -191,10 +191,7 @@ export interface HitVia {
   /** The browser hit this hit most likely came from. */
   hitId: Id<'hit'>;
   by: 'eventId' | 'clientId' | 'identity';
-  /**
-   * `exact` is proven: by event ID and event name, or by client ID and event name on the one browser hit
-   * whose request to the container was in flight. `probable`: a shared value.
-   */
+  /** `exact`: the event ID and event name both match one browser hit. `probable`: a shared value. */
   confidence: 'exact' | 'probable';
 }
 
