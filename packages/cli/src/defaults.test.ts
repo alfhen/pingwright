@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
@@ -74,4 +74,12 @@ test('the Defaults line names each default, and is absent when there is none', (
       { setting: 'autoconsentRules', path: 'tagreeve/autoconsent/cookiebot.json' },
     ]),
   ).toBe('Defaults: tagreeve/trackers.json (tracker list), tagreeve/autoconsent/cookiebot.json (autoconsent rules)');
+});
+
+test('a symlinked autoconsent rule file is used as a default', async () => {
+  await mkdir(join(root, 'tagreeve/autoconsent'));
+  await writeFile(join(root, 'shared.json'), '{}');
+  await symlink(join(root, 'shared.json'), join(root, 'tagreeve/autoconsent/linked.json'));
+  const used: DefaultUsed[] = [];
+  expect(await resolveAutoconsentRules(undefined, used)).toEqual(['tagreeve/autoconsent/linked.json']);
 });

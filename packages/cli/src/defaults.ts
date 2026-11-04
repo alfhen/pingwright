@@ -46,11 +46,15 @@ export async function resolveAutoconsentRules(flags: string[] | undefined, used:
   if (flags?.length) return flags;
   let names: string[];
   try {
-    names = (await readdir(DEFAULT_AUTOCONSENT_DIR, { withFileTypes: true })).filter((e) => e.isFile() && e.name.endsWith('.json')).map((e) => e.name).sort();
+    names = (await readdir(DEFAULT_AUTOCONSENT_DIR)).filter((name) => name.endsWith('.json')).sort();
   } catch {
     return [];
   }
-  const paths = names.map((name) => `${DEFAULT_AUTOCONSENT_DIR}/${name}`);
+  const paths: string[] = [];
+  for (const name of names) {
+    const path = `${DEFAULT_AUTOCONSENT_DIR}/${name}`;
+    if (await isKind(path, 'file')) paths.push(path);
+  }
   for (const path of paths) used.push({ setting: 'autoconsentRules', path });
   return paths;
 }
