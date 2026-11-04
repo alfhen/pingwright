@@ -812,7 +812,8 @@ function hashJudge(identity: Identity): (vendor: string, name: string, value: st
     if (PLAIN_ADDRESS_PARAMS.has(name) && PLAIN_ADDRESS_VENDORS.has(vendor) && !DIGEST_SHAPE.test(value)) return 'plain';
     if (known.has(value)) return 'match';
     const typed = value.trim().toLowerCase();
-    return plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed) ? 'unhashed' : 'wrong';
+    if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) return 'unhashed';
+    return PLAIN_ADDRESS_PARAMS.has(name) && vendor === 'meta-capi' && !DIGEST_SHAPE.test(value) ? 'plain' : 'wrong';
   };
 }
 
@@ -842,16 +843,19 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const withHash: string[] = [];
   const wrong: string[] = [];
   const unhashed: string[] = [];
+  const plainCapi: string[] = [];
   const wrongFields = new Set<string>();
   const wrongParams = new Set<string>();
   const matchedFields = new Set<string>();
   const unhashedFields = new Set<string>();
+  const plainCapiFields = new Set<string>();
   const plainAddressFields = new Set<string>();
   const uncheckedFields = new Set<string>();
   for (const hit of hits) {
     let seen = false;
     let bad = false;
     let raw = false;
+    let plainHit = false;
     if (hit.vendor === 'meta') {
       for (const id of Object.keys(hit.ids)) if (id !== 'hashedEmail' && id !== 'hashedPhone') uncheckedFields.add(guardFieldName(id));
     }
@@ -860,7 +864,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       if (!verdict) continue;
       const label = fieldLabel(identityParamName(hit.vendor, name));
       if (verdict === 'plain') {
-        plainAddressFields.add(label);
+        if (hit.vendor === 'meta-capi') {
+          plainCapiFields.add(label);
+          plainHit = true;
+        } else plainAddressFields.add(label);
         continue;
       }
       seen = true;
@@ -880,6 +887,7 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
     if (seen) withHash.push(hit.id);
     if (bad) wrong.push(hit.id);
     if (raw) unhashed.push(hit.id);
+    if (plainHit) plainCapi.push(hit.id);
   }
   const several = hits.length > 1;
   const they = several ? 'they' : 'it';
@@ -894,6 +902,14 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       `Not matching: ${[...wrongParams].join(', ')}.` +
       (matching.size ? ` Matching: ${joinLabels(matching)}.` : '');
     return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message };
+  }
+  if (plainCapi.length) {
+    return {
+      pass: false,
+      evidence: plainCapi,
+      headline: UNMATCHED_HEADLINE,
+      message: `${they} carried a plain ${joinLabels(plainCapiFields)}, not a hash${of(plainCapi.length)}. The Conversions API takes these hashed.`,
+    };
   }
   if (!withHash.length && uncheckedFields.size) {
     return {
@@ -1407,7 +1423,7 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 // merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
 // merges, and only when the shorter value never stands alone in the body: a different value in the URL, or a longer value
 // elsewhere, keeps its own finding.
-// The shorter value must never stand alone in the body: a separate value that a longer one contains keeps its own finding.
+// A shorter value that only ever appears inside a longer one in the raw body is merged into it, even when the two are different values.
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.includes(short)) return false;

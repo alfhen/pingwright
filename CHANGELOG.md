@@ -12,7 +12,7 @@
 
 A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that moves to another host before the input count is reported gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
 
-<!-- M10 -->
+- A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
 
 - Fixed: `unloadGap` no longer counts a redirected GA4 hit from the top frame as a hit from an embedded frame that has the same URL, so a missing hit is flagged (#879, #880, #881, #882).
 

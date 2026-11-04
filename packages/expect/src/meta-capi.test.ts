@@ -75,6 +75,10 @@ test('identity.hashesMatch checks every value of a multi-value em', () => {
   const raw = run([capiHit([good, identity.email])], rule);
   expect(raw.pass).toBe(false);
   expect(raw.message).toContain('unhashed email');
+  for (const text of [raw.message]) {
+    expect(text).not.toContain(identity.email);
+    expect(text).not.toContain(good);
+  }
 });
 
 test('identity.hashesMatch fails a plain ct, zp or country on a Conversions API event', () => {
@@ -84,7 +88,21 @@ test('identity.hashesMatch fails a plain ct, zp or country on a Conversions API 
   const plain = run([capiHit(good, { ct: [identity.city] })], rule);
   expect(plain.pass).toBe(false);
   expect(plain.message).toContain('unhashed city');
-  expect(run([capiHit(good, { zp: ['00000'] })], rule).pass).toBe(false);
+  expect(plain.message).not.toContain(identity.city);
+  const zip = run([capiHit(good, { zp: ['00000'] })], rule);
+  expect(zip.pass).toBe(false);
+  expect(zip.message).toContain('plain postal code');
+  expect(zip.message).not.toContain('hashed postal code values');
+});
+
+test('identity.hashesMatch counts a Conversions API hit once however many plain address fields it carries', () => {
+  const rule = '{ vendor: meta-capi, identity.hashesMatch: true }';
+  const good = sha(identity.email);
+  const bad = capiHit(good, { ct: ['nowhere'], zp: ['00000'], country: ['zz'] });
+  const result = run([capiHit(good), bad], rule);
+  expect(result.pass).toBe(false);
+  expect(result.message).toContain('(1 of 2 hits)');
+  expect(result.evidence).toEqual([bad.hit.id]);
 });
 
 test('identity.hashesMatch checks the second value of ct and fn', () => {
@@ -96,6 +114,11 @@ test('identity.hashesMatch checks the second value of ct and fn', () => {
   expect(rawCity.pass).toBe(false);
   expect(rawCity.message).toContain('unhashed city');
   expect(rawCity.message).not.toContain('city.1 ');
+  for (const text of [rawCity.message]) {
+    expect(text).not.toContain(identity.city);
+    expect(text).not.toContain(identity.email);
+    expect(text).not.toContain(city);
+  }
   const wrongCity = run([capiHit(good, { ct: [city, 'c'.repeat(64)] })], rule);
   expect(wrongCity.message).toContain('Not matching: user_data.city.1.');
   expect(wrongCity.message).toMatch(/Matching: email\.$/);
