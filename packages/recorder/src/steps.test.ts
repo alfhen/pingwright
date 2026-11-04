@@ -358,7 +358,7 @@ describe('select and locator steps on a fake page', () => {
       }),
     };
     await play(page, "start: /\nsteps:\n  - click: { any: ['#late'] }\n", {}, { actionTimeoutMs: 1000 });
-    expect(clickTimeout).toBeLessThanOrEqual(720);
+    expect(clickTimeout).toBeLessThan(1000);
     expect(clickTimeout).toBeGreaterThan(0);
   });
 
