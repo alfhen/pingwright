@@ -150,6 +150,7 @@ function readBlockingControls(): BlockingControl[] {
     for (const id of `${holder.getAttribute('aria-errormessage') ?? ''} ${holder.getAttribute('aria-describedby') ?? ''}`.split(/\s+/)) if (id) messageIds.add(id);
   }
   const cleanText = (source: Element): string => {
+    if (messageIds.has(source.id) || source.matches(validationText)) return '';
     const copy = source.cloneNode(true) as HTMLElement;
     copy.querySelectorAll(validationText).forEach((n) => n.remove());
     copy.querySelectorAll('[id]').forEach((n) => messageIds.has(n.id) && n.remove());
@@ -164,7 +165,7 @@ function readBlockingControls(): BlockingControl[] {
         .split(/\s+/)
         .map((id) => {
           const source = document.getElementById(id);
-          return source && !messageIds.has(id) && !source.matches(validationText) ? cleanText(source) : '';
+          return source ? cleanText(source) : '';
         })
         .join(' ')
         .trim();

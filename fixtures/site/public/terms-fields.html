@@ -10,7 +10,7 @@
   <label>Email <input id="email" name="email" type="email" value="pw-fixture@example.com"></label><br>
   <label>Full name <input name="full_name" type="text" required></label><br>
   <label>City <input name="city" type="text" pattern="[0-9]+" value="Fakeville" placeholder="Your city"> <span role="alert">Fakeville is invalid</span></label><br>
-  <label>Region <input name="region" type="text" value="Fakeregion" placeholder="Your region" aria-invalid="true"></label><br>
+  <label>Region <input id="region" name="region" type="text" value="Fakeregion" placeholder="Your region" aria-invalid="true" aria-describedby="region-error"></label> <label id="region-error" class="error" for="region">Fakeregion is not a region</label><br>
   <input name="promo_code" type="text" required><br>
   <input type="checkbox" name="news" aria-required="true" aria-labelledby="news-text"> <span id="news-text">Send me the newsletter</span><br>
   <input type="checkbox" name="privacy" required aria-label="Accept the privacy policy"><br>
