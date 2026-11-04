@@ -58,7 +58,21 @@ The config from step 3 makes the container serve the published version. To test 
 
 For the live container, `env` and `auth` come from the "Manually provision tagging server" page. For a workspace, they come from its preview environment, so `<env id>` and `<auth>` differ from the live ones. The preview environment must exist. A quick preview on the workspace in Tag Manager creates it.
 
-Save the workspace config as in step 4: in a file only you can read (mode 0600), outside any repository. Pass it with `--server-container-config`. Tagreeve gives the config to the container as it is, so the run serves the workspace build.
+The workspace's preview URL, or its share-preview link, holds both values. The `gtm_preview` parameter is `env-<n>`: `<env id>` is the number `<n>`, as in the live string. The `gtm_auth` parameter is `<auth>`. Treat the URL as a secret too.
+
+Build the config without putting `<auth>` in a command line, where your shell keeps it:
+
+1. In an editor, write the plain string from the table into `plain.txt`, in a folder outside any repository. Set its mode to 0600.
+2. Encode it into the config file:
+
+   ```bash
+   (umask 077; base64 < plain.txt > ~/.config/tagreeve/sgtm-workspace-config.txt)
+   ```
+
+   On Linux, use `base64 -w0` so the output is one line.
+3. Delete `plain.txt`.
+
+Pass the config file with `--server-container-config`, as in step 6. Keep it as secret as in step 4: mode 0600, outside any repository. Tagreeve gives the config to the container as it is, so the run serves the workspace build.
 
 ## What happens in a run
 
