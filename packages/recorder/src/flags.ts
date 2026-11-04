@@ -140,7 +140,7 @@ const GA4_ALIASES: Readonly<Record<string, string>> = {
   search_submitted: 'search',
 };
 
-/** `id` names a frame document and is null when the request has no Frame object (net log); then the URLs are compared. */
+/** `id` names a frame document. It is null for a worker request or a container call, which have no Frame object; then the URLs are compared, and a null URL never matches. */
 export interface FrameRef {
   id: string | null;
   url: string | null;

@@ -14,7 +14,7 @@
 
 <!-- M10 -->
 
-<!-- M11 -->
+- Fixed: `unloadGap` no longer counts a redirected GA4 hit from the top frame as a hit from an embedded frame that has the same URL, so a missing hit is flagged (#879, #880, #881, #882).
 
 <!-- E02 -->
 
