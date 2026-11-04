@@ -586,6 +586,9 @@ test.each([
   ['a base64 field and a percent-encoded line', `a=${Buffer.from('joann@shop.example').toString('base64')}\nann%40shop.example`, 'email'],
   ['a JSON-escaped line and a percent-encoded line', '{"a":"joann\\u0040shop.example"}\nann%40shop.example', 'email'],
   ['a base64 phone and a percent-encoded phone', `a=${Buffer.from('+1 555 123 4567 x').toString('base64')}\n555%20123%204567`, 'phone'],
+  ['a raw email and a base64 line', `a=joann@shop.example\n${Buffer.from('ann@shop.example x').toString('base64')}`, 'email'],
+  ['a raw phone and a base64 line', `a=+1 555 123 4567\n${Buffer.from('555 123 4567 xx').toString('base64')}`, 'phone'],
+  ['a raw email and a glued base64 line', `a=joann@shop.example\nxx_${Buffer.from('ann@shop.example x').toString('base64')}`, 'email'],
 ])('possibleRealData keeps two body values apart across decoded forms: %s', (_n, body, kind) => {
   const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);

@@ -1450,12 +1450,39 @@ function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
 
 // Approximates the forms core's scan reads a body in, each with the texts it was decoded from. Percent runs decode one by one
 // and a bad run stays raw, repeated until the text stops changing, as core's variants() does. Each step is also read with '+'
-// as a space. Base64 is tried on whole tokens at offset 0 only, up to core's depth.
+// as a space. Base64 is read as core's scan does, without its binary filter: an extra form can only keep two values apart. A
+// base64 form has no parent text, because decoding does not keep positions.
+function base64Readings(text: string): string[] {
+  const out: string[] = [];
+  for (const token of text.match(/[A-Za-z0-9+/_-]{12,}={0,2}/g) ?? []) {
+    const pieces = new Set([token]);
+    if (token.includes('/')) for (const piece of token.split('/')) if (piece.length >= 12) pieces.add(piece);
+    for (const piece of pieces) {
+      const glue = [...piece].flatMap((c, i) => (c === '_' || c === '-' || c === '+' ? [i] : []));
+      const cuts = new Set([piece]);
+      for (const i of glue) {
+        cuts.add(piece.slice(i + 1));
+        cuts.add(piece.slice(0, i));
+      }
+      if (glue.length > 1) cuts.add(piece.slice(glue[0]! + 1, glue[glue.length - 1]));
+      for (const cut of cuts) {
+        for (let offset = 0; offset <= 3; offset++) {
+          const candidate = cut.slice(offset);
+          if (candidate.length < 12) continue;
+          const bytes = Buffer.from(candidate.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+          if (bytes.length >= 8) out.push(bytes.toString('utf8'));
+        }
+      }
+    }
+  }
+  return out;
+}
+
 function bodyForms(raw: string): Map<string, Set<string>> {
   const forms = new Map<string, Set<string>>([[raw, new Set()]]);
-  const add = (form: string, parent: string) => {
+  const add = (form: string, parent: string | undefined) => {
     const parents = forms.get(form) ?? new Set<string>();
-    if (form !== parent) parents.add(parent);
+    if (parent !== undefined && form !== parent) parents.add(parent);
     forms.set(form, parents);
   };
   const decode = (text: string) =>
@@ -1467,7 +1494,7 @@ function bodyForms(raw: string): Map<string, Set<string>> {
       }
     });
   const visited = new Set<string>();
-  const read = (text: string, depth: number, source: string): void => {
+  const read = (text: string, depth: number, source: string | undefined): void => {
     let parent = source;
     for (let step = text; !visited.has(step); step = decode(step)) {
       visited.add(step);
@@ -1475,10 +1502,7 @@ function bodyForms(raw: string): Map<string, Set<string>> {
       add(decode(step.replace(/\+/g, ' ')), step);
       parent = step;
       if (depth >= 3) continue;
-      for (const token of step.match(/[A-Za-z0-9+/_-]{16,}={0,2}/g) ?? []) {
-        const bytes = Buffer.from(token, 'base64');
-        if (bytes.length) read(bytes.toString('utf8'), depth + 1, step);
-      }
+      for (const decoded of base64Readings(step)) read(decoded, depth + 1, undefined);
     }
   };
   read(raw, 0, raw);
