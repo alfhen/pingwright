@@ -1,4 +1,5 @@
-import { readFile, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, readFile, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 export const STORE_NAME = /^[a-z0-9][a-z0-9_-]*$/;
@@ -81,8 +82,12 @@ export async function readStores(path: string): Promise<Store[]> {
   });
   for (const [index, store] of stores.entries()) {
     if (store.autoconsentRules === undefined) continue;
-    const isFile = await stat(store.autoconsentRules).then((s) => s.isFile(), () => false);
-    if (!isFile) throw new StoresError(`${path}: store ${index} has autoconsentRules that are not a readable file.`);
+    const rules = store.autoconsentRules;
+    const readable = await stat(rules).then(
+      async (s) => s.isFile() && (await access(rules, constants.R_OK).then(() => true, () => false)),
+      () => false,
+    );
+    if (!readable) throw new StoresError(`${path}: store ${index} has autoconsentRules that are not a readable file.`);
   }
   return stores;
 }

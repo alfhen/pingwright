@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -71,4 +71,15 @@ test('a missing autoconsentRules file is an error that names the file and the st
 test('an autoconsentRules path that is a directory is an error', async () => {
   const path = await write(file([store({ autoconsentRules: '.' })]));
   await expect(readStores(path)).rejects.toThrow('store 0 has autoconsentRules');
+});
+
+test.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('an autoconsentRules file without read access is an error that does not name the path', async () => {
+  const path = await write(file([store({ autoconsentRules: 'denied-rules.json' })]));
+  const rules = join(path, '..', 'denied-rules.json');
+  await writeFile(rules, '{}');
+  await chmod(rules, 0o000);
+  const error = (await readStores(path).catch((e: unknown) => e)) as Error;
+  expect(error).toBeInstanceOf(StoresError);
+  expect(error.message).toContain('store 0 has autoconsentRules');
+  expect(error.message).not.toContain('denied-rules.json');
 });
