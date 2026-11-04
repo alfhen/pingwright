@@ -1,0 +1,9 @@
+start: /set-cookie-unstored
+steps:
+  - evaluate: "fetch(window.__PW_FIXTURE.sgtmUrl + '/g/collect?v=2&tid=G-PWTEST0001&en=page_view', { method: 'POST', mode: 'no-cors', credentials: 'include', headers: { 'Content-Type': 'text/plain' }, body: '' }).then(function () { return true; })"
+  - wait: 2s
+expect:
+  must: []
+  mustNot:
+    - { vendor: ga4, host: www.google-analytics.com }
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true, builtins: { deniedIdentifiers: warn, earlyIdentifiers: warn, possibleRealData: warn } }

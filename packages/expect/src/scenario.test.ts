@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { README_QUICKSTART_SCENARIO, README_SCENARIO } from './readme-scenario.ts';
 import { parseScenario, ScenarioError } from './scenario.ts';
 
@@ -373,4 +373,22 @@ test('options.viewport is { width, height } from 200 to 4000', () => {
 test('platformHosts is a boolean', () => {
   expect(parseScenario('start: /\noptions: { platformHosts: false }').options.platformHosts).toBe(false);
   expect(() => parseScenario('start: /\noptions: { platformHosts: [a.com] }')).toThrow(/platformHosts/);
+});
+
+describe('sentBy', () => {
+  const sentBy = (v: string) => parseScenario(`start: /\nexpect:\n  must:\n    - { vendor: ga4, sentBy: ${v} }\n`).expect.must[0]!.filter.sentBy;
+
+  test('parses browser and server and defaults to both', () => {
+    expect(sentBy('browser')).toBe('browser');
+    expect(sentBy('server')).toBe('server');
+    expect(parseScenario('start: /\nexpect:\n  must:\n    - { vendor: ga4 }\n').expect.must[0]!.filter.sentBy).toBeUndefined();
+  });
+
+  test('a bad value is a scenario error that names the rule', () => {
+    expect(() => sentBy('both')).toThrow(/sentBy.*must be browser or server/s);
+  });
+
+  test('a cookie rule does not take it', () => {
+    expect(() => parseScenario('start: /\nexpect:\n  must:\n    - { cookie: _a, sentBy: browser }\n')).toThrow(/sentBy/);
+  });
 });

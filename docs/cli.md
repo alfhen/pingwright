@@ -195,6 +195,23 @@ Default ignore lists for `body.only`, by vendor of the hit. A vendor that is not
 
 The lists are exported from `@tagreeve/decoders` as `GA4_BODY_ONLY_IGNORE`, `META_BODY_ONLY_IGNORE`, `META_CAPI_BODY_ONLY_IGNORE` and `SGTM_BODY_ONLY_IGNORE`.
 
+### Rules by sender
+
+With `--server-container`, the container's own calls to vendors are decoded as hits too. `sentBy` in a hit rule picks who sent the hit.
+
+```yaml
+expect:
+  mustNot:
+    - { vendor: ga4, host: region1.google-analytics.com, sentBy: browser }
+  must:
+    - { vendor: ga4, host: region1.google-analytics.com, sentBy: server }
+```
+
+- `sentBy: browser` matches hits from requests the browser sent. `sentBy: server` matches hits decoded from a server container call. Without `sentBy` a rule matches both. Any other value is a scenario error that names the rule.
+- It works in `must` and `mustNot`, with every other filter key. Cookie rules do not take it.
+- Without `--server-container` no hit comes from the container, so `sentBy: server` matches nothing.
+- A `sentBy: browser` rule never judges a server container call, so the notes `serverSendUnlinked` and `serverSendProbableLink` do not apply to it.
+
 ### Rules from a step
 
 `after: <step label>` and `from: <step label>` limit a rule to hits and cookies from a labelled step on. `after` starts when the step ends. `from` starts when the step starts, so it includes what the step does itself. For a `visit` step, the page-load hits belong to `from` only:

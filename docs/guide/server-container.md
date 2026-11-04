@@ -103,6 +103,8 @@ The report gives each server vendor its own row, for example `Google Ads (google
 - `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not by an event ID. A probable link can warn but cannot fail a run.
 - `serverSendUnlinked`: no browser hit was found for the call. A check that depends on consent cannot judge it, so that check warns.
 
+A rule that should judge only the browser, or only the container, takes `sentBy: browser` or `sentBy: server`. A browser-only `mustNot` on a Google host then ignores the container's own calls. See [Rules by sender](../cli.md#rules-by-sender).
+
 With `--json`, the same counts are in the `serverContainer` field. If the container fails to start or stops during the run, the record is still written and the run exits with code 2. See the [CLI reference](../cli.md) for the details, and [Reading a run's results](./reading-results.md) for the rest of the summary.
 
 ## What it does not show
