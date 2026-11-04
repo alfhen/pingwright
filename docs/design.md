@@ -531,7 +531,7 @@ Where the code in 0.5 differs from the design above. Sections 15.1 to 15.4 still
 - **`--server-container` runs the user's own container.** It needs Docker. Tagreeve never publishes an image that holds Google's files. The container downloads its configuration from Google at every start. Only three Google request kinds leave the machine through the recording proxy; every other call is recorded and answered locally.
 - **A container call is a hit.** It is decoded and checked like a browser hit and links to a browser hit by event ID with `Hit.via`. Record schema version is 3.
 - **Not proven:** that the Meta CAPI, Pinterest and Criteo template tags reach the proxy. The 0.5.0-rc.2 field test runs this (Check C0 items 1 to 3).
-- **Link rule 2 (client ID and event name)** is built from 0.6.0 (§4). In 0.5 a failure through a container call with no event ID, such as the built-in GA4 tag, links as probable and only warns.
+- **Not built:** link rule 2 (client ID and event name). A failure through a container call with no event ID, such as the built-in GA4 tag, links as probable and only warns.
 - **Not available locally:** Stape-only hosting features. With the live config the container does not show an unpublished server workspace; a config from the workspace's preview environment serves it.
 - **`suite --stores`** runs each scenario against several stores. `suite.json` is version 2.
 - **`platformHost`** flags requests to listed Shopify infrastructure hosts instead of `unknownDestination`. The list holds only hosts that a Shopify docs page names, so most Shopify telemetry, checkout and payments hosts are still `unknownDestination`.
