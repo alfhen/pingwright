@@ -22,7 +22,7 @@ test('a dataLayer push records whether the main frame made it and a frame number
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   try {
     await recorder.visit(`${site.url}/datalayer-frame`);
-    await recorder.wait(300);
+    await recorder.wait(600);
   } catch (error) {
     await recorder.close().catch(() => undefined);
     throw error;
@@ -30,6 +30,12 @@ test('a dataLayer push records whether the main frame made it and a frame number
   const { records } = await recorder.close();
   const top = records.dataLayerEvents.find((e) => e.event === 'top_push');
   const embedded = records.dataLayerEvents.find((e) => e.event === 'embedded_push');
+  const top2 = records.dataLayerEvents.find((e) => e.event === 'top_push_2');
+  const embedded2 = records.dataLayerEvents.find((e) => e.event === 'embedded_push_2');
+  expect(top2).toBeDefined();
+  expect(embedded2).toBeDefined();
+  expect(top2!.frame).toEqual(top!.frame);
+  expect(embedded2!.frame).toEqual(embedded!.frame);
   expect(top).toBeDefined();
   expect(embedded).toBeDefined();
   expect(top!.frame?.main).toBe(true);
