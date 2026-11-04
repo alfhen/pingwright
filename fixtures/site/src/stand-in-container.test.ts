@@ -1,7 +1,9 @@
+import net from 'node:net';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { createRunCa } from '../../../packages/recorder/src/server-container/ca.ts';
 import type { RunCa } from '../../../packages/recorder/src/server-container/ca.ts';
 import { createRecordingProxy } from '../../../packages/recorder/src/server-container/proxy.ts';
@@ -15,8 +17,10 @@ let proxy: RecordingProxy;
 let answered: ProxyRequest[];
 let forwarded: ProxyRequest[];
 let standIn: ReturnType<typeof createStandIn> | undefined;
+let errorSpy: MockInstance<typeof console.error>;
 
 beforeEach(async () => {
+  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   root = mkdtempSync(join(tmpdir(), 'tagreeve-stand-in-test-'));
   ca = createRunCa(root);
   answered = [];
@@ -37,6 +41,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  errorSpy.mockRestore();
   await standIn?.close();
   standIn = undefined;
   await proxy.close();
@@ -168,5 +173,56 @@ describe('stand-in container', () => {
     await standIn!.close();
     await new Promise((r) => setTimeout(r, 450));
     expect(answered).toEqual([]);
+  });
+
+  describe('a proxy that accepts the connection and never answers', () => {
+    let stalled: net.Server;
+    let sockets: net.Socket[];
+    let stalledPort: number;
+
+    beforeEach(async () => {
+      sockets = [];
+      stalled = net.createServer((socket) => {
+        sockets.push(socket);
+        socket.on('error', () => {});
+        socket.resume();
+      });
+      await new Promise<void>((resolve) => stalled.listen(0, '127.0.0.1', resolve));
+      stalledPort = (stalled.address() as net.AddressInfo).port;
+    });
+
+    afterEach(async () => {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => stalled.close(() => resolve()));
+    });
+
+    function startStalled(socketTimeoutMs?: number): Promise<number> {
+      standIn = createStandIn({ HTTP_PROXY: `http://u:p@127.0.0.1:${stalledPort}`, NODE_EXTRA_CA_CERTS: ca.certPath, PORT: '0' }, { socketTimeoutMs });
+      return standIn.listen();
+    }
+
+    it('rejects each call after the socket timeout, so start-up finishes', async () => {
+      const started = Date.now();
+      const port = await startStalled(150);
+      const origin = `http://127.0.0.1:${port}`;
+      for (let i = 0; i < 100 && (await fetch(`${origin}/healthz`)).status !== 200; i++) await new Promise((r) => setTimeout(r, 20));
+      expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+      expect(Date.now() - started).toBeLessThan(2000);
+      const lines = errorSpy.mock.calls.map((call) => String(call[0]));
+      expect(lines.filter((line) => line === 'Fetch failed: the proxy call timed out')).toHaveLength(2);
+    });
+
+    it('close gives up after 2 s and destroys the open sockets', async () => {
+      await startStalled(60_000);
+      await until(() => sockets.length === 1);
+      expect(sockets).toHaveLength(1);
+      const started = Date.now();
+      await standIn!.close();
+      const took = Date.now() - started;
+      expect(took).toBeGreaterThanOrEqual(1900);
+      expect(took).toBeLessThan(4000);
+      await until(() => sockets[0]!.destroyed);
+      expect(sockets[0]!.destroyed).toBe(true);
+    });
   });
 });
