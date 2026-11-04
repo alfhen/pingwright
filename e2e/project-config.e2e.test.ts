@@ -118,6 +118,22 @@ test('a refused key exits 2 with the file, key and line and never the value', as
   await rm(dir, { recursive: true, force: true });
 });
 
+test.each([
+  ['an unresolved alias', 'options:\n  gtmOverride: *gtm_auth=FAKE-AUTH-VALUE\n', 'line 4: not valid YAML (unresolved alias)'],
+  ['an unquoted wildcard host', 'options:\n  firstPartyHosts: *.example.com\n', 'line 4: not valid YAML (unresolved alias)'],
+  ['a collection key', '? { gtmOverride: "gtm_auth=FAKE-AUTH-VALUE" }\n: x\n', 'line 3: a key must be a plain name'],
+])('%s exits 2 with the file and line and never the text', async (_, body, message) => {
+  const dir = await mkdtemp(join(tmpdir(), 'tagreeve-config-yaml-'));
+  await mkdir(join(dir, 'tagreeve'));
+  await writeFile(join(dir, 'tagreeve/config.yml'), `configSchemaVersion: 1\nsite: ${site.url}\n${body}`);
+  const r = await tagreeve(dir, ['run', scenarioFile, '--json']);
+  expect(r.code).toBe(2);
+  expect(r.stderr).toContain(`tagreeve/config.yml: ${message}`);
+  expect(r.stderr).not.toMatch(/Warning/);
+  expect(r.stdout + r.stderr).not.toMatch(/FAKE-/);
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('--allow-test-payment needs --site on the command line, also when the config has a site', async () => {
   const r = await tagreeve(cwd, ['run', scenarioFile, '--allow-test-payment', '127.0.0.1']);
   expect(r.code).toBe(2);

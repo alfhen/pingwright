@@ -1,4 +1,4 @@
-import { LineCounter, isMap as isYamlMap, isPair, isScalar, parseDocument, type Node } from 'yaml';
+import { LineCounter, isAlias, isMap as isYamlMap, isPair, isScalar, parseDocument, visit, type Node } from 'yaml';
 import { parseOptions, type Path, type ScenarioOptions } from './scenario.ts';
 
 export const configSchemaVersion = 1;
@@ -42,7 +42,7 @@ function validSite(value: unknown): boolean {
 /** `file` is only used in messages. Messages never hold a value from the file. */
 export function parseProjectConfig(text: string, file: string): ProjectConfig {
   const lines = new LineCounter();
-  const doc = parseDocument(text, { lineCounter: lines, uniqueKeys: true });
+  const doc = parseDocument(text, { lineCounter: lines, uniqueKeys: true, logLevel: 'silent' });
   const issues: string[] = [];
   const lineAt = (node: Node | null | undefined): number => (node?.range ? lines.linePos(node.range[0]).line : 1);
 
@@ -68,7 +68,23 @@ export function parseProjectConfig(text: string, file: string): ProjectConfig {
   for (const e of doc.errors) issues.push(`${file}: line ${e.linePos?.[0].line ?? 1}: not valid YAML (${e.code})`);
   if (issues.length) throw new ProjectConfigError(issues);
 
-  const raw: unknown = doc.toJS();
+  // The library echoes key and alias text in its errors and warnings, so both are refused here by line only.
+  visit(doc, {
+    Pair(_, pair) {
+      if (!isScalar(pair.key) && !isAlias(pair.key)) report(lineAt(pair.key as Node), '', 'a key must be a plain name');
+    },
+    Alias(_, alias) {
+      if (!alias.resolve(doc)) report(lineAt(alias), '', 'not valid YAML (unresolved alias)');
+    },
+  });
+  if (issues.length) throw new ProjectConfigError(issues);
+
+  let raw: unknown;
+  try {
+    raw = doc.toJS({ logLevel: 'silent' } as never);
+  } catch {
+    throw new ProjectConfigError([`${file}: line 1: not valid YAML`]);
+  }
   if (!isMap(raw)) throw new ProjectConfigError([`${file}: line 1: the project config must be a YAML mapping`]);
 
   const checkKeys = (map: Record<string, unknown>, parent: Path, allowed: readonly string[]) => {

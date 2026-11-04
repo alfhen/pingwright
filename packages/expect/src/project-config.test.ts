@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { mergeOptions, parseProjectConfig, ProjectConfigError } from './project-config.ts';
 import { parseScenario } from './scenario.ts';
 
@@ -94,6 +94,18 @@ describe('refused keys', () => {
     const message = errorOf(`${head}serverContainerConfig:\n  container: FAKE-CONTAINER-CONFIG\n  gtmAuth: FAKE-AUTH-VALUE\n`);
     expect(message).toContain('line 2, serverContainerConfig');
     expect(message).not.toMatch(/FAKE/);
+  });
+
+  test.each([
+    ['an unresolved alias', `${head}options:\n  gtmOverride: *gtm_auth=FAKE-AUTH-VALUE\n`, 'line 3: not valid YAML (unresolved alias)'],
+    ['an unquoted wildcard host', `${head}options:\n  firstPartyHosts: *.example.com\n`, 'line 3: not valid YAML (unresolved alias)'],
+    ['a collection key', `${head}? { gtmOverride: "gtm_auth=FAKE-AUTH-VALUE" }\n: x\n`, 'line 2: a key must be a plain name'],
+  ])('%s names the line and never the text', (_, text, message) => {
+    const warn = vi.spyOn(process, 'emitWarning');
+    const out = errorOf(text);
+    expect(out).toBe(`${FILE}: ${message}`);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   test('an unknown key', () => {
