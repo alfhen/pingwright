@@ -8,7 +8,7 @@
 
 <!-- W06 -->
 
-<!-- M02 -->
+- A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
 <!-- M04 -->
 

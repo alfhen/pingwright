@@ -5,8 +5,6 @@ export interface Findings {
   /** Vendors that sent hits in a state, and vendors whose identifiers went out in a state. Keyed by epoch label. */
   hits: Map<string, Set<string>>;
   identifiers: Map<string, Set<string>>;
-  /** Built-in checks already named by an identifier finding of their own label. */
-  namedChecks: Set<string>;
   /** Failed and warned rules: `must`, `mustNot` and unreadable entries. */
   failed: number;
   warned: number;
@@ -20,18 +18,19 @@ export interface Findings {
 }
 
 export function emptyFindings(): Findings {
-  return { hits: new Map(), identifiers: new Map(), namedChecks: new Set(), failed: 0, warned: 0, failedChecks: new Map(), warnedChecks: new Map(), unchecked: 0, unlinkedServerHits: 0, probableServerHits: 0 };
+  return { hits: new Map(), identifiers: new Map(),failed: 0, warned: 0, failedChecks: new Map(), warnedChecks: new Map(), unchecked: 0, unlinkedServerHits: 0, probableServerHits: 0 };
 }
 
 export function addFindings(into: Findings, model: ReportModel): void {
   into.unlinkedServerHits += model.serverContainer?.unlinked ?? 0;
   into.probableServerHits += model.serverContainer?.probable ?? 0;
+  const namedHere = new Set<string>();
   for (const row of model.rows) {
     row.segments.forEach((segment, i) => {
       if (segment.mark !== 'leak') return;
       const target = segment.label === IDENTIFIER_LEAK || segment.label === IDENTIFIER_EARLY ? into.identifiers : into.hits;
-      if (segment.label === IDENTIFIER_LEAK) into.namedChecks.add('deniedIdentifiers');
-      if (segment.label === IDENTIFIER_EARLY) into.namedChecks.add('earlyIdentifiers');
+      if (segment.label === IDENTIFIER_LEAK) namedHere.add('deniedIdentifiers');
+      if (segment.label === IDENTIFIER_EARLY) namedHere.add('earlyIdentifiers');
       const label = model.columns[i]!.label;
       const vendors = target.get(label) ?? new Set<string>();
       vendors.add(row.vendor);
@@ -44,7 +43,10 @@ export function addFindings(into: Findings, model: ReportModel): void {
     if (e.status === 'CANNOT EVALUATE') into.unchecked++;
     else if (e.status === 'FAIL' || e.status === 'WARN') {
       const failing = e.status === 'FAIL';
-      if (e.kind === 'builtin') (failing ? failedHere : warnedHere).add(e.text.replace(/^builtin: /, ''));
+      if (e.kind === 'builtin') {
+        const name = e.text.replace(/^builtin: /, '');
+        if (!namedHere.has(name)) (failing ? failedHere : warnedHere).add(name);
+      }
       else if (failing) into.failed++;
       else into.warned++;
     }
@@ -74,13 +76,12 @@ export function findingsSentence(f: Findings, inRuns = false): string {
   const parts: string[] = [];
   for (const [label, vendors] of [...f.hits].sort(([a], [b]) => a.localeCompare(b))) parts.push(`${list(vendors)} ${vendors.size === 1 ? 'sends' : 'send'} hits in the ${label} state`);
   for (const [label, vendors] of [...f.identifiers].sort(([a], [b]) => a.localeCompare(b))) parts.push(`identifiers go out to ${list(vendors)} in the ${label} state`);
-  const shown = (checks: Map<string, number>) => new Map([...checks].filter(([name]) => !f.namedChecks.has(name)));
   if (parts.length === 0 && f.unchecked === 0) parts.push('no leaks');
   if (f.failed > 0) parts.push(`${plural(f.failed, 'rule')} failed`);
-  parts.push(...checkParts(shown(f.failedChecks), 'failed', inRuns));
+  parts.push(...checkParts(f.failedChecks, 'failed', inRuns));
   if (f.unchecked > 0) parts.push(`${plural(f.unchecked, 'expectation')} could not be checked`);
   if (f.warned > 0) parts.push(`${plural(f.warned, 'rule')} warned`);
-  parts.push(...checkParts(shown(f.warnedChecks), 'warned', inRuns));
+  parts.push(...checkParts(f.warnedChecks, 'warned', inRuns));
   if (f.unlinkedServerHits > 0) parts.push(`${plural(f.unlinkedServerHits, 'server container hit')} could not be linked to a browser hit`);
   if (f.probableServerHits > 0) parts.push(`${plural(f.probableServerHits, 'server container hit')} placed by a probable link`);
   return parts.join('; ');
