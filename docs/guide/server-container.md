@@ -47,6 +47,33 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 
    Use a test identity and a test copy of your site. The container may pass visitor data to Tagreeve's recording proxy, and the run records it.
 
+## Test an unpublished workspace
+
+The config from step 3 makes the container serve the published version. To test a server workspace that is not published, use a config built from that workspace's preview environment. Both configs are the base64 of one string:
+
+| Config | String before base64 |
+| --- | --- |
+| Live container | `id=GTM-PWTEST1&env=<env id>&auth=<auth>` |
+| Workspace preview | `id=GTM-PWTEST1&env=<env id>&auth=<auth>` |
+
+For the live container, `env` and `auth` come from the "Manually provision tagging server" page. For a workspace, they come from its preview environment, so `<env id>` and `<auth>` differ from the live ones. The preview environment must exist. A quick preview on the workspace in Tag Manager creates it.
+
+The workspace's preview URL, or its share-preview link, holds both values. The `gtm_preview` parameter is `env-<n>`: `<env id>` is the number `<n>`, as in the live string. The `gtm_auth` parameter is `<auth>`. Treat the URL as a secret too.
+
+Build the config without putting `<auth>` in a command line, where your shell keeps it:
+
+1. In an editor, write the plain string from the table into `plain.txt`, in a folder outside any repository. Set its mode to 0600.
+2. Encode it into the config file:
+
+   ```bash
+   (umask 077; tr -d '\r\n' < plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt)
+   ```
+
+   The `tr` drops the editor's final newline, which would otherwise become part of the auth value. On Linux, use `base64 -w0` so the output is one line.
+3. Delete `plain.txt`.
+
+Pass the config file with `--server-container-config`, as in step 6. Keep it as secret as in step 4: mode 0600, outside any repository. Tagreeve gives the config to the container as it is, so the run serves the workspace build.
+
 ## What happens in a run
 
 Requests from the browser to a host in `serverHosts` go to the local container instead of your live one. Loads are not sent to it: scripts such as `gtm.js`, stylesheets, fonts and pages from those hosts use the network. The container sends its own calls to vendors, for example GA4, Google Ads or the Meta Conversions API. Tagreeve's proxy records each call and answers it as `stub` mode would. The call is not sent on.
@@ -81,7 +108,7 @@ With `--json`, the same counts are in the `serverContainer` field. If the contai
 ## What it does not show
 
 - Stape-only hosting features: the custom loader and its domain features, Cookie Keeper, the geo and bot headers Stape adds in front of the container, store ID headers, request logs and the CDN. A cookie that Cookie Keeper would set, or a header a tag reads from the hosting layer, is missing.
-- Unpublished workspaces. The container loads the published version.
+- Unpublished workspaces with the live config. The container loads the published version. For a workspace, use a config from its preview environment (see "Test an unpublished workspace").
 - Calls to a host that no decoder knows. They are recorded and flagged as unknown destinations.
 
 Tags that Stape ships as templates, such as the Data Client and the Facebook client, are part of your container and do run. The calls of template tags such as Meta Conversions API, Pinterest and Criteo are not yet proven to reach the proxy.

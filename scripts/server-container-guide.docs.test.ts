@@ -47,6 +47,21 @@ test('the config file is saved outside the working directory', () => {
   for (const run of runs) expect(run).toMatch(/--server-container-config ~\//);
 });
 
+test('the guide explains the workspace preview config with placeholders only', () => {
+  expect(guide).toContain('## Test an unpublished workspace');
+  expect(guide).toContain('preview environment');
+  expect(guide).toContain('quick preview');
+  expect(guide.match(/id=GTM-PWTEST1&env=<env id>&auth=<auth>/g)?.length).toBe(2);
+  expect(guide).toContain('gtm_preview');
+  expect(guide).toContain('gtm_auth');
+  expect(guide).toContain("tr -d '\\r\\n' < plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt");
+  expect(guide).toContain('umask 077');
+  for (const line of guide.split('\n')) {
+    if (/\b(tagreeve|base64|echo|printf)\b/.test(line)) expect(line, line).not.toMatch(/auth=/);
+  }
+  for (const id of guide.match(/\bGTM-[A-Z0-9]+/g) ?? []) expect(id).toBe('GTM-PWTEST1');
+});
+
 test('the sidebar links to the built page', () => {
   const config = readFileSync(join(root, 'site/astro.config.mjs'), 'utf8');
   expect(config).toContain("link: '/docs/guide/server-container'");
