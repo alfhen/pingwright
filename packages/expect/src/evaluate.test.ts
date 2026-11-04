@@ -798,8 +798,8 @@ test('sentBy selects browser hits or server container hits, and no sentBy select
 });
 
 test('a scoped sentBy: browser rule gets no probable-link note, and a sentBy: server rule still does', () => {
-  const via = hit({ vendor: 'meta', t: 500 });
-  const sent = hit({ vendor: 'meta-capi', t: 1500, via: { hitId: via.hit.id, by: 'eventId', confidence: 'probable' } }, { captured: 'serverContainer' });
+  const via = hit({ vendor: 'meta', t: 1500 });
+  const sent = hit({ vendor: 'meta-capi', t: 500, via: { hitId: via.hit.id, by: 'eventId', confidence: 'probable' } }, { captured: 'serverContainer' });
   const records = [via, sent, epoch(0, 1000, denied), epoch(1000, null, granted)];
   const browserRule = rule('expect:\n  mustNot:\n    - { vendor: meta-capi, sentBy: browser, in: epoch(denied) }', records);
   expect(browserRule.note).toBeUndefined();
