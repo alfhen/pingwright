@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import net from 'node:net';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import tls from 'node:tls';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -306,6 +306,47 @@ describe('recording proxy', () => {
       createRecordingProxy({ host, port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }),
     ).rejects.toThrow(/wildcard/);
   });
+
+  const loopbackName = ['lo0', 'lo'].find((name) => name in networkInterfaces());
+
+  it.skipIf(!loopbackName)('refuses a scoped unspecified host through the check after listen', async () => {
+    const host = `::%${loopbackName}`;
+    const options = { host, port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) };
+    await expect(createRecordingProxy(options)).rejects.toThrow(/wildcard/);
+  });
+
+  it.skipIf(!loopbackName)('rejects within 1 s when a client is connected before the address check', async () => {
+    const realListen = http.Server.prototype.listen;
+    const realAddress = http.Server.prototype.address;
+    let checking = false;
+    let client: net.Socket | undefined;
+    vi.spyOn(http.Server.prototype, 'address').mockImplementation(function (this: http.Server) {
+      const real = realAddress.call(this);
+      return checking && real && typeof real === 'object' ? { ...real, address: '::' } : real;
+    });
+    vi.spyOn(http.Server.prototype, 'listen').mockImplementation(function (this: http.Server, ...args: unknown[]) {
+      const done = args[args.length - 1] as () => void;
+      const port = args[0] as number;
+      const host = args[1] as string;
+      return (realListen as (...a: unknown[]) => http.Server).call(this, port, host, () => {
+        const bound = realAddress.call(this) as net.AddressInfo;
+        client = net.connect(bound.port, '127.0.0.1');
+        client.on('error', () => {});
+        client.once('connect', () => {
+          setTimeout(() => {
+            checking = true;
+            done();
+          }, 50);
+        });
+      });
+    });
+    const started = Date.now();
+    await expect(
+      createRecordingProxy({ host: '127.0.0.1', port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }),
+    ).rejects.toThrow(/wildcard/);
+    expect(Date.now() - started).toBeLessThan(1000);
+    client?.destroy();
+  }, 5000);
 
   it('accepts loopback spellings', async () => {
     proxy = await createRecordingProxy({ host: '127.0.0.1', port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) });
