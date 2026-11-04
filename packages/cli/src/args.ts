@@ -23,7 +23,9 @@ export type Network = 'stub' | 'server' | 'live';
 export interface RunArgs {
   command: 'run';
   scenario: string;
-  site: string;
+  /** Absent: `site` from the project config. */
+  site?: string;
+  config?: string;
   network: Network | undefined;
   out: string | undefined;
   label?: string;
@@ -77,6 +79,7 @@ export interface SuiteArgs {
   /** At most one of `site` and `stores` is set. With neither, `tagreeve/stores.json` is the default. */
   site?: string;
   stores?: string;
+  config?: string;
   variants: VariantArg[];
   network: Network | undefined;
   out: string | undefined;
@@ -107,7 +110,7 @@ export type Command = RunArgs | { command: 'init' } | DiffArgs | BaselineArgs | 
 export type HelpTopic = (typeof COMMANDS)[number];
 
 export const USAGE = `Usage:
-  tagreeve run <scenario.yml> --site <url> [options]
+  tagreeve run <scenario.yml> [--site <url>] [options]
   tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
   tagreeve baseline save <run.jsonl> <baseline.json> [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
@@ -122,16 +125,18 @@ Run "tagreeve run --help" for the options of run.
 server-container build: builds the image for the server container feature on arm64 (Apple silicon) from Google's image. It needs Docker, pulls large images and never pushes. On amd64 it prints the image to use.
 
 Options for suite:
-  --site <url>               The site to test. Without --site and --stores, tagreeve/stores.json is used
+  --site <url>               The site to test. Without --site and --stores, site in tagreeve/config.yml is used, or else tagreeve/stores.json
   --stores <file>            A stores.json file: run every scenario against each store (instead of --site). Default: tagreeve/stores.json
   --variant <name[=file]>    A GTM build to test (repeatable). "published" is the live container; name=file serves an override file. Default: published
   --with-handoff             Also run scenarios with handoff steps, last, headed
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
   --allow-test-payment <host> The host that may run test payments. It must equal the --site host and be in the test-payment-hosts.json allowlist
+  --config <file>            The project config, instead of tagreeve/config.yml
   --network, --out, --label, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --server-container, --server-container-config, --json work as in run
 
 Options for run:
-  --site <url>               The site to test (required)
+  --site <url>               The site to test. Without it, site in tagreeve/config.yml is used
+  --config <file>            The project config, instead of tagreeve/config.yml
   --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
   --out <dir>                Directory for the JSONL record (default: tagreeve/runs/<date>)
   --label <name>             Name this run: 1 to 40 lowercase letters, digits or hyphens. Stored on the record and added to the default folder name
@@ -150,13 +155,14 @@ Options for run:
   --json                     Print a JSON summary on stdout
 `;
 
-export const RUN_USAGE = `Usage: tagreeve run <scenario.yml> --site <url> [options]
+export const RUN_USAGE = `Usage: tagreeve run <scenario.yml> [--site <url>] [options]
 
 Plays the scenario in Chromium, records every request, checks the expectations
 and writes one JSONL record.
 
 Options:
-  --site <url>               The site to test (required)
+  --site <url>               The site to test. Without it, site in tagreeve/config.yml is used
+  --config <file>            The project config, instead of tagreeve/config.yml
   --network stub|server|live stub (default) answers tracking requests locally; server also passes through the hosts in options.serverHosts; live sends them
   --out <dir>                Directory for the JSONL record (default: tagreeve/runs/<date>)
   --label <name>             Name this run: 1 to 40 lowercase letters, digits or hyphens. Stored on the record and added to the default folder name
@@ -278,6 +284,7 @@ function parseVariants(entries: string[]): VariantArg[] {
 const OPTIONS = {
   site: { type: 'string' },
   stores: { type: 'string' },
+  config: { type: 'string' },
   network: { type: 'string' },
   out: { type: 'string' },
   label: { type: 'string' },
@@ -386,8 +393,6 @@ function parseCommand(argv: string[]): Command {
   if (command === 'run' ? rest.length !== 1 : rest.length > 1) throw new UsageError(command === 'run' ? 'run takes one scenario file' : 'suite takes at most one scenario directory');
   if (command === 'suite') {
     if (values.site !== undefined && values.stores !== undefined) throw new UsageError('--site and --stores cannot be used together');
-  } else if (!values.site) {
-    throw new UsageError('--site is required');
   }
   if (values.site !== undefined) {
     try {
@@ -432,6 +437,7 @@ function parseCommand(argv: string[]): Command {
       ...(rest[0] !== undefined && { dir: rest[0] }),
       ...(values.site !== undefined && { site: values.site }),
       ...(values.stores !== undefined && { stores: values.stores }),
+      ...(values.config !== undefined && { config: values.config }),
       variants: parseVariants(values.variant ?? []),
       network,
       out: values.out,
@@ -455,7 +461,8 @@ function parseCommand(argv: string[]): Command {
   return {
     command: 'run',
     scenario: rest[0]!,
-    site: values.site!,
+    ...(values.site !== undefined && { site: values.site }),
+    ...(values.config !== undefined && { config: values.config }),
     network,
     out: values.out,
     ...(values.label !== undefined && { label: values.label }),

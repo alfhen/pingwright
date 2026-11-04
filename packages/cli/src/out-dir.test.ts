@@ -34,6 +34,14 @@ test('a label is added to the default folder name and ignored with --out', () =>
   expect(resolveOutDir({ out: 'o', now, label: 'ca-307-live' })).toBe('o');
 });
 
+test('a config base gets the dated folder and the label, and --out still wins', () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  process.env.TZ = 'UTC';
+  expect(resolveOutDir({ out: undefined, now, base: 'records' })).toBe(join('records', '2026-11-04'));
+  expect(resolveOutDir({ out: undefined, now, base: 'records', label: 'x1' })).toBe(join('records', '2026-11-04-x1'));
+  expect(resolveOutDir({ out: 'o', now, base: 'records' })).toBe('o');
+});
+
 test('no notice without a runs folder', async () => {
   expect(await oldRunsNotice(dir)).toBeUndefined();
 });

@@ -179,7 +179,7 @@ function isHostList(v: unknown): v is string[] {
   return Array.isArray(v) && v.every(isHostPattern);
 }
 
-type Path = (string | number)[];
+export type Path = (string | number)[];
 
 function isMap(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -219,6 +219,83 @@ export function countHolds(count: Count, actual: number): boolean {
 
 export function describeCount(count: Count): string {
   return count.op === '=' ? String(count.n) : `${count.op}${count.n}`;
+}
+
+export interface ParseOptionsSettings {
+  /** The option names that are valid here. */
+  keys?: readonly string[];
+  /** `false` keeps every value out of the messages. */
+  echo?: boolean;
+}
+
+/** The `options` mapping of a scenario or of the project config. A problem goes to `fail`; the result holds the valid entries. */
+export function parseOptions(raw: unknown, path: Path, fail: (path: Path, message: string) => void, { keys = OPTION_KEYS, echo = true }: ParseOptionsSettings = {}): ScenarioOptions {
+  const options: ScenarioOptions = {};
+  if (!isMap(raw)) fail(path, 'must be a mapping');
+  else
+    for (const [k, v] of Object.entries(raw)) {
+      const p = [...path, k];
+      if (!keys.includes(k)) fail(p, `unknown option, expected one of ${keys.join(', ')}`);
+      else if (k === 'network') {
+        if (v === 'live') fail(p, 'live is not allowed in a scenario. Pass --network live on the command line.');
+        else if (typeof v === 'string' && NETWORKS.includes(v)) options.network = v as NetworkMode;
+        else fail(p, `must be one of ${NETWORKS.join(', ')}`);
+      } else if (k === 'seed') {
+        if (typeof v === 'number' && Number.isInteger(v)) options.seed = v;
+        else fail(p, 'must be an integer');
+      } else if (k === 'allowUnknownDestination') {
+        if (typeof v === 'boolean' || isHostList(v)) options.allowUnknownDestination = v;
+        else fail(p, `must be true, false or a list of hosts${HOST_HINT}`);
+      } else if (k === 'platformHosts') {
+        if (typeof v === 'boolean') options.platformHosts = v;
+        else fail(p, 'must be true or false');
+      } else if (k === 'cartRequest') {
+        if (typeof v === 'string' && v !== '' && isRegExp(v)) options.cartRequest = v;
+        else fail(p, 'must be a regular expression such as "/api/cart/add"');
+      } else if (k === 'unloadGapIgnore') {
+        if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
+        else fail(p, 'must be a list of event names or globs such as consent_*');
+      } else if (k === 'serverHosts') {
+        if (!Array.isArray(v) || v.length === 0 || !v.every(isServerHostPattern)) fail(p, `must be a non-empty list of hosts${HOST_HINT}`);
+        else {
+          const bad = v.find((host: string) => !isSpecificServerHost(host));
+          if (bad !== undefined) fail(p, `${echo ? `"${bad}"` : 'a host in the list'} is a vendor host or a wildcard on a public suffix. List the server container's own host, such as sgtm.example.com or *.example.com`);
+          else options.serverHosts = v as string[];
+        }
+      } else if (k === 'viewport') {
+        if (isMap(v) && Object.keys(v).length === 2 && isViewportSide(v.width) && isViewportSide(v.height)) options.viewport = { width: v.width, height: v.height };
+        else fail(p, `must be { width, height }, integers from ${VIEWPORT_MIN} to ${VIEWPORT_MAX}. The preset "mobile" does not exist`);
+      } else if (k === 'identifierFields') {
+        if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names or globs such as user_data.*');
+        else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);
+        else options.identifierFields = v as string[];
+      } else if (k === 'builtins') {
+        if (!isMap(v)) fail(p, `must be a mapping of check name to ${SEVERITIES.join(' or ')}`);
+        else {
+          const builtins: NonNullable<ScenarioOptions['builtins']> = {};
+          for (const [name, severity] of Object.entries(v)) {
+            const bp = [...p, name];
+            if (!(BUILTIN_NAMES as readonly string[]).includes(name)) fail(bp, `unknown builtin check, expected one of ${BUILTIN_NAMES.join(', ')}`);
+            else if (typeof severity !== 'string' || !(SEVERITIES as readonly string[]).includes(severity))
+              fail(bp, `must be ${SEVERITIES.join(' or ')}`);
+            else builtins[name as BuiltinName] = severity as Severity;
+          }
+          options.builtins = builtins;
+        }
+      } else if (k === 'firstPartyHosts') {
+        if (isHostList(v)) options.firstPartyHosts = v;
+        else fail(p, `must be a list of hosts${HOST_HINT}`);
+      } else {
+        const ms = parseDuration(v);
+        if (ms === undefined) fail(p, 'must be a duration such as 4s or 500ms');
+        else if (k === 'consentTimeout') options.consentTimeout = ms;
+        else if (k === 'optionalTimeout') {
+          if (ms < 100 || ms > 30000) fail(p, 'must be from 100ms to 30s');
+          else options.optionalTimeout = ms;
+        } else options.graceWindow = ms;
+      }
+    }
+  return options;
 }
 
 /** `extraVendorKeys` are vendor keys from a user tracker list, valid in `vendor:` besides the built-in ones. */
@@ -672,73 +749,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
     return issues.length === before ? rule : undefined;
   }
 
-  const options: ScenarioOptions = {};
-  if (raw.options !== undefined) {
-    if (!isMap(raw.options)) fail(['options'], 'must be a mapping');
-    else
-      for (const [k, v] of Object.entries(raw.options)) {
-        const p = ['options', k];
-        if (!OPTION_KEYS.includes(k)) fail(p, `unknown option, expected one of ${OPTION_KEYS.join(', ')}`);
-        else if (k === 'network') {
-          if (v === 'live') fail(p, 'live is not allowed in a scenario. Pass --network live on the command line.');
-          else if (typeof v === 'string' && NETWORKS.includes(v)) options.network = v as NetworkMode;
-          else fail(p, `must be one of ${NETWORKS.join(', ')}`);
-        } else if (k === 'seed') {
-          if (typeof v === 'number' && Number.isInteger(v)) options.seed = v;
-          else fail(p, 'must be an integer');
-        } else if (k === 'allowUnknownDestination') {
-          if (typeof v === 'boolean' || isHostList(v)) options.allowUnknownDestination = v;
-          else fail(p, `must be true, false or a list of hosts${HOST_HINT}`);
-        } else if (k === 'platformHosts') {
-          if (typeof v === 'boolean') options.platformHosts = v;
-          else fail(p, 'must be true or false');
-        } else if (k === 'cartRequest') {
-          if (typeof v === 'string' && v !== '' && isRegExp(v)) options.cartRequest = v;
-          else fail(p, 'must be a regular expression such as "/api/cart/add"');
-        } else if (k === 'unloadGapIgnore') {
-          if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
-          else fail(p, 'must be a list of event names or globs such as consent_*');
-        } else if (k === 'serverHosts') {
-          if (!Array.isArray(v) || v.length === 0 || !v.every(isServerHostPattern)) fail(p, `must be a non-empty list of hosts${HOST_HINT}`);
-          else {
-            const bad = v.find((host: string) => !isSpecificServerHost(host));
-            if (bad !== undefined) fail(p, `"${bad}" is a vendor host or a wildcard on a public suffix. List the server container's own host, such as sgtm.example.com or *.example.com`);
-            else options.serverHosts = v as string[];
-          }
-        } else if (k === 'viewport') {
-          if (isMap(v) && Object.keys(v).length === 2 && isViewportSide(v.width) && isViewportSide(v.height)) options.viewport = { width: v.width, height: v.height };
-          else fail(p, `must be { width, height }, integers from ${VIEWPORT_MIN} to ${VIEWPORT_MAX}. The preset "mobile" does not exist`);
-        } else if (k === 'identifierFields') {
-          if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'string' && x !== '')) fail(p, 'must be a non-empty list of field names or globs such as user_data.*');
-          else if (v.some((x: string) => x.length > MAX_FIELD_NAME)) fail(p, `field names are at most ${MAX_FIELD_NAME} characters`);
-          else options.identifierFields = v as string[];
-        } else if (k === 'builtins') {
-          if (!isMap(v)) fail(p, `must be a mapping of check name to ${SEVERITIES.join(' or ')}`);
-          else {
-            const builtins: NonNullable<ScenarioOptions['builtins']> = {};
-            for (const [name, severity] of Object.entries(v)) {
-              const bp = [...p, name];
-              if (!(BUILTIN_NAMES as readonly string[]).includes(name)) fail(bp, `unknown builtin check, expected one of ${BUILTIN_NAMES.join(', ')}`);
-              else if (typeof severity !== 'string' || !(SEVERITIES as readonly string[]).includes(severity))
-                fail(bp, `must be ${SEVERITIES.join(' or ')}`);
-              else builtins[name as BuiltinName] = severity as Severity;
-            }
-            options.builtins = builtins;
-          }
-        } else if (k === 'firstPartyHosts') {
-          if (isHostList(v)) options.firstPartyHosts = v;
-          else fail(p, `must be a list of hosts${HOST_HINT}`);
-        } else {
-          const ms = parseDuration(v);
-          if (ms === undefined) fail(p, 'must be a duration such as 4s or 500ms');
-          else if (k === 'consentTimeout') options.consentTimeout = ms;
-          else if (k === 'optionalTimeout') {
-            if (ms < 100 || ms > 30000) fail(p, 'must be from 100ms to 30s');
-            else options.optionalTimeout = ms;
-          } else options.graceWindow = ms;
-        }
-      }
-  }
+  const options = raw.options === undefined ? {} : parseOptions(raw.options, ['options'], fail);
 
   if (issues.length) throw new ScenarioError(issues);
   return { start, vars, identity, steps, expect: expectOut, options, warnings };

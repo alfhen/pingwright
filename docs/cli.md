@@ -34,14 +34,15 @@ Plays the scenario in Chromium, records every request, decodes the hits, checks 
 
 | Option | Meaning |
 | --- | --- |
-| `--site <url>` | The site to test. Required. Scenario paths are resolved against it. |
+| `--site <url>` | The site to test. Scenario paths are resolved against it. Without `--site`, `site` from `tagreeve/config.yml` is used. With neither, `run` exits 2 with `--site is required`. |
+| `--config <file>` | Reads the project config from this file instead of `tagreeve/config.yml`. A file that does not exist exits 2. See "Project config". |
 | `--network stub\|server\|live` | `stub` (default) answers known collection endpoints locally. `server` is `stub`, except that collection requests to the hosts in `options.serverHosts` pass through (see Rules on cookies). Sends from a page while it unloads are still answered in the page, also to those hosts. `live` lets every hit through and warns on stderr that hits reach real vendor accounts. Overrides `options.network` in the scenario. `live` is only allowed here: a scenario that sets `network: live` is an error, also when the command line passes `--network live`. |
 | `--label <name>` | Names the run: 1 to 40 lowercase letters, digits or hyphens, such as `ca-307-live`. Anything else exits 2. Without `--out`, the folder is `tagreeve/runs/<YYYY-MM-DD>-<label>/`. With `--out`, the folder is used as given and the label is still stored in `Run.label`. The text summary starts with a `Label: <label>` line, and `--json` has `label`. Without a label there is no line and no key. |
-| `--out <dir>` | Directory for the record. The default is `tagreeve/runs/<YYYY-MM-DD>/`, with the local date, and Tagreeve makes it when it does not exist. The file is `<dir>/run_<id>.jsonl`. Without `--out`, if `./runs/` holds a `run_*.jsonl` file or a `suite_*` folder, `run` prints one note on stderr that records now go to the new folder. Pass `--out runs` to keep using the old one. |
+| `--out <dir>` | Directory for the record. The default is `tagreeve/runs/<YYYY-MM-DD>/`, with the local date, and Tagreeve makes it when it does not exist. An `out` in the project config replaces `tagreeve/runs` and still gets the date and the label: `<out>/<YYYY-MM-DD>[-<label>]/`. The file is `<dir>/run_<id>.jsonl`. Without `--out`, if `./runs/` holds a `run_*.jsonl` file or a `suite_*` folder, `run` prints one note on stderr that records now go to the new folder. Pass `--out runs` to keep using the old one. |
 | `--seed <n>` | Seed for the fake identity. Overrides `options.seed`. |
 | `--headed` | Show the browser window. Scenarios with a `handoff` step are always headed. |
 | `--viewport <W>x<H>` | Sets the browser viewport in CSS pixels, such as `390x844`. Each side is an integer from 200 to 4000. Anything else, including `mobile`, exits 2. Overrides `options.viewport`. It sets the window size only: the user agent and the client hints stay desktop, so a narrow viewport does not make the browser report itself as a mobile device. A site that checks the user agent or the hints still serves its desktop tags. The record has `Run.viewport` and the report header shows `Viewport`. |
-| `--allow-test-payment <host>` | Lets a `payment` step type a payment provider's documented test card. The host must equal the `--site` host and be in the allowlist file. See Test payments. |
+| `--allow-test-payment <host>` | Lets a `payment` step type a payment provider's documented test card. The host must equal the `--site` host and be in the allowlist file. See Test payments. It needs `--site` on the command line: a `site` from the project config is not enough, and `run` exits 2 and names the flag. |
 | `--net-log` | Launches Chromium with `--log-net-log` and records collection requests that no browser hook reports: sends from a frame while it unloads, and early sends from a sandboxed `srcdoc` iframe while it loads. They carry `captured: "netlog"` and no body. The initiator is `unload` when the request started after a navigation request (not the first page load or its redirects) and up to 1.5 s after its response, and `netlog` otherwise. An early `srcdoc` send on a later page can still be labelled `unload`. This is a guess from timing. Needs `--network live` on the command line: the command refuses it in `stub` mode with exit code 2, because those requests would leave the machine. The log is written to a private temporary directory, not the output directory, and removed when the run ends, including on SIGINT and SIGTERM. Off by default. See design §5.3. |
 | `--autoconsent-rules <file>` | Extra autoconsent rules. Can be repeated. Without it, `tagreeve/autoconsent/*.json` is used, sorted by name, when the folder has `.json` files. The flag replaces them. |
 | `--gtm-override <file>` | Runs the page against an unpublished GTM workspace build. See below. |
@@ -318,12 +319,13 @@ tagreeve suite scenarios/ --site https://staging.example.com \
 
 | Option | Meaning |
 | --- | --- |
-| `--site <url>` | The site to test. Never together with `--stores`. The site comes from `--site`, then `--stores`, then `tagreeve/stores.json`. With none of them, `suite` exits 2 and names all three. |
+| `--site <url>` | The site to test. Never together with `--stores`. The site comes from `--site`, then `--stores`, then `site` in the project config, then `tagreeve/stores.json`. With none of them, `suite` exits 2 and names the options. When the config has `site` and `tagreeve/stores.json` exists, `suite` exits 2 and asks for `--site` or `--stores`. |
+| `--config <file>` | As in `run`. |
 | `--stores <file>` | A stores file: run every scenario against each store. See "Several stores". Without `--site` and `--stores`, `tagreeve/stores.json` is used when it exists. |
 | `--variant <name[=file]>` | A GTM build to test. Can be repeated. `published` means no override and takes no file. `name=file` serves an override file in the `--gtm-override` format. The name matches `^[a-z0-9][a-z0-9_-]*$`, and a name given twice exits 2. Default: `published`. |
 | `--with-handoff` | Also runs scenarios that have a `handoff` step, after all others, in a headed window with a person at each handoff. Without it they are `SKIPPED`, which counts as a pass. |
 | `--with-test-payment` | Also runs scenarios that have a `payment` step. It needs `--allow-test-payment <host>` too, as in `run`. Without both they are `SKIPPED`, which counts as a pass. With both, a failed gate exits 2 before any run. |
-| `--allow-test-payment <host>` | As in `run`. It needs `--site` or `--stores` on the command line. Without them `suite` exits 2 and names the flag, also when `tagreeve/stores.json` holds the host, because a default file never supplies the host a test payment runs on. |
+| `--allow-test-payment <host>` | As in `run`. It needs `--site` or `--stores` on the command line. Without them `suite` exits 2 and names the flag, also when `tagreeve/stores.json` holds the host, because a default file never supplies the host a test payment runs on. A `site` from the project config does not count either. |
 | `--network`, `--out`, `--label`, `--seed`, `--viewport`, `--var`, `--tracker-list`, `--autoconsent-rules`, `--server-container`, `--server-container-config`, `--json` | As in `run`. Without `--out`, the `suite_<id>/` folder goes in `tagreeve/runs/<YYYY-MM-DD>/` (`<YYYY-MM-DD>-<label>/` with `--label`), and `suite` prints the same note about an older `./runs/`. `--server-container` starts one container for each run, not one for the suite, because each run needs its own capture window. A suite with it is slow. Every scenario must be in server mode. `--gtm-override`, `--headed` and `--net-log` are not options of `suite`. A `--var` that no scenario declares exits 2. |
 
 The runs go one after another, with one browser at a time. The variants of one scenario use the same seed, so they have the same fake identity. Output goes to `<out>/suite_<id>/`: one record per run, named `<scenario>.<variant>.jsonl` (with `--stores`, `<scenario>.<store>.<variant>.jsonl`, see Several stores; each has `Run.variant` set, and `Run.label` with `--label`; with `--stores` it also has `Run.store`), and the manifest `suite.json`. The manifest has the site origin, the variants, one cell per scenario and variant (with `--stores`, per scenario, store and variant) with its status, exit code and record file name, the failed rule count and the failed built-in check names on a failed or warned cell, and the diff counts. It holds no path, no query value, no override file path and no run message.
@@ -428,6 +430,44 @@ Installs Chromium with the Playwright version Tagreeve depends on.
 ### `tagreeve --version`
 
 Prints the version.
+
+## Project config
+
+`tagreeve/config.yml` holds the settings that every run of a project shares. `run` and `suite` read it from the current directory only, never from a parent folder. `--config <file>` reads another file instead. A `--config` file that does not exist exits 2. Without the flag, a missing `tagreeve/config.yml` is fine.
+
+```yaml
+configSchemaVersion: 1
+site: https://staging.example.com
+out: records
+options:
+  allowUnknownDestination: [cdn.example.com]
+  firstPartyHosts: ['*.example.com']
+  builtins:
+    earlyIdentifiers: fail
+```
+
+| Key | Meaning |
+| --- | --- |
+| `configSchemaVersion` | Required. Always `1`. |
+| `site` | An http or https URL with no user name or password. Used when `--site` is not given. |
+| `out` | A folder. Records go to `<out>/<YYYY-MM-DD>[-<label>]/`, as the default folder does. Only `--out` is used exactly as given. |
+| `options` | `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. Each is checked like the same option in a scenario. |
+
+The config never overrides a scenario. A scenario's own option wins, and a list in the scenario replaces the config's list. `builtins` merges per check, and the scenario wins for a check it sets. A flag on the command line wins over both.
+
+`serverHosts` says which hosts are your server. It does not turn server mode on. Server mode still comes from `--network server` or a scenario's `network: server`. A scenario with `network: server` and no `serverHosts` takes the hosts from the config.
+
+The config is plain YAML. An anchor, an alias, a tag (such as `!!str`), a merge key (`<<`) or a key that is not a plain string exits 2 with `<file>: line <n>: anchors, aliases, tags and merge keys are not allowed in the project config`. A YAML syntax error exits 2 with `<file>: line <n>: not valid YAML`. Neither message holds any text from the file.
+
+The config cannot widen what a run may do, and it never holds a secret. These keys exit 2, at the top level and in `options`: `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment` and `gtmOverride`. So does any key that is not in the table. The error names the file, the key and the line, and never the value:
+
+```text
+tagreeve/config.yml: line 3, gtmOverride: not allowed in the project config. Pass it on the command line.
+```
+
+`--allow-test-payment` needs `--site` on the command line (or `--stores` for `suite`). A `site` in the config is not enough, because the flag names the host of the `--site`.
+
+When the file comes from the default path, the text summary lists it on the `Defaults:` line, and `--json` has `{ "setting": "config", "path": "tagreeve/config.yml" }` in `defaults`. A `--config` path is not listed.
 
 ## Exit codes
 

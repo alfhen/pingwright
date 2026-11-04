@@ -2,7 +2,7 @@ import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { readRun, type TagreeveRecord, type Result, type Run, type RunRecords } from '@tagreeve/core';
 import { parseTrackerList, type TrackerEntry } from '@tagreeve/decoders';
-import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, parseScenario, ScenarioError, type Scenario, type Viewport } from '@tagreeve/expect';
+import { DEFAULT_GRACE_MS, evaluate, isLoopbackPattern, mergeOptions, parseScenario, ScenarioError, type Scenario, type Viewport } from '@tagreeve/expect';
 import {
   CONFIG_ENV,
   defaultServerContainerImage,
@@ -31,7 +31,8 @@ import { BaselineError, compareBaseline, readBaseline, type BaselineFile } from 
 import { resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { warnIfNotIgnored } from './git-ignore.ts';
 import { oldRunsNotice, resolveOutDir } from './out-dir.ts';
-import { NET_LOG_NEEDS_LIVE, type Network, type RunArgs, type SuiteArgs } from './args.ts';
+import { NET_LOG_NEEDS_LIVE, UsageError, type Network, type RunArgs, type SuiteArgs } from './args.ts';
+import { ALLOW_TEST_PAYMENT_NEEDS_SITE, loadProjectConfig, ProjectConfigLoadError, siteMissingMessage, type LoadedConfig } from './project-config.ts';
 import { applyBaseline, buildSummary, exitCodeFor, formatSummary, type Summary } from './summary.ts';
 import { acceptsDeclaration, checkTestPaymentGates, testPaymentHostsPath } from './test-payment-hosts.ts';
 import { readVersion } from './version.ts';
@@ -123,16 +124,17 @@ export interface RunOutcome {
 }
 
 /** Applies the network rules shared by `run` and `suite`. Returns undefined after writing the reason to stderr. */
-export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog' | 'serverContainer'>, parsed: Scenario, io: Io): Network | undefined {
+export function resolveNetwork(args: Pick<RunArgs, 'network' | 'netLog' | 'serverContainer'>, parsed: Scenario, io: Io, configPath?: string): Network | undefined {
+  const where = configPath === undefined ? 'in the scenario' : `in the scenario or in ${configPath}`;
   const networkMode = args.network ?? parsed.options.network ?? 'stub';
   const serverHosts = parsed.options.serverHosts ?? [];
   if (args.serverContainer && networkMode !== 'server') {
-    io.stderr('--server-container needs --network server and options.serverHosts in the scenario: the hits to those hosts are what the container receives.\n');
+    io.stderr(`--server-container needs --network server and options.serverHosts ${where}: the hits to those hosts are what the container receives.\n`);
     return undefined;
   }
   if (networkMode === 'server') {
     if (serverHosts.length === 0) {
-      io.stderr('Network mode "server" needs options.serverHosts in the scenario: the hosts whose requests pass through, such as sgtm.example.com.\n');
+      io.stderr(`Network mode "server" needs options.serverHosts ${where}: the hosts whose requests pass through, such as sgtm.example.com.\n`);
       return undefined;
     }
     const hosted = serverHosts.filter((host) => !isLoopbackPattern(host));
@@ -290,7 +292,26 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
   return { code: exitCodeFor(results), path, summary: buildSummary(records, results, path) };
 }
 
+export async function loadConfigOrReport(flag: string | undefined, io: Io): Promise<{ ok: true; loaded: LoadedConfig | undefined } | { ok: false }> {
+  try {
+    return { ok: true, loaded: await loadProjectConfig(flag) };
+  } catch (error) {
+    if (!(error instanceof ProjectConfigLoadError)) throw error;
+    io.stderr(`${error.message}\n`);
+    return { ok: false };
+  }
+}
+
 export async function runCommand(args: RunArgs, io: Io): Promise<number> {
+  if (args.allowTestPayment !== undefined && args.site === undefined) {
+    io.stderr(`${ALLOW_TEST_PAYMENT_NEEDS_SITE}\n`);
+    return 2;
+  }
+  const config = await loadConfigOrReport(args.config, io);
+  if (!config.ok) return 2;
+  const loaded = config.loaded;
+  const site = args.site ?? loaded?.config.site;
+  if (site === undefined) throw new UsageError(siteMissingMessage(loaded), 'run');
   let text: string;
   try {
     text = await readFile(args.scenario, 'utf8');
@@ -318,6 +339,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io.stderr(`${args.scenario} is not a valid scenario:\n${error.issues.map((i) => `  ${i}`).join('\n')}\n`);
     return 2;
   }
+  if (loaded) parsed.options = mergeOptions(loaded.config.options, parsed.options);
   for (const warning of parsed.warnings) io.stderr(`Warning: ${warning}\n`);
   const undeclared = Object.keys(args.vars).filter((name) => !Object.hasOwn(parsed.vars, name));
   if (undeclared.length) {
@@ -326,12 +348,12 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   }
   parsed.vars = { ...parsed.vars, ...args.vars };
 
-  const network = resolveNetwork(args, parsed, io);
+  const network = resolveNetwork(args, parsed, io, loaded?.path);
   if (!network) return 2;
   const serverContainer = await prepareServerContainer(args, parsed.options.serverHosts ?? [], io);
   if (serverContainer === undefined) return 2;
 
-  const gates = await checkTestPaymentGates(parsed, args.site, args.allowTestPayment);
+  const gates = await checkTestPaymentGates(parsed, site, args.allowTestPayment);
   if (!gates.ok) {
     io.stderr(`${gates.error}\n`);
     return 2;
@@ -359,8 +381,8 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   }
   warnTestGtmOrigin(io);
   warnTestLoopbackHosted(io);
-  const out = resolveOutDir({ out: args.out, now: new Date(), label: args.label });
-  if (args.out === undefined) {
+  const out = resolveOutDir({ out: args.out, now: new Date(), label: args.label, base: loaded?.config.out });
+  if (args.out === undefined && loaded?.config.out === undefined) {
     const notice = await oldRunsNotice(process.cwd());
     if (notice) io.stderr(notice);
   }
@@ -371,7 +393,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
       parsed,
       scenarioName: basename(args.scenario),
       network,
-      site: args.site,
+      site,
       out,
       ...(args.label !== undefined && { label: args.label }),
       seed: args.seed,
@@ -387,7 +409,8 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
     io,
   );
   if (!outcome.summary) return outcome.code;
-  if (defaults.length) outcome.summary.defaults = defaults;
+  const listed = [...(loaded?.defaultUsed ? [loaded.defaultUsed] : []), ...defaults];
+  if (listed.length) outcome.summary.defaults = listed;
   let code: 0 | 1 = outcome.code === 1 ? 1 : 0;
   if (baseline && outcome.path) {
     applyBaseline(outcome.summary, compareBaseline(baseline, await readRun(outcome.path)));

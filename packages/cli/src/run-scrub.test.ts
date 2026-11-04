@@ -43,7 +43,7 @@ test('result records, the summary and the output do not repeat the gtmAuth', asy
   const err: string[] = [];
   const io = { stdout: (t: string) => out.push(t), stderr: (t: string) => err.push(t) };
 
-  const withOverride = await runCommand({ scenario, out: dir, vars: {}, autoconsentRules: [], json: true, gtmOverride: override } as unknown as RunArgs, io);
+  const withOverride = await runCommand({ scenario, site: 'http://127.0.0.1:9', out: dir, vars: {}, autoconsentRules: [], json: true, gtmOverride: override } as unknown as RunArgs, io);
   expect(err.join(''), 'stderr').toBe('');
   expect(withOverride).toBe(1);
   const record = await readFile(join(dir, 'run.jsonl'), 'utf8');
@@ -54,6 +54,6 @@ test('result records, the summary and the output do not repeat the gtmAuth', asy
 
   // Positive control: without an override the same result is written as is.
   await writeFile(join(dir, 'run.jsonl'), '');
-  await runCommand({ scenario, out: dir, vars: {}, autoconsentRules: [], json: true } as unknown as RunArgs, io);
+  await runCommand({ scenario, site: 'http://127.0.0.1:9', out: dir, vars: {}, autoconsentRules: [], json: true } as unknown as RunArgs, io);
   expect(await readFile(join(dir, 'run.jsonl'), 'utf8')).toContain(auth);
 });
