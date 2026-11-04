@@ -315,7 +315,7 @@ Acceptance: the e2e passes. On the old code `suite --baseline` is a usage error 
 - Version `0.6.0-rc.1`. The install line is `npm i -g tagreeve@next`.
 - The CHANGELOG section has an "Upgrading from 0.5.0" list: the new default `--out`, a scenario with `network: live` no longer loads, and record schema version 4.
 - The Known list cites only open issues. It says goal 2 is not built (rc.2), that #719 waits for 2026-11-10 if not yet landed, that the #901 rule depends on the container answering after its tags send, that the Shopify terms checkbox signal is not confirmed on a real checkout (#810), and that the platform host list holds only hosts a Shopify page names (#585).
-Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm docs:test` pass; `scripts/release.sh 0.6.0-rc.1` runs on `main` after merge. The maintainer publishes.
+Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm e2e`, `pnpm docs:build` and `pnpm docs:test` pass; `scripts/release.sh 0.6.0-rc.1` runs on `main` after merge. The maintainer publishes.
 
 ## After the PRs
 
