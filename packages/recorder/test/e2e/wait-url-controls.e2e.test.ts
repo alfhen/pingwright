@@ -66,7 +66,7 @@ test('each signal is read from the real page and no value, placeholder or email 
   expect(cityValue).toBe('Fakeville');
   expect(regionValue).toBe('Fakeregion');
   expect(error).toContain(
-    'Blocking controls: text "Full name" (invalid), text "City" (invalid), text "Region" (aria-invalid), text "promo_code" (invalid), select-one "Country" (invalid), checkbox "Send me the newsletter" (required, not ticked), checkbox "Accept the privacy policy" (required, not ticked).',
+    'Blocking controls: text "Full name" (invalid), text "City" (invalid), text "Region" (aria-invalid), text "promo_code" (invalid), checkbox "Send me the newsletter" (required, not ticked), checkbox "Accept the privacy policy" (required, not ticked), select "Country" (invalid).',
   );
   for (const secret of ['Fakeville', 'Fakeregion', 'Your city', 'Your region', 'Choose a country', 'Fakeland', 'Nickname', 'token']) expect(error).not.toContain(secret);
 });
