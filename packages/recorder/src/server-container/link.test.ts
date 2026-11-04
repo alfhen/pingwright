@@ -98,6 +98,33 @@ describe('rule 2: client ID and event name in flight', () => {
     expect(via?.confidence).toBe('probable');
   });
 
+  test('an earlier answered request with the same key blocks the exact link', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 130);
+    const c = serverCall('pw-client-0001', 150);
+    const windows: Array<[Request, InFlightWindow]> = [[a, { sentAt: 100, answeredAt: 120 }], [b, { sentAt: 130, answeredAt: 200 }]];
+    const via = link([[a, hit(a, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 130)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, windows)[2];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test('a request with the same key sent after the call is not a candidate', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 160);
+    const c = serverCall('pw-client-0001', 150);
+    const aHit = hit(a, 'ga4', 'Purchase', 100);
+    const windows: Array<[Request, InFlightWindow]> = [[a, { sentAt: 100, answeredAt: 200 }], [b, { sentAt: 160, answeredAt: 250 }]];
+    const via = link([[a, aHit], [b, hit(b, 'ga4', 'Purchase', 160)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, windows)[2];
+    expect(via).toEqual({ hitId: aHit.id, by: 'clientId', confidence: 'exact' });
+  });
+
+  test('an earlier request with no window still counts as a tie', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 130);
+    const c = serverCall('pw-client-0001', 150);
+    const via = link([[a, hit(a, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 130)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [[b, { sentAt: 130, answeredAt: 200 }]])[2];
+    expect(via?.confidence).toBe('probable');
+  });
+
   test('two lines of one event in one request: probable', () => {
     const b = browserCall('pw-client-0001', 100);
     const c = serverCall('pw-client-0001', 150);
