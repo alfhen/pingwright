@@ -423,6 +423,7 @@ test.each([
   ['relative', `ga4 received /web-pixels@abc/sandbox/modern/account/${FAKE_EMAIL}?email=${FAKE_EMAIL} as the page`, 'ga4 received /web-pixels@abc/sandbox/modern/account/(other)?email as the page'],
   ['protocol-relative', 'meta received //shop.example.com/web-pixels@abc/sandbox/modern/?sid=pwfake-cookie-value-0001 as the page', 'meta received //shop.example.com/web-pixels@abc/sandbox/modern/?sid as the page'],
   ['with a space', 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/cart?q=a b c as the page', 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/cart?q as the page'],
+  ['holding " received "', 'ga4 received /web-pixels@abc/sandbox/modern/?q=pw-test@example.test received x as the page', 'ga4 received /web-pixels@abc/sandbox/modern/?q as the page'],
 ])('the sandboxPageUrl page is redacted when it is %s', (_form, detail, shown) => {
   expect(redactFlagDetail(detail)).toBe(shown);
 });

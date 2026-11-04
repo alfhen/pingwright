@@ -162,7 +162,7 @@ function formatFlags(flags: Summary['flags']): string[] {
 const URL_TOKEN = /[a-z][a-z0-9+.-]*:\/\/\S+/gi;
 const URL_PARTS = /^(?:(?:([a-z][a-z0-9+.-]*:)?\/\/)([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#.*)?$/is;
 // The URL runs to the end of the detail, so a space inside it does not end it.
-const RECEIVED_PAGE = /^(.* received )(.+)( as the page)$/s;
+const RECEIVED_PAGE = /^(\S+ received )(.+)( as the page)$/s;
 const URL_AT_END = /^(.*?(?:\b[A-Z]+ |: ))((?:[a-z][a-z0-9+.-]*:)?\/\/.*|\/.*)$/s;
 
 // A raw name is checked, so a decoded `&`, `=`, `?` or space cannot break the shape. A bare item may be a value.
