@@ -23,8 +23,11 @@ function scanScript(script: string): { text: string; open: boolean } {
     if (ch === '\\' && quote !== "'") {
       const next = script[i + 1] ?? '';
       const joined = next === '\n' ? 1 : next === '\r' && script[i + 2] === '\n' ? 2 : 0;
-      if (joined) i += joined;
-      else {
+      if (joined) {
+        i += joined;
+        const physical = script.slice(script.lastIndexOf('\n', i - joined - 1) + 1, i - joined);
+        if (/(^|[\s;&|()])#/.test(physical)) out += '\n';
+      } else {
         out += ch + next;
         i++;
       }
@@ -63,7 +66,8 @@ function scanScript(script: string): { text: string; open: boolean } {
       out += '\n';
       heredocs = [];
     } else if (ch === '#' && (i === 0 || /[\s;&|()]/.test(script[i - 1]!))) {
-      while (i + 1 < script.length && script[i + 1] !== '\n') i++;
+      out += ch;
+      while (i + 1 < script.length && script[i + 1] !== '\n') out += script[++i];
     } else {
       out += ch;
     }
@@ -270,6 +274,27 @@ describe('workflow rules', () => {
   ])('fails closed on %s', (_name, script) => {
     const problems = workflowProblems(base(`      - run: |\n          ${script}\n`));
     expect(problems.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['ANSI-C quote before a # in quotes', "x=$'\\'' y='a #'; npm publish --tag \"$dist_tag\""],
+    ['quote inside $( ) before a # in quotes', "x=\"$(echo 'a\"')\"\n          y=\"a' #\"; npm publish --tag \"$dist_tag\""],
+    ['shell heredoc body', "bash <<'EOF'\n          x=$'\\'' y='a #'; npm publish --tag \"$dist_tag\"\n          EOF"],
+    ['comment continuation in a wrong double quote', "x=$'\\'\"'\n          # note \\\n          npm publish --tag \"$dist_tag\"\n          # \""],
+    ['comment continuation in a heredoc body', "echo '(('; cat <<EOF\n          \"\n          EOF\n          # note \\\n          npm publish --tag \"$dist_tag\"\n          # \""],
+  ])('reports the publish behind %s', (_name, script) => {
+    const problems = workflowProblems(base(`      - run: |\n          ${script}\n`));
+    expect(problems.join('\n')).toContain('without --dry-run');
+  });
+
+  it('reports docker push behind an ANSI-C quote', () => {
+    const script = "x=$'\\'' y='a #'; docker push ghcr.io/x/y";
+    expect(workflowProblems(base(`      - run: |\n          ${script}\n`)).join('\n')).toContain('docker publish');
+  });
+
+  it('reads gh release behind an ANSI-C quote through runLinesOf', () => {
+    const wf = parse(base("      - run: |\n          x=$'\\'' y='a #'; gh release create v1\n")) as Workflow;
+    expect(runLinesOf(wf).filter((line) => /gh\s+release/.test(line))).not.toEqual([]);
   });
 
   it('reports an unclosed quote or heredoc', () => {
