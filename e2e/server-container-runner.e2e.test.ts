@@ -1,9 +1,9 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
@@ -22,6 +22,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const AUTH = FIXTURE_AUTH;
 const ACCESS_TOKEN = 'pw-fixture-access-token';
 const CONFIG = FIXTURE_CONFIG;
+const standInTeePath = fileURLToPath(new URL('./stand-in-tee.ts', import.meta.url));
 const ARM64 = ['--import', "data:text/javascript,Object.defineProperty(process,'arch',{value:'arm64'})"];
 const EMAIL = 'Pw.Runner@example.invalid';
 
@@ -127,29 +128,31 @@ describe('the stand-in server container through the seam', () => {
   });
 
   test('the raw stand-in output holds the config, gtm_auth, access token and proxy URL, and the scrubbed log holds none of them', async () => {
-    const port = await new Promise<number>((resolve) => {
-      const probe = net.createServer().listen(0, '127.0.0.1', () => {
-        const { port: free } = probe.address() as net.AddressInfo;
-        probe.close(() => resolve(free));
-      });
+    const teeFile = join(dirname(ca.certPath), 'stand-in-stderr.log');
+    const tee = await startServerContainer({
+      configSource: { kind: 'env' },
+      proxyPort: proxy.port,
+      proxyCredential: proxy.credential,
+      proxyUsername: proxy.username,
+      caPath: ca.certPath,
+      image: 'tagreeve-sgtm:unused',
+      serverHosts: ['127.0.0.1'],
+      env: { PATH: process.env.PATH ?? '', TAGREEVE_TEST_SERVER_CONTAINER_CMD: standInTeePath, TAGREEVE_SERVER_CONTAINER_CONFIG: CONFIG },
     });
-    const proxyUrl = `http://${proxy.username}:${proxy.credential}@127.0.0.1:${proxy.port}`;
-    const child = spawn(standInContainerPath, [], { shell: false, env: { PATH: process.env.PATH ?? '', HTTP_PROXY: proxyUrl, NODE_EXTRA_CA_CERTS: ca.certPath, PORT: String(port) } });
-    let raw = '';
-    child.stderr.on('data', (chunk: Buffer) => (raw += chunk.toString('utf8')));
     try {
-      const origin = `http://127.0.0.1:${port}`;
-      for (let i = 0; i < 200 && (await fetch(`${origin}/healthz`).catch(() => undefined))?.status !== 200; i++) await new Promise((r) => setTimeout(r, 25));
-      await fetch(`${origin}/capi`, { method: 'POST', body: '{}' });
-      await until(() => raw.includes(ACCESS_TOKEN));
-    } finally {
-      child.kill('SIGKILL');
-    }
-    for (const secret of [CONFIG, AUTH, ACCESS_TOKEN, proxy.credential]) expect(raw).toContain(secret);
+      await fetch(`${tee.origin}/capi`, { method: 'POST', body: '{}' });
+      await until(() => tee.logTail().some((line) => line.includes('Calling https://graph.facebook.com/')));
+      const raw = readFileSync(teeFile, 'utf8');
+      for (const secret of [CONFIG, AUTH, ACCESS_TOKEN, proxy.credential]) expect(raw).toContain(secret);
 
-    const scrubbed = container.logTail().join('\n');
-    expect(scrubbed).toContain('www.googletagmanager.com');
-    for (const secret of [CONFIG, AUTH, ACCESS_TOKEN, proxy.credential]) expect(scrubbed).not.toContain(secret);
+      const scrubbed = tee.logTail().join('\n');
+      for (const secret of [CONFIG, AUTH, ACCESS_TOKEN, proxy.credential]) expect(scrubbed).not.toContain(secret);
+      expect(scrubbed).toMatch(/^Config /m);
+      expect(scrubbed).toMatch(/^Proxy http:\/\/127\.0\.0\.1:/m);
+      expect(scrubbed).toMatch(/^Calling https:\/\/graph\.facebook\.com\//m);
+    } finally {
+      await tee.stop();
+    }
   });
 });
 
