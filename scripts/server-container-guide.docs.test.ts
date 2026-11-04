@@ -16,6 +16,22 @@ function tagreeveCommands(markdown: string): string[] {
   return commands;
 }
 
+export function unsafeFileTargets(markdown: string): string[] {
+  const snippets = [...markdown.matchAll(/```[a-z]*\n([\s\S]*?)```/g)].map((m) => m[1]!);
+  const prose = markdown.replace(/```[a-z]*\n[\s\S]*?```/g, '');
+  snippets.push(...[...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]!));
+  const targets: string[] = [];
+  for (const snippet of snippets) {
+    const text = snippet.replace(/\d*>&[\d-]*/g, ' ');
+    for (const m of text.matchAll(/(?:^|[^<>-])>>?\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
+    for (const m of text.matchAll(/\bchmod\s+([^;|&)\n]+)/g)) {
+      const words = m[1]!.trim().split(/\s+/).filter((w) => !w.startsWith('-'));
+      targets.push(...words.slice(1));
+    }
+  }
+  return targets.filter((t) => !/^(~\/|\/|\$HOME\/)/.test(t));
+}
+
 const base64Like = /[A-Za-z0-9+/=_-]{40,}/;
 const gtmAuthValue = /gtm_auth=\S/;
 const fakeConfig = 'ZmFrZS1jb25maWctZm9yLXRlc3Rz'.repeat(2);
@@ -45,6 +61,24 @@ test('the config file is saved outside the working directory', () => {
   const runs = tagreeveCommands(guide).filter((c) => c.includes('--server-container-config'));
   expect(runs.length).toBeGreaterThan(0);
   for (const run of runs) expect(run).toMatch(/--server-container-config ~\//);
+});
+
+test('every redirect and chmod target in the guide is under the home folder', () => {
+  expect(unsafeFileTargets(guide)).toEqual([]);
+  expect(guide).toContain('> ~/.config/tagreeve/sgtm-workspace-config.txt');
+  expect(guide).toContain('chmod 600 ~/.config/tagreeve/sgtm-config.txt');
+});
+
+test.each([
+  ['a relative redirect in a fence', '```bash\n(umask 077; cat > sgtm-config.txt)\n```', ['sgtm-config.txt']],
+  ['a relative redirect in inline code', 'run `(umask 077; pbpaste > sgtm-config.txt)` now', ['sgtm-config.txt']],
+  ['an appending redirect', '```bash\necho x >> out.txt\n```', ['out.txt']],
+  ['a relative chmod in inline code', 'run `chmod 600 sgtm-config.txt`', ['sgtm-config.txt']],
+  ['a relative chmod in a fence', '```bash\nchmod -R 600 a.txt ~/ok.txt\n```', ['a.txt']],
+  ['a relative encode target', '```bash\n(umask 077; tr -d x < plain.txt | base64 > workspace.txt)\n```', ['workspace.txt']],
+  ['home targets and stderr redirects', '```bash\ncat > ~/a 2>&1\nchmod 600 ~/a\n```', []],
+])('the target check catches %s', (_name, markdown, expected) => {
+  expect(unsafeFileTargets(markdown)).toEqual(expected);
 });
 
 test('the guide explains the workspace preview config with placeholders only', () => {

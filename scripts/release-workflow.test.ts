@@ -1,21 +1,45 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
 interface Workflow {
   on: { push: { tags: string[] } };
   permissions?: Record<string, string> | string;
-  jobs: Record<string, { permissions?: Record<string, string> | string; uses?: string; steps?: { run?: string; uses?: string }[] }>;
+  jobs: Record<string, { permissions?: Record<string, string> | string; secrets?: unknown; uses?: string; steps?: { run?: string; uses?: string }[] }>;
 }
 
 const path = new URL('../.github/workflows/release-tag.yml', import.meta.url);
 const text = readFileSync(path, 'utf8');
 const workflow = parse(text) as Workflow;
 
+function stripComment(line: string): string {
+  let quote = '';
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (quote) {
+      if (ch === quote) quote = '';
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]!))) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
 const runLinesOf = (wf: Workflow): string[] =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps ?? [])
-    .flatMap((step) => (step.run ?? '').replace(/\\\r?\n/g, '').split(/\n|&&|\|\||;|\|/));
+    .flatMap((step) =>
+      (step.run ?? '')
+        .replace(/\\\r?\n/g, '')
+        .split('\n')
+        .map(stripComment)
+        .join('\n')
+        .replace(/\d*>&[\d-]*|&>>?/g, ' ')
+        .split(/\n|&&|\|\||;|\||&/),
+    );
 
 const runLines = runLinesOf(workflow);
 
@@ -24,15 +48,32 @@ const isReadOnly = (permissions: Record<string, string> | string | undefined): b
   permissions === 'read-all' ||
   (typeof permissions === 'object' && Object.values(permissions).every((level) => level !== 'write'));
 
-export function workflowProblems(source: string): string[] {
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const readRepoFile = (rel: string): string | undefined => {
+  try {
+    return readFileSync(`${repoRoot}${rel}`, 'utf8');
+  } catch {
+    return undefined;
+  }
+};
+
+const localWorkflow = /^\.\/\.github\/workflows\/[\w.-]+\.ya?ml$/;
+
+export function workflowProblems(source: string, readLocal: (rel: string) => string | undefined = readRepoFile, depth = 0): string[] {
   const wf = parse(source) as Workflow;
   const problems: string[] = [];
   if (!isReadOnly(wf.permissions)) problems.push('top-level permissions are not read-only');
   for (const [name, job] of Object.entries(wf.jobs)) {
     if (!isReadOnly(job.permissions)) problems.push(`job ${name} permissions are not read-only`);
+    if ('secrets' in job) problems.push(`job ${name} passes secrets`);
     const uses = [job.uses, ...(job.steps ?? []).map((step) => step.uses)];
     for (const use of uses) {
       if (use && /publish|release/i.test(use)) problems.push(`uses ${use}`);
+    }
+    if (job.uses?.startsWith('./')) {
+      const nested = localWorkflow.test(job.uses) && depth < 5 ? readLocal(job.uses.slice(2)) : undefined;
+      if (nested === undefined) problems.push(`cannot check local workflow ${job.uses}`);
+      else problems.push(...workflowProblems(nested, readLocal, depth + 1).map((problem) => `${job.uses}: ${problem}`));
     }
   }
   if (/github\.token/i.test(source)) problems.push('github.token');
@@ -136,9 +177,49 @@ describe('workflow rules', () => {
     expect(workflowProblems(base(good, 'permissions: write-all\n'))).toEqual(['top-level permissions are not read-only']);
   });
 
-  it('does not crash on a reusable-workflow job', () => {
+  it('checks a local reusable workflow', () => {
     const wf = `${base(good)}  b:\n    uses: ./.github/workflows/build.yml\n`;
-    expect(workflowProblems(wf)).toEqual([]);
+    const read = (rel: string) => (rel === '.github/workflows/build.yml' ? base(good) : undefined);
+    expect(workflowProblems(wf, read)).toEqual([]);
+    const bad = (): string => base('      - run: npm publish --tag "$dist_tag"\n');
+    expect(workflowProblems(wf, bad)).toEqual(['./.github/workflows/build.yml: publish without --dry-run: npm publish --tag "$dist_tag"']);
+  });
+
+  it('refuses a local workflow it cannot read or that is not under .github/workflows', () => {
+    const missing = `${base(good)}  b:\n    uses: ./.github/workflows/gone.yml\n`;
+    expect(workflowProblems(missing, () => undefined)).toEqual(['cannot check local workflow ./.github/workflows/gone.yml']);
+    const elsewhere = `${base(good)}  b:\n    uses: ./other/build.yml\n`;
+    expect(workflowProblems(elsewhere, () => base(good))).toEqual(['cannot check local workflow ./other/build.yml']);
+  });
+
+  it('stops a local workflow that calls itself', () => {
+    const self = `${base(good)}  b:\n    uses: ./.github/workflows/loop.yml\n`;
+    expect(workflowProblems(self, () => self).length).toBeGreaterThan(0);
+  });
+
+  it('fails a job-level secrets key, including inherit', () => {
+    const own = `${base(good)}  b:\n    uses: org/repo/.github/workflows/build.yml@v1\n    secrets:\n      T: x\n`;
+    expect(workflowProblems(own)).toEqual(['job b passes secrets']);
+    const inherit = `${base(good)}  b:\n    uses: org/repo/.github/workflows/build.yml@v1\n    secrets: inherit\n`;
+    expect(workflowProblems(inherit)).toEqual(['job b passes secrets']);
+  });
+
+  it('splits a publish on a single &', () => {
+    const problems = workflowProblems(base('      - run: npm publish --tag "$dist_tag" & echo --dry-run\n'));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('without --dry-run');
+  });
+
+  it('does not take --dry-run from a # comment', () => {
+    const problems = workflowProblems(base('      - run: |\n          npm publish --tag "$dist_tag" # --dry-run\n'));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('without --dry-run');
+  });
+
+  it('keeps a # inside quotes and a redirect like 2>&1 from hiding or splitting a publish', () => {
+    expect(workflowProblems(base('      - run: npm publish --dry-run --tag "$dist_tag" 2>&1\n'))).toEqual([]);
+    const problems = workflowProblems(base('      - run: |\n          echo "a #b"; npm publish --tag "$dist_tag"\n'));
+    expect(problems).toHaveLength(1);
   });
 
   it('checks the uses of a reusable-workflow job', () => {
