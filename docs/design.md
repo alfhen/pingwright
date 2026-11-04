@@ -534,7 +534,7 @@ Where the code in 0.5 differs from the design above. Sections 15.1 to 15.4 still
 - **Not built:** link rule 2 (client ID and event name). A failure through a container call with no event ID, such as the built-in GA4 tag, links as probable and only warns.
 - **Not available locally:** Stape-only hosting features. With the live config the container does not show an unpublished server workspace; a config from the workspace's preview environment serves it.
 - **`suite --stores`** runs each scenario against several stores. `suite.json` is version 2.
-- **`platformHost`** flags requests to listed Shopify infrastructure hosts instead of `unknownDestination`. The list holds only hosts that a Shopify docs page names, so most Shopify telemetry, checkout and payments hosts are still `unknownDestination`.
+- **`platformHost`** flags requests to listed Shopify infrastructure hosts instead of `unknownDestination`. The list holds only hosts that a Shopify docs page names, so Shopify hosts that no page names, such as most checkout hosts, are still `unknownDestination`.
 - **`meta-capi`** decodes Conversions API calls. In `stub` mode the endpoint is answered with a success body.
 - **`unloadGap`** also covers an embedded frame's push shortly before the run ends.
 - **Still not built:** the server tag reporter, the server preview header, the web tag reporter and `expectedTags`, `tagreeve init`, the Shopify bridge, a full `microsoft-uet` decoder, the collector origin bridge and a `mobile` preset.
