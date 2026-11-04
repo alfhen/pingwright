@@ -5,7 +5,7 @@ import { parseScenario, mergeOptions } from '@tagreeve/expect';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { UsageError } from './args.ts';
 import { formatDefaults, loadProjectConfig, ProjectConfigLoadError, siteMissingMessage } from './project-config.ts';
-import { resolveNetwork, runCommand } from './run.ts';
+import { resolveNetwork, runCommand, type RunOutcome, type RunSpec } from './run.ts';
 import { suiteCommand } from './suite.ts';
 
 const original = process.cwd();
@@ -183,4 +183,81 @@ test('suite: the config site stands in when there is no stores.json', async () =
   expect(await suiteCommand(suiteArgs, err.io)).toBe(2);
   expect(err.text()).toContain('has no .yml or .yaml scenario files');
   expect(err.text()).not.toContain('suite needs a site');
+});
+
+const PAYMENT = 'start: /\nsteps:\n  - payment: { provider: shopify-bogus, card: "1" }\nexpect:\n  must: []\n  mustNot: []\n';
+const PLAIN = 'start: /\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
+const STRICT = 'start: /\noptions:\n  allowUnknownDestination: false\n  builtins: { sandboxPageUrl: fail }\nsteps:\n  - visit: /\nexpect:\n  must: []\n  mustNot: []\n';
+
+function stubRun() {
+  const specs: RunSpec[] = [];
+  const run = async (spec: RunSpec): Promise<RunOutcome> => {
+    specs.push(spec);
+    return { code: 0, summary: { ok: true, pass: true } as RunOutcome['summary'] };
+  };
+  return { specs, run };
+}
+
+function jsonIo() {
+  const out: string[] = [];
+  return { io: { stdout: (t: string) => void out.push(t), stderr: () => undefined }, json: () => JSON.parse(out.join('')) as { defaults?: unknown[] } };
+}
+
+test('run: --site beats the config site, so --allow-test-payment is checked against the --site host', async () => {
+  await writeFile(join(root, 'tagreeve/config.yml'), 'configSchemaVersion: 1\nsite: https://config.example.com\n');
+  await writeFile(join(root, 's.yml'), PAYMENT);
+  const err = capture();
+  expect(await runCommand({ ...runArgs, site: 'https://shop.example.com', allowTestPayment: 'config.example.com' }, err.io)).toBe(2);
+  expect(err.text()).toContain('--allow-test-payment must name the --site host (shop.example.com).');
+});
+
+test('suite: --site beats the config site and a default stores.json', async () => {
+  await writeFile(join(root, 'tagreeve/config.yml'), CONFIG);
+  await writeFile(join(root, 'tagreeve/stores.json'), '[]');
+  await mkdir(join(root, 'tagreeve/scenarios'));
+  await writeFile(join(root, 'tagreeve/scenarios/a.yml'), PLAIN);
+  const stub = stubRun();
+  expect(await suiteCommand({ ...suiteArgs, site: 'http://127.0.0.1:10' }, capture().io, stub)).toBe(0);
+  expect(stub.specs.map((s) => s.site)).toEqual(['http://127.0.0.1:10']);
+});
+
+test('suite: --stores beats the config site and the stores file is read', async () => {
+  await writeFile(join(root, 'tagreeve/config.yml'), CONFIG);
+  await writeFile(join(root, 'bad-stores.json'), '{nope');
+  await mkdir(join(root, 'tagreeve/scenarios'));
+  await writeFile(join(root, 'tagreeve/scenarios/a.yml'), PLAIN);
+  const stub = stubRun();
+  const err = capture();
+  expect(await suiteCommand({ ...suiteArgs, stores: 'bad-stores.json' }, err.io, stub)).toBe(2);
+  expect(err.text()).toContain('bad-stores.json');
+  expect(stub.specs).toEqual([]);
+});
+
+test('suite: config options merge under each scenario, out gets the dated folder, defaults name the config', async () => {
+  await writeFile(
+    join(root, 'tagreeve/config.yml'),
+    'configSchemaVersion: 1\nsite: http://127.0.0.1:9\nout: records\noptions:\n  allowUnknownDestination: true\n  builtins: { sandboxPageUrl: warn }\n',
+  );
+  await mkdir(join(root, 'tagreeve/scenarios'));
+  await writeFile(join(root, 'tagreeve/scenarios/a.yml'), PLAIN);
+  await writeFile(join(root, 'tagreeve/scenarios/b.yml'), STRICT);
+  const stub = stubRun();
+  const { io, json } = jsonIo();
+  expect(await suiteCommand({ ...suiteArgs, json: true }, io, stub)).toBe(0);
+  const byName = new Map(stub.specs.map((s) => [s.scenarioName, s]));
+  expect(byName.get('a')!.parsed.options.allowUnknownDestination).toBe(true);
+  expect(byName.get('a')!.parsed.options.builtins).toEqual({ sandboxPageUrl: 'warn' });
+  expect(byName.get('b')!.parsed.options.allowUnknownDestination).toBe(false);
+  expect(byName.get('b')!.parsed.options.builtins).toEqual({ sandboxPageUrl: 'fail' });
+  expect(byName.get('a')!.out).toMatch(/^records\/\d{4}-\d{2}-\d{2}\/suite_/);
+  expect(json().defaults).toContainEqual({ setting: 'config', path: 'tagreeve/config.yml' });
+});
+
+test('suite: a config given with --config is not listed as a default', async () => {
+  await writeFile(join(root, 'other.yml'), 'configSchemaVersion: 1\nsite: http://127.0.0.1:9\n');
+  await mkdir(join(root, 'tagreeve/scenarios'));
+  await writeFile(join(root, 'tagreeve/scenarios/a.yml'), PLAIN);
+  const { io, json } = jsonIo();
+  expect(await suiteCommand({ ...suiteArgs, json: true, config: 'other.yml' }, io, stubRun())).toBe(0);
+  expect(json().defaults ?? []).not.toContainEqual(expect.objectContaining({ setting: 'config' }));
 });
