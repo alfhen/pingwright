@@ -2,7 +2,7 @@ start: /sgtm-leak?mode=allowlist
 steps:
   - consent: reject
     label: rejected
-  - evaluate: "fetch(window.__PW_FIXTURE.sgtmUrl + '/g/collect?v=2&tid=G-PWTEST0001&cid=pw-client-0001&en=purchase&ga4=copy', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: '' }).then(function () { return true; })"
+  - evaluate: "fetch(window.__PW_FIXTURE.sgtmUrl + '/g/collect?v=2&tid=G-PWTEST0001&cid=pw-client-0001&en=purchase&ga4=copy&delayMs=300', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: '' }).then(function () { return true; })"
   - wait: 2s
 expect:
   must: []
