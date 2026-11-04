@@ -97,15 +97,32 @@ describe('refused keys', () => {
   });
 
   test.each([
-    ['an unresolved alias', `${head}options:\n  gtmOverride: *gtm_auth=FAKE-AUTH-VALUE\n`, 'line 3: not valid YAML (unresolved alias)'],
-    ['an unquoted wildcard host', `${head}options:\n  firstPartyHosts: *.example.com\n`, 'line 3: not valid YAML (unresolved alias)'],
-    ['a collection key', `${head}? { gtmOverride: "gtm_auth=FAKE-AUTH-VALUE" }\n: x\n`, 'line 2: a key must be a plain name'],
-  ])('%s names the line and never the text', (_, text, message) => {
+    ['an unresolved alias', `${head}options:\n  gtmOverride: *gtm_auth=FAKE-AUTH-VALUE\n`, 3],
+    ['an unquoted wildcard host', `${head}options:\n  firstPartyHosts: *.example.com\n`, 3],
+    ['an anchor on a value', `${head}site: &s "https://FAKE-HOST.example.com"\n`, 2],
+    ['an alias as a value', `${head}out: &o FAKE-OUT\nsite: *o\n`, 2],
+    ['an alias key at the top level', `${head}gtmOverride: &g "gtm_auth=FAKE-AUTH"\n*g : true\n`, 2],
+    ['an alias key in options', `${head}gtmOverride: &g "gtm_auth=FAKE-AUTH"\noptions:\n  *g : true\n`, 2],
+    ['an alias key in options.builtins', `${head}out: &o FAKE-OUT\noptions:\n  builtins:\n    *o : warn\n`, 2],
+    ['an alias key for a container config', `${head}serverContainerConfig: &c FAKE-CONTAINER-CONFIG\n*c : 1\n`, 2],
+    ['a merge key', `${head}options:\n  <<: { firstPartyHosts: [FAKE-HOST] }\n`, 3],
+    ['a !!str tag', `${head}site: !!str FAKE-SITE\n`, 2],
+    ['a custom tag', `${head}out: !custom FAKE-OUT\n`, 2],
+    ['a flow map key', `${head}? { gtmOverride: "gtm_auth=FAKE-AUTH-VALUE" }\n: x\n`, 2],
+    ['a number key', `${head}1: FAKE-VALUE\n`, 2],
+  ])('%s names the line and never the text', (_, text, line) => {
     const warn = vi.spyOn(process, 'emitWarning');
     const out = errorOf(text);
-    expect(out).toBe(`${FILE}: ${message}`);
+    expect(out).toBe(`${FILE}: line ${line}: anchors, aliases, tags and merge keys are not allowed in the project config`);
+    expect(out).not.toMatch(/FAKE/);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  test('a YAML syntax error names only the line', () => {
+    const out = errorOf(`${head}site: "FAKE-SITE\nout: [FAKE-OUT\n`);
+    expect(out).toMatch(/^tagreeve\/config\.yml: line \d+: not valid YAML$/);
+    expect(out).not.toMatch(/FAKE/);
   });
 
   test('an unknown key', () => {

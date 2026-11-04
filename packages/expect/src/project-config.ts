@@ -65,16 +65,21 @@ export function parseProjectConfig(text: string, file: string): ProjectConfig {
   };
   const fail = (path: Path, message: string) => report(lineOf(path), path.join('.'), message);
 
-  for (const e of doc.errors) issues.push(`${file}: line ${e.linePos?.[0].line ?? 1}: not valid YAML (${e.code})`);
+  for (const e of doc.errors) issues.push(`${file}: line ${e.linePos?.[0].line ?? 1}: not valid YAML`);
   if (issues.length) throw new ProjectConfigError(issues);
 
-  // The library echoes key and alias text in its errors and warnings, so both are refused here by line only.
+  // The library echoes key and alias text in its errors, and an alias key would turn an anchored value into key text. Both are refused here, before any key check.
+  const refuse = (node: Node | null | undefined) => {
+    report(lineAt(node), '', 'anchors, aliases, tags and merge keys are not allowed in the project config');
+    return visit.BREAK;
+  };
   visit(doc, {
     Pair(_, pair) {
-      if (!isScalar(pair.key) && !isAlias(pair.key)) report(lineAt(pair.key as Node), '', 'a key must be a plain name');
+      const key = pair.key;
+      if (!isScalar(key) || typeof key.value !== 'string' || key.value === '<<') return refuse(isScalar(key) || isAlias(key) ? key : (key as Node));
     },
-    Alias(_, alias) {
-      if (!alias.resolve(doc)) report(lineAt(alias), '', 'not valid YAML (unresolved alias)');
+    Node(_, node) {
+      if (isAlias(node) || node.anchor || node.tag) return refuse(node);
     },
   });
   if (issues.length) throw new ProjectConfigError(issues);
