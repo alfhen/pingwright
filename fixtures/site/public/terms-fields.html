@@ -9,7 +9,7 @@
 <form id="pay-form" action="/thank-you" method="get">
   <label>Email <input id="email" name="email" type="email" value="pw-fixture@example.com"></label><br>
   <label>Full name <input name="full_name" type="text" required></label><br>
-  <label>City <input name="city" type="text" pattern="[0-9]+" value="Fakeville" placeholder="Your city"></label><br>
+  <label>City <input name="city" type="text" pattern="[0-9]+" value="Fakeville" placeholder="Your city"> <span role="alert">Fakeville is invalid</span></label><br>
   <label>Region <input name="region" type="text" value="Fakeregion" placeholder="Your region" aria-invalid="true"></label><br>
   <input name="promo_code" type="text" required><br>
   <input type="checkbox" name="news" aria-required="true" aria-labelledby="news-text"> <span id="news-text">Send me the newsletter</span><br>

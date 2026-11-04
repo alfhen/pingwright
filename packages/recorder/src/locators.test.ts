@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { blockingControls, controlsFromSnapshot, resolveLocator, timeoutMessage, visibleName } from './locators.ts';
 
 describe('visibleName', () => {
@@ -239,6 +239,18 @@ describe('blockingControls', () => {
     const out = await blockingControls(contextOf(eight, eight));
     expect(out).toHaveLength(10);
     expect(out[8]).toBe('text "A0" (invalid)');
+  });
+
+  test('skips a page whose evaluation never finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      const context = { pages: () => [{ evaluate: () => new Promise(() => {}) }, { evaluate: () => Promise.resolve([{ kind: 'text', name: 'City', reason: 'invalid' }]) }] } as never;
+      const pending = blockingControls(context);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(await pending).toEqual(['text "City" (invalid)']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('skips a page that cannot be read', async () => {

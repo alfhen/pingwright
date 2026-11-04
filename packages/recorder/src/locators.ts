@@ -144,6 +144,17 @@ interface BlockingControl {
 /** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. */
 function readBlockingControls(): BlockingControl[] {
   const found: BlockingControl[] = [];
+  const validationText = 'input, select, textarea, option, [role="alert"], [aria-live], [aria-invalid="true"], [aria-errormessage], .error, .invalid, .error-message';
+  const messageIds = new Set<string>();
+  for (const holder of document.querySelectorAll('[aria-errormessage], [aria-describedby]')) {
+    for (const id of `${holder.getAttribute('aria-errormessage') ?? ''} ${holder.getAttribute('aria-describedby') ?? ''}`.split(/\s+/)) if (id) messageIds.add(id);
+  }
+  const cleanText = (source: Element): string => {
+    const copy = source.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll(validationText).forEach((n) => n.remove());
+    copy.querySelectorAll('[id]').forEach((n) => messageIds.has(n.id) && n.remove());
+    return copy.textContent ?? '';
+  };
   const nameOf = (el: Element): string => {
     const aria = el.getAttribute('aria-label');
     if (aria?.trim()) return aria;
@@ -151,7 +162,10 @@ function readBlockingControls(): BlockingControl[] {
     if (ids) {
       const text = ids
         .split(/\s+/)
-        .map((id) => document.getElementById(id)?.textContent ?? '')
+        .map((id) => {
+          const source = document.getElementById(id);
+          return source && !messageIds.has(id) && !source.matches(validationText) ? cleanText(source) : '';
+        })
         .join(' ')
         .trim();
       if (text) return text;
@@ -159,11 +173,7 @@ function readBlockingControls(): BlockingControl[] {
     const labels = (el as HTMLInputElement).labels;
     if (labels && labels.length > 0) {
       const text = [...labels]
-        .map((label) => {
-          const copy = label.cloneNode(true) as HTMLElement;
-          copy.querySelectorAll('input, select, textarea, option').forEach((n) => n.remove());
-          return copy.textContent ?? '';
-        })
+        .map(cleanText)
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim();
@@ -187,12 +197,23 @@ function readBlockingControls(): BlockingControl[] {
   return found;
 }
 
+const DIAGNOSTIC_DEADLINE_MS = 3000;
+
+/** Playwright's `evaluate` has no timeout, and a page that stopped responding would hold the original timeout error back. */
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('diagnostic timed out')), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
 /** Controls on the top-level document of each open page that block a form from submitting: kind, name and reason. Never a value, a placeholder or an error text, and never a frame. */
 export async function blockingControls(context: BrowserContext): Promise<string[]> {
   const listed: string[] = [];
   for (const page of context.pages()) {
     try {
-      const controls = await page.evaluate(readBlockingControls);
+      const controls = await withDeadline(page.evaluate(readBlockingControls), DIAGNOSTIC_DEADLINE_MS);
       for (const c of controls) {
         const name = visibleName(String(c.name));
         listed.push(`${c.kind}${name ? ` "${name}"` : ''} (${c.reason})`);
