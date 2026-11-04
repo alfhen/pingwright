@@ -633,10 +633,10 @@ export class Recorder {
     void _host;
     record.outcome = 'stubbed';
     this.stubRecorded.add(record.id);
-    const sentAt = nodeNow();
     let client: APIRequestContext | undefined;
     try {
       client = await playwrightRequest.newContext();
+      const sentAt = nodeNow();
       const response = await client.fetch(`${origin}${live.pathname}${live.search}`, {
         method: original.method(),
         headers,

@@ -90,8 +90,8 @@ function sharedKind(server: Facts, browser: Facts): 'eventId' | 'clientId' | 'id
 /**
  * Adds `via` to each hit decoded from a server container call. The proxy cannot see which browser hit led to a call,
  * so the first rule that fits decides: (1) the event ID and event name match exactly one browser hit, `exact`;
- * (2) the client ID and event name match exactly one browser hit to a `serverHosts` host whose request to the container
- * was in flight when the call arrived, `exact`; two or more such hits give no exact link;
+ * (2) the client ID and event name match exactly one browser hit to a `serverHosts` host sent before the call, and its request to the
+ * container was still in flight when the call arrived, `exact`; two or more such hits, in flight or answered, give no exact link;
  * (3) a shared value, `probable`: the latest earlier hit to a `serverHosts` host, else the latest earlier browser hit.
  * No match leaves the hit unlinked. Browser hits are returned as they are.
  */
@@ -116,17 +116,22 @@ export function linkServerHits({ hits, requests, serverHosts, identity, inFlight
     const exact = f.eventId === undefined ? [] : browser.filter((b) => b.eventId === f.eventId && b.hit.event === f.hit.event);
     if (exact.length === 1) return { ...f.hit, via: { hitId: exact[0]!.hit.id, by: 'eventId', confidence: 'exact' } };
     const callAt = f.request?.t;
-    const live =
+    const sameKey =
       callAt === undefined || f.hit.event === null
         ? []
         : browser.filter((b) => {
-            const window = inFlight?.get(b.hit.requestId);
-            if (!window || !b.onServerHost || b.hit.event !== f.hit.event) return false;
-            if (callAt < window.sentAt || callAt >= window.answeredAt) return false;
+            if (!b.onServerHost || b.hit.event !== f.hit.event) return false;
+            const sentAt = inFlight?.get(b.hit.requestId)?.sentAt ?? b.hit.t;
+            if (sentAt > callAt) return false;
             for (const id of f.clientIds) if (b.clientIds.has(id)) return true;
             return false;
           });
-    if (live.length === 1) return { ...f.hit, via: { hitId: live[0]!.hit.id, by: 'clientId', confidence: 'exact' } };
+    // An earlier request with the same key, answered or not, could be the one this call belongs to.
+    const only = sameKey.length === 1 ? sameKey[0]! : undefined;
+    const window = only && inFlight?.get(only.hit.requestId);
+    if (only && window && callAt !== undefined && callAt < window.answeredAt) {
+      return { ...f.hit, via: { hitId: only.hit.id, by: 'clientId', confidence: 'exact' } };
+    }
     const earlier = browser.flatMap((b) => {
       const by = b.hit.t <= f.hit.t ? sharedKind(f, b) : undefined;
       return by ? [{ b, by }] : [];
