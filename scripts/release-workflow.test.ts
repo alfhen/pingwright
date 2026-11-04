@@ -20,8 +20,13 @@ function stripComments(script: string): string {
   for (let i = 0; i < script.length; i++) {
     const ch = script[i]!;
     if (ch === '\\' && quote !== "'") {
-      out += ch + (script[i + 1] ?? '');
-      i++;
+      const next = script[i + 1] ?? '';
+      const joined = next === '\n' ? 1 : next === '\r' && script[i + 2] === '\n' ? 2 : 0;
+      if (joined) i += joined;
+      else {
+        out += ch + next;
+        i++;
+      }
     } else if (quote) {
       if (ch === quote) quote = '';
       out += ch;
@@ -38,13 +43,17 @@ function stripComments(script: string): string {
     } else if (ch === '\n' && heredocs.length > 0) {
       out += ch;
       for (const { word, dash } of heredocs) {
+        const body: string[] = [];
         for (;;) {
           const end = script.indexOf('\n', i + 1);
           const line = script.slice(i + 1, end === -1 ? script.length : end);
           i = end === -1 ? script.length : end;
+          body.push(line);
           out += `\n${stripComments(line)}`;
           if (end === -1 || (dash ? line.replace(/^\t+/, '') : line) === word) break;
         }
+        // A cat body keeps quotes literal and a shell body does not: show both readings.
+        out += `\n${stripComments(body.join('\n'))}`;
       }
       out += '\n';
       heredocs = [];
@@ -62,7 +71,6 @@ const runLinesOf = (wf: Workflow): string[] =>
     .flatMap((job) => job.steps ?? [])
     .flatMap((step) =>
       stripComments(step.run ?? '')
-        .replace(/\\\r?\n/g, '')
         .replace(/\d*>&[\d-]*|&>>?/g, ' ')
         .split(/\n|&&|\|\||;|\||&/),
     );
@@ -295,6 +303,16 @@ describe('workflow rules', () => {
   it('checks the uses of a reusable-workflow job', () => {
     const wf = `${base(good)}  b:\n    uses: org/repo/.github/workflows/publish.yml@v1\n`;
     expect(workflowProblems(wf)).toEqual(['uses org/repo/.github/workflows/publish.yml@v1']);
+  });
+
+  it('does not join a line after an escaped backslash', () => {
+    const wf = base('      - run: |\n          echo --dry-run\\\\\n          npm publish --tag "$dist_tag"\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
+  });
+
+  it('keeps quote state across the lines of a shell heredoc body', () => {
+    const wf = base('      - run: |\n          bash <<EOF\n          echo "a\n          b # x"; npm publish --tag "$dist_tag"\n          EOF\n');
+    expect(workflowProblems(wf)[0]).toContain('without --dry-run');
   });
 
   it('joins backslash continuations before checking a publish', () => {

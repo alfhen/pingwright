@@ -9,7 +9,7 @@ const guide = readFileSync(join(root, 'docs/guide/server-container.md'), 'utf8')
 function tagreeveCommands(markdown: string): string[] {
   const commands: string[] = [];
   for (const block of markdown.matchAll(/```[a-z]*\n([\s\S]*?)```/g)) {
-    for (const line of block[1]!.replace(/\\\n/g, ' ').split('\n')) {
+    for (const line of block[1]!.replace(/(?<!\\)((?:\\\\)*)\\\n/g, '$1 ').split('\n')) {
       if (line.trim().startsWith('tagreeve ')) commands.push(line.trim());
     }
   }
@@ -102,4 +102,9 @@ test('the sidebar links to the built page', () => {
   const config = readFileSync(join(root, 'site/astro.config.mjs'), 'utf8');
   expect(config).toContain("link: '/docs/guide/server-container'");
   expect(existsSync(join(dist, 'docs/guide/server-container.html'))).toBe(true);
+});
+
+test('a continuation joins only after an odd number of backslashes', () => {
+  expect(tagreeveCommands('```bash\ntagreeve run \\\n  --site x\n```')).toEqual(['tagreeve run    --site x']);
+  expect(tagreeveCommands('```bash\ntagreeve run \\\\\n  --site x\n```')).toEqual(['tagreeve run \\\\']);
 });
