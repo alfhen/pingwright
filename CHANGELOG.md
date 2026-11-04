@@ -20,7 +20,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 <!-- E02 -->
 
-<!-- L06 -->
+- A server container call now links exactly by client ID and event name when exactly one browser hit with them had its request to the container in flight. A leak through the container's GA4 forwarding then fails the run instead of warning. Ties and different event names stay `probable` (#901).
 
 - Shop Pay hosts (`pay.shopify.com`, `shop.app`, `cdn.shopifycloud.com` and `*.shopifysvc.com`) are platform hosts, so their requests get the flag `platformHost` and not `unknownDestination` (#585, #886).
 

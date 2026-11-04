@@ -1,6 +1,6 @@
 import { createIdentity, hashEmail, newId, type Hit, type Request } from '@tagreeve/core';
 import { describe, expect, test } from 'vitest';
-import { linkServerHits } from './link.ts';
+import { linkServerHits, type InFlightWindow } from './link.ts';
 
 const identity = createIdentity(1);
 const hosts = ['sgtm.example.invalid'];
@@ -22,8 +22,14 @@ function hit(req: Request, vendor: string, event: string | null, t: number, para
   };
 }
 
-function link(pairs: Array<[Request, Hit]>, serverHosts = hosts) {
-  const out = linkServerHits({ hits: pairs.map(([, h]) => h), requests: pairs.map(([r]) => r), serverHosts, identity });
+function link(pairs: Array<[Request, Hit]>, serverHosts = hosts, inFlight?: Array<[Request, InFlightWindow]>) {
+  const out = linkServerHits({
+    hits: pairs.map(([, h]) => h),
+    requests: pairs.map(([r]) => r),
+    serverHosts,
+    identity,
+    ...(inFlight ? { inFlight: new Map(inFlight.map(([r, w]) => [r.id, w])) } : {}),
+  });
   return out.map((h) => h.via);
 }
 
@@ -68,6 +74,109 @@ describe('rule 1: event ID and event name', () => {
       { hitId: pixel.id, by: 'eventId', confidence: 'exact' },
       { hitId: pixel.id, by: 'eventId', confidence: 'exact' },
     ]);
+  });
+});
+
+describe('rule 2: client ID and event name in flight', () => {
+  const browserCall = (cid: string, t: number) => request(`https://sgtm.example.invalid/g/collect?cid=${cid}&en=Purchase`, { t });
+  const serverCall = (cid: string, t: number) => serverRequest(`https://www.google-analytics.com/g/collect?cid=${cid}&en=Purchase`, { t });
+
+  test('one browser hit in flight when the call arrived: exact by clientId', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const bHit = hit(b, 'ga4', 'Purchase', 100);
+    const c = serverCall('pw-client-0001', 150);
+    const via = link([[b, bHit], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[1];
+    expect(via).toEqual({ hitId: bHit.id, by: 'clientId', confidence: 'exact' });
+  });
+
+  test('two browser hits in flight: probable, never one of them picked as exact', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 110);
+    const c = serverCall('pw-client-0001', 150);
+    const windows: Array<[Request, InFlightWindow]> = [[a, { sentAt: 100, answeredAt: 200 }], [b, { sentAt: 110, answeredAt: 200 }]];
+    const via = link([[a, hit(a, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 110)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, windows)[2];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test('an earlier answered request with the same key blocks the exact link', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 130);
+    const c = serverCall('pw-client-0001', 150);
+    const windows: Array<[Request, InFlightWindow]> = [[a, { sentAt: 100, answeredAt: 120 }], [b, { sentAt: 130, answeredAt: 200 }]];
+    const via = link([[a, hit(a, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 130)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, windows)[2];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test('a request with the same key sent after the call is not a candidate', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 160);
+    const c = serverCall('pw-client-0001', 150);
+    const aHit = hit(a, 'ga4', 'Purchase', 100);
+    const windows: Array<[Request, InFlightWindow]> = [[a, { sentAt: 100, answeredAt: 200 }], [b, { sentAt: 160, answeredAt: 250 }]];
+    const via = link([[a, aHit], [b, hit(b, 'ga4', 'Purchase', 160)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, windows)[2];
+    expect(via).toEqual({ hitId: aHit.id, by: 'clientId', confidence: 'exact' });
+  });
+
+  test('an earlier request with no window still counts as a tie', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 130);
+    const c = serverCall('pw-client-0001', 150);
+    const via = link([[a, hit(a, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 130)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [[b, { sentAt: 130, answeredAt: 200 }]])[2];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test('two lines of one event in one request: probable', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0001', 150);
+    const via = link([[b, hit(b, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[2];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test.each([
+    ['after the answer', 200],
+    ['before the request was sent', 99],
+  ])('a call %s: probable', (_name, at) => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0001', at);
+    const via = link([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', Math.max(at, 100))]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[1];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test('a request with no recorded window is probable', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0001', 150);
+    expect(link([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [])[1]?.confidence).toBe('probable');
+  });
+
+  test('another event name never links by rule 2', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverRequest('https://graph.facebook.com/v21.0/1/events', { t: 150, postData: JSON.stringify({ data: [{ user_data: { fbp: 'pw-client-0001' } }] }) });
+    const via = link([[b, hit(b, 'ga4', 'purchase', 100)], [c, hit(c, 'meta-capi', 'Purchase', 150)]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[1];
+    expect(via).toMatchObject({ by: 'clientId', confidence: 'probable' });
+  });
+
+  test('a hit to a host outside serverHosts is not exact', () => {
+    const b = request('https://www.google-analytics.com/g/collect?cid=pw-client-0001&en=Purchase', { t: 100 });
+    const c = serverCall('pw-client-0001', 150);
+    const via = link([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[1];
+    expect(via?.confidence).toBe('probable');
+  });
+
+  test('a different client ID is not exact', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0009', 150);
+    expect(link([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[1]).toBeUndefined();
+  });
+
+  test('rule 1 still wins over rule 2', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const bHit = hit(b, 'ga4', 'Purchase', 100);
+    const idReq = request('https://sgtm.example.invalid/g/collect?cid=pw-client-0001&en=Purchase', { t: 90 });
+    const idHit = hit(idReq, 'ga4', 'Purchase', 90, { event_id: 'evt-12345678' });
+    const c = serverCall('pw-client-0001', 150);
+    const callHit = hit(c, 'ga4', 'Purchase', 150, { event_id: 'evt-12345678' });
+    const via = link([[b, bHit], [idReq, idHit], [c, callHit]], hosts, [[b, { sentAt: 100, answeredAt: 200 }]])[2];
+    expect(via).toEqual({ hitId: idHit.id, by: 'eventId', confidence: 'exact' });
   });
 });
 

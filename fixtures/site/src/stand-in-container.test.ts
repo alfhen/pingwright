@@ -101,6 +101,30 @@ describe('stand-in container', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(400);
   });
 
+  it('ga4=copy puts the browser client ID and event name in the GA4 call and no event ID', async () => {
+    const origin = await start();
+    await fetch(`${origin}/g/collect?cid=pw-client-0001&en=Purchase&ga4=copy`, { method: 'POST', body: '' });
+    await until(() => answered.length === 3);
+    const ga4 = answered[0]!;
+    expect(new URL(ga4.url).searchParams.get('cid')).toBe('pw-client-0001');
+    expect(new URL(ga4.url).searchParams.get('en')).toBe('Purchase');
+    expect(ga4.body.toString('utf8')).toBe('en=Purchase');
+  });
+
+  it('keeps the fixed client ID and the event ID without ga4=copy', async () => {
+    const origin = await start();
+    await fetch(`${origin}/g/collect?cid=pw-client-0001&en=Purchase`, { method: 'POST', body: '' });
+    await until(() => answered.length === 3);
+    expect(new URL(answered[0]!.url).searchParams.get('cid')).toBe('pw-client.1');
+    expect(answered[0]!.body.toString('utf8')).toContain('ep.event_id=');
+  });
+
+  it('answer=after answers only when the vendor calls have finished', async () => {
+    const origin = await start();
+    await fetch(`${origin}/capi?answer=after`, { method: 'POST', body: '{}' });
+    expect(answered).toHaveLength(3);
+  });
+
   it('caps the delay at 5000 ms', async () => {
     const origin = await start();
     await fetch(`${origin}/capi?delayMs=900000`, { method: 'POST', body: '{}' });
