@@ -2,6 +2,8 @@
 
 ## 0.6.0-rc.1
 
+Not released yet. The newest release is 0.5.0, below.
+
 - `run` and `suite` write to `tagreeve/runs/<date>/` when you give no `--out`. The old default was `runs/`. If `./runs/` holds records, a note on stderr says so. Pass `--out runs` to keep the old folder.
 
 - Breaking: a scenario with `options.network: live` now fails to load (exit 2). Move `live` to the command line with `--network live`.
@@ -18,9 +20,9 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - `run` and `suite` take `--label <name>` (1 to 40 lowercase letters, digits or hyphens). The default folder becomes `tagreeve/runs/<date>-<label>/`, `Run.label` holds the label, and the summary, `--json` and the HTML report show it. A `suite --stores` cell record has `Run.store`. Record schema version is 4 and `suite.json` is version 3 (#811).
 
-<!-- L06 -->
+- A server container call now links exactly by client ID and event name when exactly one browser hit with them had its request to the container in flight. A leak through the container's GA4 forwarding then fails the run instead of warning. Ties and different event names stay `probable` (#901).
 
-<!-- H06 -->
+- Shop Pay hosts (`pay.shopify.com`, `shop.app`, `cdn.shopifycloud.com` and `*.shopifysvc.com`) are platform hosts, so their requests get the flag `platformHost` and not `unknownDestination` (#585, #886).
 
 <!-- E03 -->
 

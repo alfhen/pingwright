@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
 interface Workflow {
   on: { push: { tags: string[] } };
   permissions?: Record<string, string> | string;
-  jobs: Record<string, { permissions?: Record<string, string> | string; uses?: string; steps?: { run?: string; uses?: string }[] }>;
+  jobs: Record<string, { permissions?: Record<string, string> | string; secrets?: unknown; uses?: string; steps?: { run?: string; uses?: string }[] }>;
 }
 
 const path = new URL('../.github/workflows/release-tag.yml', import.meta.url);
@@ -19,20 +20,37 @@ const runLinesOf = (wf: Workflow): string[] =>
 
 const runLines = runLinesOf(workflow);
 
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const readRepoFile = (rel: string): string | undefined => {
+  try {
+    return readFileSync(`${repoRoot}${rel}`, 'utf8');
+  } catch {
+    return undefined;
+  }
+};
+
+const localWorkflow = /^\.\/\.github\/workflows\/[\w.-]+\.ya?ml$/;
+
 const isReadOnly = (permissions: Record<string, string> | string | undefined): boolean =>
   permissions === undefined ||
   permissions === 'read-all' ||
   (typeof permissions === 'object' && Object.values(permissions).every((level) => level !== 'write'));
 
-export function workflowProblems(source: string): string[] {
+export function workflowProblems(source: string, readLocal: (rel: string) => string | undefined = readRepoFile, depth = 0): string[] {
   const wf = parse(source) as Workflow;
   const problems: string[] = [];
   if (!isReadOnly(wf.permissions)) problems.push('top-level permissions are not read-only');
   for (const [name, job] of Object.entries(wf.jobs)) {
     if (!isReadOnly(job.permissions)) problems.push(`job ${name} permissions are not read-only`);
+    if ('secrets' in job) problems.push(`job ${name} passes secrets`);
     const uses = [job.uses, ...(job.steps ?? []).map((step) => step.uses)];
     for (const use of uses) {
       if (use && /publish|release/i.test(use)) problems.push(`uses ${use}`);
+    }
+    if (job.uses?.startsWith('./')) {
+      const nested = localWorkflow.test(job.uses) && depth < 5 ? readLocal(job.uses.slice(2)) : undefined;
+      if (nested === undefined) problems.push(`cannot check local workflow ${job.uses}`);
+      else problems.push(...workflowProblems(nested, readLocal, depth + 1).map((problem) => `${job.uses}: ${problem}`));
     }
   }
   if (/github\.token/i.test(source)) problems.push('github.token');
@@ -43,6 +61,7 @@ export function workflowProblems(source: string): string[] {
     if (!line.includes('--tag "$dist_tag"')) problems.push(`publish without --tag "$dist_tag": ${line.trim()}`);
   }
   for (const line of lines) {
+    if (/gh\s+release/.test(line)) problems.push(`gh release: ${line.trim()}`);
     if (/docker\s+(push|login)\b/.test(line) || (/\bbuild\b/.test(line) && /--push\b/.test(line))) {
       problems.push(`docker publish: ${line.trim()}`);
     }
@@ -136,9 +155,39 @@ describe('workflow rules', () => {
     expect(workflowProblems(base(good, 'permissions: write-all\n'))).toEqual(['top-level permissions are not read-only']);
   });
 
-  it('does not crash on a reusable-workflow job', () => {
+  it('checks a local reusable workflow', () => {
     const wf = `${base(good)}  b:\n    uses: ./.github/workflows/build.yml\n`;
-    expect(workflowProblems(wf)).toEqual([]);
+    const read = (rel: string) => (rel === '.github/workflows/build.yml' ? base(good) : undefined);
+    expect(workflowProblems(wf, read)).toEqual([]);
+    const bad = (): string => base('      - run: npm publish --tag "$dist_tag"\n');
+    expect(workflowProblems(wf, bad)).toEqual(['./.github/workflows/build.yml: publish without --dry-run: npm publish --tag "$dist_tag"']);
+  });
+
+  it('refuses a local workflow it cannot read or that is not under .github/workflows', () => {
+    const missing = `${base(good)}  b:\n    uses: ./.github/workflows/gone.yml\n`;
+    expect(workflowProblems(missing, () => undefined)).toEqual(['cannot check local workflow ./.github/workflows/gone.yml']);
+    const elsewhere = `${base(good)}  b:\n    uses: ./other/build.yml\n`;
+    expect(workflowProblems(elsewhere, () => base(good))).toEqual(['cannot check local workflow ./other/build.yml']);
+  });
+
+  it('stops a local workflow that calls itself', () => {
+    const self = `${base(good)}  b:\n    uses: ./.github/workflows/loop.yml\n`;
+    expect(workflowProblems(self, () => self).length).toBeGreaterThan(0);
+  });
+
+  it('fails a job-level secrets key, including inherit', () => {
+    const own = `${base(good)}  b:\n    uses: org/repo/.github/workflows/build.yml@v1\n    secrets:\n      T: x\n`;
+    expect(workflowProblems(own)).toEqual(['job b passes secrets']);
+    const inherit = `${base(good)}  b:\n    uses: org/repo/.github/workflows/build.yml@v1\n    secrets: inherit\n`;
+    expect(workflowProblems(inherit)).toEqual(['job b passes secrets']);
+  });
+
+  it.each([
+    'x="a #b" npm publish --tag "$dist_tag"',
+    'docker build --label "desc=build #42" --push .',
+    "npm --registry 'https://r.example/?a=1&b=2' publish --tag \"$dist_tag\"",
+  ])('still reports %s', (line) => {
+    expect(workflowProblems(base(`${good}      - run: |\n          ${line}\n`)).length).toBeGreaterThan(0);
   });
 
   it('checks the uses of a reusable-workflow job', () => {
@@ -195,5 +244,16 @@ describe('workflow rules', () => {
 
   it('lets a plain docker build through', () => {
     expect(workflowProblems(base(`${good}      - run: docker build -t x .\n`))).toEqual([]);
+  });
+
+  it('fails gh release in a nested workflow', () => {
+    const nested = base(`${good}      - run: gh release create v1\n`);
+    const wf = base('', 'permissions:\n  contents: read\n').replace('jobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n', 'jobs:\n  a:\n    uses: ./.github/workflows/build.yml\n');
+    expect(workflowProblems(wf, () => nested)).toEqual(['./.github/workflows/build.yml: gh release: gh release create v1']);
+  });
+
+  it('still finds gh release behind a quoted #', () => {
+    const wf = parse(base('      - run: |\n          NOTE="a #1" gh release create v1\n')) as Workflow;
+    expect(runLinesOf(wf).filter((line) => /gh\s+release/.test(line))).not.toEqual([]);
   });
 });

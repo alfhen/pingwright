@@ -30,6 +30,8 @@ interface HitFields {
   eventName: string;
   eventId: string;
   email: string;
+  clientId: string | undefined;
+  copyGa4: boolean;
 }
 
 /**
@@ -146,6 +148,7 @@ export function createStandIn(env: StandInEnv, options: { readonly socketTimeout
   }
 
   function fieldsOf(url: URL, body: string): HitFields {
+    const copyGa4 = url.searchParams.get('ga4') === 'copy';
     const values = new Map<string, string>(url.searchParams);
     try {
       const json: unknown = JSON.parse(body);
@@ -160,6 +163,8 @@ export function createStandIn(env: StandInEnv, options: { readonly socketTimeout
       eventName: pick('event_name', 'ev', 'en') ?? 'Purchase',
       eventId: pick('event_id', 'eid') ?? 'pw-event-1',
       email: pick('email', 'em') ?? 'pw-fixture@example.invalid',
+      clientId: copyGa4 ? pick('cid', 'client_id') : undefined,
+      copyGa4,
     };
   }
 
@@ -176,8 +181,9 @@ export function createStandIn(env: StandInEnv, options: { readonly socketTimeout
         },
       ],
     });
+    const ga4Body = `en=${encodeURIComponent(fields.eventName)}${fields.copyGa4 ? '' : `&ep.event_id=${encodeURIComponent(fields.eventId)}`}`;
     const calls: Array<[string, string, string | undefined]> = [
-      ['POST', `https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=pw-client.1&en=${encodeURIComponent(fields.eventName)}`, `en=${encodeURIComponent(fields.eventName)}&ep.event_id=${encodeURIComponent(fields.eventId)}`],
+      ['POST', `https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=${encodeURIComponent(fields.clientId ?? 'pw-client.1')}&en=${encodeURIComponent(fields.eventName)}`, ga4Body],
       ['GET', `https://www.googleadservices.com/pagead/conversion/000000001/?label=pw-label&oid=${encodeURIComponent(fields.eventId)}`, undefined],
       ['POST', 'https://graph.facebook.com/v21.0/100000000000001/events?access_token=pw-fixture-access-token', capi],
     ];
@@ -202,13 +208,17 @@ export function createStandIn(env: StandInEnv, options: { readonly socketTimeout
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
-      res.writeHead(200, { 'content-type': 'text/plain' }).end('ok');
+      const answerAfter = url.searchParams.get('answer') === 'after';
+      const answer = () => {
+        if (!res.writableEnded) res.writeHead(200, { 'content-type': 'text/plain' }).end('ok');
+      };
+      if (!answerAfter) answer();
       const asked = Number(url.searchParams.get('delayMs') ?? 0);
       const delay = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 0), MAX_DELAY_MS) : 0;
       const fields = fieldsOf(url, Buffer.concat(chunks).toString('utf8'));
       const timer = setTimeout(() => {
         timers.delete(timer);
-        void track(sendVendorCalls(fields));
+        void track(sendVendorCalls(fields).finally(answer));
       }, delay);
       timers.add(timer);
     });

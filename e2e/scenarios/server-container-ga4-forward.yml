@@ -1,0 +1,11 @@
+start: /sgtm-leak?mode=allowlist
+steps:
+  - consent: reject
+    label: rejected
+  - evaluate: "fetch(window.__PW_FIXTURE.sgtmUrl + '/g/collect?v=2&tid=G-PWTEST0001&cid=pw-client-0001&en=purchase&ga4=copy&answer=after', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: '' }).then(function () { return true; })"
+  - wait: 2s
+expect:
+  must: []
+  mustNot:
+    - { vendor: ga4, host: www.google-analytics.com, sentBy: server, after: rejected }
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true, builtins: { possibleRealData: warn } }

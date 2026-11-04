@@ -37,6 +37,20 @@ test('every source is https on the platform docs domains', () => {
   }
 });
 
+test('the Shop Pay hosts match with their purposes', () => {
+  const purpose = (url: string) => platformHostFor({ url })?.purpose;
+  expect(purpose('https://pay.shopify.com/x')).toBe('payments');
+  expect(purpose('https://shop.app/x')).toBe('payments');
+  expect(purpose('https://cdn.shopifycloud.com/x.js')).toBe('cdn');
+  expect(purpose('https://otlp-http-production.shopifysvc.com/v1/traces')).toBe('telemetry');
+});
+
+test('lookalikes of the Shop Pay hosts do not match', () => {
+  for (const url of ['https://shopifysvc.com/', 'https://evilshopifysvc.com/', 'https://pay.shopify.com.evil.test/', 'https://js.stripe.com/v3/']) {
+    expect(platformHostFor({ url }), url).toBeUndefined();
+  }
+});
+
 test('third-party payment hosts are not listed', () => {
   for (const url of ['https://js.stripe.com/v3/', 'https://www.paypal.com/sdk/js', 'https://x.klarna.com/y']) {
     expect(platformHostFor({ url })).toBeUndefined();
