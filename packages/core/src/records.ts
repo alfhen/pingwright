@@ -27,8 +27,8 @@ export interface CaptureCoverage {
 /**
  * Version 1 is the 0.2.0 record shape. Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`,
  * which a version 1 hit does not have. Version 3 adds `Request.captured: 'serverContainer'`, `Hit.via`,
- * `Run.serverContainer` and `Run.testServerContainer`. Version 4 adds `Run.label` and `Run.store`, and a
- * `Hit.via` with `by: 'clientId'` may be `exact`. A record with no version is version 0.
+ * `Run.serverContainer` and `Run.testServerContainer`. Version 4 adds `Run.label`, `Run.store` and
+ * `DataLayerEvent.frame`, and a `Hit.via` with `by: 'clientId'` may be `exact`. A record with no version is version 0.
  */
 export const RECORD_SCHEMA_VERSION = 4;
 
@@ -236,6 +236,13 @@ export interface DataLayerEvent {
   /** The pushed arguments, JSON-safe. A gtag() call is its argument list; any other push is `[item]`. */
   args: unknown[];
   isConsentCommand: boolean;
+  /** The frame that made the push. `n` is the run's number for that frame. Absent on a version 3 event, which reads as unknown. */
+  frame?: DataLayerFrame;
+}
+
+export interface DataLayerFrame {
+  main: boolean;
+  n: number;
 }
 
 export interface TagStatus {

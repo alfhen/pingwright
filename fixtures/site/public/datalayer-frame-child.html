@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer frame child</title>
+</head>
+<body>
+<script>
+window.dataLayer = window.dataLayer || [];
+window.dataLayer.push({ event: 'embedded_push' });
+setTimeout(() => window.dataLayer.push({ event: 'embedded_push_2' }), 100);
+</script>
+</body>
+</html>

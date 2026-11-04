@@ -43,6 +43,8 @@ const pages: Record<string, string> = {
   '/terms-fields': 'terms-fields.html',
   '/handoff/until': 'handoff-until.html',
   '/viewport': 'viewport.html',
+  '/datalayer-frame': 'datalayer-frame.html',
+  '/datalayer-frame-child': 'datalayer-frame-child.html',
   '/pinterest': 'pinterest.html',
   '/tracker': 'tracker.html',
   '/unload-beacons': 'unload-beacons.html',

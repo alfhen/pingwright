@@ -1,4 +1,4 @@
-import { newId, pageTimeToEpoch, type DataLayerEvent, type EpochMs, type Id } from '@tagreeve/core';
+import { newId, pageTimeToEpoch, type DataLayerEvent, type DataLayerFrame, type EpochMs, type Id } from '@tagreeve/core';
 
 export const DATALAYER_BINDING = '__tagreeveDataLayer';
 
@@ -94,6 +94,7 @@ export function dataLayerEventFromPayload(
   payload: DataLayerPayload,
   runId: Id<'run'>,
   offset: number,
+  frame: DataLayerFrame,
 ): DataLayerEvent | undefined {
   let args: unknown;
   try {
@@ -113,5 +114,6 @@ export function dataLayerEventFromPayload(
     gtmUniqueEventId: uniqueEventId(args),
     args,
     isConsentCommand: isConsentCommand(args),
+    frame: { main: frame.main, n: frame.n },
   };
 }
