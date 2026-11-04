@@ -262,6 +262,7 @@ test.each([
   ['a phone', 'note=+1 555 123 4567\n555 123 4567', 'phone'],
   ['a percent-encoded email', 'note=joann%40shop.example\nann%40shop.example', 'email'],
   ['a percent-encoded phone', 'note=%2B1%20555%20123%204567\n555%20123%204567', 'phone'],
+  ['a percent-encoded email with a stray percent', 'note=joann%40shop.example\nann%40shop.example&d=100%', 'email'],
 ])('possibleRealData keeps two body values apart when one contains the other: %s', (_n, body, kind) => {
   const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
@@ -450,8 +451,10 @@ test.each([
   ['a lowercase %5b%5d joined into the name', 'x%5b%5dvisitor@other-person.example=1', '(other)'],
   ['a long name joined with []', 'abcdef[]visitor@other-person.example=1', '(other)'],
   ['a long name joined after another field', 'a=1&abcdef[]visitor@other-person.example=1', '(other)'],
+  ['a stray percent in another field', 'x%5B%5Dvisitor%40other-person.example=1&d=100%', '(other)'],
+  ['a Latin-1 escape in another field', 'x%5B%5Dvisitor%40other-person.example=1&n=caf%E9', '(other)'],
 ])('possibleRealData reports one value once when the body and its field read it with different edges: %s', (_n, body, where) => {
-  expect(body).toContain('visitor@other-person.example');
+  expect(body.replace(/%40/g, '@')).toContain('visitor@other-person.example');
   const [leak, ...rest] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(rest).toHaveLength(0);
   expect(leak!.detail).toContain('carries 1 email value(s)');

@@ -1443,16 +1443,18 @@ function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   return occurs && merges;
 }
 
-// The forms a scan reads a body in: raw, percent-decoded, JSON-unescaped and base64-decoded.
+// Approximates the forms core's scan reads a body in. Percent runs decode one by one and a bad run stays raw, as in
+// core's tryUrlDecode. Base64 is tried on whole tokens at offset 0 only.
 function bodyForms(raw: string): string[] {
   const forms = new Set([raw]);
-  const decode = (text: string) => {
-    try {
-      return decodeURIComponent(text);
-    } catch {
-      return text;
-    }
-  };
+  const decode = (text: string) =>
+    text.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        return run;
+      }
+    });
   forms.add(decode(raw));
   forms.add(decode(raw.replace(/\+/g, ' ')));
   forms.add(raw.replace(/\\u([0-9a-f]{4})/gi, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(["\\/])/g, '$1'));
