@@ -9,13 +9,15 @@
 
 Agent-first testing for tags and consent. Tagreeve plays a visitor in a real browser, records every tracking hit the site sends, and checks the result against what you expect. Tag-firing reports (which tags fired) are planned.
 
-> **Status: 0.5 (`0.5.0`).** Tagreeve plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `tagreeve suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. 0.4 adds handoffs that end by themselves, an opt-in test payment step, baselines, a viewport option and fake identities by country. 0.5 adds `--server-container`, which runs your own server container in Docker and records what it sends to each vendor, a Conversions API decoder, several stores in one suite and platform hosts for Shopify. The rest of this README describes where Tagreeve is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
+> **Status: 0.6 (`0.6.0-rc.1`).** Tagreeve plays a visitor in Chromium, records and decodes hits, answers the consent banner, checks YAML expectations and writes a JSONL record. 0.3 adds rules on payload fields and cookies, a `deniedIdentifiers` check, `tagreeve suite`, an HTML report, a Done control for handoff steps, role-based locators and a `select` step. 0.4 adds handoffs that end by themselves, an opt-in test payment step, baselines, a viewport option and fake identities by country. 0.5 adds `--server-container`, which runs your own server container in Docker and records what it sends to each vendor, a Conversions API decoder, several stores in one suite and platform hosts for Shopify. 0.6.0-rc.1 adds path defaults, `tagreeve init`, `tagreeve/config.yml`, `--label`, default baseline paths and `suite --baseline`, exact links between server container calls and browser hits by client ID, and the frame of each `dataLayer` push. The rest of this README describes where Tagreeve is going, and marks what is not built yet. The design is in [docs/design.md](docs/design.md). Feedback is welcome in issues.
 >
 > **In 0.1:** `tagreeve run` with `stub` and `live` network modes; consent epochs, with withdrawals labelled apart from first rejects; seeded fake identities, hash checks and leak detection; decoders for GA4, Google Ads, Meta, Stape custom loader and a minimal server-container data client; banner handling through autoconsent; expectations; JSONL output.
 >
 > **In 0.2:** `--gtm-override` runs the page against an unpublished GTM web workspace, also through a Stape-style custom loader; `tagreeve diff` compares two runs; a Pinterest decoder; a curated tracker list (LinkedIn, Microsoft UET, Reddit) that is stubbed and recorded as minimal hits, extendable with `--tracker-list` (X, for example); a record schema version; a Shopify checkout pattern ([docs/shopify-checkout.md](docs/shopify-checkout.md)).
 >
 > **In 0.3:** `body.has` and `body.only` rules on the field names of a hit; `cookie` rules; a `deniedIdentifiers` check that fails when an identifier goes out on a denied hit; `tagreeve suite` runs a folder of scenarios against several GTM builds; `tagreeve report` writes an HTML report of one run or a suite; a Done button in the handoff window; `click` and `wait` by role and name or from a list of selectors; a `select` step; the `server` network mode; record schema version 2. `deniedIdentifiers` fails by default, so a run that passed in 0.2 can exit 1. See [CHANGELOG.md](CHANGELOG.md).
+>
+> **In 0.6.0-rc.1:** `run` and `suite` write to `tagreeve/runs/<date>/` by default; `tagreeve init` makes the folders; `tagreeve/config.yml` holds `site`, `out` and scenario options; `--label` names a run; `baseline save` and `suite --baseline` use `tagreeve/baselines/`; a scenario with `network: live` no longer loads; a `wait` timeout lists the controls that block submission; Shop Pay hosts are platform hosts; and a server container call links exactly by client ID and event name when only one browser hit fits. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.6.0-rc.1".
 >
 > **In 0.5.0:** a hit rule takes `sentBy: browser` or `sentBy: server`, so a rule on a Google host can ignore the server container's own forwarding; a missing `tagreeve-sgtm` image stops a suite before any scenario starts, and the message lists the local tags; the server container guide shows how to test an unpublished server workspace through its preview environment; and the text and `--json` summaries show query names only and mask value-like path segments, for every form of URL. Records keep the full detail. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.5.0".
 >
@@ -80,15 +82,15 @@ tagreeve run scenarios/undecided-visitor.yml --site https://staging.example.com
 ## Install
 
 ```bash
-npm i -g tagreeve
+npm i -g tagreeve@next
 tagreeve install-browser
 ```
 
-Node 22.18 or later. `npm i -g tagreeve` installs the newest release. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
+Node 22.18 or later. `npm i -g tagreeve@next` installs the newest release candidate. Other ways to install, from a git tag or a tarball, are in [docs/cli.md](docs/cli.md).
 
 ## Quick start
 
-1. `npm i -g tagreeve`
+1. `npm i -g tagreeve@next`
 2. `tagreeve install-browser`. In a project folder, `tagreeve init` makes `tagreeve/scenarios/` and `tagreeve/baselines/` and keeps `tagreeve/runs/` out of git.
 3. Write `scenario.yml`:
 
