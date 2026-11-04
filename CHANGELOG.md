@@ -10,7 +10,7 @@
 
 <!-- K05 -->
 
-<!-- P05 -->
+- The text and `--json` summaries no longer print a value from a flag's URL. A relative or protocol-relative URL is redacted like an absolute one, a path segment that looks like a value reads `(other)`, and a bare query item reads `(other)`. Records are unchanged (#870, #871, #869, #874, #853).
 
 ## 0.5.0-rc.2
 

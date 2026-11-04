@@ -1,4 +1,4 @@
-import { guardFieldName, platformHostFor } from '@tagreeve/decoders';
+import { guardFieldName, maskValuePath, OTHER_NAME, platformHostFor } from '@tagreeve/decoders';
 import type { Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
 import { isServerHit, judgeIndex, viaHitOf } from '@tagreeve/expect';
 import { NOTE_TEXT } from './report/model.ts';
@@ -139,7 +139,7 @@ function formatFlags(flags: Summary['flags']): string[] {
     if (f.kind === 'platformHost' && platformOf(f)) continue;
     const target = groupTarget(f);
     if (!target) {
-      lines.push(`  ${f.kind}: ${redactFlagDetail(f.detail)}`);
+      lines.push(`  ${f.kind}: ${f.detail}`);
       continue;
     }
     const { label, url } = target;
@@ -160,28 +160,31 @@ function formatFlags(flags: Summary['flags']): string[] {
 }
 
 const URL_TOKEN = /[a-z][a-z0-9+.-]*:\/\/\S+/gi;
-const URL_PARTS = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)([^?#]*)(?:\?([^#]*))?(?:#.*)?$/i;
+const URL_PARTS = /^(?:(?:([a-z][a-z0-9+.-]*:)?\/\/)([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#.*)?$/is;
+// The URL runs to the end of the detail, so a space inside it does not end it.
+const RECEIVED_PAGE = /^(\S+ received )(.+)( as the page)$/s;
+const URL_AT_END = /^(.*?(?:\b[A-Z]+ |: ))((?:[a-z][a-z0-9+.-]*:)?\/\/.*|\/.*)$/s;
 
+// A raw name is checked, so a decoded `&`, `=`, `?` or space cannot break the shape. A bare item may be a value.
 function queryName(pair: string): string {
-  const raw = pair.split('=')[0]!;
-  try {
-    return guardFieldName(decodeURIComponent(raw));
-  } catch {
-    return guardFieldName(raw);
-  }
+  const eq = pair.indexOf('=');
+  return eq < 0 ? OTHER_NAME : guardFieldName(pair.slice(0, eq));
 }
 
-/** `scheme://host/path?name&name`: no credentials, query values or fragment, and value-like query names shown as `(other)`. */
-function redactUrl(token: string): string {
-  const parts = URL_PARTS.exec(token);
-  if (!parts) return token.split(/[?#]/)[0]!;
-  const [, scheme, authority, path, query] = parts;
+/** `scheme://host/path?name&name`, or the relative form: no credentials, query values or fragment, value-like path segments and query names shown as `(other)`. */
+function redactUrl(raw: string): string {
+  const [, scheme = '', authority, path = '', query] = URL_PARTS.exec(raw)!;
+  const origin = authority === undefined ? '' : `${scheme}//${authority.slice(authority.lastIndexOf('@') + 1).replace(/\s/g, '')}`;
   const names = new Set((query ?? '').split('&').filter(Boolean).map(queryName));
-  return `${scheme}${authority!.slice(authority!.lastIndexOf('@') + 1)}${path}${names.size > 0 ? `?${[...names].join('&')}` : ''}`;
+  return `${origin}${maskValuePath(path.replace(/\s/g, '%20'), OTHER_NAME)}${names.size > 0 ? `?${[...names].join('&')}` : ''}`;
 }
 
 /** Replaces each URL in a flag detail and keeps the words around it, so the host parsers still match. */
 export function redactFlagDetail(detail: string): string {
+  const page = RECEIVED_PAGE.exec(detail);
+  if (page) return `${page[1]}${redactUrl(page[2]!)}${page[3]}`;
+  const tail = URL_AT_END.exec(detail);
+  if (tail) return `${tail[1]}${redactUrl(tail[2]!)}`;
   return detail.replace(URL_TOKEN, redactUrl);
 }
 
