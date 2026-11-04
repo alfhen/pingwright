@@ -24,7 +24,6 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/build.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && ASTRO_TELEMETRY_DISABLED=1 astro sync --root site && tsc --noEmit -p site/tsconfig.json",
     "test": "vitest run --project unit",
