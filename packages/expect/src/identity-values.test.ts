@@ -260,6 +260,8 @@ test('possibleRealData keeps a URL email apart from a longer body email that con
 test.each([
   ['an email', 'note=joann@shop.example\nann@shop.example', 'email'],
   ['a phone', 'note=+1 555 123 4567\n555 123 4567', 'phone'],
+  ['a percent-encoded email', 'note=joann%40shop.example\nann%40shop.example', 'email'],
+  ['a percent-encoded phone', 'note=%2B1%20555%20123%204567\n555%20123%204567', 'phone'],
 ])('possibleRealData keeps two body values apart when one contains the other: %s', (_n, body, kind) => {
   const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);

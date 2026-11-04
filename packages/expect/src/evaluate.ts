@@ -812,7 +812,8 @@ function hashJudge(identity: Identity): (vendor: string, name: string, value: st
     if (PLAIN_ADDRESS_PARAMS.has(name) && PLAIN_ADDRESS_VENDORS.has(vendor) && !DIGEST_SHAPE.test(value)) return 'plain';
     if (known.has(value)) return 'match';
     const typed = value.trim().toLowerCase();
-    return plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed) ? 'unhashed' : 'wrong';
+    if (plain.has(typed) || accepted.some((v) => v.trim().toLowerCase() === typed)) return 'unhashed';
+    return PLAIN_ADDRESS_PARAMS.has(name) && vendor === 'meta-capi' && !DIGEST_SHAPE.test(value) ? 'plain' : 'wrong';
   };
 }
 
@@ -842,10 +843,12 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
   const withHash: string[] = [];
   const wrong: string[] = [];
   const unhashed: string[] = [];
+  const plainCapi: string[] = [];
   const wrongFields = new Set<string>();
   const wrongParams = new Set<string>();
   const matchedFields = new Set<string>();
   const unhashedFields = new Set<string>();
+  const plainCapiFields = new Set<string>();
   const plainAddressFields = new Set<string>();
   const uncheckedFields = new Set<string>();
   for (const hit of hits) {
@@ -860,7 +863,10 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       if (!verdict) continue;
       const label = fieldLabel(identityParamName(hit.vendor, name));
       if (verdict === 'plain') {
-        plainAddressFields.add(label);
+        if (hit.vendor === 'meta-capi') {
+          plainCapiFields.add(label);
+          plainCapi.push(hit.id);
+        } else plainAddressFields.add(label);
         continue;
       }
       seen = true;
@@ -894,6 +900,14 @@ function checkHashes(hits: Hit[], ctx: Context): { pass: boolean; evidence: stri
       `Not matching: ${[...wrongParams].join(', ')}.` +
       (matching.size ? ` Matching: ${joinLabels(matching)}.` : '');
     return { pass: false, evidence: wrong, headline: UNMATCHED_HEADLINE, message };
+  }
+  if (plainCapi.length) {
+    return {
+      pass: false,
+      evidence: plainCapi,
+      headline: UNMATCHED_HEADLINE,
+      message: `${they} carried a plain ${joinLabels(plainCapiFields)}, not a hash${of(plainCapi.length)}. The Conversions API takes these hashed.`,
+    };
   }
   if (!withHash.length && uncheckedFields.size) {
     return {
@@ -1405,21 +1419,46 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 
 // The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
 // merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
-// merges, and only when the shorter value never stands alone in the body: a different value in the URL, or a longer value
-// elsewhere, keeps its own finding.
-// The shorter value must never stand alone in the body: a separate value that a longer one contains keeps its own finding.
+// merges, and only when the shorter value occurs in some form of the body and never stands alone in any form: a different value
+// in the URL, or a separate value that a longer one contains, keeps its own finding.
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.includes(short)) return false;
-  return bodies.every((raw) => {
-    const text = raw.replace(/\[\]|%5B%5D/gi, '');
-    const covered: [number, number][] = [];
-    for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
-    for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
-      if (!covered.some(([from, to]) => i >= from && i + short.length <= to)) return false;
+  let occurs = false;
+  const merges = bodies.every((raw) =>
+    bodyForms(raw).every((form) => {
+      const text = form.replace(/\[\]|%5B%5D/gi, '');
+      const covered: [number, number][] = [];
+      for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
+      for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
+        occurs = true;
+        const standsAlone = !covered.some(([from, to]) => i >= from && i + short.length <= to);
+        if (standsAlone && (form === raw || covered.length > 0)) return false;
+      }
+      return true;
+    }),
+  );
+  return occurs && merges;
+}
+
+// The forms a scan reads a body in: raw, percent-decoded, JSON-unescaped and base64-decoded.
+function bodyForms(raw: string): string[] {
+  const forms = new Set([raw]);
+  const decode = (text: string) => {
+    try {
+      return decodeURIComponent(text);
+    } catch {
+      return text;
     }
-    return true;
-  });
+  };
+  forms.add(decode(raw));
+  forms.add(decode(raw.replace(/\+/g, ' ')));
+  forms.add(raw.replace(/\\u([0-9a-f]{4})/gi, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(["\\/])/g, '$1'));
+  for (const token of raw.match(/[A-Za-z0-9+/_-]{16,}={0,2}/g) ?? []) {
+    const bytes = Buffer.from(token, 'base64');
+    if (bytes.length) forms.add(bytes.toString('utf8'));
+  }
+  return [...forms];
 }
 
 function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>, bodies: string[]): void {
