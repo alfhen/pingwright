@@ -26,7 +26,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 <!-- E03 -->
 
-<!-- D01 -->
+- Each `dataLayer` event records which frame pushed it: `frame` is `{ main, n }`, with no URL (#922).
 
 <!-- E05 -->
 

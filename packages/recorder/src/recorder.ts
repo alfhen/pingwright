@@ -335,10 +335,12 @@ export class Recorder {
       ...(loopbackIsHostedForTests() ? { testLoopbackHosted: true as const } : {}),
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
-      const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset);
+      const isMain = source.frame === source.page.mainFrame();
+      this.frameDocumentId(source.frame);
+      const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumbers.get(source.frame)! });
       if (!event) return;
       this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
-      if (source.frame === source.page.mainFrame()) this.mainFrameEventIds.add(event.id);
+      if (isMain) this.mainFrameEventIds.add(event.id);
       else this.eventFrames.set(event.id, { id: this.frameDocumentId(source.frame), url: source.frame.url() });
     });
     await context.addInitScript(dataLayerInitScript);

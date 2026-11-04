@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer frame</title>
+</head>
+<body>
+<h1>DataLayer frame</h1>
+<iframe src="/datalayer-frame-child" title="Embedded frame"></iframe>
+<script>
+window.dataLayer = window.dataLayer || [];
+window.dataLayer.push({ event: 'top_push' });
+</script>
+</body>
+</html>

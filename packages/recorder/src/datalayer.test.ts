@@ -3,6 +3,8 @@ import { newId } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript } from './datalayer.ts';
 
+const MAIN = { main: true, n: 0 };
+
 interface Sent {
   t: number;
   args: string;
@@ -61,7 +63,7 @@ test('values that cannot be serialised do not break the push', () => {
 
 test('turns payloads into records on the shared clock', () => {
   const runId = newId('run');
-  const consent = dataLayerEventFromPayload({ t: 1000, args: '["consent","default",{"ad_storage":"denied"}]' }, runId, 50);
+  const consent = dataLayerEventFromPayload({ t: 1000, args: '["consent","default",{"ad_storage":"denied"}]' }, runId, 50, MAIN);
   expect(consent).toMatchObject({
     type: 'dataLayerEvent',
     runId,
@@ -74,16 +76,27 @@ test('turns payloads into records on the shared clock', () => {
     { t: 1, args: '[{"event":"purchase","gtm.uniqueEventId":7}]' },
     runId,
     0,
+    MAIN,
   );
   expect(event).toMatchObject({ event: 'purchase', gtmUniqueEventId: 7, isConsentCommand: false });
-  const gtagEvent = dataLayerEventFromPayload({ t: 1, args: '["event","add_to_cart",{}]' }, runId, 0);
+  const gtagEvent = dataLayerEventFromPayload({ t: 1, args: '["event","add_to_cart",{}]' }, runId, 0, MAIN);
   expect(gtagEvent?.event).toBe('add_to_cart');
+});
+
+test('a payload from an embedded frame keeps its frame number and main false', () => {
+  const runId = newId('run');
+  const payload = { t: 1, args: '[{"event":"x"}]' };
+  const first = dataLayerEventFromPayload(payload, runId, 0, { main: false, n: 3 });
+  const second = dataLayerEventFromPayload(payload, runId, 0, { main: false, n: 3 });
+  expect(first?.frame).toEqual({ main: false, n: 3 });
+  expect(second?.frame).toEqual(first?.frame);
+  expect(dataLayerEventFromPayload(payload, runId, 0, MAIN)?.frame).toEqual({ main: true, n: 0 });
 });
 
 test('malformed payloads are dropped', () => {
   const runId = newId('run');
-  expect(dataLayerEventFromPayload({ t: 1, args: 'nope' }, runId, 0)).toBeUndefined();
-  expect(dataLayerEventFromPayload({ t: 1, args: '{}' }, runId, 0)).toBeUndefined();
+  expect(dataLayerEventFromPayload({ t: 1, args: 'nope' }, runId, 0, MAIN)).toBeUndefined();
+  expect(dataLayerEventFromPayload({ t: 1, args: '{}' }, runId, 0, MAIN)).toBeUndefined();
 });
 
 test('a push over the size limit keeps its event name and drops the deep values', () => {
@@ -92,7 +105,7 @@ test('a push over the size limit keeps its event name and drops the deep values'
     `window.dataLayer = []; dataLayer.push({ event: 'purchase', 'gtm.uniqueEventId': 9, ecommerce: { value: 5, items: Array.from({ length: 400 }, (_, i) => ({ item_id: 'SKU' + i, item_name: 'Fake tee ' + i })) } });`,
   );
   expect(page.sent[0]!.args.length).toBeLessThanOrEqual(10000);
-  const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0);
+  const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0, MAIN);
   expect(event).toMatchObject({ event: 'purchase', gtmUniqueEventId: 9, isConsentCommand: false });
   const push = event?.args[0] as { ecommerce: { value: number; items: unknown[] } };
   expect(push.ecommerce.value).toBe(5);
@@ -104,7 +117,7 @@ test('a large gtag call keeps the command, so a consent update is still a consen
   page.run(
     `window.dataLayer = []; function gtag() { dataLayer.push(arguments); } gtag('consent', 'update', { analytics_storage: 'granted', note: 'x'.repeat(20000), more: { a: 'y'.repeat(9000) } });`,
   );
-  const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0);
+  const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0, MAIN);
   expect(event).toMatchObject({ isConsentCommand: true });
   expect((event?.args[2] as Record<string, unknown>).analytics_storage).toBe('granted');
 });
