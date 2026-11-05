@@ -1,6 +1,6 @@
 start: /server-container-link
 steps:
-  - evaluate: "window.pwSendLinkHits({ en: 'link_none', cid: 'pw-client-none-1', copy: true })"
+  - evaluate: "window.pwSendLinkHits({ en: 'link_none', cid: 'pw-client-none-1', copy: true, delayMs: 300 })"
   - wait: 2s
   - evaluate: "window.pwSendLinkHits({ en: 'link_nomatch' })"
   - wait: 2s

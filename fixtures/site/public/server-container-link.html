@@ -7,7 +7,7 @@
 </head>
 <body>
 <h1>Server container link</h1>
-<p>Sends GA4 hits to the mock server container, so its calls link or miss in a set way. Options in the query: <code>n</code> hits, <code>en</code> event name, <code>cid</code>, <code>eid</code>, <code>copy=1</code>, <code>after=1</code> and <code>gap</code> ms between hits. <code>window.pwSendLinkHits(options)</code> takes the same options.</p>
+<p>Sends GA4 hits to the mock server container, so its calls link or miss in a set way. Options in the query: <code>n</code> hits, <code>en</code> event name, <code>cid</code>, <code>eid</code>, <code>copy=1</code>, <code>after=1</code>, <code>delayMs</code> and <code>gap</code> ms between hits. <code>window.pwSendLinkHits(options)</code> takes the same options.</p>
 <script>
 (function () {
   function send(o) {
@@ -19,6 +19,7 @@
     }
     if (o.copy) q.set('ga4', 'copy');
     if (o.after) q.set('answer', 'after');
+    if (o.delayMs) q.set('delayMs', String(o.delayMs));
     return fetch(window.__PW_FIXTURE.sgtmUrl + '/g/collect?' + q.toString(), {
       method: 'POST',
       mode: 'no-cors',
@@ -49,6 +50,7 @@
       eid: q.get('eid') || '',
       copy: q.get('copy') === '1',
       after: q.get('after') === '1',
+      delayMs: Number(q.get('delayMs') || 0),
       gap: Number(q.get('gap') || 0)
     });
   }
