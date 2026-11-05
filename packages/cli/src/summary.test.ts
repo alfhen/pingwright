@@ -547,3 +547,18 @@ test('tag names in the summary are masked: an email reads (other), the redacted 
   expect(JSON.stringify(summary) + text).not.toContain('pw-fixture');
   expect(JSON.stringify(summary)).toContain('[redacted]');
 });
+
+test('a checkout token or a GID in a tag name reads (other) in the JSON and the text', () => {
+  const records = tagRecords({
+    tagReports: [tagReport('tag_1', [
+      { id: '90', name: 'Thanks /checkouts/c/0f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b/thank-you', status: 'failure' },
+      { id: '91', name: 'Order gid://shopify/Order/5551234567890', status: 'failure' },
+    ])],
+  });
+  const summary = buildSummary(records, [result(true)], 'p');
+  const all = JSON.stringify(summary) + formatSummary(summary);
+  expect(all).not.toContain('0f3e9a7b');
+  expect(all).not.toContain('5551234567890');
+  expect(formatSummary(summary)).toContain('90 (other): failure');
+  expect(formatSummary(summary)).toContain('91 (other): failure');
+});

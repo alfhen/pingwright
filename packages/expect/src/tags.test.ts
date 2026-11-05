@@ -2,7 +2,7 @@ import { newId, type TagReport } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { evaluate } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
-import { summarizeTags } from './tags.ts';
+import { maskTagName, summarizeTags } from './tags.ts';
 
 const runId = newId('run');
 
@@ -124,6 +124,28 @@ test('summarizeTags masks an email name and a strange status, and keeps [redacte
   expect(out).not.toContain('pw-fixture');
   expect(out).toContain('"name":"(other)"');
   expect(out).toContain('"name":"[redacted]"');
+});
+
+const LEAK_NAMES = [
+  'Thanks /checkouts/c/0f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b/thank-you',
+  'Order=0f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b',
+  '/web-pixels/sandbox/modern/checkouts/c/0f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b/thank-you',
+  'Order gid://shopify/Order/5551234567890',
+];
+
+test.each(LEAK_NAMES)('maskTagName masks a checkout token or a GID: %s', (name) => {
+  expect(maskTagName(name)).toBe('(other)');
+});
+
+test('maskTagName keeps an ordinary name', () => {
+  expect(maskTagName('GA4 - Config / Purchase: v2')).toBe('GA4 - Config / Purchase: v2');
+});
+
+test('summarizeTags masks a checkout token and a GID in a name', () => {
+  const records = [report({ tags: LEAK_NAMES.map((name, i) => tag(String(90 + i), name)) })];
+  const out = JSON.stringify(summarizeTags(records, undefined));
+  expect(out).not.toContain('0f3e9a7b');
+  expect(out).not.toContain('5551234567890');
 });
 
 test('only web reports count for notFired', () => {
