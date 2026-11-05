@@ -149,16 +149,25 @@ interface BlockingControl {
 /** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. Clones nothing, so no page code runs and no image loads. Only a checkbox that is required and not ticked is named by its label text; every other control is named by `aria-label`, `name` or `id`, so no error text can reach a name. */
 function readBlockingControls(max: number): BlockingControl[] {
   const found: BlockingControl[] = [];
-  const skipped = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'OPTION', 'BUTTON', 'SCRIPT', 'STYLE']);
-  const labelText = (labels: Iterable<Element>): string => {
+  const skipped = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'OPTION', 'DATALIST', 'BUTTON', 'SCRIPT', 'STYLE']);
+  const plain = new Set(['A', 'ABBR', 'B', 'EM', 'I', 'SMALL', 'SPAN', 'STRONG', 'U']);
+  const isPlain = (e: Element): boolean => plain.has(e.tagName) && !e.id && !e.hasAttribute('role') && !e.hasAttribute('hidden') && !e.getAttributeNames().some((a) => a.startsWith('aria-'));
+  // Undefined when the label is not the only one or holds anything but text and plain inline elements: a validation library may add its error there.
+  const labelText = (labels: NodeListOf<HTMLLabelElement> | undefined): string | undefined => {
+    if (!labels || labels.length !== 1) return undefined;
     let text = '';
-    for (const label of labels) {
-      const walker = document.createTreeWalker(label, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-        acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && skipped.has((n as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
-      });
-      for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
-    }
-    return text.replace(/\s+/g, ' ').trim();
+    let plainOnly = true;
+    const walker = document.createTreeWalker(labels[0]!, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => {
+        if (n.nodeType !== Node.ELEMENT_NODE) return NodeFilter.FILTER_ACCEPT;
+        const e = n as Element;
+        if (skipped.has(e.tagName)) return NodeFilter.FILTER_REJECT;
+        if (!isPlain(e)) plainOnly = false;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
+    return plainOnly ? text.replace(/\s+/g, ' ').trim() : undefined;
   };
   const attributeName = (el: Element): string => {
     const aria = el.getAttribute('aria-label')?.trim();
@@ -166,7 +175,7 @@ function readBlockingControls(max: number): BlockingControl[] {
   };
   const nameOf = (el: Element, reason: BlockReason): string => {
     if (reason === 'required, not ticked') {
-      const text = labelText((el as HTMLInputElement).labels ?? []);
+      const text = labelText((el as HTMLInputElement).labels ?? undefined);
       if (text) return text;
     }
     return attributeName(el);

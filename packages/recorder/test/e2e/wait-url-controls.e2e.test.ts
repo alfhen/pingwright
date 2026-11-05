@@ -92,23 +92,14 @@ test('each signal is read from the real page and no value, placeholder, error te
     'Fakestate is unknown',
     'Fakesuburb is unknown',
     'Faketown is invalid',
-    'Nickname',
-    'Disabled terms',
+    'nickname',
+    'disabled_terms',
     'token',
   ];
   for (const secret of forbidden) expect(error).not.toContain(secret);
 });
 
 const GUARD_CASES: { name: string; html: string; expected: string | string[]; forbidden: string }[] = [
-  {
-    name: 'select and option',
-    html: '<label>Country <select name="c" required><option value="">Choose a country</option><option value="f">Fakeland</option></select></label>',
-    expected: 'select "c" (invalid)',
-    forbidden: 'Fakeland',
-  },
-  { name: 'textarea', html: '<label>Notes <textarea name="n" aria-invalid="true">Faketext</textarea></label>', expected: 'textarea "n" (aria-invalid)', forbidden: 'Faketext' },
-  { name: 'script', html: '<label>Script <script>var fakescript = 1</script><input name="s" aria-invalid="true"></label>', expected: 'text "s" (aria-invalid)', forbidden: 'fakescript' },
-  { name: 'style', html: '<label>Style <style>.fakestyle { color: red }</style><input name="y" aria-invalid="true"></label>', expected: 'text "y" (aria-invalid)', forbidden: 'fakestyle' },
   { name: 'aria-live', html: '<label>Live <input name="l" aria-invalid="true"> <span aria-live="polite">Fakelive is wrong</span></label>', expected: 'text "l" (aria-invalid)', forbidden: 'Fakelive' },
   { name: '.invalid-feedback', html: '<label>Feedback <input name="f" aria-invalid="true"> <div class="invalid-feedback">Fakefeedback is wrong</div></label>', expected: 'text "f" (aria-invalid)', forbidden: 'Fakefeedback' },
   { name: '.field-error', html: '<label>Fielderr <input name="e" aria-invalid="true"> <span class="field-error">Fakefielderr is wrong</span></label>', expected: 'text "e" (aria-invalid)', forbidden: 'Fakefielderr' },
@@ -193,11 +184,32 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
     forbidden: 'Fakeaem',
   },
   {
-    name: 'option outside a select',
-    html: '<label>Opt <input name="op" aria-invalid="true" list="dl"><datalist id="dl"><option>Fakeopt</option></datalist></label>',
-    expected: 'text "op" (aria-invalid)',
-    forbidden: 'Fakeopt',
+    name: 'a checkbox label that wraps a select, textarea, script, style, button and datalist',
+    html: '<label><input type="checkbox" name="w" required> Accept <select><option>Fakeland</option></select><textarea>Faketext</textarea><script>var fakescript = 1</script><style>.fakestyle { color: red }</style><button>Fakebutton</button><datalist id="dl"><option>Fakeopt</option></datalist> terms</label>',
+    expected: 'checkbox "Accept terms" (required, not ticked)',
+    forbidden: 'Fake',
   },
+  {
+    name: 'a required checkbox with a separate error label (jQuery Validate)',
+    html: '<input type="checkbox" id="t" name="t" required><label for="t">Terms</label><label id="t-error" class="error" for="t">Fakejqcheck is required</label>',
+    expected: 'checkbox "t" (required, not ticked)',
+    forbidden: 'Fakejqcheck',
+  },
+  {
+    name: 'a required checkbox with an error label nested in its wrapping label',
+    html: '<label><input type="checkbox" id="t2" name="t2" required> Terms <label id="t2-error" class="error" for="t2">Fakejqnest is required</label></label>',
+    expected: 'checkbox "t2" (required, not ticked)',
+    forbidden: 'Fakejqnest',
+  },
+  ...['<span role="alert">', '<span role="status">', '<span aria-live="polite">', '<output>', '<span aria-hidden="true">', '<div id="ev" class="invalid-feedback">'].map((open) => ({
+    name: `a required checkbox whose label holds ${open}`,
+    html: `<label><input type="checkbox" name="nc" required> I accept the terms ${open}Fakenested is required</${open.slice(1).split(/[ >]/)[0]}></label>`,
+    expected: 'checkbox "nc" (required, not ticked)',
+    forbidden: 'Fakenested',
+  })),
+  { name: 'a disabled required field', html: '<label>Nick <input name="nick" required disabled></label>', expected: [] as string[], forbidden: 'nick' },
+  { name: 'a disabled required checkbox', html: '<label><input type="checkbox" name="dt" required disabled> Disabled terms</label>', expected: [] as string[], forbidden: 'dt' },
+  { name: 'a hidden aria-invalid input', html: '<input type="hidden" name="tok" aria-invalid="true">', expected: [] as string[], forbidden: 'tok' },
   {
     name: 'a wrapping label with an error class',
     html: '<label class="error">Terms <input type="checkbox" required></label>',
@@ -240,7 +252,7 @@ test('the name reader never clones a node', async () => {
     });
     const before = await page.evaluate(() => (window as unknown as { m15Clones: number }).m15Clones);
     const listed = await blockingControls(recorder.context);
-    expect(listed).toEqual(['checkbox "Pic" (required, not ticked)']);
+    expect(listed).toEqual(['checkbox (required, not ticked)']);
     expect(await page.evaluate(() => (window as unknown as { m15Clones: number }).m15Clones)).toBe(before);
   } finally {
     await recorder.close().catch(() => undefined);
