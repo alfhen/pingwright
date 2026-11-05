@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { containerId, fakeWorkspace, noVersionContainerId, resolveContainer } from './containers.ts';
+import { containerId, containerVersion, fakeEmail, fakeWorkspace, fixtureTags, noVersionContainerId, resolveContainer } from './containers.ts';
 
 const third = 'http://127.0.0.1:1';
 const params = (o: Record<string, string>) => new URLSearchParams(o);
@@ -41,5 +41,43 @@ describe('resolveContainer', () => {
   test('a container without a version or an unknown container is 404', () => {
     expect(resolveContainer(params({ id: noVersionContainerId }), third).status).toBe(404);
     expect(resolveContainer(params({}), third).status).toBe(404);
+  });
+});
+
+describe('the opt-in tag reporter', () => {
+  const body = (extra: Record<string, string> = {}) => {
+    const r = resolveContainer(params({ id: containerId, ...extra }), third);
+    if (r.status !== 200) throw new Error('no container');
+    return r.body;
+  };
+
+  test('both builds define reportTags but never call it', () => {
+    for (const text of [body(), body(fakeWorkspace)]) {
+      expect(text).toContain('pwContainer.reportTags = function');
+      expect(text).not.toMatch(/pwContainer\.reportTags\(/);
+    }
+  });
+
+  test('each build carries its tag list and container version', () => {
+    const published = body();
+    const workspace = body(fakeWorkspace);
+    expect(published).toContain(JSON.stringify(fixtureTags.published));
+    expect(workspace).toContain(JSON.stringify(fixtureTags.workspace));
+    expect(published).toContain(`"version":${JSON.stringify(containerVersion.published)}`);
+    expect(workspace).toContain(`"version":${JSON.stringify(containerVersion.workspace)}`);
+  });
+
+  test('the published list is 11 and 12, the workspace list drops 12 and adds 13, 14, 77, 88 and 89, and 45 is in neither', () => {
+    expect(fixtureTags.published).toEqual([
+      { id: '11', name: 'GA4 - Config', status: 'success', executionTime: 4 },
+      { id: '12', status: 'failure', executionTime: 2 },
+    ]);
+    const workspace = fixtureTags.workspace;
+    expect(workspace.map((t) => [t.id, t.status])).toEqual([['11', 'success'], ['13', 'failure'], ['14', 'success'], ['77', 'success'], ['88', 'success'], ['89', 'success']]);
+    expect(workspace.filter((t) => t.name === undefined).map((t) => t.id)).toEqual(['13', '14']);
+    expect(workspace.find((t) => t.id === '77')!.name).toBe('GA4 - Workspace Only');
+    expect(workspace.find((t) => t.id === '88')!.name).toContain(fakeEmail);
+    expect(workspace.find((t) => t.id === '89')!.name).toContain(fakeWorkspace.gtm_auth);
+    expect([...fixtureTags.published, ...workspace].some((t) => t.id === '45')).toBe(false);
   });
 });

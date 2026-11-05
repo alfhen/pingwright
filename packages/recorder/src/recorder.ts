@@ -15,6 +15,7 @@ import {
   type CollectorReport,
   type ConsentEpoch,
   type DataLayerEvent,
+  type DataLayerFrame,
   type Flag,
   type Hit,
   type Id,
@@ -28,6 +29,7 @@ import {
   type ServerContainerErrorClass,
   type ServerContainerPassThrough,
   type Step,
+  type TagReport,
 } from '@tagreeve/core';
 import { HANDOFF_DONE_BINDING, HANDOFF_STATE_BINDING, HandoffGate, handoffOverlayScript, type HandoffState } from './handoff-overlay.ts';
 import { buildEpochs, consentModeChanges, installConsent, type BannerEvent, type BannerResult, type ConsentDriver, type ConsentOptions } from '@tagreeve/consent';
@@ -48,6 +50,7 @@ import {
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
+import { parseTagReport, TAG_REPORT_BINDING } from './tag-report.ts';
 import { buildFlags, buildUnloadGapFlags, type FrameRef } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
 import { redactHeaders } from './redact.ts';
@@ -79,6 +82,8 @@ import { loopbackIsHostedForTests } from './guard.ts';
 
 export const TAGREEVE_VERSION = readVersion();
 const REDACTED_VALUE = '[redacted]';
+const TAG_REPORT_QUIET_MS = 500;
+const TAG_REPORT_MAX_WAIT_MS = 2500;
 
 
 export interface ServerContainerOptions {
@@ -210,6 +215,8 @@ export class Recorder {
   private readonly navigationSeen = new WeakSet<PwRequest>();
   private readonly requestFrameIds = new Map<string, string>();
   private readonly collectorReports: (CollectorReport | InvalidReport)[] = [];
+  private readonly tagReports: TagReport[] = [];
+  private lastTagReportAt = 0;
   private readonly pending = new Set<Promise<unknown>>();
   private readonly steps: Step[] = [];
   private readonly checkpoints: Checkpoint[] = [];
@@ -345,6 +352,7 @@ export class Recorder {
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
+    await context.exposeBinding(TAG_REPORT_BINDING, (source, payload: unknown) => this.recordTagReport(source.frame, payload));
     if (this.options.networkMode !== 'live') {
       await context.exposeBinding(UNLOAD_BINDING, (source, payload: UnloadSendPayload) => this.recordUnloadSend(payload, this.frameDocumentId(source.frame)));
       await context.addInitScript(unloadInitScript);
@@ -445,6 +453,23 @@ export class Recorder {
     void promise.finally(() => this.pending.delete(promise));
   }
 
+  private recordTagReport(frame: Frame, payload: unknown): void {
+    if (this.closed) return;
+    this.lastTagReportAt = Date.now();
+    const parsed = parseTagReport(payload, 'web', { runId: this.runId, t: nodeNow(), stepId: this.currentStepId, frame: this.frameRef(frame) });
+    if (!parsed.ok) {
+      this.collectorReports.push(parsed.invalid);
+      return;
+    }
+    this.tagReports.push(parsed.report);
+    if (parsed.version !== null) this.run.containerVersions[parsed.report.container] = parsed.version;
+  }
+
+  private frameRef(frame: Frame): DataLayerFrame {
+    this.frameDocumentId(frame);
+    return { main: frame === frame.page().mainFrame(), n: this.frameNumbers.get(frame)! };
+  }
+
   /** A frame document is the frame plus how many navigation requests the frame has started. Held in memory only. */
   private frameDocumentId(frame: Frame): string {
     let number = this.frameNumbers.get(frame);
@@ -483,6 +508,12 @@ export class Recorder {
     // The collector and self-test origins are Tagreeve's own channel, not site traffic.
     if (!/^https?:/.test(url) || url.startsWith(COLLECTOR_ORIGIN) || url.startsWith(SELFTEST_ORIGIN)) return undefined;
     const body = request.postData();
+    let frame: DataLayerFrame | undefined;
+    try {
+      frame = this.frameRef(request.frame());
+    } catch {
+      // Requests from workers have no frame.
+    }
     let record: Request = {
       type: 'request',
       id: newId('request'),
@@ -493,6 +524,7 @@ export class Recorder {
       url: request.url(),
       resourceType: request.resourceType(),
       frameUrl: frameUrlOf(request),
+      ...(frame ? { frame } : {}),
       initiator: initiatorOf(request),
       headers: redactHeaders(request.headers()),
       postData: body === null ? null : body.slice(0, MAX_POST_DATA),
@@ -988,6 +1020,12 @@ export class Recorder {
     }
   }
 
+  /** GTM calls back up to its event timeout after an event, so a report can arrive well after the last step. */
+  private async waitForLateTagReports(): Promise<void> {
+    if (this.tagReports.length === 0) return;
+    await waitForQuiet(() => this.lastTagReportAt, { quietMs: TAG_REPORT_QUIET_MS, maxMs: TAG_REPORT_MAX_WAIT_MS });
+  }
+
   /** Closes the browser, decodes the requests and writes `<outDir>/<runId>.jsonl`. */
   async close(): Promise<RunResult> {
     const closeStartedAt = nodeNow();
@@ -999,6 +1037,7 @@ export class Recorder {
       session.stopRecording();
       this.noteContainerExit();
     }
+    await this.waitForLateTagReports();
     this.closed = true;
     try {
       await this.browser.close();
@@ -1050,7 +1089,7 @@ export class Recorder {
       responses: this.responses,
       hits,
       dataLayerEvents: this.dataLayerEvents,
-      tagReports: [],
+      tagReports: this.tagReports,
       consentEpochs,
       checkpoints: this.checkpoints,
       results: [],
@@ -1071,6 +1110,7 @@ export class Recorder {
         ...records.responses,
         ...records.hits,
         ...records.dataLayerEvents,
+        ...records.tagReports,
         ...records.consentEpochs,
         ...records.collectorReports,
         ...records.invalidReports,

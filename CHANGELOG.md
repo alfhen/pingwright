@@ -25,7 +25,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - A test payment fill that loses its card frame to a navigation reports "the card frame is gone or not served from the card host", not a Playwright message. The input count reason keeps the path of the document that was checked.
 
-<!-- W07 -->
+- The run record now holds web tag reports. A page binding, `tagreeveTagReport`, receives what the Tagreeve tag reporter template sends: for each event, the status of each tag. A bad report becomes an invalid report with an error class and no body. `Run.containerVersions` is set from the reports, and `Request.frame` says which frame sent a request. The run waits up to 2.5 s at the end for late reports. The fixture container has an opt-in reporter on `/container/tags`.
 
 - Added `tagreeve template web`. It prints the web tag reporter's GTM template. `--json` prints the template with the setup fields and steps, so an agent can install it with its own GTM access. Tagreeve never calls the GTM API.
 
