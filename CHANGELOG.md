@@ -12,7 +12,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- K07 -->
 
-<!-- I07 -->
+- `tagreeve init` writes a starter `tagreeve/config.yml` when none exists (#1086). `init --json` prints `{ "items": [...] }`, and any other option is a usage error (#1051). A failed `init` names the relative path, keeps the lines already printed and exits 2 (#1048).
 
 <!-- F07 -->
 

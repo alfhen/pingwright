@@ -112,7 +112,7 @@ export interface ServerContainerArgs {
   action: 'build';
 }
 
-export type Command = RunArgs | { command: 'init' } | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
+export type Command = RunArgs | { command: 'init'; json: boolean } | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
 
 export type HelpTopic = (typeof COMMANDS)[number];
 
@@ -122,7 +122,7 @@ export const USAGE = `Usage:
   tagreeve baseline save <run.jsonl> [<baseline.json>] [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
-  tagreeve init
+  tagreeve init [--json]
   tagreeve server-container build
   tagreeve install-browser
   tagreeve --version
@@ -232,11 +232,12 @@ Options:
   -h, --help                 Show this help
 `;
 
-const INIT_USAGE = `Usage: tagreeve init
+const INIT_USAGE = `Usage: tagreeve init [--json]
 
-Makes tagreeve/scenarios/ and tagreeve/baselines/ in the current directory, and adds /tagreeve/runs/ to ./.gitignore unless the work tree already ignores it. It writes no scenario, never overwrites a file and says what it did or skipped. It takes no options.
+Makes tagreeve/scenarios/ and tagreeve/baselines/ in the current directory, writes a starter tagreeve/config.yml, and adds /tagreeve/runs/ to ./.gitignore unless the work tree already ignores it. It writes no scenario, never overwrites a file and says what it did or skipped.
 
 Options:
+  --json                     Print {"items": [{"path", "action"}]} on stdout; action is created, skipped or added
   -h, --help                 Show this help
 `;
 
@@ -380,7 +381,9 @@ function parseCommand(argv: string[]): Command {
   if (values.help || command === undefined) return { command: 'help' };
   if (command === 'init') {
     if (rest.length) throw new UsageError('init takes no arguments');
-    return { command: 'init' };
+    const other = Object.keys(values).find((key) => key !== 'json');
+    if (other) throw new UsageError(`init does not take --${other}.`);
+    return { command: 'init', json: values.json ?? false };
   }
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');

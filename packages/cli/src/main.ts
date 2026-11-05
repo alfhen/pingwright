@@ -44,7 +44,7 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         io.stdout(helpText(command.topic));
         return 0;
       case 'init':
-        return await initCommand(io);
+        return await initCommand(io, command.json);
       case 'install-browser':
         return (await installBrowser()) === 0 ? 0 : 2;
       case 'baseline':
