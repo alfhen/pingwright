@@ -1,7 +1,7 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newId, type Hit, type RunRecords } from '@tagreeve/core';
+import { newId, readRun, type Hit, type RunRecords } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
 import { baselineCommand, buildBaseline, compareBaseline, defaultBaselineName, parseBaseline } from './baseline.ts';
@@ -251,6 +251,39 @@ test('defaultBaselineName: no store, a store, published, workspace', () => {
   expect(defaultBaselineName(named({ variant: 'published' }))).toBe('checkout.json');
   expect(defaultBaselineName(named({ store: 'se', variant: 'workspace' }))).toBe('checkout.se.workspace.json');
   expect(defaultBaselineName(named({ variant: 'workspace' }))).toBe('checkout.workspace.json');
+});
+
+test('defaultBaselineName refuses names that could leave the folder', () => {
+  for (const scenario of ['../../x', 'a/b', 'a\\b', '..', '.hidden', 'a\0b']) {
+    expect(() => defaultBaselineName(named({ scenario }))).toThrow('Give the baseline path');
+  }
+  expect(() => defaultBaselineName(named({ store: '../s' }))).toThrow('Give the baseline path');
+  expect(() => defaultBaselineName(named({ store: 'a/b' }))).toThrow('Give the baseline path');
+  expect(() => defaultBaselineName(named({ variant: 'v/w' }))).toThrow('Give the baseline path');
+  expect(() => defaultBaselineName(named({ variant: 'Bad' }))).toThrow('Give the baseline path');
+  expect(defaultBaselineName(named({ scenario: 'checkout.yml', store: 'eu', variant: 'workspace' }))).toBe('checkout.eu.workspace.json');
+});
+
+test('baseline save with a crafted scenario name exits 2 and writes nothing outside the folder', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const work = join(root, 'work');
+  await mkdir(work);
+  const record = join(work, 'run.jsonl');
+  const records = makeRun(['page_view']);
+  records.run.scenario = '../../escape';
+  await writeFile(record, [records.run, ...records.consentEpochs, ...records.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  expect((await readRun(record)).run.scenario).toBe('../../escape');
+  const before = process.cwd();
+  process.chdir(work);
+  try {
+    const err: string[] = [];
+    expect(await main(['baseline', 'save', record], { stdout: () => {}, stderr: (t) => err.push(t) })).toBe(2);
+    expect(err.join('')).not.toContain('escape');
+    expect(await readdir(root)).toEqual(['work']);
+    expect(await readdir(work)).toEqual(['run.jsonl']);
+  } finally {
+    process.chdir(before);
+  }
 });
 
 test('a suite cell record of schema version 3 has no store, so it needs an explicit path', () => {

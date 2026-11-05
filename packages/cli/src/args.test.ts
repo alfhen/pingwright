@@ -47,7 +47,9 @@ test('run defaults', () => {
 test('other commands', () => {
   expect(parseCli(['--version'])).toEqual({ command: 'version' });
   expect(parseCli(['install-browser'])).toEqual({ command: 'install-browser' });
-  expect(parseCli(['init'])).toEqual({ command: 'init' });
+  expect(parseCli(['init'])).toEqual({ command: 'init', json: false });
+  expect(parseCli(['init', '--json'])).toEqual({ command: 'init', json: true });
+  expect(() => parseCli(['init', '--site', 'https://x.example'])).toThrow('init does not take --site');
   expect(() => parseCli(['init', 'x'])).toThrow('init takes no arguments');
   expect(parseCli([])).toEqual({ command: 'help' });
   expect(parseCli(['run', '--help'])).toEqual({ command: 'help', topic: 'run' });

@@ -8,17 +8,18 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- J07 -->
 
-<!-- Z07 -->
+- Added the built-in check `consentModeSetup`. It warns when a Google hit shows a Consent Mode signal that was never set (`gcd` letter `l`), for example a default without `ad_user_data` and `ad_personalization`. It is `warn` by default and `options.builtins.consentModeSetup: fail` makes it fail the run.
 
-<!-- K07 -->
+- `baseline save` refuses a scenario, store or variant name that could write outside `tagreeve/baselines/`. It exits 2 and asks for an explicit path (#1069).
 
-<!-- I07 -->
+- `tagreeve init` writes a starter `tagreeve/config.yml` when none exists (#1086). `init --json` prints `{ "items": [...] }`, and any other option is a usage error (#1051). A failed `init` names the relative path, keeps the lines already printed and exits 2 (#1048).
 
 - A project config without `configSchemaVersion` now says which line to add (#1085). `configSchemaVersion: 1` is in the README and the 0.6.0-rc.1 notes below.
 
 - The old-runs notice, for `run` and `suite`, names the real folder. The `suite` notice prints after the payment gates, and the suite site, folder and test-payment errors now add the help hint.
 
-<!-- M14 -->
+- Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
+- Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
 
 <!-- M15 -->
 
@@ -72,7 +73,7 @@ Release candidate. Install it with `npm i -g tagreeve@next`.
 
 - A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
-A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that moves to another host before the input count is reported gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
+A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that has gone, or is no longer served from the card host or at the path of the field, when the input is checked gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
 
 - A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
 

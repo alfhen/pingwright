@@ -15,9 +15,9 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 
    On amd64 the command prints Google's image reference and builds nothing. Pull that reference with `docker pull`. Without the pull, the first run exits 2 because the image is missing.
 
-   When a `tagreeve-sgtm` image is missing, the message lists the `tagreeve-sgtm` tags that exist on your machine, or says `none`. After an upgrade you see the old tag there and need the new one. `suite --server-container` checks the image once, before any scenario starts, and exits 2 if it is missing.
-
    On Apple silicon (arm64), Google's image is amd64 only, so the command rebuilds it for arm64 in your own Docker. The image tag holds the Tagreeve version, so run the command again after each Tagreeve upgrade. Tagreeve never pushes an image.
+
+   When the `tagreeve-sgtm:<version>` image that the build command makes on arm64 is missing, the message lists the `tagreeve-sgtm` tags that exist on your machine, or says `none`. After an upgrade you see the old tag there and need the new one. On amd64 the message has no list, and it has none when `docker image ls` fails. `suite --server-container` checks the image once, before any scenario starts, and exits 2 if it is missing.
 3. Get the container config. In the Google Tag Manager admin, open your server container, then Admin, then Container settings, then "Manually provision tagging server". The page shows a long config string. Copy it. Below, `<container-config>` stands for that string.
 4. Save the config to a file that only you can read, in a folder outside any repository. A folder under your home directory works:
 
@@ -51,28 +51,34 @@ The container is opt-in. A run without `--server-container` never looks for Dock
 
 ## Test an unpublished workspace
 
-The config from step 3 makes the container serve the published version. To test a server workspace that is not published, use a config built from that workspace's preview environment. Both configs are the base64 of one string:
+The config from step 3 makes the container serve the published version. To test a server workspace that is not published, use a config built from that workspace's preview environment. Both configs are the base64 of a string of the same form:
 
-| Config | String before base64 |
-| --- | --- |
-| Live container | `id=GTM-PWTEST1&env=<env id>&auth=<auth>` |
-| Workspace preview | `id=GTM-PWTEST1&env=<env id>&auth=<auth>` |
+| Config | String before base64 | Where `<env id>` and `<auth>` come from |
+| --- | --- | --- |
+| Live container | `id=GTM-PWTEST1&env=<env id>&auth=<auth>` | Inside the config from step 3. You do not decode or build it: use that config as it is. |
+| Workspace preview | `id=GTM-PWTEST1&env=<env id>&auth=<auth>` | The workspace's preview environment. You build this string by hand. |
 
-For the live container, `env` and `auth` come from the "Manually provision tagging server" page. For a workspace, they come from its preview environment, so `<env id>` and `<auth>` differ from the live ones. The preview environment must exist. A quick preview on the workspace in Tag Manager creates it.
+The values for a workspace differ from the live ones. The preview environment must exist. A quick preview on the workspace in Tag Manager creates it.
 
 The workspace's preview URL, or its share-preview link, holds both values. The `gtm_preview` parameter is `env-<n>`: `<env id>` is the number `<n>`, as in the live string. The `gtm_auth` parameter is `<auth>`. Treat the URL as a secret too.
 
 Build the config without putting `<auth>` in a command line, where your shell keeps it:
 
-1. In an editor, write the plain string from the table into `plain.txt`, in a folder outside any repository. Set its mode to 0600.
+1. Write the plain string from the table into a file that only you can read, in a folder outside any repository:
+
+   ```bash
+   (umask 077; cat > ~/.config/tagreeve/plain.txt)
+   ```
+
+   Paste the string, press Enter, then press Ctrl-D. Do not open the file in an editor, which can leave swap or backup files that keep the auth value.
 2. Encode it into the config file:
 
    ```bash
-   (umask 077; tr -d '\r\n' < plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt)
+   (umask 077; tr -d '\r\n' < ~/.config/tagreeve/plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt)
    ```
 
-   The `tr` drops the editor's final newline, which would otherwise become part of the auth value. On Linux, use `base64 -w0` so the output is one line.
-3. Delete `plain.txt`.
+   The `tr` drops the final newline, which would otherwise become part of the auth value. On Linux, use `base64 -w0` so the output is one line.
+3. Delete `plain.txt`, and any swap or backup file next to it (for example `.plain.txt.swp` or `plain.txt~`).
 
 Pass the config file with `--server-container-config`, as in step 6. Keep it as secret as in step 4: mode 0600, outside any repository. Tagreeve gives the config to the container as it is, so the run serves the workspace build.
 
@@ -102,7 +108,7 @@ Server container: image ok; 7 vendor calls, 5 linked exactly, 1 probable, 1 unli
 
 The report gives each server vendor its own row, for example `Google Ads (google-ads), sent by the server container`. Each call in a row is placed in the consent epoch of the browser hit it is linked to, so one row can span several epochs. Calls with no link are in an unlinked column after the last epoch. Notes on a result tell you how far to trust that link:
 
-- `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not proven. A probable link can warn but cannot fail a run. A client ID link is exact only when the call has the same client ID and event name as one browser hit whose request to the container was still waiting for its answer. That needs a container that answers after its tags send. If an earlier browser hit with the same client ID and event name was sent before the call, answered or not, the link stays probable. A container that answers first never gives an exact link.
+- `serverSendProbableLink`: the call was linked to a browser hit by a value both hold, such as a client ID, and not proven. A probable link can warn but cannot fail a run. A client ID link is exact only when the call has the same client ID and event name as one browser hit whose request to the container was still waiting for its answer. That needs a container that answers after its tags send. If another browser hit with the same client ID and event name was sent before the call, answered or not, the link stays probable. A container that answers first does not give an exact link in practice: the rule gives one only when the call arrives before Tagreeve sees the answer.
 - `serverSendUnlinked`: no browser hit was found for the call. A check that depends on consent cannot judge it, so that check warns.
 
 A rule that should judge only the browser, or only the container, takes `sentBy: browser` or `sentBy: server`. A browser-only `mustNot` on a Google host then ignores the container's own calls. See [Rules by sender](../cli.md#rules-by-sender).

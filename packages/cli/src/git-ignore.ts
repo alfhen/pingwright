@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 const GIT_TIMEOUT_MS = 5000;
+const PROBE_FILE = 'probe.jsonl';
 
 async function nearestExistingDir(path: string): Promise<string> {
   let dir = resolve(path);
@@ -34,9 +35,8 @@ export type IgnoreStatus = 'ignored' | 'unignored' | 'unknown';
 export async function gitIgnoreStatus(path: string): Promise<IgnoreStatus> {
   const absolute = resolve(path);
   const existing = await nearestExistingDir(absolute);
-  // A folder that does not exist yet is probed through a file inside it, so a "dir/" rule still matches.
-  const probe = absolute === existing ? absolute : join(absolute, 'probe');
-  const code = await checkIgnoreExit(existing, probe);
+  // Probe a file inside the folder: "dir/**" and "*.jsonl" rules match the files, not the folder, and a "dir/" rule matches a folder that does not exist yet.
+  const code = await checkIgnoreExit(existing, join(absolute, PROBE_FILE));
   return code === 0 ? 'ignored' : code === 1 ? 'unignored' : 'unknown';
 }
 
