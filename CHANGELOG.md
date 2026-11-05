@@ -29,7 +29,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- C07 -->
 
-<!-- U07 -->
+- The `--json` summary has `dataLayer`: the shape of each push per step, event and frame, with key paths and types, array indexes as `[*]` and no values. A key or event name that looks like a value reads `(other)`. The text summary has one `dataLayer:` line with the push and event counts (#928).
 
 <!-- M12 -->
 

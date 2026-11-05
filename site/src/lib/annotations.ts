@@ -25,6 +25,12 @@ export const ANNOT: Annotation[] = [
     lines: ['  sgtm: (no event) x1'],
   },
   {
+    key: 'datalayer',
+    title: 'dataLayer',
+    body: 'How many pushes the page made to its dataLayer and which events. The key paths of each push are in the --json summary, without values.',
+    lines: ['dataLayer: 6 pushes, 3 events (add_to_cart, page_view, view_item); shapes in --json'],
+  },
+  {
     key: 'epochs',
     title: 'Consent epochs',
     body: 'The periods of one consent state in the run. This run never answered the banner, so it ends undecided.',
