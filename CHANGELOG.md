@@ -25,7 +25,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- M20 -->
 
-<!-- W07 -->
+- The run record now holds web tag reports. A page binding, `tagreeveTagReport`, receives what the Tagreeve tag reporter template sends: for each event, the status of each tag. A bad report becomes an invalid report with an error class and no body. `Run.containerVersions` is set from the reports, and `Request.frame` says which frame sent a request. The run waits up to 2.5 s at the end for late reports. The fixture container has an opt-in reporter on `/container/tags`.
 
 <!-- C07 -->
 
