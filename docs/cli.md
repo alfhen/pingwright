@@ -514,7 +514,7 @@ The config never overrides a scenario. A scenario's own option wins, and a list 
 
 `serverHosts` says which hosts are your server. It does not turn server mode on. Server mode still comes from `--network server` or a scenario's `network: server`. A scenario with `network: server` and no `serverHosts` takes the hosts from the config.
 
-The config is plain YAML. An anchor, an alias, a tag (such as `!!str`), a merge key (`<<`) or a key that is not a plain string exits 2 with `<file>: line <n>: anchors, aliases, tags and merge keys are not allowed in the project config`. A YAML syntax error exits 2 with `<file>: line <n>: not valid YAML`. Neither message holds any text from the file.
+The config is plain YAML. An anchor, an alias, a tag (such as `!!str`), a merge key (`<<`) or a key that is not a plain string (a quoted or block-scalar key is not) exits 2 with `<file>: line <n>: anchors, aliases, tags and merge keys are not allowed in the project config`. A YAML syntax error, or a second YAML document, exits 2 with `<file>: line <n>: not valid YAML`. Neither message holds any text from the file.
 
 The config cannot widen what a run may do, and it never holds a secret. These keys exit 2, at the top level and in `options`: `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment` and `gtmOverride`. So does any key that is not in the table. The error names the file, the key and the line, and never the value:
 
