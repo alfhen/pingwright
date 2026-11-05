@@ -117,7 +117,7 @@ Issues still open that you can meet:
 - A default lookup, such as `tagreeve/autoconsent`, ignores a filesystem error and skips a symlinked file without a message. The run goes on without your rules (#1040).
 - `unloadGap` can miss a real gap. A push that a frame sends after its own navigation started is grouped with the next document, so a hit from that document covers it (#958).
 - A `wait` step calls the page for its list of blocking controls with no time limit. On a busy page the step can run past its timeout or hang before it reports (#989).
-- `init` prints Node's error with the absolute path and does not say what it did (#1048). `init --json` exits 0 with text, not JSON (#1051). The old-runs notice prints a literal `<date>` instead of the folder (#971).
+- `init` prints Node's error with the absolute path and does not say what it did (#1048). `init --json` exits 0 with text, not JSON (#1051). The `suite` old-runs notice prints a literal `<date>` instead of the folder (#971). `run` still does.
 - `network: stub` and `server` mode can still let a hit reach a real vendor account, for an unknown destination in `stub` and for a hosted `serverHosts` host in `server`.
 - `baseline save` does not check the scenario or variant in a record. A shared or hand-edited record with a name like `../../x` makes it write outside `tagreeve/baselines/`. Read a record from someone else before you save a baseline from it (#1069).
 - Records keep the full flag detail, including query values. Do not share a record from a page that sends an identifier in a query.
