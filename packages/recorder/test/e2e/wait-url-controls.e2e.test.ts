@@ -56,17 +56,44 @@ test('with no blocking control the message is the plain one', async () => {
   expect(error).not.toContain('Blocking controls');
 });
 
-test('each signal is read from the real page and no value, placeholder or email is printed', async () => {
-  let cityValue = '';
-  let regionValue = '';
+test('each signal is read from the real page and no value, placeholder, error text or email is printed', async () => {
+  const values: Record<string, string> = {};
+  let cityMessage = '';
   const error = await failureOf('/terms-fields', async (page) => {
-    cityValue = await page.inputValue('[name=city]');
-    regionValue = await page.inputValue('[name=region]');
+    for (const name of ['email', 'city', 'region', 'postcode', 'street', 'state', 'suburb', 'town']) values[name] = await page.inputValue(`[name=${name}]`);
+    cityMessage = await page.$eval('[name=city]', (e) => (e as HTMLInputElement).validationMessage);
   });
-  expect(cityValue).toBe('Fakeville');
-  expect(regionValue).toBe('Fakeregion');
+  expect(values).toEqual({
+    email: FAKE_EMAIL,
+    city: 'Fakeville',
+    region: 'Fakeregion',
+    postcode: 'Fakepost',
+    street: 'Fakestreet',
+    state: 'Fakestate',
+    suburb: 'Fakesuburb',
+    town: 'Faketown',
+  });
+  expect(cityMessage).not.toBe('');
+  expect(error).not.toContain(cityMessage);
   expect(error).toContain(
-    'Blocking controls: text "Full name" (invalid), text "City" (invalid), text "Region" (aria-invalid), text "promo_code" (invalid), checkbox "Send me the newsletter" (required, not ticked), checkbox "Accept the privacy policy" (required, not ticked), select "Country" (invalid).',
+    'Blocking controls: email "Email" (aria-invalid), text "City" (invalid), text "Region" (aria-invalid), text "Postcode" (invalid), text "Street" (aria-invalid), checkbox "Send me the newsletter" (required, not ticked), text "State" (invalid), text "Suburb" (invalid), text "Town" (invalid), checkbox "I accept the terms" (required, not ticked).',
   );
-  for (const secret of ['Fakeville', 'Fakeregion', 'Your city', 'Your region', 'is invalid', 'is not a region', 'Choose a country', 'Fakeland', 'Nickname', 'token']) expect(error).not.toContain(secret);
+  const forbidden = [
+    ...Object.values(values),
+    'Your city',
+    'Your region',
+    'Fakeville is invalid',
+    'Fakeregion is not a region',
+    'Fakepost is wrong',
+    'Fakestreet is rejected',
+    'Fakenews is required',
+    'Fakenews is wrong',
+    'Fakestate is unknown',
+    'Fakesuburb is unknown',
+    'Faketown is invalid',
+    'Nickname',
+    'Disabled terms',
+    'token',
+  ];
+  for (const secret of forbidden) expect(error).not.toContain(secret);
 });

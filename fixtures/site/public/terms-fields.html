@@ -7,14 +7,16 @@
 <body>
 <h1>Pay</h1>
 <form id="pay-form" action="/thank-you" method="get">
-  <label>Email <input id="email" name="email" type="email" value="pw-fixture@example.com"></label><br>
-  <label>Full name <input name="full_name" type="text" required></label><br>
+  <label>Email <input id="email" name="email" type="email" value="pw-fixture@example.com" aria-invalid="true"></label><br>
   <label>City <input name="city" type="text" pattern="[0-9]+" value="Fakeville" placeholder="Your city"> <span role="alert">Fakeville is invalid</span></label><br>
-  <label>Region <input id="region" name="region" type="text" value="Fakeregion" placeholder="Your region" aria-invalid="true" aria-describedby="region-error"></label> <label id="region-error" class="error" for="region">Fakeregion is not a region</label><br>
-  <input name="promo_code" type="text" required><br>
-  <input type="checkbox" name="news" aria-required="true" aria-labelledby="news-text"> <span id="news-text">Send me the newsletter</span><br>
-  <input type="checkbox" name="privacy" required aria-label="Accept the privacy policy"><br>
-  <label>Country <select name="country" required><option value="">Choose a country</option><option value="xx">Fakeland</option></select></label><br>
+  <label>Region <input id="region" name="region" type="text" value="Fakeregion" placeholder="Your region" aria-invalid="true" aria-describedby="region-error"> <span id="region-error">Fakeregion is not a region</span></label><br>
+  <label>Postcode <input name="postcode" type="text" pattern="[0-9]+" value="Fakepost"> <span class="error">Fakepost is wrong</span></label><br>
+  <label>Street <input name="street" type="text" value="Fakestreet" aria-invalid="true" aria-errormessage="street-error"> <span id="street-error">Fakestreet is rejected</span></label><br>
+  <input type="checkbox" name="news" aria-required="true" aria-labelledby="news-text news-error" aria-errormessage="news-error"> <span id="news-text">Send me the newsletter <span role="alert">Fakenews is required</span></span> <span id="news-error">Fakenews is wrong</span><br>
+  <label>State <input name="state" type="text" pattern="[0-9]+" value="Fakestate"> <output>Fakestate is unknown</output></label><br>
+  <label>Suburb <input name="suburb" type="text" pattern="[0-9]+" value="Fakesuburb"> <span role="status">Fakesuburb is unknown</span></label><br>
+  <label>Town <input name="town" type="text" pattern="[0-9]+" value="Faketown"> <span class="text-danger">Faketown is invalid</span></label><br>
+  <input type="checkbox" id="terms" name="accept_terms" required aria-describedby="terms-label"> <label id="terms-label" for="terms">I accept the terms</label><br>
   <label>Nickname <input name="nickname" type="text" required disabled></label><br>
   <label><input type="checkbox" name="disabled_terms" required disabled> Disabled terms</label><br>
   <input name="token" type="hidden" aria-invalid="true">

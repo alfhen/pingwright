@@ -133,7 +133,12 @@ export async function timeoutMessage(page: Page, firstLine: string, requested?: 
   }
 }
 
-type BlockReason = 'required, not ticked' | 'invalid' | 'aria-invalid';
+const BLOCK_REASONS = ['required, not ticked', 'invalid', 'aria-invalid'] as const;
+type BlockReason = (typeof BLOCK_REASONS)[number];
+
+const INPUT_TYPES = ['checkbox', 'color', 'date', 'datetime-local', 'email', 'file', 'month', 'number', 'password', 'radio', 'range', 'search', 'tel', 'text', 'time', 'url', 'week'];
+const WIDGET_ROLES = ['checkbox', 'combobox', 'listbox', 'radio', 'radiogroup', 'searchbox', 'slider', 'spinbutton', 'switch', 'textbox'];
+const KINDS: readonly string[] = [...INPUT_TYPES, ...WIDGET_ROLES, 'select', 'textarea'];
 
 interface BlockingControl {
   kind: string;
@@ -141,20 +146,26 @@ interface BlockingControl {
   reason: BlockReason;
 }
 
-/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. */
-function readBlockingControls(): BlockingControl[] {
+/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. Clones nothing, so no page code runs and no image loads. */
+function readBlockingControls(max: number): BlockingControl[] {
   const found: BlockingControl[] = [];
-  const validationText = 'input, select, textarea, option, [role="alert"], [aria-live], [aria-invalid="true"], [aria-errormessage], .error, .invalid, .error-message';
+  const validationText =
+    'input, select, textarea, option, script, style, output, [role="alert"], [role="status"], [aria-live], [aria-invalid="true"], [aria-errormessage], .error, .invalid, .error-message, .invalid-feedback, .field-error, .text-danger, .field__message--error';
   const messageIds = new Set<string>();
+  const describedIds = new Set<string>();
   for (const holder of document.querySelectorAll('[aria-errormessage], [aria-describedby]')) {
-    for (const id of `${holder.getAttribute('aria-errormessage') ?? ''} ${holder.getAttribute('aria-describedby') ?? ''}`.split(/\s+/)) if (id) messageIds.add(id);
+    for (const id of (holder.getAttribute('aria-errormessage') ?? '').split(/\s+/)) if (id) messageIds.add(id);
+    for (const id of (holder.getAttribute('aria-describedby') ?? '').split(/\s+/)) if (id) describedIds.add(id);
   }
+  const isMessage = (n: Element) => n.matches(validationText) || messageIds.has(n.id) || describedIds.has(n.id);
   const cleanText = (source: Element): string => {
-    if (messageIds.has(source.id) || source.matches(validationText)) return '';
-    const copy = source.cloneNode(true) as HTMLElement;
-    copy.querySelectorAll(validationText).forEach((n) => n.remove());
-    copy.querySelectorAll('[id]').forEach((n) => messageIds.has(n.id) && n.remove());
-    return copy.textContent ?? '';
+    if (messageIds.has(source.id)) return '';
+    const walker = document.createTreeWalker(source, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && isMessage(n as Element) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
+    let text = '';
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
+    return text;
   };
   const nameOf = (el: Element): string => {
     const aria = el.getAttribute('aria-label');
@@ -168,13 +179,14 @@ function readBlockingControls(): BlockingControl[] {
           return source ? cleanText(source) : '';
         })
         .join(' ')
+        .replace(/\s+/g, ' ')
         .trim();
       if (text) return text;
     }
     const labels = (el as HTMLInputElement).labels;
     if (labels && labels.length > 0) {
       const text = [...labels]
-        .map(cleanText)
+        .map((label) => cleanText(label))
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim();
@@ -193,7 +205,7 @@ function readBlockingControls(): BlockingControl[] {
     if (!reason) continue;
     const kind = el instanceof HTMLInputElement ? el.type : (el.getAttribute('role') ?? el.tagName.toLowerCase());
     found.push({ kind, name: nameOf(el), reason });
-    if (found.length >= 10) break;
+    if (found.length >= max) break;
   }
   return found;
 }
@@ -214,10 +226,12 @@ export async function blockingControls(context: BrowserContext): Promise<string[
   const listed: string[] = [];
   for (const page of context.pages()) {
     try {
-      const controls = await withDeadline(page.evaluate(readBlockingControls), DIAGNOSTIC_DEADLINE_MS);
+      const controls = await withDeadline(page.evaluate(readBlockingControls, MAX_LISTED), DIAGNOSTIC_DEADLINE_MS);
       for (const c of controls) {
+        if (!BLOCK_REASONS.includes(c.reason)) continue;
+        const kind = KINDS.includes(c.kind) ? c.kind : 'control';
         const name = visibleName(String(c.name));
-        listed.push(`${c.kind}${name ? ` "${name}"` : ''} (${c.reason})`);
+        listed.push(`${kind}${name ? ` "${name}"` : ''} (${c.reason})`);
       }
     } catch {}
     if (listed.length >= MAX_LISTED) break;

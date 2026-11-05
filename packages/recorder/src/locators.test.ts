@@ -225,9 +225,21 @@ describe('blockingControls', () => {
     expect(out).toEqual(['text "(hidden)" (invalid)']);
   });
 
-  test('prints no value, placeholder or error text that comes with a control', async () => {
-    const out = await blockingControls(contextOf([{ kind: 'text', name: 'City', reason: 'invalid', value: 'Fakeville', placeholder: 'Your city', error: 'Enter a city' }]));
-    expect(out).toEqual(['text "City" (invalid)']);
+  test('prints a kind only from the allowlist and drops an unknown reason', async () => {
+    const out = await blockingControls(
+      contextOf([
+        { kind: 'x-secret-token', name: 'City', reason: 'invalid' },
+        { kind: 'switch', name: 'Newsletter', reason: 'aria-invalid' },
+        { kind: 'text', name: 'Free text', reason: 'Fakeville is invalid' },
+      ]),
+    );
+    expect(out).toEqual(['control "City" (invalid)', 'switch "Newsletter" (aria-invalid)']);
+  });
+
+  test('asks the page for at most MAX_LISTED controls', async () => {
+    const evaluate = vi.fn(() => Promise.resolve([]));
+    await blockingControls({ pages: () => [{ evaluate }] } as never);
+    expect(evaluate).toHaveBeenCalledWith(expect.any(Function), 10);
   });
 
   test('leaves out the name when there is none', async () => {

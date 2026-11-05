@@ -20,7 +20,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- M14 -->
 
-<!-- M15 -->
+- A `wait` timeout message no longer holds error text from `role=status`, `<output>` or the common error classes, and a terms checkbox whose label is its own `aria-describedby` target keeps its visible name.
 
 <!-- M20 -->
 
