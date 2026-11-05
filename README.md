@@ -172,6 +172,7 @@ options:
 - `cookie` checks which cookies were set, by name, before or after consent. In `stub` mode a stubbed endpoint sets no cookies, so use `--network server` with `options.serverHosts` to see the cookies of a server container.
 - `deniedIdentifiers` is a built-in check. It fails when a hit carries `user_id`, `uid`, a hashed `user_data` field or another identifier while the matching consent signal is denied. It is `fail` by default. Set it to `warn` to keep the old exit code while you fix the cause.
 - `earlyIdentifiers` is a built-in check. It warns when a hit sent before the first consent answer carries an identifier and its consent signal is unknown, for example a hashed email on a page with no Consent Mode default. It is `warn` by default, so the exit code stays the same. Set it to `fail` to fail the run.
+- `consentModeSetup` is a built-in check. It warns when a Google hit shows a Consent Mode signal that was never set, for example a default without `ad_user_data` and `ad_personalization`. It reads the `gcd` value of each hit. It is `warn` by default. Set it to `fail` to fail the run.
 - `click` and `wait` take `{ role, name }` or `{ any: [selectors] }`, so a theme change does not break every scenario. `select` chooses an option of a `<select>` by value, then by label, and reads it back.
 
 ## Tracker list
