@@ -71,7 +71,7 @@ expect:
     - { vendor: ga4, event: purchase, after: checkout }
 ```
 
-If your store shows no terms checkbox, leave that click out. Tagreeve does not tick it for you, so a store that needs it fails at Pay without the click. The checkbox name differs per store. A blocked Pay click shows up as a `wait` timeout that ends with `Blocking controls: checkbox "..." (required, not ticked)`.
+If your store shows no terms checkbox, leave that click out. Tagreeve does not tick it for you, so a store that needs it fails at Pay without the click. The checkbox name differs per store. A blocked Pay click shows up as a `wait` timeout that ends with `Blocking controls: checkbox "..." (required, not ticked)`. The name there is the control's `aria-label`, `name` or `id`, not the label text you see, for example `accept_terms`.
 
 Wallets (Shop Pay, Google Pay, PayPal), live payment methods and 3-D Secure challenges stay handoff steps. The delivery country is set explicitly, as above.
 

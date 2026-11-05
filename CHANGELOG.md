@@ -21,7 +21,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 - Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
 - Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
 
-<!-- M15 -->
+- Fix: a `wait` timeout message never holds error text in a blocking control's name. Every blocking control is named by its `aria-label`, `name` or `id`, never by page text.
 
 - A test payment fill that loses its card frame to a navigation reports "the card frame is gone or not served from the card host", not a Playwright message. The input count reason keeps the path of the document that was checked.
 
