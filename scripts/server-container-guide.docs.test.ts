@@ -25,7 +25,10 @@ export function unsafeFileTargets(markdown: string): string[] {
   snippets.push(...[...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]!));
   const targets: string[] = [];
   for (const snippet of snippets) {
-    const text = snippet.replace(/\\\n/g, ' ').replace(/\d*>&(?:\d+|-)/g, ' ');
+    const text = snippet
+      .replace(/\\\n/g, ' ')
+      .replace(/\d*>&\s*(?:\d+|-)(?=[\s;|&)]|$)/g, ' ')
+      .replace(/(?<!<)<(?!<)\s*[^\s;|&)<>]+/g, ' ');
     for (const m of text.matchAll(/(?:^|[^<>])>[>|]?\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
     for (const m of text.matchAll(/(?:^|[\s;|(])>&\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
     for (const m of text.matchAll(/\btee\s+([^;|&)<>\n]+)/g)) {
@@ -37,7 +40,8 @@ export function unsafeFileTargets(markdown: string): string[] {
       targets.push(...words.slice(1));
     }
   }
-  return targets.filter((t) => !allowedTarget.test(t) || /(^|\/)\.\.(\/|$)/.test(t));
+  const unquoted = targets.map((t) => t.replace(/^(["'])(.*)\1$/, '$2'));
+  return unquoted.filter((t) => !allowedTarget.test(t) || /(^|\/)\.\.(\/|$)/.test(t));
 }
 
 const base64Like = /[A-Za-z0-9+/=_-]{40,}/;
@@ -99,6 +103,10 @@ test.each([
   ['a /../ escape under home', '```bash\ncat > ~/../work/x\n```', ['~/../work/x']],
   ['a $HOME target with /../', '```bash\ncat > $HOME/a/../../x\n```', ['$HOME/a/../../x']],
   ['home, /dev/null and stderr redirects', '```bash\ncat > ~/a 2>/dev/null\ntee $HOME/b < ~/a > /dev/null\n```', []],
+  ['spaced descriptor redirects', '```bash\ncat > ~/a >& 2\ncat >& -\n```', []],
+  ['a tee target after an input redirect', '```bash\ntee < ~/plain.txt sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['a quoted home target', '```bash\ntee "$HOME/config.txt"\n```', []],
+  ['a quoted relative target', '```bash\ncat > "out.txt"\n```', ['out.txt']],
   ['home targets and stderr redirects', '```bash\ncat > ~/a 2>&1\nchmod 600 ~/a\n```', []],
 ])('the target check catches %s', (_name, markdown, expected) => {
   expect(unsafeFileTargets(markdown)).toEqual(expected);
