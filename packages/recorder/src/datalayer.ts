@@ -50,13 +50,17 @@ export const dataLayerInitScript = `(() => {
   };
   const hook = (layer) => {
     if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
-    Object.defineProperty(layer, '__tagreeveHooked', { value: true });
+    try {
+      Object.defineProperty(layer, '__tagreeveHooked', { value: true });
+    } catch {
+      return;
+    }
     // Each entry runs its own implementation, so a saved push reaches the same one whenever it is called, in any
     // unwrap order. The first entry that sees an item reports it, so a push is recorded once however wrappers call
     // each other. Primitives cannot be tracked and are reported at the outermost call only.
     const seen = new WeakSet();
     let depth = 0;
-    const entryFor = (impl) =>
+    const entryFor = (impl, base) =>
       function (...items) {
         const fresh = items.filter((item) => {
           if (item !== null && (typeof item === 'object' || typeof item === 'function')) {
@@ -72,27 +76,34 @@ export const dataLayerInitScript = `(() => {
           return impl.apply(this, items);
         } finally {
           depth--;
+          if (base) for (const item of items) if (item !== null && (typeof item === 'object' || typeof item === 'function')) seen.delete(item);
           for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
         }
       };
     const known = new Set();
-    let top = entryFor(layer.push);
+    let top = entryFor(layer.push, true);
     known.add(top);
-    Object.defineProperty(layer, 'push', {
-      configurable: true,
-      enumerable: false,
-      get: () => top,
-      set: (fn) => {
-        if (typeof fn !== 'function') return;
-        if (!known.has(fn)) {
-          const entry = entryFor(fn);
-          known.add(entry);
-          top = entry;
-          return;
-        }
-        top = fn;
-      },
-    });
+    try {
+      Object.defineProperty(layer, 'push', {
+        configurable: true,
+        enumerable: false,
+        get: () => top,
+        set: (fn) => {
+          if (typeof fn !== 'function') return;
+          if (!known.has(fn)) {
+            const entry = entryFor(fn, false);
+            known.add(entry);
+            top = entry;
+            return;
+          }
+          top = fn;
+        },
+      });
+    } catch {
+      try {
+        layer.push = top;
+      } catch {}
+    }
     for (const item of layer) post({ t: clock(), args: argsOf(item), uid: stampOf(item) });
   };
   let current = window.dataLayer;
