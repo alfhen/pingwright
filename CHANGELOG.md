@@ -8,7 +8,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - **The `dataLayer` hook survives a loader that wraps `push`.** `dataLayer.push` stays exactly the function the page assigned, so identity-guarded installs behave as without Tagreeve. Each push that reaches the array is recorded once, also when the page assigns `Array.prototype.push`. A push that a page wrapper drops without calling through is not recorded, because it never reached the array. `gtmUniqueEventId` is read after the push returns, so an ID a loader sets is no longer null. A page that replaces `window.dataLayer` after a Google loader request gets a `dataLayerReassigned` flag. Pushes to the new array are still recorded.
 
-<!-- Z07 -->
+- Added the built-in check `consentModeSetup`. It warns when a Google hit shows a Consent Mode signal that was never set (`gcd` letter `l`), for example a default without `ad_user_data` and `ad_personalization`. It is `warn` by default and `options.builtins.consentModeSetup: fail` makes it fail the run.
 
 - `baseline save` refuses a scenario, store or variant name that could write outside `tagreeve/baselines/`. It exits 2 and asks for an explicit path (#1069).
 

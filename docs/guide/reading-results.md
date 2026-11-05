@@ -27,8 +27,9 @@ Expectations
        evidence: hit_01M66G9M2S992B5DF1MZ15ZQ07
   PASS builtin: deniedIdentifiers
   PASS builtin: earlyIdentifiers
+  PASS builtin: consentModeSetup
   PASS builtin: possibleRealData
-Result: fail (3 of 6)
+Result: fail (3 of 7)
 Record: tagreeve/runs/2026-11-03/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
@@ -87,6 +88,7 @@ Built-in checks run on every run. You do not write them:
 - `sandboxPageUrl` fails if a vendor received the address of a sandboxed iframe as the page address. The vendor then reports the wrong page. Shopify custom pixels run in such an iframe.
 - `deniedIdentifiers` fails if a hit carries an identifier, such as a user ID or a hashed email, while the matching consent signal is denied. See [deniedIdentifiers](../cli.md#deniedidentifiers). It reads the fields of hits, not the `Cookie` header of a request.
 - `earlyIdentifiers` warns if a hit sent before the first consent answer carries an identifier and its consent signal is unknown. It reads hit fields only, so an identifier that goes out only in a `Cookie` header is left to the cookie rules. It does not change the exit code unless you set it to `fail`. See [earlyIdentifiers](../cli.md#earlyidentifiers).
+- `consentModeSetup` warns if a Google hit shows a Consent Mode signal that was never set, for example a default without `ad_user_data` and `ad_personalization`. It reads the `gcd` value of the hit. See [consentModeSetup](../cli.md#consentmodesetup).
 - `possibleRealData` fails if the record holds an email address, a phone number or a hash that does not belong to the fake identity. A hash is a fixed code made from a value, such as an email address.
 
 The [CLI page](../cli.md) lists the options that change these checks. One of them, `options.builtins`, sets a check to `warn`. The summary then shows `WARN` for it and the exit code stays 0.

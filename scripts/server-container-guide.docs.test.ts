@@ -16,6 +16,8 @@ function tagreeveCommands(markdown: string): string[] {
   return commands;
 }
 
+const allowedTarget = /^(~\/|\$HOME\/|\/dev\/null$)/;
+
 export function unsafeFileTargets(markdown: string): string[] {
   const fence = /(```|~~~)[a-z]*\n([\s\S]*?)\1/g;
   const snippets = [...markdown.matchAll(fence)].map((m) => m[2]!);
@@ -23,16 +25,29 @@ export function unsafeFileTargets(markdown: string): string[] {
   snippets.push(...[...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]!));
   const targets: string[] = [];
   for (const snippet of snippets) {
-    const text = snippet.replace(/\\\n/g, ' ').replace(/\d*>&(?:\d+|-)/g, ' ');
-    for (const m of text.matchAll(/(?:^|[^<>-])>>?\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
-    for (const m of text.matchAll(/(?:^|[\s;|(])>&([^\s;|&)<>]+)/g)) targets.push(m[1]!);
+    const text = snippet
+      .replace(/\\\n/g, ' ')
+      .replace(/\d*>&\s*(?:\d+|-)(?=[\s;|&)]|$)/g, ' ')
+      .replace(/(?<!<)<(?!<)\s*[^\s;|&)<>]+/g, ' ');
+    for (const m of text.matchAll(/(?:^|[^<>])>[>|]?\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
+    for (const m of text.matchAll(/(?:^|[\s;|(])>&\s*([^\s;|&)<>]+)/g)) targets.push(m[1]!);
+    for (const m of text.matchAll(/\btee\s+([^;|&)<>\n]+)/g)) {
+      targets.push(...m[1]!.trim().split(/\s+/).filter((w) => !/^-/.test(w)));
+    }
     for (const m of text.matchAll(/\bchmod\s+([^;|&)\n]+)/g)) {
       const words = m[1]!.trim().split(/\s+/);
       while (words.length && /^(-[RvcfHLP]+|--[a-z-]+(=.*)?)$/.test(words[0]!)) words.shift();
       targets.push(...words.slice(1));
     }
   }
-  return targets.filter((t) => !/^(~\/|\/|\$HOME\/)/.test(t));
+  // The shell expands ~ and $HOME only outside quotes, except $HOME inside double quotes.
+  const unquoted = targets.map((t) => {
+    const m = /^(["'])(.*)\1$/.exec(t);
+    if (!m) return t;
+    if (m[1] === '"' && m[2]!.startsWith('$HOME/')) return m[2]!;
+    return /^[~$]/.test(m[2]!) ? t : m[2]!;
+  });
+  return unquoted.filter((t) => !allowedTarget.test(t) || /(^|\/)\.\.(\/|$)/.test(t));
 }
 
 const base64Like = /[A-Za-z0-9+/=_-]{40,}/;
@@ -69,6 +84,7 @@ test('the config file is saved outside the working directory', () => {
 test('every redirect and chmod target in the guide is under the home folder', () => {
   expect(unsafeFileTargets(guide)).toEqual([]);
   expect(guide).toContain('> ~/.config/tagreeve/sgtm-workspace-config.txt');
+  expect(guide).toContain('> ~/.config/tagreeve/plain.txt');
   expect(guide).toContain('chmod 600 ~/.config/tagreeve/sgtm-config.txt');
 });
 
@@ -83,6 +99,24 @@ test.each([
   ['a tilde fence', '~~~bash\ncat > sgtm-config.txt\n~~~', ['sgtm-config.txt']],
   ['a redirect with >&', '```bash\ncat >&sgtm-config.txt\n```', ['sgtm-config.txt']],
   ['a chmod after a continuation', '```bash\nchmod \\\n  600 sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['a clobber redirect', '```bash\necho x >| out.txt\n```', ['out.txt']],
+  ['a redirect with >& and a space', '```bash\ncat >& sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['an absolute target outside home', '```bash\nbase64 > /tmp/sgtm-workspace-config.txt\n```', ['/tmp/sgtm-workspace-config.txt']],
+  ['an absolute repo target', '```bash\ncat > /repo/checkout/sgtm-config.txt\n```', ['/repo/checkout/sgtm-config.txt']],
+  ['a tee target', '```bash\npbpaste | tee sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['a tee target after a flag', '```bash\npbpaste | tee -a ~/ok.txt out.txt\n```', ['out.txt']],
+  ['a -> redirect', '```bash\ncat -> sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['a /../ escape under home', '```bash\ncat > ~/../work/x\n```', ['~/../work/x']],
+  ['a $HOME target with /../', '```bash\ncat > $HOME/a/../../x\n```', ['$HOME/a/../../x']],
+  ['home, /dev/null and stderr redirects', '```bash\ncat > ~/a 2>/dev/null\ntee $HOME/b < ~/a > /dev/null\n```', []],
+  ['spaced descriptor redirects', '```bash\ncat > ~/a >& 2\ncat >& -\n```', []],
+  ['a tee target after an input redirect', '```bash\ntee < ~/plain.txt sgtm-config.txt\n```', ['sgtm-config.txt']],
+  ['a quoted home target', '```bash\ntee "$HOME/config.txt"\n```', []],
+  ['a double-quoted tilde target', '```bash\ncat > "~/x"\n```', ['"~/x"']],
+  ['a single-quoted tilde target', "```bash\ncat > '~/x'\n```", ["'~/x'"]],
+  ['a single-quoted $HOME target', "```bash\ncat > '$HOME/x'\n```", ["'$HOME/x'"]],
+  ['a quoted tilde tee target', '```bash\ntee "~/sgtm-config.txt"\n```', ['"~/sgtm-config.txt"']],
+  ['a quoted relative target', '```bash\ncat > "out.txt"\n```', ['out.txt']],
   ['home targets and stderr redirects', '```bash\ncat > ~/a 2>&1\nchmod 600 ~/a\n```', []],
 ])('the target check catches %s', (_name, markdown, expected) => {
   expect(unsafeFileTargets(markdown)).toEqual(expected);
@@ -93,9 +127,10 @@ test('the guide explains the workspace preview config with placeholders only', (
   expect(guide).toContain('preview environment');
   expect(guide).toContain('quick preview');
   expect(guide.match(/id=GTM-PWTEST1&env=<env id>&auth=<auth>/g)?.length).toBe(2);
+  expect(guide).toContain('| Where `<env id>` and `<auth>` come from |');
   expect(guide).toContain('gtm_preview');
   expect(guide).toContain('gtm_auth');
-  expect(guide).toContain("tr -d '\\r\\n' < plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt");
+  expect(guide).toContain("tr -d '\\r\\n' < ~/.config/tagreeve/plain.txt | base64 > ~/.config/tagreeve/sgtm-workspace-config.txt");
   expect(guide).toContain('umask 077');
   for (const line of guide.split('\n')) {
     if (/\b(tagreeve|base64|echo|printf)\b/.test(line)) expect(line, line).not.toMatch(/auth=/);
