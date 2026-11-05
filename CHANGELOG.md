@@ -72,7 +72,7 @@ Release candidate. Install it with `npm i -g tagreeve@next`.
 
 - A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
-A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that moves to another host before the input count is reported gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
+A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that has gone, or is no longer served from the card host or at the path of the field, when the input is checked gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
 
 - A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
 
