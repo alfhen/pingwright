@@ -1,4 +1,4 @@
-import { unwrapStapeLoader } from '@tagreeve/decoders';
+import { isValueSegment, unwrapStapeLoader } from '@tagreeve/decoders';
 import { newId, type Flag, type Id, type Request } from '@tagreeve/core';
 import { DEFAULT_DATALAYER, isDataLayerName } from './datalayer.ts';
 
@@ -31,7 +31,7 @@ export function buildDataLayerNotHookedFlag(input: { runId: Id<'run'>; requests:
   });
   const first = misses[0];
   if (!first) return undefined;
-  const shown = isDataLayerName(first.name) ? `"${first.name}"` : '(other)';
+  const shown = isDataLayerName(first.name) && !isValueSegment(first.name) ? `"${first.name}"` : '(other)';
   return {
     type: 'flag',
     id: newId('flag'),

@@ -44,3 +44,15 @@ test('a name that is not an identifier shows as (other)', () => {
   expect(flag?.detail).toContain('(other)');
   expect(flag?.detail).not.toContain('example.test');
 });
+
+test.each([
+  ['a checkout token', 'c0ffee00c0ffee00c0ffee00c0ffee00'],
+  ['an email', 'pw.test@example.test'],
+  ['a Shopify GID', 'gid://shopify/Customer/1234567890'],
+])('the flag detail never holds %s from l=', (_label, value) => {
+  const r = req(`https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1&l=${encodeURIComponent(value)}`);
+  expect(loaderLayerName(r)).toBe(value);
+  const flag = buildDataLayerNotHookedFlag({ runId, requests: [r], hooked: [] });
+  expect(flag?.detail).toContain('(other)');
+  expect(flag?.detail).not.toContain(value);
+});

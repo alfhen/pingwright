@@ -227,7 +227,7 @@ test('dataLayerNames is a short list of identifiers', () => {
   expect(() => parseScenario('start: /\noptions: { dataLayerNames: ["a.b"] }')).toThrow(/dataLayerNames/);
   expect(() => parseScenario(`start: /\noptions: { dataLayerNames: [${'x'.repeat(65)}] }`)).toThrow(/dataLayerNames/);
   expect(parseScenario(`start: /\noptions: { dataLayerNames: [${'x'.repeat(64)}] }`).options.dataLayerNames).toHaveLength(1);
-  for (const unsafe of ['__proto__', 'constructor', 'prototype']) expect(() => parseScenario(`start: /\noptions: { dataLayerNames: [${unsafe}] }`)).toThrow(/dataLayerNames/);
+  for (const unsafe of ['location', 'Shopify', '__proto__', 'constructor', 'prototype']) expect(() => parseScenario(`start: /\noptions: { dataLayerNames: [${unsafe}] }`)).toThrow(/dataLayerNames/);
   const nine = Array.from({ length: 9 }, (_, i) => `n${i}`).join(', ');
   expect(() => parseScenario(`start: /\noptions: { dataLayerNames: [${nine}] }`)).toThrow(/at most|1 to 8/);
   const eight = Array.from({ length: 8 }, (_, i) => `n${i}`).join(', ');

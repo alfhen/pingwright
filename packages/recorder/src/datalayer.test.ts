@@ -139,12 +139,12 @@ test('a layer name that is not an identifier is dropped from the payload', () =>
 
 test('a name is trapped only when absent or a configurable array', () => {
   const page = pageWith(
-    `Object.defineProperty(window, 'fixed', { value: [], configurable: false }); window.Shopify = { theme: 1 }; window.early = [{ event: 'early' }];`,
+    `Object.defineProperty(window, 'fixed', { value: [], configurable: false }); window.early = [{ event: 'early' }];`,
     ['fixed', 'Shopify', 'early', 'location', '__proto__', 'constructor', 'prototype', 'toString'],
   );
   page.run(`early.push({ event: 'late' });`);
   expect(page.sent.map((s) => s.layer)).toEqual(['early', 'early']);
-  expect(page.run('Shopify.theme')).toBe(1);
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify')`)).toBeUndefined();
   expect(page.run(`Object.getOwnPropertyDescriptor(window, 'fixed').value.length`)).toBe(0);
   expect(page.run(`Object.prototype.hasOwnProperty.call(window, 'toString')`)).toBe(false);
 });
@@ -153,4 +153,13 @@ test('names outside the identifier pattern never reach the script', () => {
   const script = dataLayerInitScript(['ok', 'x"; alert(1); "', 'a-b']);
   expect(script).toContain('["dataLayer","ok"]');
   expect(script).not.toContain('alert');
+});
+
+test('Shopify and location are not trapped while absent', () => {
+  expect(dataLayerInitScript(['Shopify', 'location', 'ok'])).toContain('["dataLayer","ok"]');
+  const page = pageWith('', ['Shopify', 'location']);
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify')`)).toBeUndefined();
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'location')`)).toBeUndefined();
+  page.run(`window.Shopify = { theme: 1 };`);
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify').value.theme`)).toBe(1);
 });
