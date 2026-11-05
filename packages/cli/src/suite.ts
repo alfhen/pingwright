@@ -4,7 +4,7 @@ import { readRun, ulid } from '@tagreeve/core';
 import type { TrackerEntry } from '@tagreeve/decoders';
 import { diffRuns, mergeOptions, parseScenario, ScenarioError, type Scenario, type ScenarioOptions } from '@tagreeve/expect';
 import { GtmOverrideError, hasHandoff, hasPayment, normalizeHost, parseTestGtmOrigin, TEST_GTM_ORIGIN_ENV, type GtmOverrideInput, type TestPayment } from '@tagreeve/recorder';
-import type { Network, SuiteArgs } from './args.ts';
+import { UsageError, usageHint, type Network, type SuiteArgs } from './args.ts';
 import { baselineFileName, BaselineError, compareBaseline, readBaseline, type BaselineFile } from './baseline.ts';
 import { DEFAULT_BASELINES, DEFAULT_STORES, defaultScenarioDir, defaultStores, resolveAutoconsentRules, resolveTrackerList, type DefaultUsed } from './defaults.ts';
 import { warnIfNotIgnored } from './git-ignore.ts';
@@ -283,9 +283,18 @@ async function loadStores(path: string | undefined, io: Io): Promise<Store[] | u
 }
 
 export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { run: executeRun }): Promise<number> {
-  if (args.allowTestPayment !== undefined && args.site === undefined && args.stores === undefined) {
-    io.stderr('--allow-test-payment needs --site or --stores on the command line. A default file never supplies the host a test payment runs on.\n');
+  try {
+    return await runSuite(args, io, deps);
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    io.stderr(`${error.message}\n${usageHint(error.command)}\n`);
     return 2;
+  }
+}
+
+async function runSuite(args: SuiteArgs, io: Io, deps: SuiteDeps): Promise<number> {
+  if (args.allowTestPayment !== undefined && args.site === undefined && args.stores === undefined) {
+    throw new UsageError('--allow-test-payment needs --site or --stores on the command line. A default file never supplies the host a test payment runs on.', 'suite');
   }
   const config = await loadConfigOrReport(args.config, io);
   if (!config.ok) return 2;
@@ -293,8 +302,7 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   const defaults: DefaultUsed[] = [];
   const scenarioDir = args.dir ?? (await defaultScenarioDir(defaults));
   if (scenarioDir === undefined) {
-    io.stderr('suite needs a scenario folder: give <dir> or create tagreeve/scenarios.\n');
-    return 2;
+    throw new UsageError('suite needs a scenario folder: give <dir> or create tagreeve/scenarios.', 'suite');
   }
   const trackerListPath = await resolveTrackerList(args.trackerList, defaults);
   const autoconsentRules = await resolveAutoconsentRules(args.autoconsentRules, defaults);
@@ -313,12 +321,10 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   if (site === undefined) {
     storesPath = args.stores ?? (await defaultStores(defaults));
   } else if (configSite !== undefined && (await defaultStores([])) !== undefined) {
-    io.stderr(`${loaded!.path} sets site and ${DEFAULT_STORES} exists. Give --site or --stores to say which one to use.\n`);
-    return 2;
+    throw new UsageError(`${loaded!.path} sets site and ${DEFAULT_STORES} exists. Give --site or --stores to say which one to use.`, 'suite');
   }
   if (site === undefined && storesPath === undefined) {
-    io.stderr('suite needs a site: give --site or --stores, or create tagreeve/stores.json.\n');
-    return 2;
+    throw new UsageError('suite needs a site: give --site or --stores, or create tagreeve/stores.json.', 'suite');
   }
   const stores = await loadStores(storesPath, io);
   if (!stores) return 2;
@@ -351,10 +357,6 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   if (!overrides) return 2;
   warnTestGtmOrigin(io);
   warnTestLoopbackHosted(io);
-  if (args.out === undefined && loaded?.config.out === undefined) {
-    const notice = await oldRunsNotice(process.cwd());
-    if (notice) io.stderr(notice);
-  }
 
   const targets: { store: Store | undefined; site: string }[] = stores.length ? stores.map((store) => ({ store, site: store.site })) : [{ store: undefined, site: site! }];
   const allowedHost = args.allowTestPayment === undefined ? undefined : normalizeHost(args.allowTestPayment);
@@ -362,16 +364,14 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
   const testPayments = new Map<string, TestPayment>();
   if (args.withTestPayment && args.allowTestPayment !== undefined) {
     if (stores.length && scenarios.some((x) => x.payment) && !targets.some((t) => normalizeHost(new URL(t.site).hostname) === allowedHost)) {
-      io.stderr(`--allow-test-payment ${allowedHost}: no store in the stores file has that host.\n`);
-      return 2;
+      throw new UsageError(`--allow-test-payment ${allowedHost}: no store in the stores file has that host.`, 'suite');
     }
     for (const s of scenarios.filter((x) => x.payment)) {
       for (const { store, site } of targets) {
         if (store && normalizeHost(new URL(site).hostname) !== allowedHost) continue;
         const gates = await checkTestPaymentGates(s.parsed, site, args.allowTestPayment);
         if (!gates.ok) {
-          io.stderr(`${s.name}${store ? ` on ${store.name}` : ''}: ${gates.error}\n`);
-          return 2;
+          throw new UsageError(`${s.name}${store ? ` on ${store.name}` : ''}: ${gates.error}`, 'suite');
         }
         if (gates.testPayment) testPayments.set(paymentKey(s.name, store), gates.testPayment);
       }
@@ -408,6 +408,10 @@ export async function suiteCommand(args: SuiteArgs, io: Io, deps: SuiteDeps = { 
 
   const id = `suite_${ulid()}`;
   const outFolder = resolveOutDir({ out: args.out, now: new Date(), label: args.label, base: loaded?.config.out });
+  if (args.out === undefined && loaded?.config.out === undefined) {
+    const notice = await oldRunsNotice(process.cwd(), outFolder);
+    if (notice) io.stderr(notice);
+  }
   await warnIfNotIgnored(outFolder, io.stderr);
   const dir = join(outFolder, id);
   await mkdir(dir, { recursive: true });

@@ -116,6 +116,13 @@ export function createStandIn(env: StandInEnv, options: { readonly socketTimeout
         const request = http.request({ agent, lookup: refuseLookup, method, host: url.hostname, path: url.pathname + url.search, headers }, (res) => {
           const chunks: Buffer[] = [];
           res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('error', reject);
+          res.on('close', () => {
+            if (!res.complete) {
+              secure.destroy();
+              reject(new Error('the response was cut off'));
+            }
+          });
           res.on('end', () => {
             secure.destroy();
             resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') });

@@ -3,8 +3,9 @@ Hits
   sgtm: (no event) x2
   meta: PageView x2, AddToCart x1
   google-ads: page_view x2, view_item x1, add_to_cart x1
+dataLayer: 16 pushes, 8 events (add_to_cart, consent default, consent update, …); shapes in --json
 Consent epochs
-  undecided (3.2 s)
+  undecided (2.5 s)
   denied (to end)
 Flags
   unknownDestination: pixel.adnetwork.example x2 (/unknown-pixel)
@@ -12,18 +13,18 @@ Flags
 Expectations
   FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}
        Expected no matching hits before consent, found 2 matching hits (7 before narrowing).
-       evidence: hit_01M6NMA57QEWCNKK088PNY0QSW, hit_01M6NMA57S2AZHQEP7TQRJG9VW
+       evidence: hit_01M6NWG7C9BYSXY7ED0G07E4DY, hit_01M6NWG7C9BYSXY7ED0G07E4E0
   FAIL mustNot: {"vendor":"meta","in":"epoch(denied)"}
        Expected no matching hits in epoch(denied), found 2 matching hits (3 before narrowing).
-       evidence: hit_01M6NMA57V55H47M9GR9D2VW6B, hit_01M6NMA57X0KJXZK0WNRSPCGC3
+       evidence: hit_01M6NWG7CAFH60RQCMN9EBTK3R, hit_01M6NWG7CAFH60RQCMN9EBTK3W
   PASS builtin: unknownDestination
-       evidence: flg_01M6NMA57YBB4T3GAH13EBGMAZ, flg_01M6NMA57ZA8PYVYCMW7SVJ4G6
+       evidence: flg_01M6NWG7CCEZ9H68NK4ASR14SP, flg_01M6NWG7CCEZ9H68NK4ASR14SQ
   WARN builtin: sandboxPageUrl
        Expected no hit to carry a sandbox URL as its page, found 2: staging.northwind.example/web-pixels@0.0.0-fixture/sandbox/modern/.
-       evidence: hit_01M6NMA57P9M7ECGS2GRSWYEJH, hit_01M6NMA57TB7WM4VGTV43V353A
+       evidence: hit_01M6NWG7C8A3EH7FPQEY3D35CC, hit_01M6NWG7CAFH60RQCMN9EBTK3Q
   PASS builtin: deniedIdentifiers
   PASS builtin: earlyIdentifiers
   PASS builtin: consentModeSetup
   PASS builtin: possibleRealData
 Result: fail (2 of 8) with 1 warning
-Record: runs/run_01M6NM9XRZA4RQV5GHFBW3DFVK.jsonl
+Record: runs/run_01M6NWG156A1MGNRP5RJ84V29T.jsonl

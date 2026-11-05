@@ -45,6 +45,10 @@ test('the Shop Pay hosts match with their purposes', () => {
   expect(purpose('https://otlp-http-production.shopifysvc.com/v1/traces')).toBe('telemetry');
 });
 
+test('monorail-edge keeps its own source ahead of the shopifysvc wildcard', () => {
+  expect(platformHostFor({ url: 'https://monorail-edge.shopifysvc.com/v1/produce' })?.source).toBe('https://shopify.dev/docs/storefronts/headless/hydrogen/analytics/validation');
+});
+
 test('lookalikes of the Shop Pay hosts do not match', () => {
   for (const url of ['https://shopifysvc.com/', 'https://evilshopifysvc.com/', 'https://pay.shopify.com.evil.test/', 'https://js.stripe.com/v3/']) {
     expect(platformHostFor({ url }), url).toBeUndefined();

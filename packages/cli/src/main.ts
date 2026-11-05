@@ -3,6 +3,7 @@ import { helpText, parseCli, UsageError, usageHint } from './args.ts';
 import { baselineCommand } from './baseline.ts';
 import { diffCommand } from './diff.ts';
 import { initCommand } from './init.ts';
+import { templateCommand } from './template.ts';
 import { installBrowser } from './install-browser.ts';
 import { reportCommand } from './report/index.ts';
 import { runCommand, type Io } from './run.ts';
@@ -45,6 +46,8 @@ export async function main(argv: string[], io: Io = processIo): Promise<number> 
         return 0;
       case 'init':
         return await initCommand(io, command.json);
+      case 'template':
+        return templateCommand(io, command.json);
       case 'install-browser':
         return (await installBrowser()) === 0 ? 0 : 2;
       case 'baseline':

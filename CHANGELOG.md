@@ -16,20 +16,20 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - A project config without `configSchemaVersion` now says which line to add (#1085). `configSchemaVersion: 1` is in the README and the 0.6.0-rc.1 notes below.
 
-<!-- M13 -->
+- The old-runs notice, for `run` and `suite`, names the real folder. The `suite` notice prints after the payment gates, and the suite site, folder and test-payment errors now add the help hint.
 
 - Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
 - Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
 
 <!-- M15 -->
 
-<!-- M20 -->
+- A test payment fill that loses its card frame to a navigation reports "the card frame is gone or not served from the card host", not a Playwright message. The input count reason keeps the path of the document that was checked.
 
 <!-- W07 -->
 
-<!-- C07 -->
+- Added `tagreeve template web`. It prints the web tag reporter's GTM template. `--json` prints the template with the setup fields and steps, so an agent can install it with its own GTM access. Tagreeve never calls the GTM API.
 
-<!-- U07 -->
+- The `--json` summary has `dataLayer`: the shape of each push per step, event and frame, with key paths and types, array indexes as `[*]` and no values. A key or event name that looks like a value reads `(other)`. The text summary has one `dataLayer:` line with the push and event counts (#928).
 
 <!-- M12 -->
 

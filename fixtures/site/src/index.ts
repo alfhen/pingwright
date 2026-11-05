@@ -80,6 +80,7 @@ const pages: Record<string, string> = {
   '/meta-early': 'meta-early.html',
   '/meta-early-ids': 'meta-early-ids.html',
   '/consent-mode-hits': 'consent-mode-hits.html',
+  '/datalayer-shapes': 'datalayer-shapes.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',

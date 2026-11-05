@@ -226,29 +226,41 @@ async function fillVerified(element: ElementHandle, field: CardField, cardHost: 
   const tryMs = (): number => Math.max(1, Math.min(FILL_TRY_MS, deadline - Date.now()));
   for (;;) {
     const frame = await frameStillServed(element, cardHost, field);
+    const checkedUrl = frame.url();
     const inputs = frame.locator(field.input).filter({ visible: true });
     const count = await inputs.count();
     if (count === 1) {
+      let handle: ElementHandle | undefined;
       try {
-        const handle = await inputs.elementHandle({ timeout: tryMs() });
-        await frameStillServed(element, cardHost, field);
+        handle = await inputs.elementHandle({ timeout: tryMs() });
+        if ((await frameStillServed(element, cardHost, field)).url() !== checkedUrl) throw new OwnReason(GONE_FRAME);
         await handle.fill(value, { timeout: tryMs() });
         return;
       } catch (error) {
-        if (!(error instanceof Error && error.name === 'TimeoutError') || Date.now() >= deadline) throw error;
+        if (!(error instanceof Error && error.name === 'TimeoutError')) {
+          if (error instanceof OwnReason) throw error;
+          const moved = (await frameStillServed(element, cardHost, field)).url() !== checkedUrl;
+          const attached = handle ? await handle.evaluate((e) => e.isConnected).catch(() => false) : true;
+          if (moved || !attached) throw new OwnReason(GONE_FRAME);
+          throw error;
+        }
+        if (Date.now() >= deadline) throw error;
         continue;
       }
     }
     if (Date.now() >= deadline) {
       const current = await frameStillServed(element, cardHost, field).catch(() => undefined);
-      throw new OwnReason(current ? await countReason(current, count, typed) : GONE_FRAME);
+      if (!current || current.url() !== checkedUrl) throw new OwnReason(GONE_FRAME);
+      const reason = await countReason(current, pathOf(checkedUrl), count, typed);
+      if ((await frameStillServed(element, cardHost, field)).url() !== checkedUrl) throw new OwnReason(GONE_FRAME);
+      throw new OwnReason(reason);
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
 /** The frame's path and the name, autocomplete and type of each visible input. Never a value, a placeholder or a label. */
-async function countReason(frame: Frame, count: number, typed: string[]): Promise<string> {
+async function countReason(frame: Frame, path: string, count: number, typed: string[]): Promise<string> {
   const attribute = (v: string | null): string => scrub((v ?? '').replace(/\s+/g, ' '), typed).slice(0, 40);
   let inputs = ' none visible';
   try {
@@ -260,7 +272,7 @@ async function countReason(frame: Frame, count: number, typed: string[]): Promis
   } catch {
     inputs = ' inputs not readable';
   }
-  return `${count} visible inputs match in ${pathOf(frame.url())}:${inputs}`;
+  return `${count} visible inputs match in ${path}:${inputs}`;
 }
 
 function typedValues(provider: PaymentProvider, card: string, identity: Identity): string[] {

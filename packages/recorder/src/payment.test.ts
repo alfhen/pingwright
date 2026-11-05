@@ -49,6 +49,8 @@ interface Setup {
   slowFill?: { tries: number; moveTo?: string };
   /** The frame navigates to this URL while the first fill is under way, whether the fill is a handle fill or a locator fill. */
   navigateDuringFill?: string;
+  /** The frame navigates to this URL while the visible inputs are being read for the count reason. */
+  navigateDuringRead?: string;
   /** The frame navigates to this URL while the input handle is being resolved, so the handle belongs to the new document. */
   navigateDuringResolve?: string;
   failFill?: boolean;
@@ -81,12 +83,12 @@ function fake(setup: Setup = {}) {
     frame.generation++;
   };
   const element = (frame: (typeof frames)[number], selector: string) => {
-    const typeInto = async (input: string, value: string, options?: { timeout?: number }): Promise<void> => {
+    const typeInto = async (input: string, value: string, options?: { timeout?: number }, kind = 'locator'): Promise<void> => {
       if (setup.slowFill && slowTries < setup.slowFill.tries) {
         slowTries++;
         log.push(`try ${options?.timeout}`);
         if (setup.slowFill.moveTo) for (const f of frames) navigate(f, setup.slowFill.moveTo);
-        throw Object.assign(new Error('locator.fill: Timeout 500ms exceeded.'), { name: 'TimeoutError' });
+        throw Object.assign(new Error(`${kind}.fill: Timeout 500ms exceeded.`), { name: 'TimeoutError' });
       }
       log.push(`fill ${selector} ${input} ${value} @${frame.name}`);
       if (failFill && fills++ === failFillAt) throw new Error(setup.fillMessage?.(value) ?? `locator.fill: Timeout. fill("${value}")`);
@@ -106,15 +108,25 @@ function fake(setup: Setup = {}) {
                   if (setup.moveFramesAfterCount) for (const f of frames) navigate(f, setup.moveFramesAfterCount);
                   return count;
                 },
-                evaluateAll: async () => setup.inputs ?? [],
+                evaluateAll: async () => {
+                  if (setup.navigateDuringRead) navigate(frame, setup.navigateDuringRead);
+                  return setup.inputs ?? [];
+                },
                 elementHandle: async () => {
                   if (setup.navigateDuringResolve) navigate(frame, setup.navigateDuringResolve);
                   const bound = frame.generation;
                   return {
+                    evaluate: async () => frame.generation === bound,
                     fill: async (value: string, options?: { timeout?: number }) => {
                       if (setup.navigateDuringFill && !navigated++) navigate(frame, setup.navigateDuringFill);
-                      if (frame.generation !== bound) throw new Error('elementHandle.fill: Element is not attached to the DOM');
-                      await typeInto(input, value, options);
+                      const detached = (): Error => new Error('elementHandle.fill: Element is not attached to the DOM');
+                      if (frame.generation !== bound) throw detached();
+                      try {
+                        await typeInto(input, value, options, 'elementHandle');
+                      } catch (error) {
+                        if (frame.generation !== bound) throw detached();
+                        throw error;
+                      }
                     },
                   };
                 },
@@ -279,16 +291,45 @@ describe('duplicate frames and inputs', () => {
     expect(record.payment).toBeUndefined();
   });
 
+  test('a frame that moves during the input read gives the gone-frame reason, with no path or attribute of the new document', async () => {
+    const { error } = await play({
+      counts: [2],
+      timeout: 300,
+      navigateDuringRead: 'http://127.0.0.1:4000/elsewhere.html',
+      inputs: [{ name: 'secret-attr', autocomplete: 'x', type: 'text' }],
+    });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+  });
+
+  test('a frame that moves to another accepted document during the input read gives the gone-frame reason', async () => {
+    const { error } = await play({
+      counts: [2],
+      timeout: 300,
+      navigateDuringRead: 'http://127.0.0.1:4000/card-frame-extra-input',
+      inputs: [{ name: 'secret-attr', autocomplete: 'x', type: 'text' }],
+    });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(error?.message).not.toContain('card-frame-extra-input');
+    expect(error?.message).not.toContain('secret-attr');
+  });
+
   test('a fill that keeps timing out fails at the deadline with the timeout line', async () => {
     const { error, log } = await play({ slowFill: { tries: 1e9 }, timeout: 700 });
-    expect(error?.message).toContain('card field number could not be filled: locator.fill: Timeout');
+    expect(error?.message).toContain('card field number could not be filled: elementHandle.fill: Timeout');
     expect(fills(log)).toEqual([]);
   });
 
   test('a frame that navigates during a fill try that would succeed gets nothing typed', async () => {
     const { error, log, record } = await play({ navigateDuringFill: 'http://127.0.0.1:4000/elsewhere.html' });
     expect(fills(log)).toEqual([]);
-    expect(error?.message).toContain('card field number could not be filled: ');
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a frame that moves to another accepted document during a fill gives the gone-frame reason', async () => {
+    const { error, log, record } = await play({ navigateDuringFill: 'http://127.0.0.1:4000/card-frame-extra-input' });
+    expect(fills(log)).toEqual([]);
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
     expect(record.payment).toBeUndefined();
   });
 
@@ -303,6 +344,14 @@ describe('duplicate frames and inputs', () => {
     const { error } = await play({ counts: [2], moveFramesAfterCount: 'http://other-card-host.invalid/card-frame', timeout: 0 });
     expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
     expect(error?.message).not.toContain('other-card-host');
+  });
+
+  test('a frame that moves to another accepted card document during the count gives the gone-frame reason and names no path or attribute', async () => {
+    const inputs = [{ name: 'secret-attr', autocomplete: 'x', type: 'text' }];
+    const { error } = await play({ counts: [2], inputs, moveFramesAfterCount: 'http://127.0.0.1:4000/card-frame-extra-input', timeout: 0 });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(error?.message).not.toContain('card-frame-extra-input');
+    expect(error?.message).not.toContain('secret-attr');
   });
 
   test('a typed value in an input attribute of the count reason is scrubbed', async () => {

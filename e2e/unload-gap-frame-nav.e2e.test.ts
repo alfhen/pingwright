@@ -8,6 +8,7 @@ test("a hit from a frame's next document does not cover a push from its earlier 
   const other = records!.hits.find((h) => h.vendor === 'ga4' && h.event === 'other_frame_ga');
   expect(other).toBeDefined();
   expect(other!.t).toBeGreaterThanOrEqual(push!.t);
+  expect(other!.t).toBeLessThan(records!.steps.at(-1)!.endedAt!);
   const otherRequest = records!.requests.find((r) => r.id === other!.requestId);
   expect(otherRequest!.frameUrl).toContain('/unload-gap-frame-nav-frame');
   expect(records!.hits.some((h) => h.event === 'add_to_cart')).toBe(false);
