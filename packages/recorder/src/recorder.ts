@@ -202,6 +202,7 @@ export class Recorder {
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
+  private readonly dataLayerReassigns: Array<{ n: number; t: number }> = [];
   private readonly mainFrameEventIds = new Set<string>();
   private readonly eventFrames = new Map<string, FrameRef>();
   private readonly frameNumbers = new WeakMap<Frame, number>();
@@ -337,6 +338,10 @@ export class Recorder {
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const isMain = source.frame === source.page.mainFrame();
       this.frameDocumentId(source.frame);
+      if (payload.reassigned) {
+        this.dataLayerReassigns.push({ n: this.frameNumbers.get(source.frame)!, t: pageTimeToEpoch(payload.t, this.clockOffset) });
+        return;
+      }
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumbers.get(source.frame)! });
       if (!event) return;
       this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
@@ -655,6 +660,21 @@ export class Recorder {
     } finally {
       await client?.dispose().catch(() => undefined);
     }
+  }
+
+  private dataLayerReassignedFlags(requests: Request[]): Flag[] {
+    const loaderTimes = requests.filter((r) => isGoogleLoaderUrl(r.url)).map((r) => r.t);
+    if (loaderTimes.length === 0) return [];
+    const first = Math.min(...loaderTimes);
+    const frames = new Set(this.dataLayerReassigns.filter((r) => r.t >= first).map((r) => r.n));
+    return [...frames].sort((a, b) => a - b).map((n) => ({
+      type: 'flag' as const,
+      id: newId('flag'),
+      runId: this.runId,
+      kind: 'dataLayerReassigned',
+      recordIds: [],
+      detail: `Frame ${n} replaced window.dataLayer with a new array after a Google loader request. Pushes to the new array are still recorded.`,
+    }));
   }
 
   private isStubbedCollection(record: Request): boolean {
@@ -1035,6 +1055,7 @@ export class Recorder {
       handedToChromium: this.handedToChromium,
       redirectHeaderWithoutRedirect: this.redirectHeaderWithoutRedirect,
     });
+    flags.push(...this.dataLayerReassignedFlags(requests));
     if (!this.netLogPath) {
       const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
       flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, runEnd: closeStartedAt, eventFrames: this.eventFrames, requestFrames: new Map(requests.map((r) => [r.id, { id: this.requestFrameIds.get(r.id) ?? null, url: r.frameUrl }])), ignore: this.options.unloadGapIgnore }));
@@ -1119,6 +1140,15 @@ function abortCode(error: unknown): string {
 
 // Fetch spec and Chromium: a redirect that changes the method to GET drops the body, its headers and Origin.
 const BODY_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'content-language', 'content-location', 'origin']);
+
+function isGoogleLoaderUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === 'www.googletagmanager.com' && (u.pathname === '/gtm.js' || u.pathname === '/gtag/js');
+  } catch {
+    return false;
+  }
+}
 
 function withoutMethodChangeHeaders(headers: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !BODY_HEADERS.has(name.toLowerCase())));

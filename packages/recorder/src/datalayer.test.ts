@@ -8,6 +8,8 @@ const MAIN = { main: true, n: 0 };
 interface Sent {
   t: number;
   args: string;
+  uid?: number;
+  reassigned?: true;
 }
 
 function pageWith(setup: string): { sent: Sent[]; run: (code: string) => unknown } {
@@ -25,7 +27,7 @@ function pageWith(setup: string): { sent: Sent[]; run: (code: string) => unknown
   return { sent, run: (code) => runInNewContext(code, sandbox) };
 }
 
-const argsOf = (sent: Sent[]) => sent.map((s) => JSON.parse(s.args) as unknown);
+const argsOf = (sent: Sent[]) => sent.filter((s) => !s.reassigned).map((s) => JSON.parse(s.args) as unknown);
 
 test('hooks a dataLayer created after the init script', () => {
   const page = pageWith('');
@@ -120,4 +122,70 @@ test('a large gtag call keeps the command, so a consent update is still a consen
   const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0, MAIN);
   expect(event).toMatchObject({ isConsentCommand: true });
   expect((event?.args[2] as Record<string, unknown>).analytics_storage).toBe('granted');
+});
+
+test('a wrapper that calls the saved push reports each push once', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; const saved = dataLayer.push; dataLayer.push = function () { return saved.apply(this, arguments); }; dataLayer.push({ event: 'a' });`);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }]]);
+  expect(page.run('dataLayer.length')).toBe(1);
+});
+
+test('two stacked call-through wrappers report once and reach the array', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = [];
+    for (let i = 0; i < 2; i++) { const saved = dataLayer.push; dataLayer.push = function () { return saved.apply(this, arguments); }; }
+    dataLayer.push({ event: 'a' });`);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }]]);
+  expect(page.run('dataLayer.length')).toBe(1);
+});
+
+test('a wrapper that never calls the saved push does not hide later pushes', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push = function () { return 0; }; dataLayer.push({ event: 'a' }); dataLayer.push({ event: 'b' });`);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }]]);
+});
+
+test('gtm.uniqueEventId is read after the push returns', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; const saved = dataLayer.push;
+    dataLayer.push = function (item) { const r = saved.apply(this, arguments); item['gtm.uniqueEventId'] = 42; return r; };
+    dataLayer.push({ event: 'a' });`);
+  expect(page.sent[0]?.uid).toBe(42);
+  expect(JSON.parse(page.sent[0]!.args)).toEqual([{ event: 'a' }]);
+});
+
+test('the time is taken when the push starts', () => {
+  const sent: Sent[] = [];
+  let now = 5;
+  const sandbox: Record<string, unknown> = {
+    performance: { timeOrigin: 1000, now: () => now },
+    Node: class {},
+    tick: () => {
+      now = 50;
+    },
+    [DATALAYER_BINDING]: (payload: Sent) => {
+      sent.push(payload);
+      return Promise.resolve();
+    },
+  };
+  sandbox.window = sandbox;
+  runInNewContext(dataLayerInitScript, sandbox);
+  runInNewContext(`window.dataLayer = []; const saved = dataLayer.push; dataLayer.push = function () { tick(); return saved.apply(this, arguments); }; dataLayer.push({ event: 'a' });`, sandbox);
+  expect(sent[0]?.t).toBe(1005);
+});
+
+test('replacing a hooked dataLayer reports a reassign, and assigning the same array does not', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; window.dataLayer = window.dataLayer || [];`);
+  expect(page.sent.filter((s) => s.reassigned)).toEqual([]);
+  page.run(`window.dataLayer = [];`);
+  expect(page.sent.filter((s) => s.reassigned)).toHaveLength(1);
+});
+
+test('a reassign payload makes no record and a late id becomes the record id', () => {
+  const runId = newId('run');
+  expect(dataLayerEventFromPayload({ t: 1, args: '[]', reassigned: true }, runId, 0, MAIN)).toBeUndefined();
+  const event = dataLayerEventFromPayload({ t: 1, args: '[{"event":"a"}]', uid: 9 }, runId, 0, MAIN);
+  expect(event?.gtmUniqueEventId).toBe(9);
 });

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer wrap</title>
+</head>
+<body>
+<h1>DataLayer wrap</h1>
+<script>
+const params = new URLSearchParams(location.search);
+const wrap = params.get('wrap');
+const reassign = params.has('reassign');
+window.pwOwnPushes = 0;
+window.dataLayer = window.dataLayer || [];
+function pwPush(item) {
+  window.pwOwnPushes += 1;
+  window.dataLayer.push(item);
+}
+pwPush({ event: 'before_loader' });
+
+// A fake loader script. through: calls the saved push, then stamps gtm.uniqueEventId. drop: never calls the saved push.
+if (wrap === 'through' || wrap === 'drop') {
+  const saved = window.dataLayer.push;
+  let uniqueId = 100;
+  window.dataLayer.push = function () {
+    if (wrap === 'drop') return window.dataLayer.length;
+    const result = saved.apply(this, arguments);
+    for (const item of arguments) {
+      if (item && typeof item === 'object' && typeof item.event === 'string') item['gtm.uniqueEventId'] = ++uniqueId;
+    }
+    return result;
+  };
+}
+if (reassign) {
+  document.write('<script src="https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1"><\/script>');
+}
+</script>
+<script>
+if (new URLSearchParams(location.search).has('reassign')) window.dataLayer = [];
+pwPush({ event: 'after_loader_1' });
+setTimeout(() => pwPush({ event: 'after_loader_2' }), 100);
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- V07 -->
 
-<!-- J07 -->
+- **The `dataLayer` hook survives a loader that wraps `push`.** Each push is recorded once, also when the wrapper does not call the saved `push`. `gtmUniqueEventId` is read after the push returns, so an ID a loader sets is no longer null. A page that replaces `window.dataLayer` after a Google loader request gets a `dataLayerReassigned` flag. Pushes to the new array are still recorded.
 
 <!-- Z07 -->
 

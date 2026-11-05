@@ -34,21 +34,51 @@ export const dataLayerInitScript = `(() => {
       return JSON.stringify(['[unserializable]']);
     }
   };
-  const report = (item) => {
-    const isArgs = Object.prototype.toString.call(item) === '[object Arguments]';
+  const post = (message) => {
     const send = window[binding];
     if (typeof send !== 'function') return;
-    send({ t: clock(), args: safe(isArgs ? Array.from(item) : [item]) }).catch(() => {});
+    send(message).catch(() => {});
+  };
+  const argsOf = (item) => safe(Object.prototype.toString.call(item) === '[object Arguments]' ? Array.from(item) : [item]);
+  const stampOf = (item) => {
+    try {
+      const id = item !== null && typeof item === 'object' ? item['gtm.uniqueEventId'] : undefined;
+      return typeof id === 'number' ? id : undefined;
+    } catch {
+      return undefined;
+    }
   };
   const hook = (layer) => {
     if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
     Object.defineProperty(layer, '__tagreeveHooked', { value: true });
-    const push = layer.push;
-    layer.push = function (...items) {
-      for (const item of items) report(item);
-      return push.apply(this, items);
+    // impls[0] is the push that was there first. A loader that wraps push saves the getter's value and calls it,
+    // so a call made while another is running goes one step down the chain instead of back into the wrapper.
+    const impls = [layer.push];
+    let depth = 0;
+    let level = 0;
+    const reporter = function (...items) {
+      const outer = depth === 0;
+      const saved = level;
+      level = outer ? impls.length - 1 : Math.max(level - 1, 0);
+      const started = outer ? items.map((item) => ({ item, t: clock(), args: argsOf(item) })) : [];
+      depth++;
+      try {
+        return impls[level].apply(this, items);
+      } finally {
+        depth--;
+        level = saved;
+        for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
+      }
     };
-    for (const item of layer) report(item);
+    Object.defineProperty(layer, 'push', {
+      configurable: true,
+      enumerable: false,
+      get: () => reporter,
+      set: (fn) => {
+        if (typeof fn === 'function' && fn !== reporter) impls.push(fn);
+      },
+    });
+    for (const item of layer) post({ t: clock(), args: argsOf(item), uid: stampOf(item) });
   };
   let current = window.dataLayer;
   hook(current);
@@ -57,7 +87,11 @@ export const dataLayerInitScript = `(() => {
     enumerable: true,
     get: () => current,
     set: (value) => {
+      const previous = current;
       current = value;
+      if (Array.isArray(previous) && previous.__tagreeveHooked && Array.isArray(value) && value !== previous) {
+        post({ t: clock(), args: '[]', reassigned: true });
+      }
       hook(value);
     },
   });
@@ -66,6 +100,10 @@ export const dataLayerInitScript = `(() => {
 export interface DataLayerPayload {
   t: number;
   args: string;
+  /** `gtm.uniqueEventId`, read after the push returned. */
+  uid?: number;
+  /** The page replaced `window.dataLayer` with another array. */
+  reassigned?: true;
 }
 
 function isConsentCommand(args: unknown[]): boolean {
@@ -102,7 +140,7 @@ export function dataLayerEventFromPayload(
   } catch {
     return undefined;
   }
-  if (!Array.isArray(args) || typeof payload.t !== 'number') return undefined;
+  if (!Array.isArray(args) || typeof payload.t !== 'number' || payload.reassigned) return undefined;
   const t: EpochMs = pageTimeToEpoch(payload.t, offset);
   return {
     type: 'dataLayerEvent',
@@ -111,7 +149,7 @@ export function dataLayerEventFromPayload(
     stepId: null,
     t,
     event: eventName(args),
-    gtmUniqueEventId: uniqueEventId(args),
+    gtmUniqueEventId: typeof payload.uid === 'number' ? payload.uid : uniqueEventId(args),
     args,
     isConsentCommand: isConsentCommand(args),
     frame: { main: frame.main, n: frame.n },
