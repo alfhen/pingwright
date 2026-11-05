@@ -1,6 +1,6 @@
 # Tagreeve design
 
-Status: revision 11, for release 0.5.0. Milestones 0.1, 0.2, 0.3, 0.4 and 0.5 are built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0. Revision 10 adds §15.5, the differences in 0.5, and rewrites the 0.5 item of §15 to what was built. Revision 11 is the 0.5.0 release: a server workspace runs through its preview-environment config.
+Status: revision 12, for release 0.6.0-rc.1. Milestones 0.1, 0.2, 0.3, 0.4 and 0.5 are built, and 0.6 is partly built (§15); the rest is design. Claims marked **(verify)** are believed true but not tested in code, and each one says so. Revision 2 took in an adversarial design review and the CodeRabbit review on PR #1. Revision 3 records verification results. Revision 4 adds the recorder results. Revision 5 resolves the 0.1 claims and adds §15.1, the differences in 0.1. Revision 6 takes in the field-test fixes released in 0.1.0. Revision 7 adds §15.2, the differences in 0.2. Revision 8 adds §15.3, the differences in 0.3, and rewrites the roadmap in §15. Revision 9 adds §15.4, the differences in 0.4, lists `baseline` in §12, says the tool is CLI only, and moves the unbuilt 0.4 items to 0.5.0. Revision 10 adds §15.5, the differences in 0.5, and rewrites the 0.5 item of §15 to what was built. Revision 11 is the 0.5.0 release: a server workspace runs through its preview-environment config. Revision 12 is the 0.6.0-rc.1 release and adds §15.6, the differences in 0.6.
 
 ## 1. Problem
 
@@ -457,7 +457,8 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 3. **0.3 (built, `0.3.0`):** rules on payload fields (`body.has`, `body.only`) and cookies, the `deniedIdentifiers` check, `suite`, an HTML `report` for one run and for a suite, the Done control for handoff steps, role and `any` locators, a `select` step, a minimal `server` network mode (`serverHosts`), record schema version 2. See docs/plan-0.3.md.
 4. **0.4 (built, `0.4.0-rc.3`):** handoff steps that end by themselves, an opt-in test payment step, baselines for drift checks, a `<W>x<H>` viewport, fake identities by country, server-container visibility described in §8.5, the `possibleRedirectHop` flag, a WebKit probe, the release workflow and the rename to Tagreeve. See docs/plan-0.4.md.
 5. **0.5 (built, `0.5.0`):** the local server container (`--server-container`, `server-container build`, the recording proxy and the container calls as decoded hits, #358), the Conversions API decoder, several stores in one suite (#360), `unloadGap` at the end of a run (#261), platform hosts for Shopify (#585, partly), masked page paths in `--by-page` keys and the removal of the old command alias. See docs/plan-0.5.md.
-6. **Later:** the server tag reporter, the server workspace preview header, the web tag-firing reporter template and expected tag lists (goal 2), `tagreeve init` (goal 8), a full `microsoft-uet` decoder, the Shopify custom pixel bridge, the collector origin bridge and a `mobile` viewport preset (#514).
+6. **0.6 (partly built, `0.6.0-rc.1`):** `tagreeve init`, path defaults, `tagreeve/config.yml`, `--label`, default baseline paths and `suite --baseline`, the default `--out` of `tagreeve/runs/<date>/` (#811), `network: live` only from the command line, the exact client ID link for container calls (#901), Shop Pay platform hosts and the frame of each `dataLayer` push. See docs/plan-0.6.0-rc.1.md. Goal 2 follows in 0.6.0-rc.2.
+7. **Later:** the server tag reporter, the server workspace preview header, the web tag-firing reporter template and expected tag lists (goal 2), a full `microsoft-uet` decoder, the Shopify custom pixel bridge, the collector origin bridge and a `mobile` viewport preset (#514).
 
 Deferred: terminal, JSON and JUnit output for `report`, a replay page.
 
@@ -544,6 +545,17 @@ Where the code in 0.5 differs from the design above. Sections 15.1 to 15.4 still
 - **`meta-capi`** decodes Conversions API calls. In `stub` mode the endpoint is answered with a success body.
 - **`unloadGap`** also covers an embedded frame's push shortly before the run ends.
 - **Still not built:** the server tag reporter, the server preview header, the web tag reporter and `expectedTags`, `tagreeve init`, the Shopify bridge, a full `microsoft-uet` decoder, the collector origin bridge and a `mobile` preset.
+
+### 15.6 Differences in 0.6
+
+Where the code in 0.6 differs from the design above. Sections 15.1 to 15.5 still apply, except where noted.
+
+- **Record schema version is 4.** `Run.label` and `Run.store` are new, and `DataLayerEvent.frame` is `{ main, n }` with no URL. `suite.json` is version 3. `baselineSchemaVersion` and `storesSchemaVersion` stay 1, and the project config has `configSchemaVersion: 1`.
+- **Default `--out`.** Without `--out`, records go to `tagreeve/runs/<YYYY-MM-DD>/`, or `<date>-<label>` with `--label`. A note on stderr says when `./runs/` holds older records.
+- **Path defaults and the project config.** Four settings read a default file or folder under `tagreeve/` when it exists and the flag is not given (§12). `tagreeve/config.yml` is plain YAML and holds `site`, `out` and some scenario options. It refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. A default file never supplies the host of a test payment.
+- **`live` is a command-line choice.** A scenario with `options.network: live` is a scenario error (§5.3).
+- **Exact container links.** A container call links to a browser hit by client ID and event name (`via.by: "clientId"`, `confidence: "exact"`) when exactly one browser hit with them had its request to the container in flight. Ties and different event names stay `probable`. The rule is proven only when the container answers the browser after its tags send; the field test of 0.6.0-rc.1 checks this.
+- **Not built:** the server tag reporter, the server preview header, the web tag reporter and `expectedTags` (goal 2, rc.2), the Shopify bridge, a full `microsoft-uet` decoder, the collector origin bridge and a `mobile` preset.
 
 ## 16. Related tools
 

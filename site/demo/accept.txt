@@ -12,16 +12,16 @@ Flags
 Expectations
   FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}
        Expected no matching hits before consent, found 2 matching hits (17 before narrowing).
-       evidence: hit_01M6JHK7E90K9XRX73RF9HCKDT, hit_01M6JHK7EAEBGWCAGYE98A17RS
+       evidence: hit_01M6M61TRRCRVRCFR3Y1MRJWHK, hit_01M6M61TRRCRVRCFR3Y1MRJWHN
   PASS must: {"vendor":"meta","event":"AddToCart","in":"epoch(granted)"}
-       evidence: hit_01M6JHK7ED95S6H9S6P7KZYGFE
+       evidence: hit_01M6M61TRV696VQTK22CWNA51P
   PASS builtin: unknownDestination
-       evidence: flg_01M6JHK7EEE3X7DNCY6YDWQYRR, flg_01M6JHK7EEE3X7DNCY6YDWQYRS
+       evidence: flg_01M6M61TRXBNNSF2Y54G525PGE, flg_01M6M61TRXBNNSF2Y54G525PGF
   WARN builtin: sandboxPageUrl
        Expected no hit to carry a sandbox URL as its page, found 2: staging.northwind.example/web-pixels@0.0.0-fixture/sandbox/modern/.
-       evidence: hit_01M6JHK7E90K9XRX73RF9HCKDS, hit_01M6JHK7EBAWMBN2ZS975MV4Y1
+       evidence: hit_01M6M61TRQEEFSBP6NJGDDH6M2, hit_01M6M61TRSAD3MAP9CMZXSB056
   PASS builtin: deniedIdentifiers
   PASS builtin: earlyIdentifiers
   PASS builtin: possibleRealData
 Result: fail (1 of 7) with 1 warning
-Record: runs/run_01M6JHK17949HK6TJMD19YWDHE.jsonl
+Record: runs/run_01M6M61MMDASC4719EP1SGDP8R.jsonl
