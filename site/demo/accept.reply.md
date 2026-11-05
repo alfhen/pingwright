@@ -14,4 +14,4 @@ After Accept, everything works: GA4, Meta AddToCart and the Ads add_to_cart all 
 
 The problem is before the answer: Meta and Google Ads send hits while the banner is still open (2 hits). That explains Legal's complaints.
 
-Evidence: hit_…B9EQ, hit_…K1KF.
+Evidence: hit_…J9N7, hit_…J9N9.

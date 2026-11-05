@@ -1,6 +1,6 @@
 import { guardFieldName, maskValuePath, OTHER_NAME, platformHostFor } from '@tagreeve/decoders';
 import type { Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
-import { isServerHit, judgeIndex, viaHitOf } from '@tagreeve/expect';
+import { isServerHit, judgeIndex, NO_EVENT, pushShapes, viaHitOf, type PushShapes } from '@tagreeve/expect';
 import { formatDefaults, type DefaultEntry } from './project-config.ts';
 import { NOTE_TEXT } from './report/model.ts';
 
@@ -38,6 +38,8 @@ export interface Summary {
   /** No result failed at `fail` severity and the run shows no baseline drift. The exit code is 0 exactly when this is true. */
   ok: boolean;
   hits: Record<string, Record<string, number>>;
+  /** Masked shapes of the pushes to the dataLayer. Absent when the run recorded none. */
+  dataLayer?: PushShapes;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
   /** Optional fill entries that were skipped because the field was not on the page. */
@@ -100,6 +102,7 @@ function serverContainerOf(records: RunRecords): ServerContainerSummary | undefi
 export function buildSummary(records: RunRecords, results: Result[], path: string): Summary {
   const testPayment = testPaymentOf(records);
   const serverContainer = serverContainerOf(records);
+  const dataLayer = pushShapes({ steps: records.steps, dataLayerEvents: records.dataLayerEvents ?? [] });
   return {
     runId: records.run.id,
     ...(records.run.label !== undefined && { label: records.run.label }),
@@ -107,6 +110,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     pass: results.every((r) => r.pass),
     ok: results.every(passesGate),
     hits: countHits(records.hits),
+    ...(dataLayer.pushes > 0 && { dataLayer }),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: redactFlagDetail(f.detail) })),
     ...(testPayment && { testPayment }),
@@ -232,6 +236,15 @@ function serverContainerLines(summary: Summary): string[] {
   return [`Server container: ${head}${error}; ${calls}; ${c.forwarded} request${c.forwarded === 1 ? '' : 's'} forwarded to Google`, SERVER_CONTAINER_LIMITS];
 }
 
+const DATALAYER_EVENTS_SHOWN = 3;
+
+function dataLayerLine({ pushes, steps }: PushShapes): string {
+  const events = [...new Set(steps.flatMap((s) => s.events.map((e) => e.event)))].filter((e) => e !== NO_EVENT).sort();
+  const shown = events.slice(0, DATALAYER_EVENTS_SHOWN).join(', ');
+  const list = events.length > 0 ? ` (${shown}${events.length > DATALAYER_EVENTS_SHOWN ? ', …' : ''})` : '';
+  return `dataLayer: ${pushes} push${pushes === 1 ? '' : 'es'}, ${events.length} event${events.length === 1 ? '' : 's'}${list}; shapes in --json`;
+}
+
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
   if (summary.label !== undefined) lines.push(`Label: ${summary.label}`);
@@ -248,6 +261,7 @@ export function formatSummary(summary: Summary): string {
   for (const [vendor, events] of vendors) {
     lines.push(`  ${vendor}: ${Object.entries(events).map(([e, n]) => `${e} x${n}`).join(', ')}`);
   }
+  if (summary.dataLayer) lines.push(dataLayerLine(summary.dataLayer));
   lines.push('Consent epochs');
   for (const e of summary.epochs) {
     const label = e.label === 'withdrawn' && e.state ? `withdrawn, ${e.state}` : e.label;
