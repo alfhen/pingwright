@@ -43,11 +43,9 @@ flowchart TB
   recorder --> page["Page, iframes<br/>and workers"]
   page -->|"collector origin,<br/>answered by<br/>context.route"| store[("Run store")]
   recorder -->|records| store
-  page --> sgtm["Server GTM"]
-  sgtm -->|"tag reports"| sink["Sink"]
-  sink --> store
+  page -->|"page binding:<br/>web tag reports"| store
   page -.->|"opt-in, Docker"| local["Local server<br/>container"]
-  local -.->|"vendor calls"| proxy["Recording proxy"]
+  local -.->|"vendor calls and<br/>server tag reports"| proxy["Recording proxy"]
   proxy -.-> store
   store --> decoders["Decoders"]
   decoders --> expect["Expect"]
@@ -55,7 +53,7 @@ flowchart TB
   report --> front["CLI"]
 ```
 
-The recorder plays the scenario in a browser and writes everything it sees to the run store. Reports from the page reach the store through the collector origin, which `context.route` answers. Reports from server GTM reach it through the sink. With the opt-in server container feature, the user's own container runs in Docker on the same machine, and its calls to vendors go through a recording proxy that answers them and writes them to the store. The decoders, expectations, report and diff read the store, and the CLI exposes them.
+The recorder plays the scenario in a browser and writes everything it sees to the run store. Platform bridge reports reach the store through the collector origin, which `context.route` answers. Web tag reports reach it through a page binding that the recorder exposes (§8.1). With the opt-in server container feature, the user's own container runs in Docker on the same machine, and its calls to vendors go through a recording proxy that answers them and writes them to the store. The decoders, expectations, report and diff read the store, and the CLI exposes them.
 
 ## 4. Data model
 
@@ -252,15 +250,16 @@ Rules: `before: consent` means "in the first epoch, while the state is undecided
 
 ### 8.1 Web tag-firing reporter
 
-A custom tag template, published to the Community Template Gallery.
+A custom tag template that ships in the Tagreeve repo, not in the Community Template Gallery. The gallery needs a separate public repo per template under Apache-2.0, and Tagreeve is MIT. The CLI prints the template text, and the user imports it into a workspace.
 
-- **Trigger and consent.** Fires on every event when a debug signal is present (a cookie set by the recorder). Its consent setting must be "no additional consent required", or reports go missing exactly in the before-consent window.
+- **Transport.** The template calls a page function, `tagreeveTagReport`, through `callInWindow`. The recorder exposes that function with `context.exposeBinding`. A web template can only send a GET (`sendPixel`), which caps a report at URL length and would send a request from a real visitor's browser. A real visitor's page has no such function, so `callInWindow` returns `undefined` and the template does nothing there. It is inert wherever the binding does not exist.
+- **Trigger and consent.** Fires on every event. Its consent setting must be "no additional consent required", or reports go missing exactly in the before-consent window.
 - **Data.** Calls `addEventCallback`. The callback runs once the tags for the event have run, and receives the container ID and event data. The event data includes `tags[]` with `id`, `status` and `executionTime`, plus each tag's monitoring metadata.
 - **Only fired tags appear.** Tags blocked by triggers or consent do not appear. "Did not fire" is computed by comparing against an expected tag list the caller supplies (§8.2).
-- **Tag names.** Names are present only when tags have monitoring metadata with a tag-name key. A missing name is reported as `null` (unknown). Name-based rules (`tags.mustFire`, `tags.mustNotFire`) treat an unknown name as "cannot evaluate" and report that, instead of passing or failing. Rules can also match by tag ID.
-- **Permissions.** The template needs `read_event_metadata` for `addEventCallback`, and a sending permission (for example `send_pixel`) limited to the collector origin field. Which web template API can send the report body is still open **(verify)**. Not tested in 0.1. Template tests check the permissions and the URL limit.
-- **What it sends.** `{runId, event, gtmUniqueEventId, tags[]}` to the collector origin. Never event data.
-- **Exposure.** A published template ships to all visitors. Any visitor could set the debug cookie and make their own browser post to the collector origin, which resolves nowhere for them. Keep the reporter in workspace or environment versions where possible.
+- **Tag names.** Names are present only when tags have monitoring metadata with a tag-name key. A missing name is reported as `null` (unknown). Name-based rules treat an unknown name as "cannot evaluate" and report that, instead of passing or failing. Rules can also match by tag ID.
+- **Permissions.** `read_event_metadata` for `addEventCallback`, `access_globals` with execute access for `tagreeveTagReport` only, and `read_container_data` for the container version string. No sending permission. Template tests check the permission list.
+- **What it sends.** The container ID, the event name, `gtmUniqueEventId`, the container version string and, for each tag, its ID, status, execution time and name. Never event data. The recorder drops any other key.
+- **Exposure.** A published template ships to all visitors, and the binding does not exist for them, so the template does nothing. Keep the reporter in workspace or environment versions where possible.
 
 ### 8.2 Testing an unpublished workspace
 
@@ -297,25 +296,17 @@ Limits:
 
 ### 8.3 Server tag-firing reporter
 
-A server-side tag template with the same job. The server-side `addEventCallback` exists: it runs once all tags for the event have run, and its `tags[]` has `id`, `status` and `executionTime` plus metadata ([server-side API reference](https://developers.google.com/tag-platform/tag-manager/server-side/api)).
+A server-side tag template with the same job, planned for the local server container only (§8.5). The server-side `addEventCallback` exists: it runs once all tags for the event have run, and its `tags[]` has `id`, `status` and `executionTime` plus metadata ([server-side API reference](https://developers.google.com/tag-platform/tag-manager/server-side/api)).
 
-- **Gating.** The server container is public, so a header alone is not enough: anyone could send it. The recorder sends a run token: run ID, timestamp, and a signature of both under a secret held in a template field. The template recomputes the signature and drops requests that do not match or are older than a few minutes. Signature method: HMAC-SHA256 if the server template APIs offer it **(verify)**, otherwise SHA-256 over secret, run ID and timestamp. Not tested in 0.1.
-- **Target.** It posts only to the sink address in its template field. It never takes an address from the incoming request. Its `send_http` permission is limited to that address.
-- **What it sends.** Run ID, event name, client name, tag statuses and the consent state the server saw. Never the event payload.
+- **Destination.** The template sends its report to a reserved host that the proxy answers and records, like every other call from the container. The report never leaves the user's machine.
+- **No gating.** There is no signature and no shared secret. Only a container that Tagreeve started can reach the proxy, and the proxy takes writes only with its per-run credential (§9).
+- **What it sends.** Event name, client name, tag statuses and the consent state the server saw. Never the event payload.
 - **Not visible.** The reporter does not show the server container's own outgoing requests, for example to Meta's Conversions API. It shows only whether those tags succeeded. A run with `--server-container` records those requests from the recording proxy instead (§8.5).
-- **The sink** authenticates the template (for example with a Cloudflare Access service token), accepts only run IDs Tagreeve issued, and rate-limits writes.
+- **Open.** Whether the container's `sendHttpRequest` goes through the proxy to a reserved host, and what the server `addEventCallback` reports, are not tested. The web reporter (§8.1) is field tested first.
 
-### 8.4 The sink
+### 8.4 No remote endpoint
 
-A remote server container cannot reach the user's machine. The user runs the sink. Tagreeve runs no service. The opt-in local server container (§8.5) needs no sink: it runs on the user's machine. Any HTTPS endpoint that accepts an authenticated POST works.
-
-| Option | When |
-| --- | --- |
-| Named Cloudflare Tunnel on the user's own domain, protected by Cloudflare Access | Local development |
-| A small Worker in the user's own Cloudflare account, storing reports in D1 or KV | CI and unattended runs |
-| Any other endpoint the user controls | Anything else |
-
-Setup commands for the tunnel and the Worker are deferred until after the first releases.
+No remote endpoint for reports is planned. Tagreeve runs no service, and a remote server container cannot reach the user's machine. The local server container (§8.5) runs on the user's machine, so its reports and vendor calls reach the recording proxy.
 
 ### 8.5 What the server container sends on
 
@@ -325,7 +316,7 @@ A server container receives a hit from the browser and may send it on to vendors
 | --- | --- | --- |
 | Browser to server container | Yes | Recorded and decoded (`sgtm-data-client`, `stape-custom-loader`). |
 | Server container's answer | Yes, in `server` mode | Status and `Set-Cookie` names for hosts in `serverHosts`. Not for `pagehide` and `visibilitychange` sends, which the page answers (§15.3). |
-| Server container to vendors | Yes, with `--server-container` | For the container's own tags, built-in and template. The recording proxy records and answers each call (below). Without the flag, no: it needs an endpoint the user runs. |
+| Server container to vendors | Yes, with `--server-container` | For the container's own tags, built-in and template. The recording proxy records and answers each call (below). Without the flag, no. |
 | Server preview data | No | Only a signed-in person in the GTM UI sees it. |
 
 ```mermaid
@@ -336,29 +327,24 @@ flowchart LR
   S -.->|without the flag: not visible| V[Vendors]
 ```
 
-With `--server-container`, the container runs on the user's machine and every vendor call goes through the recording proxy, which records it and answers it. The call never reaches the vendor. Without the flag the browser sees the first hop only, and the user runs an endpoint to see the second, by one of two paths.
+With `--server-container`, the container runs on the user's machine and every vendor call goes through the recording proxy, which records it and answers it. The call never reaches the vendor. Without the flag the browser sees the first hop only. A run with `--server-container` shows what the local container sent on, in the summary and the report. A run without it cannot say what the server container sent on, and the report must not imply it can. The local server container needs no test workspace and no endpoint: its vendor calls are answered by Tagreeve's recording proxy and never forwarded. The server tag-firing reporter (§8.3) reports through the same proxy. The local container does not show Stape-only features, tags that need the hosting layer, or calls that no decoder matched (flagged unknown). With the live config the local container does not show unpublished workspaces; a config from a server workspace's preview environment serves that workspace.
 
-- **Server tag-firing reporter (§8.3).** A template in the server container reports tag status per event to the sink.
-- **Test sink as the vendor endpoint.** In a test workspace, the server container's vendor tags point at an endpoint the user runs. It records what the server container sent on. The local server container needs no such workspace: it runs on the user's machine, and its vendor calls are answered by Tagreeve's recording proxy and never forwarded. Real vendors receive nothing from that workspace only if every vendor tag in it points at the sink. The sink receives full vendor payloads, so runs that use it use the §13 test identities, and the sink reader applies the same value rules as recorded hits.
+**Server preview.** The `X-Gtm-Server-Preview` header is not planned. Only a signed-in person in the GTM UI sees the preview data, and Tagreeve cannot read it without the GTM API, which it never calls. A server workspace is tested with a config from its preview environment and `--server-container`. No code sends the header.
 
-Tagreeve reads either one only through the sink reader (§9). The sink reader is not built. A run with `--server-container` shows what the local container sent on, in the summary and the report. A run without it cannot say what the server container sent on, and the report must not imply it can. The local container does not show Stape-only features, tags that need the hosting layer, or calls that no decoder matched (flagged unknown). With the live config the local container does not show unpublished workspaces; a config from a server workspace's preview environment serves that workspace.
-
-**Server preview.** `X-Gtm-Server-Preview` puts the traffic in the server container's preview. Only a signed-in person in the GTM UI sees the preview data. Tagreeve cannot read it without the GTM API, which it never calls. The header value is a secret like `gtmAuth`. It must not appear in a record, a log line, an error message or test output. In 0.3 and 0.4 the recorder does not send the header (§15.3).
-
-**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports and the sink reader ingests them.
+**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports.
 
 **Out of scope.** Stape's logs and the API of any hosted service. Tagreeve runs no hosted service. Everything runs on the user's machine. The opt-in server container feature runs the user's own container in the user's Docker, and the container downloads its own configuration from Google, as it always does.
 
 ## 9. Collector and run store
 
-- **Collector origin.** The platform bridge and the web reporter post to a reserved origin, `https://collector.tagreeve.invalid/`. The recorder answers these requests itself through `context.route`. No DNS lookup, private address, certificate or browser flag is involved, so Chrome's local-network checks do not apply.
+- **Collector origin.** The platform bridge posts to a reserved origin, `https://collector.tagreeve.invalid/`. The web reporter does not use it: it calls a page binding (§8.1). The recorder answers these requests itself through `context.route`. No DNS lookup, private address, certificate or browser flag is involved, so Chrome's local-network checks do not apply.
   - **Verified** on Chromium 156.0.8078.4 with Playwright 1.64.1, no browser flags (`packages/recorder/test/e2e/collector-origin.e2e.test.ts`). `context.route` answers the collector origin, and `context.on('request')` sees it, from: page `fetch`, `navigator.sendBeacon`, a dedicated worker, a sandboxed `srcdoc` iframe (`sandbox="allow-scripts"`), a sandboxed cross-site iframe (top page on `localhost`, iframe on `127.0.0.1`, so out of process), and a worker inside a sandboxed iframe. It also works from a sandboxed iframe on a page served as `https://shop.tagreeve.test/` through `context.route`. Firefox was not tested. WebKit was probed by hand for five of these sources (§14, item 10).
   - **Direct fetch.** From that same public-looking page, a sandboxed iframe's `fetch` to `http://localhost:<port>` fails and the server is never reached. This was the same in every run. A local listener would not work there. The cause is Chromium's Local Network Access check, which blocks a request from a public page to a loopback address: Chromium logs a loopback permission denial for it, and the test asserts that message. As a control, the same fetch from a sandboxed iframe on a `localhost` top page succeeds and reaches the server, since LNA only blocks public to local.
   - **Early requests.** A request sent while a sandboxed `srcdoc` iframe is still loading is usually neither routed nor reported by `context.on('request')`; on CI it was once routed (§5.3). This holds for every destination, not only the collector. In probes the collector request failed with `ERR_NAME_NOT_RESOLVED` (5 of 5 runs). A request to a local server (`/g/collect?early`) with a stubbing route in place was not routed and reached the server (3 of 3 runs). Sends after the load event are captured when the machine is idle, but not reliably under load: with 12 browser contexts running in parallel, a single send 100 ms after load bypassed `context.route` in 34 of 40 runs, 500 ms after load in 4 of 40, and 1.5 s after load in 2 of 40. The failed `fetch` was neither routed nor reported (`ERR_NAME_NOT_RESOLVED`, no `requestfailed` event). `context.on('request')` also does not see such a request (§5.3). The recorder must not rely on reports sent during iframe load, and in stub mode such a request can leave the machine unrecorded.
 - **Authorisation.** Because the requests never leave the browser context, nothing outside the test browser can write to the run store. The run ID is a label, not a credential. With `--server-container` the recording proxy is a second writer to the run store, outside the browser context. Its write authorization is a per-run random proxy credential, sent in the `HTTP_PROXY` userinfo as `Proxy-Authorization`. A peer without it gets `407` and is counted in `Run.serverContainer.refused`, not logged. The relay container joins the default bridge, so its port 8080 can be reached from other containers on that bridge, not only through the `127.0.0.1` publish. That port leads to the server container and takes no credential. This is accepted for each path. The `127.0.0.1` publish is on a random port per run. The bridge side is the fixed port 8080 of a relay that lives only as long as the run, and only containers the user runs on the same bridge can reach it. Anything that reaches either path can only send a hit to the user's own container, which sits on the internal network and whose vendor calls the proxy answers locally.
 - **Validation.** Every incoming report is checked against a schema. Invalid reports are kept as `invalidReport` records, not dropped silently. A request that is not a POST, such as an image or a GET beacon, is kept as an invalid report with its URL. CORS preflights are answered but not recorded.
-- **Sink reader.** Server reports are read from the configured sink with the sink's credentials. The sink reader is not built. What the server container sends on is read from the recording proxy instead (§8.5), as `Request` records with `captured: "serverContainer"`.
-- **Correlation.** The run ID travels in a cookie and, for server-container hosts, in the signed run token header. It does not travel in URL parameters, which redirects and checkouts drop. The run ID cookie and the run token are not built. The calls of a local server container are linked to browser hits by the rules in §4 (event ID and name, then client ID and name while the browser request is in flight, then a shared value). A link by shared value alone is only `probable`.
+- **Server reads.** What the server container sends on is read from the recording proxy (§8.5), as `Request` records with `captured: "serverContainer"`. 
+- **Correlation.** The run ID is a label in the run record. It does not travel in a cookie, a header or URL parameters, which redirects and checkouts drop. The calls of a local server container are linked to browser hits by the rules in §4 (event ID and name, then client ID and name while the browser request is in flight, then a shared value). A link by shared value alone is only `probable`.
 - **Storage.** Each run is written to `tagreeve/runs/<YYYY-MM-DD>/run_<id>.jsonl` by default, with the local date, or to the folder given by `--out`. There is no fixed in-memory cap.
 - **No fallback yet.** A local HTTPS listener could replace the reserved origin where interception does not work, but it is not available until its write authorization is defined. Browser-context isolation (above) does not protect a real listener, and a trusted local CA only authenticates the listener to the browser. It does not decide who may write. If the reserved origin cannot be intercepted on a platform, that platform is unsupported until then.
 
@@ -366,7 +352,7 @@ Tagreeve reads either one only through the sink reader (§9). The sink reader is
 
 ### 10.1 Shopify
 
-- **Custom pixel bridge.** A small snippet for a custom pixel that copies pushes to the collector origin when the debug cookie is set. It is inert otherwise.
+- **Custom pixel bridge.** A small snippet for a custom pixel that copies pushes to the collector origin when the debug cookie is set. It is inert otherwise. Not built.
 - **Sandbox handling.** Custom pixels run in a sandboxed iframe whose URL contains `/web-pixels@…/sandbox/`. Decoders report that path as a defect when it reaches vendors as the page URL.
 - **Checkout.** Checkout pages run no theme code. Add to cart goes through the cart API. Checkout payment is a handoff step. The one exception is the opt-in test payment (§5.4), where the user declares the host's test mode.
 - **Theme preview.** `preview_theme_id` is a scenario variable, so an unpublished theme can be tested.
@@ -425,7 +411,7 @@ Real data can still appear through:
 
 The docs and the handoff prompt tell people to use test accounts and test cards.
 
-**Secrets are always redacted:** the run token, sink credentials, the server container config (the `CONTAINER_CONFIG` value, a secret like `gtmAuth`), the per-run proxy credential and any `Authorization` or cookie header values Tagreeve adds.
+**Secrets are always redacted:** the server container config (the `CONTAINER_CONFIG` value, a secret like `gtmAuth`), the per-run proxy credential and any `Authorization` or cookie header values Tagreeve adds.
 
 **The `gtmAuth` value is redacted in any form.** In `Recorder.close()`, as its last step, the recorder scrubs the value from every string in the records. Decoding and flags run on the raw records first, so a redacted value still has its hit. The built-in checks run in `evaluate`, on the scrubbed records. They read the flags made from the raw records. The scrub decodes before it searches: it URL-decodes and base64-decodes each string recursively, and reads the query strings found inside decoded text. For a query value of `Request.url` or a form body, the whole value becomes `[redacted]`. The URL at the end of a flag's `detail` is scrubbed like `Request.url`. If it is redacted whole, it keeps its origin (`https://host/[redacted]`), unless the origin holds the value. Any other string, including `Hit.params`, `Hit.page`, headers and object fields such as `DataLayerEvent.args`, becomes `[redacted]` whole. CLI output and error messages get the same treatment. Limit: a base64 value glued to unseparated text may not be decoded.
 
@@ -445,8 +431,8 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
    Unload-time sends are handled in the page in stub mode, with the limits in §5.3. A sandboxed frame's unload sends are captured only with `--net-log` in live mode; otherwise the run flags `unloadGap`.
 3. **Dedicated worker capture.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.2). The startup self-test still reports coverage per run.
 4. **Stubbing side effects.** Verified for GA4 in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.3). Other vendors are untested in 0.1.
-5. **Server template signature APIs (verify).** Not tested in 0.1.
-6. **Web template sending permission (verify).** Not tested in 0.1.
+5. **Server template signature APIs.** Not needed: the server reporter is signed by nothing and reports to the local proxy (§8.3).
+6. **Web template transport.** The web reporter calls a page binding through `callInWindow` (§8.1). Whether real GTM runs the template as the shim does is checked in the field test.
 7. **Custom loaders.** Swapping the container script loses loader-specific behaviour (§8.2).
 8. **Banner bot detection** changes over time. Guard: the "banner shown" check.
 9. **Scope.** Many vendors and banners exist. Decoders are plugins, and banner handling is delegated to autoconsent.
