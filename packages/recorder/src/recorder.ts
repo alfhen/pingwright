@@ -207,7 +207,6 @@ export class Recorder {
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
-  private readonly mainFrameEventIds = new Set<string>();
   private readonly eventFrames = new Map<string, FrameRef>();
   private readonly frameNumbers = new WeakMap<Frame, number>();
   private readonly frameNavigations = new WeakMap<Frame, number>();
@@ -343,12 +342,10 @@ export class Recorder {
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const isMain = source.frame === source.page.mainFrame();
-      this.frameDocumentId(source.frame);
-      const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumbers.get(source.frame)! });
+      const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumber(source.frame) });
       if (!event) return;
       this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
-      if (isMain) this.mainFrameEventIds.add(event.id);
-      else this.eventFrames.set(event.id, { id: this.frameDocumentId(source.frame), url: source.frame.url() });
+      if (!isMain) this.eventFrames.set(event.id, { id: this.frameDocumentId(source.frame), url: source.frame.url() });
     });
     await context.addInitScript(dataLayerInitScript);
     this.consent = await installConsent(context, this.options.autoconsent);
@@ -466,18 +463,21 @@ export class Recorder {
   }
 
   private frameRef(frame: Frame): DataLayerFrame {
-    this.frameDocumentId(frame);
-    return { main: frame === frame.page().mainFrame(), n: this.frameNumbers.get(frame)! };
+    return { main: frame === frame.page().mainFrame(), n: this.frameNumber(frame) };
   }
 
-  /** A frame document is the frame plus how many navigation requests the frame has started. Held in memory only. */
-  private frameDocumentId(frame: Frame): string {
+  private frameNumber(frame: Frame): number {
     let number = this.frameNumbers.get(frame);
     if (number === undefined) {
       number = this.frameCount++;
       this.frameNumbers.set(frame, number);
     }
-    return `${number}.${this.frameNavigations.get(frame) ?? 0}`;
+    return number;
+  }
+
+  /** A frame document is the frame plus how many navigation requests the frame has started. Held in memory only. */
+  private frameDocumentId(frame: Frame): string {
+    return `${this.frameNumber(frame)}.${this.frameNavigations.get(frame) ?? 0}`;
   }
 
   private countNavigation(request: PwRequest): void {
@@ -961,7 +961,7 @@ export class Recorder {
 
   private buildConsentEpochs(): ConsentEpoch[] {
     // The page's consent state comes from its main frame. A gtag call in an embedded frame has its own state.
-    const mainFrameEvents = this.dataLayerEvents.filter((e) => this.mainFrameEventIds.has(e.id));
+    const mainFrameEvents = this.dataLayerEvents.filter((e) => e.frame?.main);
     const drafts = buildEpochs(this.bannerEvents, consentModeChanges(mainFrameEvents, Math.min(...this.bannerEvents.map((b) => b.t))), { startT: this.run.startedAt });
     return drafts.map((epoch) => ({
       type: 'consentEpoch',
@@ -1075,7 +1075,7 @@ export class Recorder {
       redirectHeaderWithoutRedirect: this.redirectHeaderWithoutRedirect,
     });
     if (!this.netLogPath) {
-      const embedded = this.dataLayerEvents.filter((e) => !this.mainFrameEventIds.has(e.id));
+      const embedded = this.dataLayerEvents.filter((e) => !e.frame?.main);
       flags.push(...buildUnloadGapFlags({ runId: this.runId, networkMode: this.options.networkMode, events: embedded, hits, navigations: this.navigations, runEnd: closeStartedAt, eventFrames: this.eventFrames, requestFrames: new Map(requests.map((r) => [r.id, { id: this.requestFrameIds.get(r.id) ?? null, url: r.frameUrl }])), ignore: this.options.unloadGapIgnore }));
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });

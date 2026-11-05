@@ -83,13 +83,11 @@ test('turns payloads into records on the shared clock', () => {
   expect(gtagEvent?.event).toBe('add_to_cart');
 });
 
-test('a payload from an embedded frame keeps its frame number and main false', () => {
+test('a payload carries the frame flag and number it is given', () => {
   const runId = newId('run');
   const payload = { t: 1, args: '[{"event":"x"}]' };
   const first = dataLayerEventFromPayload(payload, runId, 0, { main: false, n: 3 });
-  const second = dataLayerEventFromPayload(payload, runId, 0, { main: false, n: 3 });
   expect(first?.frame).toEqual({ main: false, n: 3 });
-  expect(second?.frame).toEqual(first?.frame);
   expect(dataLayerEventFromPayload(payload, runId, 0, MAIN)?.frame).toEqual({ main: true, n: 0 });
 });
 
