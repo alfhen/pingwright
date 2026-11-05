@@ -51,31 +51,36 @@ export const dataLayerInitScript = `(() => {
   const hook = (layer) => {
     if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
     Object.defineProperty(layer, '__tagreeveHooked', { value: true });
-    // impls[0] is the push that was there first. A loader that wraps push saves the getter's value and calls it,
-    // so a call made while another is running goes one step down the chain instead of back into the wrapper.
+    // entries[k] runs impls[k]. A wrapper saves the getter's value, which is the entry below it, so a call through
+    // that reference reaches the next implementation down whenever it is made. Only the top entry reports,
+    // so a push the page makes while a wrapper runs still goes through every wrapper and is recorded once.
     const impls = [layer.push];
-    let depth = 0;
-    let level = 0;
-    const reporter = function (...items) {
-      const outer = depth === 0;
-      const saved = level;
-      level = outer ? impls.length - 1 : Math.max(level - 1, 0);
-      const started = outer ? items.map((item) => ({ item, t: clock(), args: argsOf(item) })) : [];
-      depth++;
-      try {
-        return impls[level].apply(this, items);
-      } finally {
-        depth--;
-        level = saved;
-        for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
-      }
-    };
+    const entries = [];
+    const entryFor = (k) =>
+      function (...items) {
+        if (k !== impls.length - 1) return impls[k].apply(this, items);
+        const started = items.map((item) => ({ item, t: clock(), args: argsOf(item) }));
+        try {
+          return impls[k].apply(this, items);
+        } finally {
+          for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
+        }
+      };
+    entries.push(entryFor(0));
     Object.defineProperty(layer, 'push', {
       configurable: true,
       enumerable: false,
-      get: () => reporter,
+      get: () => entries[impls.length - 1],
       set: (fn) => {
-        if (typeof fn === 'function' && fn !== reporter) impls.push(fn);
+        if (typeof fn !== 'function') return;
+        const k = entries.indexOf(fn);
+        if (k >= 0) {
+          if (k < impls.length) impls.length = k + 1;
+          return;
+        }
+        impls.push(fn);
+        entries.length = impls.length - 1;
+        entries.push(entryFor(impls.length - 1));
       },
     });
     for (const item of layer) post({ t: clock(), args: argsOf(item), uid: stampOf(item) });

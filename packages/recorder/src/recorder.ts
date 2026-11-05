@@ -202,7 +202,7 @@ export class Recorder {
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
-  private readonly dataLayerReassigns: Array<{ n: number; t: number }> = [];
+  private readonly dataLayerReassigns: Array<{ n: number; t: number; doc: string }> = [];
   private readonly mainFrameEventIds = new Set<string>();
   private readonly eventFrames = new Map<string, FrameRef>();
   private readonly frameNumbers = new WeakMap<Frame, number>();
@@ -339,12 +339,15 @@ export class Recorder {
       const isMain = source.frame === source.page.mainFrame();
       this.frameDocumentId(source.frame);
       if (payload.reassigned) {
-        this.dataLayerReassigns.push({ n: this.frameNumbers.get(source.frame)!, t: pageTimeToEpoch(payload.t, this.clockOffset) });
+        this.dataLayerReassigns.push({ n: this.frameNumbers.get(source.frame)!, doc: this.frameDocumentId(source.frame), t: pageTimeToEpoch(payload.t, this.clockOffset) });
         return;
       }
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumbers.get(source.frame)! });
       if (!event) return;
-      this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
+      // A nested push posts before the push that was running around it.
+      let at = this.dataLayerEvents.length;
+      while (at > 0 && this.dataLayerEvents[at - 1]!.t > event.t) at--;
+      this.dataLayerEvents.splice(at, 0, { ...event, stepId: this.currentStepId });
       if (isMain) this.mainFrameEventIds.add(event.id);
       else this.eventFrames.set(event.id, { id: this.frameDocumentId(source.frame), url: source.frame.url() });
     });
@@ -663,10 +666,13 @@ export class Recorder {
   }
 
   private dataLayerReassignedFlags(requests: Request[]): Flag[] {
-    const loaderTimes = requests.filter((r) => isGoogleLoaderUrl(r.url)).map((r) => r.t);
-    if (loaderTimes.length === 0) return [];
-    const first = Math.min(...loaderTimes);
-    const frames = new Set(this.dataLayerReassigns.filter((r) => r.t >= first).map((r) => r.n));
+    const loaders = requests.filter((r) => isGoogleLoaderUrl(r.url));
+    if (loaders.length === 0) return [];
+    const frames = new Set(
+      this.dataLayerReassigns
+        .filter((r) => loaders.some((l) => this.requestFrameIds.get(l.id) === r.doc && l.t <= r.t))
+        .map((r) => r.n),
+    );
     return [...frames].sort((a, b) => a - b).map((n) => ({
       type: 'flag' as const,
       id: newId('flag'),

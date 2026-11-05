@@ -189,3 +189,38 @@ test('a reassign payload makes no record and a late id becomes the record id', (
   const event = dataLayerEventFromPayload({ t: 1, args: '[{"event":"a"}]', uid: 9 }, runId, 0, MAIN);
   expect(event?.gtmUniqueEventId).toBe(9);
 });
+
+test('a push made while a wrapper runs goes through the wrapper and is recorded once', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.calls = []; const saved = dataLayer.push;
+    dataLayer.push = function () {
+      const r = saved.apply(this, arguments);
+      for (const item of arguments) { calls.push(item.event); if (item.event === 'a') dataLayer.push({ event: 'nested' }); }
+      return r;
+    };
+    dataLayer.push({ event: 'a' });`);
+  expect(page.run('calls')).toEqual(['a', 'nested']);
+  expect(page.run('dataLayer.length')).toBe(2);
+  expect(argsOf(page.sent).map((a) => ((a as Array<{ event: string }>)[0]!).event).sort()).toEqual(['a', 'nested']);
+});
+
+test('a deferred call to the saved push is not reported again and does not loop', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.n = 0; const saved = dataLayer.push;
+    dataLayer.push = function () { n++; const args = arguments; Promise.resolve().then(() => saved.apply(this, args)); return 0; };
+    dataLayer.push({ event: 'a' });`);
+  await new Promise((r) => setTimeout(r, 10));
+  expect(page.run('n')).toBe(1);
+  expect(page.run('dataLayer.length')).toBe(1);
+  expect(page.sent).toHaveLength(1);
+});
+
+test('putting the saved push back removes the wrapper', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.n = 0; const saved = dataLayer.push;
+    dataLayer.push = function () { n++; return saved.apply(this, arguments); };
+    dataLayer.push({ event: 'a' }); dataLayer.push = saved; dataLayer.push({ event: 'b' });`);
+  expect(page.run('n')).toBe(1);
+  expect(page.run('dataLayer.length')).toBe(2);
+  expect(page.sent).toHaveLength(2);
+});
