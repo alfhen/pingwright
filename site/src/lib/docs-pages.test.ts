@@ -13,6 +13,7 @@ describe('findPages', () => {
       'docs/guide/project-layout.md',
       'docs/guide/reading-results.md',
       'docs/guide/server-container.md',
+      'docs/guide/tag-reports.md',
       'docs/guide/what-it-checks.md',
       'docs/shopify-checkout.md',
     ]);

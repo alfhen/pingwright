@@ -29,7 +29,7 @@ Agent-first testing for tags and consent. Tagreeve plays a visitor in a real bro
 >
 > **In 0.4.0-rc.1:** a `handoff` step can end at a URL or an element (`until`, `settle`, `timeout`); a `payment` step types a provider's test card on a store you allow, with three opt-in checks; `tagreeve baseline save` and `run --baseline` catch drift in the shape of a run; `--viewport <W>x<H>`; `identity.country` picks the format of the fake identity (US, SE, GB, DE); optional `fill` entries; a `possibleRedirectHop` flag; and the rename to Tagreeve. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.4.0-rc.1".
 >
-> **Not built yet:** the tag-firing reporter templates and `expectedTags`, a Shopify bridge, a full Microsoft UET decoder, a `mobile` viewport preset, Firefox and WebKit. There is no MCP server: Tagreeve is a CLI, and agents read `--json`.
+> **Not built yet:** the server tag reporter, a Shopify bridge, a full Microsoft UET decoder, a `mobile` viewport preset, Firefox and WebKit. There is no MCP server: Tagreeve is a CLI, and agents read `--json`.
 
 ## Why
 
@@ -42,7 +42,7 @@ Tracking setups break quietly. A trigger change lets a pixel fire before consent
 Tagreeve is built so that a coding agent, a CI job or a person can answer these questions with one command and get structured results:
 
 - What did the site send to each vendor, before and after the visitor's consent choice?
-- Which tags fired for each event, and which expected tags did not? (Planned, not built yet.)
+- Which tags fired for each event, and which expected tags did not? See [Report which tags fired](docs/guide/tag-reports.md).
 - Does an unpublished GTM workspace behave as intended, before you publish it? Run the same scenario with and without `--gtm-override` and compare the two records with `tagreeve diff`. (In 0.2.)
 
 ## What it does
@@ -50,7 +50,7 @@ Tagreeve is built so that a coding agent, a CI job or a person can answer these 
 1. **Plays a visitor.** A Playwright browser opens your site, answers the consent banner (accept, reject, or no answer), visits pages, fills forms with a fake identity and adds to cart. Steps that a tool must not do, such as paying or logging in, are handoff steps: a person acts in a visible window while recording continues.
 2. **Records requests** from the page and from all iframes, including sandboxed iframes such as Shopify custom pixels. Capture from service workers works in Chromium only, and requests to the collector origin from dedicated workers are captured too. Each run reports which sources it covered.
 3. **Decodes hits.** Vendor plugins turn raw requests into readable hits: GA4 events and consent state, Google Ads, Meta, Meta Conversions API and Stape server-container traffic. Pinterest is decoded in 0.2. Hosts on the tracker list, such as LinkedIn, Microsoft UET and Reddit, give minimal hits with the vendor name. A full Microsoft UET decoder is not built yet.
-4. **Reports tag firing (not built yet).** An optional GTM template reports which tags fired or failed for each event, in the web container and the server container. Agents get this without a Google sign-in. Given the container's tag list, Tagreeve also reports which expected tags did not fire.
+4. **Reports tag firing.** An optional GTM template reports which tags fired or failed for each event in the web container. The server container is not covered yet. Agents get this without a Google sign-in, and `tagreeve template web --json` gives them the setup steps. Given the container's tag list, Tagreeve also reports which expected tags did not fire.
 5. **Checks expectations.** Each scenario lists what must and must not happen, for example "no Meta request before consent" or "GA4 hits after a reject carry no user ID". Tagreeve reports pass or fail, with the evidence. A scenario that names a vendor Tagreeve does not know is rejected when it is parsed.
 6. **Checks hashing.** Because Tagreeve knows the fake identity it typed, it can check that the hashed email and phone sent to Google and Meta are correct.
 7. **Compares runs.** `tagreeve diff` shows what changed per vendor and per event between two runs, for example before and after a GTM change. `tagreeve suite` does this for a folder of scenarios.
@@ -219,12 +219,12 @@ Tagreeve will not change GTM containers or sign in to Google. An agent that edit
 | `consent` | Banner handling through DuckDuckGo autoconsent, Consent Mode probe, epochs | 0.1 |
 | `expect` | Scenario format, expectations, `deniedIdentifiers`, diff engine | 0.5 |
 | `cli` | `tagreeve run`, `diff`, `suite`, `report`, `baseline`, `server-container build`, `template web`, `install-browser` | 0.5 |
-| `gtm` | Tag-firing reporter templates | not built yet |
+| `gtm` | Tag-firing reporter template (web, printed by `tagreeve template web`) | web reporter in 0.6.0-rc.2; server reporter not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
 
 ## Related tools
 
-- **EDPS website-evidence-collector** records cookies and beacons, including before consent. Tagreeve adds vendor decoding, expectations and diffs. Tag reports are planned.
+- **EDPS website-evidence-collector** records cookies and beacons, including before consent. Tagreeve adds vendor decoding, expectations and diffs. Tag reports are in the [tag reports guide](docs/guide/tag-reports.md).
 - **DuckDuckGo autoconsent** handles consent banners. Tagreeve uses it.
 - **Snowplow Micro** does local, assertable event collection for Snowplow trackers.
 - **ObservePoint**, **DataTrue** and **Trackingplan** are commercial services for tag auditing and monitoring.
