@@ -167,29 +167,26 @@ function readBlockingControls(max: number): BlockingControl[] {
     for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
     return text;
   };
+  const joinSources = (sources: Element[], el: Element): string => {
+    const own = new Set(`${el.getAttribute('aria-describedby') ?? ''} ${el.getAttribute('aria-errormessage') ?? ''}`.split(/\s+/));
+    const texts = sources.map((source) => ({ own: source.id !== '' && own.has(source.id), text: cleanText(source, el) }));
+    const kept = texts.filter((t) => !t.own);
+    return (kept.some((t) => t.text.trim()) ? kept : texts).map((t) => t.text).join(' ').replace(/\s+/g, ' ').trim();
+  };
   const nameOf = (el: Element): string => {
     const aria = el.getAttribute('aria-label');
     if (aria?.trim()) return aria;
     const ids = el.getAttribute('aria-labelledby');
     if (ids) {
-      const text = ids
-        .split(/\s+/)
-        .map((id) => {
-          const source = document.getElementById(id);
-          return source ? cleanText(source, el) : '';
-        })
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const text = joinSources(
+        ids.split(/\s+/).flatMap((id) => document.getElementById(id) ?? []),
+        el,
+      );
       if (text) return text;
     }
     const labels = (el as HTMLInputElement).labels;
     if (labels && labels.length > 0) {
-      const text = [...labels]
-        .map((label) => cleanText(label, el))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const text = joinSources([...labels], el);
       if (text) return text;
     }
     return el.getAttribute('name') ?? '';

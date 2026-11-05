@@ -99,7 +99,7 @@ test('each signal is read from the real page and no value, placeholder, error te
   for (const secret of forbidden) expect(error).not.toContain(secret);
 });
 
-const GUARD_CASES: { name: string; html: string; expected: string; forbidden: string }[] = [
+const GUARD_CASES: { name: string; html: string; expected: string | string[]; forbidden: string }[] = [
   {
     name: 'select and option',
     html: '<label>Country <select name="c" required><option value="">Choose a country</option><option value="f">Fakeland</option></select></label>',
@@ -136,6 +136,44 @@ const GUARD_CASES: { name: string; html: string; expected: string; forbidden: st
     expected: 'text "Fax" (aria-invalid)',
     forbidden: 'Fakelo',
   },
+  {
+    name: 'a describedby error label with a framework class',
+    html: '<label for="hb">Region</label><input id="hb" aria-invalid="true" aria-describedby="hb-error"><label id="hb-error" class="help-block" for="hb">Fakehb is not a region</label>',
+    expected: 'text "Region" (aria-invalid)',
+    forbidden: 'Fakehb',
+  },
+  {
+    name: 'an aria-labelledby source that is a describedby target',
+    html: '<input aria-invalid="true" aria-labelledby="ld-name ld-err" aria-describedby="ld-err"><span id="ld-name">Phone</span> <span id="ld-err">Fakeld is wrong</span>',
+    expected: 'text "Phone" (aria-invalid)',
+    forbidden: 'Fakeld',
+  },
+  { name: '.invalid', html: '<label>Inv <input name="iv" aria-invalid="true"> <span class="invalid">Fakeinvalid is wrong</span></label>', expected: 'text "Inv" (aria-invalid)', forbidden: 'Fakeinvalid' },
+  {
+    name: '.error-message',
+    html: '<label>Em <input name="em" aria-invalid="true"> <span class="error-message">Fakeem is wrong</span></label>',
+    expected: 'text "Em" (aria-invalid)',
+    forbidden: 'Fakeem',
+  },
+  { name: 'aria-invalid descendant', html: '<label>Ai <input name="ai" aria-invalid="true"> <span aria-invalid="true">Fakeai</span></label>', expected: ['text "Ai" (aria-invalid)', 'control (aria-invalid)'], forbidden: 'Fakeai' },
+  {
+    name: 'aria-errormessage descendant',
+    html: '<label>Aem <input name="aem" aria-invalid="true"> <span aria-errormessage="zz">Fakeaem</span></label>',
+    expected: 'text "Aem" (aria-invalid)',
+    forbidden: 'Fakeaem',
+  },
+  {
+    name: 'option outside a select',
+    html: '<label>Opt <input name="op" aria-invalid="true" list="dl"><datalist id="dl"><option>Fakeopt</option></datalist></label>',
+    expected: 'text "Opt" (aria-invalid)',
+    forbidden: 'Fakeopt',
+  },
+  {
+    name: 'a wrapping label with an error class',
+    html: '<label class="error">Terms <input type="checkbox" required></label>',
+    expected: 'checkbox "Terms" (required, not ticked)',
+    forbidden: 'Fakenothing',
+  },
   { name: 'aria-label name', html: '<input aria-label="Accept the privacy policy" type="checkbox" required>', expected: 'checkbox "Accept the privacy policy" (required, not ticked)', forbidden: 'Fakenothing' },
   { name: 'name attribute fallback', html: '<input name="promo_code" aria-invalid="true">', expected: 'text "promo_code" (aria-invalid)', forbidden: 'Fakenothing' },
 ];
@@ -146,8 +184,27 @@ test.each(GUARD_CASES)('name guard: $name', async ({ html, expected, forbidden }
     const page = await recorder.context.newPage();
     await page.setContent(`<!doctype html><body><form>${html}</form></body>`);
     const listed = await blockingControls(recorder.context);
-    expect(listed).toEqual([expected]);
+    expect(listed).toEqual([expected].flat());
     expect(listed.join(' ')).not.toContain(forbidden);
+  } finally {
+    await recorder.close().catch(() => undefined);
+  }
+});
+
+test('the name reader clones nothing, so no label image loads again', async () => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+  try {
+    const page = await recorder.context.newPage();
+    const hits: string[] = [];
+    recorder.context.on('request', (r) => {
+      if (r.url().includes('m15-probe.gif')) hits.push(r.url());
+    });
+    await page.setContent('<!doctype html><body><form><label>Pic <img src="/m15-probe.gif"><input aria-invalid="true"></label></form></body>');
+    await page.waitForLoadState('load');
+    const before = hits.length;
+    const listed = await blockingControls(recorder.context);
+    expect(listed).toEqual(['text "Pic" (aria-invalid)']);
+    expect(hits.length).toBe(before);
   } finally {
     await recorder.close().catch(() => undefined);
   }
