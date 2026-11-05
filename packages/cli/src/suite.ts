@@ -302,7 +302,8 @@ async function runSuite(args: SuiteArgs, io: Io, deps: SuiteDeps): Promise<numbe
   const defaults: DefaultUsed[] = [];
   const scenarioDir = args.dir ?? (await defaultScenarioDir(defaults));
   if (scenarioDir === undefined) {
-    throw new UsageError('suite needs a scenario folder: give <dir> or create tagreeve/scenarios.', 'suite');
+    const hint = args.baseline !== undefined ? ` "${args.baseline}" was read as the baseline folder: put a bare --baseline last, or give <dir> before --baseline.` : '';
+    throw new UsageError(`suite needs a scenario folder: give <dir> or create tagreeve/scenarios.${hint}`, 'suite');
   }
   const trackerListPath = await resolveTrackerList(args.trackerList, defaults);
   const autoconsentRules = await resolveAutoconsentRules(args.autoconsentRules, defaults);
@@ -384,24 +385,41 @@ async function runSuite(args: SuiteArgs, io: Io, deps: SuiteDeps): Promise<numbe
   const baselineFor = (scenario: string, store: Store | undefined, variant: string) => baselineFileName(scenario, store?.name, variant);
   if (baselineDir !== undefined) {
     const missing: string[] = [];
+    const invalid: string[] = [];
     const unreadable: string[] = [];
+    const owners = new Map<string, string>();
     for (const s of scenarios) {
       for (const { store } of targets) {
         if ((s.handoff && !args.withHandoff) || (s.payment && !testPayments.has(paymentKey(s.name, store)))) continue;
         for (const variant of args.variants.map((v) => v.name)) {
           const file = baselineFor(s.name, store, variant);
-          if (baselines.has(file) || missing.includes(join(baselineDir, file))) continue;
+          const owner = `${s.name}${store ? ` on ${store.name}` : ''} (${variant})`;
+          const first = owners.get(file);
+          if (first !== undefined) {
+            if (first !== owner) throw new UsageError(`${first} and ${owner} both use the baseline file ${file}. Rename a scenario so the file names differ.`, 'suite');
+            continue;
+          }
+          owners.set(file, owner);
           try {
             baselines.set(file, await readBaseline(join(baselineDir, file)));
           } catch (error) {
             if (!(error instanceof BaselineError)) throw error;
-            (error.message.includes('ENOENT') ? missing : unreadable).push(error.message.includes('ENOENT') ? join(baselineDir, file) : error.message);
+            if (error.missing) missing.push(join(baselineDir, file));
+            else if (error.message.startsWith('Cannot read ')) unreadable.push(error.message);
+            else invalid.push(error.message);
           }
         }
       }
     }
-    if (missing.length || unreadable.length) {
-      io.stderr(`${[...(missing.length ? ['Baseline files missing:', ...missing.map((m) => `  ${m}`)] : []), ...unreadable].join('\n')}\nSave them with "tagreeve baseline save <record>", or run the suite without --baseline.\n`);
+    if (missing.length || invalid.length || unreadable.length) {
+      const lines = [...(missing.length ? ['Baseline files missing:', ...missing.map((m) => `  ${m}`)] : []), ...invalid, ...unreadable];
+      const hints = [
+        ...(missing.length ? ['Save missing files with "tagreeve baseline save <record>".'] : []),
+        ...(invalid.length ? ['Fix an invalid file, or save it again with "tagreeve baseline save <record>".'] : []),
+        ...(unreadable.length ? ['Make the unreadable files readable.'] : []),
+        'Or run the suite without --baseline.',
+      ];
+      io.stderr(`${lines.join('\n')}\n${hints.join(' ')}\n`);
       return 2;
     }
   }

@@ -139,7 +139,7 @@ Options for suite:
   --with-test-payment        Also run scenarios with a payment step. Needs --allow-test-payment
   --allow-test-payment <host> The host that may run test payments. It must equal the --site host and be in the test-payment-hosts.json allowlist
   --config <file>            The project config, instead of tagreeve/config.yml
-  --baseline [<folder>]      Compare each cell with its baseline file in the folder (default: tagreeve/baselines) and fail on drift. Bare, put it last
+  --baseline [<folder>]      Compare each cell with its baseline file in the folder (default: tagreeve/baselines) and fail on drift. Bare, put it last: a word after it is the folder
   --network, --out, --label, --seed, --viewport, --var, --tracker-list, --autoconsent-rules, --server-container, --server-container-config, --json work as in run
 
 Options for run:

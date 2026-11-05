@@ -33,6 +33,8 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- M12 -->
 
+- `baseline save <record> x/y.json` makes the folder `x/` (#1076). `suite --baseline` hints at the ordering when the scenario folder is missing (#1075), gives a hint that fits an invalid file (#1074), no longer finds a missing file by matching `ENOENT` in the message (#1073), and exits 2 when two cells map to one baseline file name (#1068). The `suite --baseline` docs describe the drift text as it is (#1077).
+
 <!-- E07 -->
 
 <!-- B07 -->

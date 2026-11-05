@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative, resolve, isAbsolute } from 'node:path';
+import { dirname, join, relative, resolve, isAbsolute } from 'node:path';
 import { readRun, type RunRecords } from '@tagreeve/core';
 import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey, type ShapeMove } from '@tagreeve/expect';
 import { PUBLISHED_VARIANT, type BaselineArgs } from './args.ts';
@@ -19,7 +19,11 @@ export interface BaselineFile {
   keys: ShapeKey[];
 }
 
-export class BaselineError extends Error {}
+export class BaselineError extends Error {
+  constructor(message: string, readonly missing = false) {
+    super(message);
+  }
+}
 
 function hostOf(site: string): string {
   try {
@@ -82,7 +86,8 @@ export async function readBaseline(path: string): Promise<BaselineFile> {
   try {
     text = await readFile(path, 'utf8');
   } catch (error) {
-    throw new BaselineError(`Cannot read ${path}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`);
+    const code = (error as NodeJS.ErrnoException).code;
+    throw new BaselineError(`Cannot read ${path}: ${code ?? 'unknown error'}`, code === 'ENOENT');
   }
   return parseBaseline(text, path);
 }
@@ -180,6 +185,13 @@ export async function baselineCommand(args: BaselineArgs, io: Io): Promise<numbe
     output = join(DEFAULT_BASELINES, defaultBaselineName(records.run));
     if (!insideBaselines(output)) throw new BaselineError('The baseline path leaves tagreeve/baselines. Give the baseline path.');
     await mkdir(DEFAULT_BASELINES, { recursive: true });
+  }
+  if (args.output !== undefined) {
+    try {
+      await mkdir(dirname(output), { recursive: true });
+    } catch (error) {
+      throw new BaselineError(`Cannot make the folder for ${args.output}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`);
+    }
   }
   await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`);
   const hits = baseline.keys.reduce((n, k) => n + k.tuples.reduce((m, t) => m + t.count, 0), 0);

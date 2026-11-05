@@ -852,12 +852,6 @@ test('suite --baseline marks a drifting cell FAIL, exits 1 and records the count
   expect(cell('a')).toMatchObject({ status: 'pass', exitCode: 0, baseline: { file: 'a.json', drift: false } });
 });
 
-test('without --baseline the same drifting cell passes', async () => {
-  const { dir, out } = await workDir({ 'a.yml': VALID });
-  const rec = recorder(async (spec) => ({ code: 0, summary: pass.summary, path: await cellRecord(spec.out, spec.scenarioName, ['page_view', 'add_to_cart']) }));
-  expect(await suiteCommand(args(dir, out), capture().io, rec)).toBe(0);
-});
-
 test('suite --baseline exits 2 before any run and lists every missing file, store and variant names included', async () => {
   const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
   const folder = join(dir, '..', 'baselines');
@@ -971,7 +965,7 @@ test('--out gives no notice, and a refused test payment prints no notice', async
   });
 });
 
-test('a --stores cell record holds the store name and none of the store site, path, query or var values', async () => {
+test('a --stores cell record holds the store name and the site origin, and no store path, query or var values', async () => {
   const { dir, out } = await workDir({ 'a.yml': DECLARED });
   const stores = await storesFile(dir, [{ name: 'se', site: 'https://shop.example.se/private/path?token=abc', vars: { size: 'pw-secret-value' } }]);
   const written: string[] = [];
@@ -987,4 +981,59 @@ test('a --stores cell record holds the store name and none of the store site, pa
   expect(runLine.store).toBe('se');
   expect(runLine.site).toBe('https://shop.example.se');
   for (const leak of ['token=abc', 'private', 'pw-secret-value']) expect(written[0]).not.toContain(leak);
+});
+
+test('suite --baseline with a missing scenario folder hints that the folder was read as the baseline folder', async () => {
+  await inProject({}, async () => {
+    const c = capture();
+    expect(await suiteCommand(bare({ site: 'https://x.example.com', baseline: 'e2e/baseline' }), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('suite needs a scenario folder');
+    expect(c.err()).toContain('"e2e/baseline" was read as the baseline folder');
+  });
+});
+
+test('an invalid baseline file gets the fix hint and a missing one the save hint', async () => {
+  const { dir, out } = await workDir({ 'a.yml': VALID, 'b.yml': VALID });
+  const folder = join(dir, '..', 'baselines');
+  await mkdir(folder, { recursive: true });
+  await writeFile(join(folder, 'a.json'), '{bad');
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { baseline: folder }), c.io, recorder())).toBe(2);
+  expect(c.err()).toContain('is not valid JSON');
+  expect(c.err()).toContain('Fix an invalid file');
+  expect(c.err()).toContain(join(folder, 'b.json'));
+  expect(c.err()).toContain('Save missing files');
+});
+
+test('a baseline path that holds ENOENT does not turn an invalid file into a missing one', async () => {
+  const { dir, out } = await workDir({ 'ENOENT.yml': VALID });
+  const folder = join(dir, '..', 'baselines');
+  await mkdir(folder, { recursive: true });
+  await writeFile(join(folder, 'ENOENT.json'), '{bad');
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { baseline: folder }), c.io, recorder())).toBe(2);
+  expect(c.err()).toContain('is not valid JSON');
+  expect(c.err()).not.toContain('Baseline files missing');
+});
+
+test('two cells that map to one baseline file name exit 2 and name both cells', async () => {
+  const { dir, out } = await workDir({ 'a.workspace.yml': VALID, 'a.yml': VALID });
+  const folder = join(dir, '..', 'baselines');
+  await saveBaseline(folder, 'a.workspace.json', ['page_view']);
+  const rec = recorder();
+  const c = capture();
+  expect(await suiteCommand(args(dir, out, { baseline: folder, variants: [{ name: 'published' }, { name: 'workspace' }] }), c.io, rec)).toBe(2);
+  expect(rec.specs).toHaveLength(0);
+  expect(c.err()).toContain('a.workspace (published)');
+  expect(c.err()).toContain('a (workspace)');
+  expect(c.err()).toContain('a.workspace.json');
+});
+
+test('a saved drifting baseline changes nothing without --baseline', async () => {
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID }, async (root) => {
+    await saveBaseline(join(root, 'tagreeve/baselines'), 'a.json', ['page_view']);
+    const rec = recorder(async (spec) => ({ code: 0, summary: pass.summary, path: await cellRecord(spec.out, spec.scenarioName, ['page_view', 'add_to_cart']) }));
+    expect(await suiteCommand(bare({ site: 'https://shop.example.com', out: join(root, 'out') }), capture().io, rec)).toBe(0);
+    expect(await suiteCommand(bare({ site: 'https://shop.example.com', baselineDefault: true, out: join(root, 'out2') }), capture().io, rec)).toBe(1);
+  });
 });
