@@ -246,8 +246,9 @@ async function fillVerified(element: ElementHandle, field: CardField, cardHost: 
     if (Date.now() >= deadline) {
       const current = await frameStillServed(element, cardHost, field).catch(() => undefined);
       if (!current) throw new OwnReason(GONE_FRAME);
-      const reason = await countReason(current, pathOf(current.url()), count, typed);
-      await frameStillServed(element, cardHost, field);
+      const checkedUrl = current.url();
+      const reason = await countReason(current, pathOf(checkedUrl), count, typed);
+      if ((await frameStillServed(element, cardHost, field)).url() !== checkedUrl) throw new OwnReason(GONE_FRAME);
       throw new OwnReason(reason);
     }
     await new Promise((resolve) => setTimeout(resolve, 100));

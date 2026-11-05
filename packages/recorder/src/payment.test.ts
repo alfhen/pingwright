@@ -300,6 +300,18 @@ describe('duplicate frames and inputs', () => {
     expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
   });
 
+  test('a frame that moves to another accepted document during the input read gives the gone-frame reason', async () => {
+    const { error } = await play({
+      counts: [2],
+      timeout: 300,
+      navigateDuringRead: 'http://127.0.0.1:4000/card-frame-extra-input',
+      inputs: [{ name: 'secret-attr', autocomplete: 'x', type: 'text' }],
+    });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(error?.message).not.toContain('card-frame-extra-input');
+    expect(error?.message).not.toContain('secret-attr');
+  });
+
   test('a fill that keeps timing out fails at the deadline with the timeout line', async () => {
     const { error, log } = await play({ slowFill: { tries: 1e9 }, timeout: 700 });
     expect(error?.message).toContain('card field number could not be filled: elementHandle.fill: Timeout');
