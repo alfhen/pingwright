@@ -71,9 +71,35 @@ export const dataLayerInitScript = `(() => {
     const base = layer.push;
     let known = 0;
     let queued = false;
-    // Items appended since the last call. A shrink resets the known length; holes are skipped.
+    let lastFilled = false;
+    let lastItem;
+    const remember = () => {
+      try {
+        lastFilled = known > 0 && known - 1 in layer;
+        lastItem = lastFilled ? layer[known - 1] : undefined;
+      } catch {
+        lastFilled = false;
+        lastItem = undefined;
+      }
+    };
+    // The slot before the known length must be unchanged, else the array was edited in place (unshift,
+    // splice, sort, shrink) and nothing is recorded. Holes are skipped.
+    const intact = () => {
+      try {
+        if (layer.length < known) return false;
+        if (known === 0) return true;
+        return lastFilled ? known - 1 in layer && layer[known - 1] === lastItem : !(known - 1 in layer);
+      } catch {
+        return false;
+      }
+    };
     const fresh = () => {
       const length = layer.length;
+      if (!intact()) {
+        known = length;
+        remember();
+        return [];
+      }
       const from = known;
       known = length;
       const added = [];
@@ -82,6 +108,7 @@ export const dataLayerInitScript = `(() => {
           if (i in layer) added.push(layer[i]);
         } catch {}
       }
+      if (length !== from) remember();
       return added;
     };
     // The id is read in a microtask, so an id a call-through wrapper sets after the push returned is picked up.

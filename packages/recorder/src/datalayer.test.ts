@@ -410,8 +410,24 @@ test('unshift, splice and shift never throw and never record a wrong item', asyn
     dataLayer.unshift({ event: 'u' }); dataLayer.splice(1, 0, { event: 'z' }); dataLayer.shift(); dataLayer.push({ event: 'c' });`);
   await page.settle();
   const names = argsOf(page.sent).map((a) => (a as Array<{ event: string }>)[0]!.event);
-  expect(names.filter((n) => n === 'c')).toHaveLength(1);
-  expect(names.filter((n) => n === 'a')).toHaveLength(1);
+  expect(names).toEqual(['a', 'b', 'c']);
+});
+
+test('splice that inserts in front does not record the old last item again', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }, { event: 'b' });
+    dataLayer.splice(0, 1, { event: 'x' }, { event: 'y' }); dataLayer.push({ event: 'c' });`);
+  await page.settle();
+  const names = argsOf(page.sent).map((a) => (a as Array<{ event: string }>)[0]!.event);
+  expect(names).toEqual(['a', 'b', 'c']);
+});
+
+test('unshift on a pre-hooked array records nothing extra', async () => {
+  const page = pageWith(`window.dataLayer = [{ event: 'a' }];`);
+  page.run(`dataLayer.unshift({ event: 'u' });`);
+  await page.settle();
+  const names = argsOf(page.sent).map((a) => (a as Array<{ event: string }>)[0]!.event);
+  expect(names).toEqual(['a']);
 });
 
 test('a hole made by an index write is skipped and later items are recorded', async () => {
