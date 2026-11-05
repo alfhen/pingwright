@@ -3,6 +3,8 @@ import { newId, type Flag, type Id, type Request } from '@tagreeve/core';
 import { DEFAULT_DATALAYER, isDataLayerName } from './datalayer.ts';
 import { GOOGLE_HOST } from './gtm-override.ts';
 
+const GOOGLE_TAG_ID = /^(GTM|G|GT|AW|DC)-[A-Z0-9]+$/;
+
 function loaderName(url: string, googleOnly: boolean): string | undefined {
   let parsed: URL;
   try {
@@ -11,7 +13,8 @@ function loaderName(url: string, googleOnly: boolean): string | undefined {
     return undefined;
   }
   if (!/\/(gtm\.js|gtag\/js)$/.test(parsed.pathname)) return undefined;
-  if (googleOnly && !GOOGLE_HOST.test(parsed.hostname)) return undefined;
+  // A first-party or server container host serves the loader too; only a Google tag ID tells it from other gtm.js files.
+  if (googleOnly && !GOOGLE_HOST.test(parsed.hostname) && !GOOGLE_TAG_ID.test(parsed.searchParams.get('id') ?? '')) return undefined;
   const name = parsed.searchParams.get('l');
   return name === null || name === '' ? undefined : name;
 }

@@ -13,6 +13,9 @@ test('reads l= from gtm.js and gtag/js', () => {
   expect(loaderLayerName(req('https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1'))).toBeUndefined();
   expect(loaderLayerName(req('https://shop.example/app.js?l=myLayer'))).toBeUndefined();
   expect(loaderLayerName(req('https://shop.example/gtm.js?l=myLayer'))).toBeUndefined();
+  expect(loaderLayerName(req('https://sgtm.shop.example/gtm.js?id=GTM-PWTEST1&l=myLayer'))).toBe('myLayer');
+  expect(loaderLayerName(req('https://sgtm.shop.example/gtag/js?id=G-PWTEST0001&l=other'))).toBe('other');
+  expect(loaderLayerName(req('https://shop.example/gtm.js?id=jquery&l=myLayer'))).toBeUndefined();
   expect(loaderLayerName(req('not a url'))).toBeUndefined();
 });
 
