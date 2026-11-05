@@ -28,9 +28,12 @@ export interface CaptureCoverage {
  * Version 1 is the 0.2.0 record shape. Version 2 adds `Hit.fields`, `Hit.fieldsComplete` and `Hit.idFields`,
  * which a version 1 hit does not have. Version 3 adds `Request.captured: 'serverContainer'`, `Hit.via`,
  * `Run.serverContainer` and `Run.testServerContainer`. Version 4 adds `Run.label`, `Run.store` and
- * `DataLayerEvent.frame`, and a `Hit.via` with `by: 'clientId'` may be `exact`. A record with no version is version 0.
+ * `DataLayerEvent.frame`, and a `Hit.via` with `by: 'clientId'` may be `exact`. Version 5 adds `TagReport.t`,
+ * `TagReport.frame` and `TagReport.client`, `Hit.linkMiss`, `DataLayerEvent.layer`, `Request.frame`, the notes
+ * `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`.
+ * A record with no version is version 0.
  */
-export const RECORD_SCHEMA_VERSION = 4;
+export const RECORD_SCHEMA_VERSION = 5;
 
 export type ServerContainerErrorClass = 'dockerMissing' | 'imageMissing' | 'configRejected' | 'egressOpen' | 'exited' | 'notReady';
 
@@ -97,6 +100,7 @@ export interface Run {
   gtmOverride: GtmOverrideRecord | null;
   /** Set when `TAGREEVE_TEST_GTM_ORIGIN` replaced the GTM origin in gtm.js fetches. */
   testGtmOrigin?: string;
+  /** Read from `google_tag_manager[id]` where exposed. From version 5 on it is also written from web tag reports. */
   containerVersions: Record<string, string>;
   identity: Identity | null;
   identitySeed?: number;
@@ -162,6 +166,8 @@ export interface Request {
    * `serverContainer`: a call the server container made, seen by the recording proxy. It was answered locally.
    */
   captured?: 'netlog' | 'serverContainer';
+  /** The frame that made the request. `n` is the run's number for that frame. Never a URL. Absent before version 5, which reads as unknown. */
+  frame?: DataLayerFrame;
 }
 
 export interface Response {
@@ -223,6 +229,23 @@ export interface Hit {
   idFields?: string[];
   /** Set on a hit decoded from a server container call that was linked to a browser hit. */
   via?: HitVia;
+  /** Set on a server container hit that is not `exact`: why each linking rule did not prove a link. */
+  linkMiss?: HitLinkMiss;
+}
+
+/**
+ * One class name per linking rule. Rule 1 (event ID) is tried first, rule 2 (client ID) only after it.
+ * Class names only, never an ID or a value.
+ */
+export interface HitLinkMiss {
+  /** Rule 1. `none`: the call carries no event ID or no event name. `noMatch`: no browser hit has that event ID and event name. `several`: more than one does. */
+  eventId: 'none' | 'noMatch' | 'several';
+  /**
+   * Rule 2, the first reason that applies. `noClientId`: no event name, or no client ID of at least 8 characters.
+   * `noSameKeyHit`: no browser hit shares the key. `severalSameKeyHits`: more than one does.
+   * `answeredBefore`: one same-key hit, and the call came after its answer or it has no window.
+   */
+  clientId: 'noClientId' | 'noSameKeyHit' | 'severalSameKeyHits' | 'answeredBefore';
 }
 
 export interface DataLayerEvent {
@@ -238,6 +261,11 @@ export interface DataLayerEvent {
   isConsentCommand: boolean;
   /** The frame that made the push. `n` is the run's number for that frame. Absent on a version 3 event, which reads as unknown. */
   frame?: DataLayerFrame;
+  /**
+   * The name of the hooked global when it is not `dataLayer`. Absent for `dataLayer`.
+   * `gtmUniqueEventId` is read after the push returns, because GTM assigns it while handling the push.
+   */
+  layer?: string;
 }
 
 export interface DataLayerFrame {
@@ -248,6 +276,7 @@ export interface DataLayerFrame {
 export interface TagStatus {
   id: string;
   name: string | null;
+  /** GTM's values are `success`, `failure`, `exception` and `timeout`. Any other string is kept as GTM sent it. */
   status: string;
   executionTime: number | null;
 }
@@ -259,8 +288,14 @@ export interface TagReport {
   stepId: Id<'stp'> | null;
   container: string;
   side: 'web' | 'server';
+  /** The arrival time of the report on the shared clock, never a time the page gave. Required from version 5. */
+  t: number;
   event: string;
   gtmUniqueEventId: number | null;
+  /** The frame the report came from, for a web report. */
+  frame?: DataLayerFrame;
+  /** The server client name. Reserved for the server reporter. */
+  client?: string;
   tags: TagStatus[];
 }
 
@@ -319,7 +354,9 @@ export type ResultNote =
   | 'cookieNotStored'
   | 'nestedNameOnly'
   | 'serverSendProbableLink'
-  | 'serverSendUnlinked';
+  | 'serverSendUnlinked'
+  | 'noTagReports'
+  | 'tagNameUnknown';
 
 export type Severity = 'fail' | 'warn';
 
@@ -332,6 +369,8 @@ export type FlagKind =
   | 'unloadGap'
   | 'netLogUnreadable'
   | 'serverContainerFailed'
+  | 'dataLayerReassigned'
+  | 'dataLayerNotHooked'
   | (string & {});
 
 export interface Flag {

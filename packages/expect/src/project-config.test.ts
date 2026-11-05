@@ -45,10 +45,15 @@ describe('allowed keys', () => {
   });
 });
 
+test('a config without configSchemaVersion says which line to add and holds no value', () => {
+  expect(errorOf('site: https://shop.example\n')).toBe(
+    `${FILE}: line 1, configSchemaVersion: required. Add the line "configSchemaVersion: 1" at the top of the file.`,
+  );
+});
+
 describe('invalid values', () => {
   test.each([
     ['', 'must be a YAML mapping'],
-    ['site: https://a.example.com\n', 'configSchemaVersion: required'],
     ['configSchemaVersion: 2\n', 'configSchemaVersion: must be 1'],
     [`${head}site: ftp://a.example.com\n`, 'site: must be an http or https URL'],
     [`${head}site: https://user:pw@a.example.com\n`, 'site: must be an http or https URL'],

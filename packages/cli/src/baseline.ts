@@ -1,10 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative, resolve, isAbsolute } from 'node:path';
 import { readRun, type RunRecords } from '@tagreeve/core';
 import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey, type ShapeMove } from '@tagreeve/expect';
 import { PUBLISHED_VARIANT, type BaselineArgs } from './args.ts';
 import { DEFAULT_BASELINES } from './defaults.ts';
 import type { Io } from './run.ts';
+import { STORE_NAME } from './stores.ts';
 import type { BaselineSummary } from './summary.ts';
 
 export const BASELINE_SCHEMA_VERSION = 1;
@@ -122,7 +123,23 @@ export function defaultBaselineName(run: RunRecords['run']): string {
   if (run.variant !== undefined && (run.recordSchemaVersion ?? 0) < 4) {
     throw new BaselineError('This record is from a suite and was made before record schema version 4, so it does not name its store. Give the baseline path.');
   }
+  const unsafe = (part: string) => /[/\\\0]/.test(part) || part.includes('..') || part.startsWith('.');
+  const name = scenarioName(run.scenario);
+  if (
+    !name || unsafe(name) || unsafe(run.store ?? '') || unsafe(run.variant ?? '') ||
+    (run.store !== undefined && !STORE_NAME.test(run.store)) ||
+    (run.variant !== undefined && !VARIANT_NAME.test(run.variant))
+  ) {
+    throw new BaselineError('The scenario, store or variant in this record cannot name a baseline file. Give the baseline path.');
+  }
   return baselineFileName(run.scenario, run.store, run.variant);
+}
+
+const VARIANT_NAME = /^[a-z0-9][a-z0-9_-]*$/;
+
+function insideBaselines(path: string): boolean {
+  const rel = relative(resolve(DEFAULT_BASELINES), resolve(path));
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
 }
 
 /** The baseline decides `byPage`, so the new run is shaped the way the file was. A different scenario or site is a warning, not an error. */
@@ -161,6 +178,7 @@ export async function baselineCommand(args: BaselineArgs, io: Io): Promise<numbe
   let output = args.output;
   if (output === undefined) {
     output = join(DEFAULT_BASELINES, defaultBaselineName(records.run));
+    if (!insideBaselines(output)) throw new BaselineError('The baseline path leaves tagreeve/baselines. Give the baseline path.');
     await mkdir(DEFAULT_BASELINES, { recursive: true });
   }
   await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`);

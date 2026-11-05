@@ -4,21 +4,22 @@
 
 Not released yet. The newest release is 0.6.0-rc.1, below.
 
-<!-- V07 -->
+- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. Nothing writes the new fields yet. A version 4 record reads as before.
 
 <!-- J07 -->
 
 - Added the built-in check `consentModeSetup`. It warns when a Google hit shows a Consent Mode signal that was never set (`gcd` letter `l`), for example a default without `ad_user_data` and `ad_personalization`. It is `warn` by default and `options.builtins.consentModeSetup: fail` makes it fail the run.
 
-<!-- K07 -->
+- `baseline save` refuses a scenario, store or variant name that could write outside `tagreeve/baselines/`. It exits 2 and asks for an explicit path (#1069).
 
 <!-- I07 -->
 
-<!-- F07 -->
+- A project config without `configSchemaVersion` now says which line to add (#1085). `configSchemaVersion: 1` is in the README and the 0.6.0-rc.1 notes below.
 
 <!-- M13 -->
 
-<!-- M14 -->
+- Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
+- Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
 
 <!-- M15 -->
 
@@ -72,7 +73,7 @@ Release candidate. Install it with `npm i -g tagreeve@next`.
 
 - A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
-A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that moves to another host before the input count is reported gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
+A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that has gone, or is no longer served from the card host or at the path of the field, when the input is checked gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
 
 - A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
 
@@ -90,7 +91,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - New command `tagreeve init`: it makes `tagreeve/scenarios/` and `tagreeve/baselines/` and adds `/tagreeve/runs/` to `.gitignore`. `run` and `suite` now print a warning when the record folder is in a git work tree and not ignored (#811).
 
-- New file `tagreeve/config.yml`, and `--config <file>` to read another one. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. The file is plain YAML: anchors, aliases, tags and merge keys are refused. No error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
+- New file `tagreeve/config.yml`, and `--config <file>` to read another one. The file must start with `configSchemaVersion: 1`. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. The file is plain YAML: anchors, aliases, tags and merge keys are refused. No error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
 
 - `baseline save <record>` with one path writes `tagreeve/baselines/<scenario>[.<store>][.<variant>].json` and makes the folder. `run --baseline` with no file reads `tagreeve/baselines/<scenario>.json`; put the bare flag last. New `suite --baseline [<folder>]` checks every cell against its own baseline file. It reads all the files before a browser starts and exits 2 when one is missing. A drifting cell is `FAIL (baseline drift)`, the suite exits 1, and `suite.json` cells get `baseline: { file, drift, added, removed, countChanges }` (#811).
 
