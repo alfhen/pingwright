@@ -13,6 +13,7 @@ import {
   type Checkpoint,
   type Flag,
   type HashForms,
+  type DataLayerEvent,
   type Hit,
   type Identity,
   type TagreeveRecord,
@@ -27,6 +28,7 @@ import {
   globToRegExp,
 } from '@tagreeve/core';
 import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, maskValuePath, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
+import { consentModeSetup } from './consent-mode-setup.ts';
 import { hostMatches } from './hosts.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
@@ -967,7 +969,7 @@ function countByHost(flags: readonly Flag[], ctx: Context): string {
 }
 
 /** Built-in checks whose default is not `fail`. */
-const DEFAULT_SEVERITY: Partial<Record<BuiltinName, Severity>> = { earlyIdentifiers: 'warn' };
+const DEFAULT_SEVERITY: Partial<Record<BuiltinName, Severity>> = { earlyIdentifiers: 'warn', consentModeSetup: 'warn' };
 
 function builtInChecks(
   records: readonly Input[],
@@ -1024,6 +1026,12 @@ function builtInChecks(
       add(name, pass, evidence, message, note ?? (pass && passRestsOnProbableLink(ctx, passes) ? 'serverSendProbableLink' : undefined), pass || failureRestsOnProbableLink(ctx, passes)),
     );
   }
+
+  const consentMode = consentModeSetup(
+    ctx.hits.filter((h) => !ctx.serverHitIds.has(h.id)),
+    records.filter((r): r is DataLayerEvent => r.type === 'dataLayerEvent'),
+  );
+  add('consentModeSetup', consentMode.pass, consentMode.evidence, consentMode.message);
 
   const real = flags.filter((f) => f.kind === 'possibleRealData');
   // Flags from the recorder come from the raw records. Scanning again only adds requests the recorder did not flag.

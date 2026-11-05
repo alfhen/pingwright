@@ -54,6 +54,7 @@ export const ANNOT: Annotation[] = [
       '       Expected no hit to carry a sandbox URL as its page, found 1: http://localhost:57308/web-pixels@0.0.0-fixture/sandbox/modern/.',
       '  PASS builtin: deniedIdentifiers',
       '  PASS builtin: earlyIdentifiers',
+      '  PASS builtin: consentModeSetup',
       '  PASS builtin: possibleRealData',
     ],
   },
@@ -70,8 +71,8 @@ export const ANNOT: Annotation[] = [
   {
     key: 'res',
     title: 'Result',
-    body: '3 of 6 checks failed. The exit code is 1.',
-    lines: ['Result: fail (3 of 6)'],
+    body: '3 of 7 checks failed. The exit code is 1.',
+    lines: ['Result: fail (3 of 7)'],
   },
   {
     key: 'rec',

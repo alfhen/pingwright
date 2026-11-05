@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Consent Mode hits</title>
+</head>
+<body>
+<h1>Consent Mode hits</h1>
+<p>Sends one GA4 <code>page_view</code> hit for the fake tag at once, with the <code>gcs</code> and <code>gcd</code> given in the query. The page has no banner. With <code>push=default</code> it first pushes a <code>consent default</code> to the dataLayer.</p>
+<script>
+var q = new URLSearchParams(location.search);
+if (q.get('push') === 'default') {
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag('consent', 'default', { ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+}
+var url = 'https://www.google-analytics.com/g/collect?v=2&tid=G-PWTEST0001&cid=7777777777.8888888888&en=page_view';
+if (q.get('gcs')) url += '&gcs=' + encodeURIComponent(q.get('gcs'));
+if (q.get('gcd')) url += '&gcd=' + encodeURIComponent(q.get('gcd'));
+new Image().src = url;
+</script>
+</body>
+</html>
