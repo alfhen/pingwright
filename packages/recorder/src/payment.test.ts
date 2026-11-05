@@ -346,6 +346,14 @@ describe('duplicate frames and inputs', () => {
     expect(error?.message).not.toContain('other-card-host');
   });
 
+  test('a frame that moves to another accepted card document during the count gives the gone-frame reason and names no path or attribute', async () => {
+    const inputs = [{ name: 'secret-attr', autocomplete: 'x', type: 'text' }];
+    const { error } = await play({ counts: [2], inputs, moveFramesAfterCount: 'http://127.0.0.1:4000/card-frame-extra-input', timeout: 0 });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(error?.message).not.toContain('card-frame-extra-input');
+    expect(error?.message).not.toContain('secret-attr');
+  });
+
   test('a typed value in an input attribute of the count reason is scrubbed', async () => {
     const inputs = [
       { name: CARD, autocomplete: 'cc-number', type: 'text' },
