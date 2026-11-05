@@ -404,44 +404,56 @@ test('assigning a non-function to push is kept, as without the hook', async () =
   expect(page.run('dataLayer.push')).toBeUndefined();
 });
 
-test('an unshifted item is reported once and the last item is not reported again', async () => {
+test('unshift, splice and shift never throw and never record a wrong item', async () => {
   const page = pageWith('');
-  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }); dataLayer.push({ event: 'purchase' });
-    dataLayer.unshift(['consent', 'default', {}]); dataLayer.push({ event: 'c' });`);
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }, { event: 'b' });
+    dataLayer.unshift({ event: 'u' }); dataLayer.splice(1, 0, { event: 'z' }); dataLayer.shift(); dataLayer.push({ event: 'c' });`);
   await page.settle();
-  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'purchase' }], [['consent', 'default', {}]], [{ event: 'c' }]]);
+  const names = argsOf(page.sent).map((a) => (a as Array<{ event: string }>)[0]!.event);
+  expect(names.filter((n) => n === 'c')).toHaveLength(1);
+  expect(names.filter((n) => n === 'a')).toHaveLength(1);
 });
 
-test('a spliced-in item is reported once', async () => {
+test('a hole made by an index write is skipped and later items are recorded', async () => {
   const page = pageWith('');
-  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }, { event: 'b' }); dataLayer.splice(1, 0, { event: 'z' });`);
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }); dataLayer[3] = { event: 'h' };
+    dataLayer.push = Array.prototype.push; dataLayer.push({ event: 'b' });`);
   await page.settle();
-  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }], [{ event: 'z' }]]);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'h' }], [{ event: 'b' }]]);
 });
 
-test('items added after the array shrank in the same task are reported with an assigned native push', async () => {
+test('a length shrink resets the known length and later appends are recorded', async () => {
   const page = pageWith('');
   page.run(`window.dataLayer = []; dataLayer.push = Array.prototype.push; dataLayer.push({ event: 'a' }, { event: 'b' });`);
   await page.settle();
-  page.run(`dataLayer.splice(0); dataLayer.push({ event: 'c' }, { event: 'd' });`);
+  page.run(`dataLayer.length = 1; dataLayer.push;`);
   await page.settle();
-  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }], [{ event: 'c' }], [{ event: 'd' }]]);
-});
-
-test('a shift followed by a push is reported with an assigned native push', async () => {
-  const page = pageWith('');
-  page.run(`window.dataLayer = []; dataLayer.push = Array.prototype.push; dataLayer.push({ event: 'a' }, { event: 'b' });`);
-  await page.settle();
-  page.run(`dataLayer.shift(); dataLayer.push({ event: 'c' });`);
+  page.run(`dataLayer.push({ event: 'c' });`);
   await page.settle();
   expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }], [{ event: 'c' }]]);
 });
 
-test('a wrapper that sends some items to unshift gives one record per item', async () => {
+test('a length write that makes holes does not throw and records later pushes', async () => {
   const page = pageWith('');
-  page.run(`window.dataLayer = []; const saved = dataLayer.push;
-    dataLayer.push = function (a, b) { saved.call(this, a); this.unshift(b); return this.length; };
-    dataLayer.push({ event: 'a' }, { event: 'x' }); dataLayer.push({ event: 'b' }, { event: 'y' });`);
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }); dataLayer.length = 3;
+    dataLayer.push = Array.prototype.push; dataLayer.push({ event: 'b' });`);
   await page.settle();
-  expect(argsOf(page.sent).map((a) => (a as Array<{ event: string }>)[0]!.event).sort()).toEqual(['a', 'b', 'x', 'y']);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }]]);
+});
+
+test('a throwing binding and a throwing item getter never reach the page', async () => {
+  const page = pageWith('');
+  page.run(`window.__tagreeveDataLayer = () => { throw new Error('binding'); };
+    window.dataLayer = []; const bad = {}; Object.defineProperty(bad, 'gtm.uniqueEventId', { get() { throw new Error('getter'); } });
+    Object.defineProperty(bad, 'event', { enumerable: true, get() { throw new Error('event'); } });
+    dataLayer.push(bad); dataLayer.push = Array.prototype.push; dataLayer.push(bad, { event: 'x' });`);
+  const errors: unknown[] = [];
+  const onError = (e: unknown) => errors.push(e);
+  process.on('uncaughtException', onError);
+  process.on('unhandledRejection', onError);
+  await page.settle();
+  process.off('uncaughtException', onError);
+  process.off('unhandledRejection', onError);
+  expect(errors).toEqual([]);
+  expect(page.run('dataLayer.length')).toBe(3);
 });

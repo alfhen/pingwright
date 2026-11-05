@@ -35,9 +35,11 @@ export const dataLayerInitScript = `(() => {
     }
   };
   const post = (message) => {
-    const send = window[binding];
-    if (typeof send !== 'function') return;
-    send(message).catch(() => {});
+    try {
+      const send = window[binding];
+      if (typeof send !== 'function') return;
+      Promise.resolve(send(message)).catch(() => {});
+    } catch {}
   };
   const argsOf = (item) => safe(Object.prototype.toString.call(item) === '[object Arguments]' ? Array.from(item) : [item]);
   const stampOf = (item) => {
@@ -48,8 +50,16 @@ export const dataLayerInitScript = `(() => {
       return undefined;
     }
   };
-  // Page code always sees the function it assigned last. A push is recorded when it reaches the array: through
-  // the base push (which wrappers save and call through) or, for pushes that skip it, by comparing the length.
+  // Page code always sees the function it assigned last. Only items appended at the end are recorded: through
+  // the base push (which wrappers save and call through) or, for pushes that skip it, by length growth.
+  // Nothing here may throw into page code, so every entry point swallows errors.
+  const guarded = (fn) => (...a) => {
+    try {
+      return fn(...a);
+    } catch {
+      return undefined;
+    }
+  };
   const hook = (layer) => {
     if (!Array.isArray(layer) || layer.__tagreeveHooked) return () => {};
     try {
@@ -59,58 +69,64 @@ export const dataLayerInitScript = `(() => {
     }
     const callIt = Reflect.apply;
     const base = layer.push;
-    const slice = Array.prototype.slice;
-    let seen = callIt(slice, layer, []);
+    let known = 0;
     let queued = false;
-    // Items that reached the array since the last call, in array order. Pushes only append, but unshift, splice
-    // and shrink-then-grow do not, so when the recorded items are no longer a prefix the array is compared with
-    // them as a multiset by identity: the same object pushed twice still counts twice.
+    // Items appended since the last call. A shrink resets the known length; holes are skipped.
     const fresh = () => {
-      const size = seen.length;
-      if (layer.length >= size && (size === 0 || layer[size - 1] === seen[size - 1])) {
-        const added = callIt(slice, layer, [size]);
-        for (let i = 0; i < added.length; i++) seen[size + i] = added[i];
-        return added;
-      }
-      const counts = new Map();
-      for (const item of seen) counts.set(item, (counts.get(item) || 0) + 1);
+      const length = layer.length;
+      const from = known;
+      known = length;
       const added = [];
-      const now = callIt(slice, layer, []);
-      for (const item of now) {
-        const left = counts.get(item) || 0;
-        if (left > 0) counts.set(item, left - 1);
-        else added.push(item);
+      for (let i = from; i < length; i++) {
+        try {
+          if (i in layer) added.push(layer[i]);
+        } catch {}
       }
-      seen = now;
       return added;
     };
     // The id is read in a microtask, so an id a call-through wrapper sets after the push returned is picked up.
     const report = (added, t = clock()) => {
-      const items = added.map((item) => ({ item, args: argsOf(item) }));
-      queueMicrotask(() => {
-        for (const { item, args } of items) post({ t, args, uid: stampOf(item) });
-      });
+      const items = [];
+      for (const item of added) {
+        try {
+          items.push({ item, args: argsOf(item) });
+        } catch {}
+      }
+      queueMicrotask(guarded(() => {
+        for (const { item, args } of items) {
+          try {
+            post({ t, args, uid: stampOf(item) });
+          } catch {}
+        }
+      }));
     };
-    const sync = () => {
+    const sync = guarded(() => {
       queued = false;
       const added = fresh();
       if (added.length > 0) report(added);
-    };
+    });
     const schedule = () => {
       if (queued) return;
       queued = true;
       queueMicrotask(sync);
     };
     const record = function (...items) {
-      if (this !== layer) return callIt(base, this, items);
-      sync();
-      const t = clock();
+      let t;
+      try {
+        if (this === layer) {
+          sync();
+          t = clock();
+        }
+      } catch {}
       try {
         return callIt(base, this, items);
       } finally {
-        // A push nested inside the base may already have reported part of the new items.
-        const added = fresh();
-        if (added.length > 0) report(added, t);
+        try {
+          if (this === layer) {
+            const added = fresh();
+            if (added.length > 0) report(added, t);
+          }
+        } catch {}
       }
     };
     let assigned = record;
@@ -118,39 +134,50 @@ export const dataLayerInitScript = `(() => {
       Object.defineProperty(layer, 'push', {
         configurable: true,
         enumerable: false,
-        get: () => {
+        get: guarded(() => {
           schedule();
           return assigned;
-        },
-        set: (fn) => {
+        }),
+        set: guarded((fn) => {
           assigned = fn;
           schedule();
-        },
+        }),
       });
     } catch {}
     try {
       addEventListener('pagehide', sync);
     } catch {}
-    for (const item of seen) report([item]);
+    try {
+      report(fresh());
+    } catch {}
     return sync;
   };
   let current = window.dataLayer;
-  let syncCurrent = hook(current);
+  let syncCurrent = () => {};
+  try {
+    syncCurrent = hook(current);
+  } catch {}
   Object.defineProperty(window, 'dataLayer', {
     configurable: true,
     enumerable: true,
     get: () => {
-      queueMicrotask(syncCurrent);
+      try {
+        queueMicrotask(syncCurrent);
+      } catch {}
       return current;
     },
     set: (value) => {
       const previous = current;
       current = value;
-      if (Array.isArray(previous) && previous.__tagreeveHooked && Array.isArray(value) && value !== previous) {
-        post({ t: clock(), args: '[]', reassigned: true });
+      try {
+        if (Array.isArray(previous) && previous.__tagreeveHooked && Array.isArray(value) && value !== previous) {
+          post({ t: clock(), args: '[]', reassigned: true });
+        }
+        syncCurrent();
+        syncCurrent = hook(value);
+      } catch {
+        syncCurrent = () => {};
       }
-      syncCurrent();
-      syncCurrent = hook(value);
     },
   });
 })();`;
