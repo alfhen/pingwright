@@ -23,7 +23,7 @@ In the folder of your project, run:
 tagreeve init
 ```
 
-It makes `tagreeve/scenarios/` and `tagreeve/baselines/`, and adds `/tagreeve/runs/` to `.gitignore` so records stay out of your repo. It writes no scenario.
+It makes `tagreeve/scenarios/` and `tagreeve/baselines/`, writes a starter `tagreeve/config.yml`, and adds `/tagreeve/runs/` to `.gitignore` so records stay out of your repo. It writes no scenario. Add `--json` to get the result as JSON.
 
 ## Write a scenario
 
