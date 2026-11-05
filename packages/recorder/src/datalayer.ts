@@ -89,8 +89,10 @@ export const dataLayerInitScript = `(() => {
         return callIt(base, this, items);
       } finally {
         const to = layer.length;
+        // A push nested inside the base may already have reported part of from..to.
+        const start = Math.max(from, known);
         known = to;
-        if (to > from) report(from, to, t);
+        if (to > start) report(start, to, t);
       }
     };
     let assigned = record;
