@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -21,30 +21,42 @@ afterAll(async () => {
 test('a dataLayer push records whether the main frame made it and a frame number', async () => {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   try {
-    await recorder.visit(`${site.url}/datalayer-frame`);
+    const page = await recorder.visit(`${site.url}/datalayer-frame`);
+    await recorder.wait(600);
+    const child = page.frames().find((f) => f !== page.mainFrame());
+    expect(child).toBeDefined();
+    await Promise.all([child!.waitForNavigation(), child!.evaluate(() => location.assign('/datalayer-frame-child?again=1'))]);
     await recorder.wait(600);
   } catch (error) {
     await recorder.close().catch(() => undefined);
     throw error;
   }
-  const { records } = await recorder.close();
+  const closed = await recorder.close();
+  const records = closed.records;
+  const written = await readFile(closed.path, 'utf8');
+
   const top = records.dataLayerEvents.find((e) => e.event === 'top_push');
-  const embedded = records.dataLayerEvents.find((e) => e.event === 'embedded_push');
   const top2 = records.dataLayerEvents.find((e) => e.event === 'top_push_2');
+  const embeddedPushes = records.dataLayerEvents.filter((e) => e.event === 'embedded_push');
   const embedded2 = records.dataLayerEvents.find((e) => e.event === 'embedded_push_2');
-  expect(top2).toBeDefined();
-  expect(embedded2).toBeDefined();
-  expect(top2!.frame).toEqual(top!.frame);
-  expect(embedded2!.frame).toEqual(embedded!.frame);
   expect(top).toBeDefined();
-  expect(embedded).toBeDefined();
+  expect(top2!.frame).toEqual(top!.frame);
+  expect(embedded2).toBeDefined();
+  expect(embeddedPushes).toHaveLength(2);
+  const [before, after] = embeddedPushes;
+  expect(after!.frame).toEqual(before!.frame);
+  expect(embedded2!.frame).toEqual(before!.frame);
   expect(top!.frame?.main).toBe(true);
-  expect(embedded!.frame?.main).toBe(false);
-  expect(embedded!.frame?.n).not.toBe(top!.frame?.n);
-  for (const event of [top!, embedded!]) {
-    expect(Object.keys(event.frame!).sort()).toEqual(['main', 'n']);
-    const text = JSON.stringify({ ...event, args: undefined });
+  expect(before!.frame?.main).toBe(false);
+  expect(before!.frame?.n).not.toBe(top!.frame?.n);
+
+  const lines = written.split('\n').filter(Boolean).map((l) => JSON.parse(l) as { type: string; frame?: unknown });
+  const writtenEvents = lines.filter((l) => l.type === 'dataLayerEvent');
+  expect(writtenEvents.length).toBe(records.dataLayerEvents.length);
+  for (const event of [...records.dataLayerEvents, ...writtenEvents]) {
+    const text = JSON.stringify(event);
     expect(text).not.toContain('datalayer-frame');
     expect(text).not.toContain(site.url);
   }
+  for (const event of [top!, ...embeddedPushes]) expect(Object.keys(event.frame!).sort()).toEqual(['main', 'n']);
 }, 60_000);

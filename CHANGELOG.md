@@ -41,6 +41,8 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- X07 -->
 
+- The dataLayer frame number comes from one helper, with no side-effect call (#1033). The main and embedded filters read the recorded `frame.main` (#1036). The frame e2e navigates the embedded frame between two pushes and checks `args` and the written file (#1034, #1035).
+
 <!-- M22 -->
 
 <!-- L07 -->
