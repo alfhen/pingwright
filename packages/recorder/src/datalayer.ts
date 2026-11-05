@@ -48,95 +48,89 @@ export const dataLayerInitScript = `(() => {
       return undefined;
     }
   };
+  // Page code always sees the function it assigned last. A push is recorded when it reaches the array: through
+  // the base push (which wrappers save and call through) or, for pushes that skip it, by comparing the length.
   const hook = (layer) => {
-    if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
+    if (!Array.isArray(layer) || layer.__tagreeveHooked) return () => {};
     try {
       Object.defineProperty(layer, '__tagreeveHooked', { value: true });
     } catch {
-      return;
+      return () => {};
     }
-    // Each entry runs its own implementation, so a saved push reaches the same one whenever it is called, in any
-    // unwrap order. A call to the current top entry from outside any push is a new push and always reports its
-    // objects. Any other call reports an object only if no entry has reported it yet, so a push is recorded once
-    // however wrappers call each other. Primitives cannot be tracked and are reported at the outermost call only.
-    // An assigned function is wrapped in a Proxy, so the page still sees its own properties on it.
-    const seen = new WeakSet();
     const callIt = Reflect.apply;
-    const entries = new WeakMap();
-    const known = new WeakSet();
-    let depth = 0;
-    let top;
-    const isObject = (item) => item !== null && (typeof item === 'object' || typeof item === 'function');
-    const entryFor = (impl, base) => {
-      let entry;
-      const run = (thisArg, items) => {
-        const outermost = depth === 0;
-        const newPush = outermost && entry === top;
-        const fresh = items.filter((item) => {
-          if (isObject(item)) {
-            const wasSeen = seen.has(item);
-            seen.add(item);
-            return newPush || !wasSeen;
-          }
-          return outermost;
-        });
-        const started = fresh.map((item) => ({ item, t: clock(), args: argsOf(item) }));
-        depth++;
-        try {
-          return callIt(impl, thisArg, items);
-        } finally {
-          depth--;
-          if (base) for (const item of items) if (isObject(item)) seen.delete(item);
-          for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
-        }
-      };
-      entry = base
-        ? function (...items) {
-            return run(this, items);
-          }
-        : new Proxy(impl, { apply: (target, thisArg, items) => run(thisArg, items) });
-      known.add(entry);
-      return entry;
+    const base = layer.push;
+    let known = layer.length;
+    let queued = false;
+    // The id is read in a microtask, so an id a call-through wrapper sets after the push returned is picked up.
+    const report = (from, to, t = clock()) => {
+      const items = [];
+      for (let i = from; i < to; i++) items.push({ item: layer[i], args: argsOf(layer[i]) });
+      queueMicrotask(() => {
+        for (const { item, args } of items) post({ t, args, uid: stampOf(item) });
+      });
     };
-    top = entryFor(layer.push, true);
+    const sync = () => {
+      queued = false;
+      const from = known;
+      known = layer.length;
+      if (known > from) report(from, known);
+    };
+    const schedule = () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(sync);
+    };
+    const record = function (...items) {
+      if (this !== layer) return callIt(base, this, items);
+      sync();
+      const from = known;
+      const t = clock();
+      try {
+        return callIt(base, this, items);
+      } finally {
+        const to = layer.length;
+        known = to;
+        if (to > from) report(from, to, t);
+      }
+    };
+    let assigned = record;
     try {
       Object.defineProperty(layer, 'push', {
         configurable: true,
         enumerable: false,
-        get: () => top,
+        get: () => {
+          schedule();
+          return assigned;
+        },
         set: (fn) => {
-          if (typeof fn !== 'function' || known.has(fn)) {
-            top = fn;
-            return;
-          }
-          let entry = entries.get(fn);
-          if (!entry) {
-            entry = entryFor(fn, false);
-            entries.set(fn, entry);
-          }
-          top = entry;
+          assigned = fn;
+          schedule();
         },
       });
-    } catch {
-      try {
-        layer.push = top;
-      } catch {}
-    }
-    for (const item of layer) post({ t: clock(), args: argsOf(item), uid: stampOf(item) });
+    } catch {}
+    try {
+      addEventListener('pagehide', sync);
+    } catch {}
+    for (let i = 0; i < known; i++) report(i, i + 1);
+    return sync;
   };
   let current = window.dataLayer;
-  hook(current);
+  let syncCurrent = hook(current);
   Object.defineProperty(window, 'dataLayer', {
     configurable: true,
     enumerable: true,
-    get: () => current,
+    get: () => {
+      queueMicrotask(syncCurrent);
+      return current;
+    },
     set: (value) => {
       const previous = current;
       current = value;
       if (Array.isArray(previous) && previous.__tagreeveHooked && Array.isArray(value) && value !== previous) {
         post({ t: clock(), args: '[]', reassigned: true });
       }
-      hook(value);
+      syncCurrent();
+      syncCurrent = hook(value);
     },
   });
 })();`;

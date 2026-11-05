@@ -22,6 +22,7 @@ async function load(query: string) {
   const previous = process.env.TAGREEVE_TEST_GTM_ORIGIN;
   process.env.TAGREEVE_TEST_GTM_ORIGIN = site.containerUrl;
   let ownPushes: unknown;
+  let wrapRuns: unknown;
   let recorder;
   try {
     recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
@@ -33,13 +34,14 @@ async function load(query: string) {
     const page = await recorder.visit(`${site.url}/datalayer-wrap${query}`);
     await recorder.wait(600);
     ownPushes = await page.evaluate(() => (window as unknown as { pwOwnPushes: number }).pwOwnPushes);
+    wrapRuns = await page.evaluate(() => (window as unknown as { pwWrapRuns: number }).pwWrapRuns);
   } catch (error) {
     await recorder.close().catch(() => undefined);
     throw error;
   }
   const { records } = await recorder.close();
   const own = records.dataLayerEvents.filter((e) => ['before_loader', 'after_loader_1', 'after_loader_2'].includes(e.event ?? ''));
-  return { records, own, ownPushes };
+  return { records, own, ownPushes, wrapRuns };
 }
 
 const names = ['before_loader', 'after_loader_1', 'after_loader_2'];
@@ -54,9 +56,22 @@ test('wrap=through records each push once and reads the id the loader sets after
   expect(records.flags.filter((f) => f.kind === 'dataLayerReassigned')).toEqual([]);
 }, 60_000);
 
-test('wrap=drop still records the pushes after the wrapper', async () => {
+test('wrap=drop does not record pushes the wrapper dropped, because they never reached the array', async () => {
   const { own, ownPushes } = await load('?wrap=drop');
   expect(ownPushes).toBe(3);
+  expect(own.map((e) => e.event)).toEqual(['before_loader']);
+}, 60_000);
+
+test('wrap=native records pushes made through an assigned Array.prototype.push', async () => {
+  const { own, ownPushes } = await load('?wrap=native');
+  expect(ownPushes).toBe(3);
+  expect(own.map((e) => e.event)).toEqual(names);
+}, 60_000);
+
+test('wrap=guard runs an identity-guarded wrapper once per push and records each push once', async () => {
+  const { own, ownPushes, wrapRuns } = await load('?wrap=guard');
+  expect(ownPushes).toBe(3);
+  expect(wrapRuns).toBe(2);
   expect(own.map((e) => e.event)).toEqual(names);
 }, 60_000);
 

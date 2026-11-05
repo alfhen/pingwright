@@ -6,7 +6,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. Nothing writes the new fields yet. A version 4 record reads as before.
 
-- **The `dataLayer` hook survives a loader that wraps `push`.** Each push is recorded once, also when the wrapper does not call the saved `push`. `gtmUniqueEventId` is read after the push returns, so an ID a loader sets is no longer null. A page that replaces `window.dataLayer` after a Google loader request gets a `dataLayerReassigned` flag. Pushes to the new array are still recorded.
+- **The `dataLayer` hook survives a loader that wraps `push`.** `dataLayer.push` stays exactly the function the page assigned, so identity-guarded installs behave as without Tagreeve. Each push that reaches the array is recorded once, also when the page assigns `Array.prototype.push`. A push that a page wrapper drops without calling through is not recorded, because it never reached the array. `gtmUniqueEventId` is read after the push returns, so an ID a loader sets is no longer null. A page that replaces `window.dataLayer` after a Google loader request gets a `dataLayerReassigned` flag. Pushes to the new array are still recorded.
 
 <!-- Z07 -->
 

@@ -11,6 +11,7 @@ const params = new URLSearchParams(location.search);
 const wrap = params.get('wrap');
 const reassign = params.has('reassign');
 window.pwOwnPushes = 0;
+window.pwWrapRuns = 0;
 window.dataLayer = window.dataLayer || [];
 function pwPush(item) {
   window.pwOwnPushes += 1;
@@ -30,6 +31,23 @@ if (wrap === 'through' || wrap === 'drop') {
     }
     return result;
   };
+}
+if (wrap === 'native') window.dataLayer.push = Array.prototype.push;
+if (wrap === 'guard') {
+  let saved;
+  let mine;
+  const install = () => {
+    if (window.dataLayer.push === mine) return;
+    saved = window.dataLayer.push;
+    mine = function () {
+      window.pwWrapRuns += 1;
+      return saved.apply(this, arguments);
+    };
+    window.dataLayer.push = mine;
+  };
+  install();
+  install();
+  install();
 }
 if (reassign) {
   document.write('<script src="https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1"><\/script>');

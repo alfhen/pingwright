@@ -28,6 +28,13 @@ describe('/datalayer-wrap', () => {
     expect(html).toContain("item['gtm.uniqueEventId']");
   });
 
+  test('has a native-assign mode and an identity-guarded install mode', async () => {
+    const html = await page('?wrap=native');
+    expect(html).toContain('window.dataLayer.push = Array.prototype.push');
+    expect(html).toContain("wrap === 'guard'");
+    expect(html).toContain('window.dataLayer.push === mine');
+  });
+
   test('the reassign mode loads the fake container and replaces the array', async () => {
     const html = await page('?reassign=1');
     expect(html).toContain('gtm.js?id=GTM-PWTEST1');
