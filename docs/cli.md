@@ -299,7 +299,7 @@ Writes the shape of one run to a small file you can commit, so a later run can b
 | --- | --- |
 | `--by-page` | Adds the page path to each key, as in `diff`. The path only: no query, no host. Segments that look like a value are stored as `*`, by the same rules as in `diff`. The baseline holds no per-order token of those shapes. |
 
-The file holds `baselineSchemaVersion`, the `scenario` name, the `site` host (no scheme, port or path), `byPage` and a sorted list of keys. A key is the consent epoch label, the vendor and the event. Under each key are the tuples seen: the four consent states, the raw `gcs` and `gcd` values, the names of the IDs that are present, and a hit count. It holds no hit ID, time, URL, query, cookie or value. There is no `approve` command: to accept a change, save the baseline again and review the file diff in the pull request.
+The file holds `baselineSchemaVersion`, the `scenario` name, the `site` host (no scheme, port or path), `byPage` and a sorted list of keys, and optionally a `dataLayer` section of push shapes. A key is the consent epoch label, the vendor and the event. Under each key are the tuples seen: the four consent states, the raw `gcs` and `gcd` values, the names of the IDs that are present, and a hit count. It holds no hit ID, time, URL, query, cookie or value (the `dataLayer` section holds key paths and types only). There is no `approve` command: to accept a change, save the baseline again and review the file diff in the pull request.
 
 Then check a new run against it:
 
