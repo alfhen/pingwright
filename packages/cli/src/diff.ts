@@ -1,5 +1,6 @@
 import { readRun, type RunRecords } from '@tagreeve/core';
-import { diffRuns, type ChangedHit, type DiffKey, type DiffResult, type PushDiff } from '@tagreeve/expect';
+import { readFile } from 'node:fs/promises';
+import { diffRuns, parseEventMap, type ChangedHit, type DiffKey, type DiffResult, type PushDiff } from '@tagreeve/expect';
 import type { DiffArgs } from './args.ts';
 import type { Io } from './run.ts';
 
@@ -110,10 +111,19 @@ async function load(path: string): Promise<RunRecords> {
   }
 }
 
+async function readMap(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8');
+  } catch {
+    throw new Error(`Cannot read the event map ${path}.`);
+  }
+}
+
 /** Returns 0 once both files read. An unreadable or invalid file throws, and main turns that into exit 2. */
 export async function diffCommand(args: DiffArgs, io: Io): Promise<number> {
   const [a, b] = await Promise.all([load(args.a), load(args.b)]);
-  const result = diffRuns(a, b, { byPage: args.byPage, acrossFrames: args.acrossFrames });
+  const eventMap = args.eventMap === undefined ? undefined : parseEventMap(await readMap(args.eventMap), args.eventMap);
+  const result = diffRuns(a, b, { byPage: args.byPage, acrossFrames: args.acrossFrames, eventMap });
   for (const [path, run] of [[args.a, a], [args.b, b]] as const) {
     if (run.truncatedAtLine) result.warnings.push(`${path}: truncated at line ${run.truncatedAtLine}; later records are missing from the diff`);
   }

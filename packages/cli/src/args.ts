@@ -60,6 +60,7 @@ export interface DiffArgs {
   b: string;
   byPage: boolean;
   acrossFrames: boolean;
+  eventMap?: string;
   allFlags: boolean;
   json: boolean;
 }
@@ -119,7 +120,7 @@ export type HelpTopic = (typeof COMMANDS)[number];
 
 export const USAGE = `Usage:
   tagreeve run <scenario.yml> [--site <url>] [options]
-  tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--across-frames] [--all-flags] [--json]
+  tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--across-frames] [--event-map <file>] [--all-flags] [--json]
   tagreeve baseline save <run.jsonl> [<baseline.json>] [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
@@ -212,6 +213,7 @@ Compares the hits and the dataLayer push shapes of two run records. It exits 0 w
 Options:
   --by-page                  Add the page path to each key
   --across-frames            Treat a push as the same event whichever frame sent it
+  --event-map <file>         Rename events and key paths of the first run to those of the second (JSON)
   --all-flags                Also show flag count changes for hosts allowed by allowUnknownDestination and for platform hosts (hidden by default)
   --json                     Print the full diff result as JSON
   -h, --help                 Show this help
@@ -330,6 +332,7 @@ const OPTIONS = {
   'by-page': { type: 'boolean' },
   'all-flags': { type: 'boolean' },
   'across-frames': { type: 'boolean' },
+  'event-map': { type: 'string' },
   version: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
@@ -394,6 +397,7 @@ function parseCommand(argv: string[]): Command {
   }
   if (values.help || command === undefined) return { command: 'help' };
   if (values['across-frames'] && command !== 'diff') throw new UsageError('--across-frames is only for diff.');
+  if (values['event-map'] !== undefined && command !== 'diff') throw new UsageError('--event-map is only for diff.');
   if (command === 'init') {
     if (rest.length) throw new UsageError('init takes no arguments');
     const other = Object.keys(values).find((key) => key !== 'json');
@@ -417,7 +421,7 @@ function parseCommand(argv: string[]): Command {
   }
   if (command === 'diff') {
     if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
-    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, acrossFrames: values['across-frames'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
+    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, acrossFrames: values['across-frames'] ?? false, ...(values['event-map'] !== undefined && { eventMap: values['event-map'] }), allFlags: values['all-flags'] ?? false, json: values.json ?? false };
   }
   if (command === 'baseline') {
     if (rest[0] !== 'save') throw new UsageError('baseline needs a subcommand: save');

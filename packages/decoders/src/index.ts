@@ -14,3 +14,4 @@ export * from './registry.ts';
 export * from './tracker-list.ts';
 export * from './tracker.ts';
 export * from './platform-hosts.ts';
+export * from './event-names.ts';

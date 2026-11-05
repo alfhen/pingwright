@@ -83,6 +83,7 @@ const pages: Record<string, string> = {
   '/consent-mode-hits': 'consent-mode-hits.html',
   '/datalayer-shapes': 'datalayer-shapes.html',
   '/datalayer-build': 'datalayer-build.html',
+  '/datalayer-event-map': 'datalayer-event-map.html',
   '/container/direct': 'container-direct.html',
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',
