@@ -19,8 +19,10 @@ export interface BaselineFile {
   keys: ShapeKey[];
 }
 
+export type BaselineErrorCode = 'missing' | 'unreadable' | 'invalid' | 'usage';
+
 export class BaselineError extends Error {
-  constructor(message: string, readonly missing = false) {
+  constructor(message: string, readonly code: BaselineErrorCode) {
     super(message);
   }
 }
@@ -68,15 +70,15 @@ export function parseBaseline(text: string, label: string): BaselineFile {
   try {
     json = JSON.parse(text);
   } catch {
-    throw new BaselineError(`${label} is not valid JSON`);
+    throw new BaselineError(`${label} is not valid JSON`, 'invalid');
   }
-  if (!isRecord(json) || json.baselineSchemaVersion === undefined) throw new BaselineError(`${label} is not a baseline file`);
+  if (!isRecord(json) || json.baselineSchemaVersion === undefined) throw new BaselineError(`${label} is not a baseline file`, 'invalid');
   if (json.baselineSchemaVersion !== BASELINE_SCHEMA_VERSION) {
     const found = typeof json.baselineSchemaVersion === 'number' ? json.baselineSchemaVersion : '?';
-    throw new BaselineError(`${label} has baselineSchemaVersion ${found}, and this Tagreeve reads ${BASELINE_SCHEMA_VERSION}`);
+    throw new BaselineError(`${label} has baselineSchemaVersion ${found}, and this Tagreeve reads ${BASELINE_SCHEMA_VERSION}`, 'invalid');
   }
   if (typeof json.scenario !== 'string' || typeof json.site !== 'string' || typeof json.byPage !== 'boolean' || !Array.isArray(json.keys) || !json.keys.every(validKey)) {
-    throw new BaselineError(`${label} is not a valid baseline file`);
+    throw new BaselineError(`${label} is not a valid baseline file`, 'invalid');
   }
   return json as unknown as BaselineFile;
 }
@@ -87,7 +89,7 @@ export async function readBaseline(path: string): Promise<BaselineFile> {
     text = await readFile(path, 'utf8');
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    throw new BaselineError(`Cannot read ${path}: ${code ?? 'unknown error'}`, code === 'ENOENT');
+    throw new BaselineError(`Cannot read ${path}: ${code ?? 'unknown error'}`, code === 'ENOENT' ? 'missing' : 'unreadable');
   }
   return parseBaseline(text, path);
 }
@@ -126,7 +128,7 @@ export function baselineFileName(scenario: string, store?: string, variant?: str
 
 export function defaultBaselineName(run: RunRecords['run']): string {
   if (run.variant !== undefined && (run.recordSchemaVersion ?? 0) < 4) {
-    throw new BaselineError('This record is from a suite and was made before record schema version 4, so it does not name its store. Give the baseline path.');
+    throw new BaselineError('This record is from a suite and was made before record schema version 4, so it does not name its store. Give the baseline path.', 'usage');
   }
   const unsafe = (part: string) => /[/\\\0]/.test(part) || part.includes('..') || part.startsWith('.');
   const name = scenarioName(run.scenario);
@@ -135,7 +137,7 @@ export function defaultBaselineName(run: RunRecords['run']): string {
     (run.store !== undefined && !STORE_NAME.test(run.store)) ||
     (run.variant !== undefined && !VARIANT_NAME.test(run.variant))
   ) {
-    throw new BaselineError('The scenario, store or variant in this record cannot name a baseline file. Give the baseline path.');
+    throw new BaselineError('The scenario, store or variant in this record cannot name a baseline file. Give the baseline path.', 'usage');
   }
   return baselineFileName(run.scenario, run.store, run.variant);
 }
@@ -183,14 +185,14 @@ export async function baselineCommand(args: BaselineArgs, io: Io): Promise<numbe
   let output = args.output;
   if (output === undefined) {
     output = join(DEFAULT_BASELINES, defaultBaselineName(records.run));
-    if (!insideBaselines(output)) throw new BaselineError('The baseline path leaves tagreeve/baselines. Give the baseline path.');
+    if (!insideBaselines(output)) throw new BaselineError('The baseline path leaves tagreeve/baselines. Give the baseline path.', 'usage');
     await mkdir(DEFAULT_BASELINES, { recursive: true });
   }
   if (args.output !== undefined) {
     try {
       await mkdir(dirname(output), { recursive: true });
     } catch (error) {
-      throw new BaselineError(`Cannot make the folder for ${args.output}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`);
+      throw new BaselineError(`Cannot make the folder for ${args.output}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`, 'usage');
     }
   }
   await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`);

@@ -404,8 +404,8 @@ async function runSuite(args: SuiteArgs, io: Io, deps: SuiteDeps): Promise<numbe
             baselines.set(file, await readBaseline(join(baselineDir, file)));
           } catch (error) {
             if (!(error instanceof BaselineError)) throw error;
-            if (error.missing) missing.push(join(baselineDir, file));
-            else if (error.message.startsWith('Cannot read ')) unreadable.push(error.message);
+            if (error.code === 'missing') missing.push(join(baselineDir, file));
+            else if (error.code === 'unreadable') unreadable.push(error.message);
             else invalid.push(error.message);
           }
         }

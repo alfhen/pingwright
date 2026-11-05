@@ -333,7 +333,7 @@ test('baseline save exits 2 with a short message when the folder cannot be made'
 test('readBaseline marks a missing file by its errno code, not by its message', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
   const { readBaseline } = await import('./baseline.ts');
-  await expect(readBaseline(join(dir, 'ENOENT.json'))).rejects.toMatchObject({ missing: true });
+  await expect(readBaseline(join(dir, 'ENOENT.json'))).rejects.toMatchObject({ code: 'missing' });
   await writeFile(join(dir, 'bad.json'), '{bad');
-  await expect(readBaseline(join(dir, 'bad.json'))).rejects.toMatchObject({ missing: false });
+  await expect(readBaseline(join(dir, 'bad.json'))).rejects.toMatchObject({ code: 'invalid' });
 });
