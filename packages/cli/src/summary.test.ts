@@ -321,7 +321,7 @@ function serverRecords(error?: string): RunRecords {
   const browser = { type: 'hit', id: newId('hit'), runId, requestId: newId('request'), t: 0, vendor: 'meta', event: 'Purchase' };
   const via = (confidence: string) => ({ hitId: browser.id, by: 'eventId', confidence });
   const sent = (i: number, extra: object) => ({ type: 'hit', id: newId('hit'), runId, requestId: requests[i]!.id, t: 10 + i, vendor: 'ga4', event: 'purchase', ...extra });
-  const hits = [browser, sent(0, { via: via('exact') }), sent(1, { via: via('exact') }), sent(2, { via: via('probable') }), sent(3, {})];
+  const hits = [browser, sent(0, { via: via('exact') }), sent(1, { via: via('exact') }), sent(2, { via: via('probable'), linkMiss: { eventId: 'none', clientId: 'answeredBefore' } }), sent(3, { linkMiss: { eventId: 'noMatch', clientId: 'answeredBefore' } })];
   return {
     run: { id: runId, serverContainer: { image: 'tagreeve-sgtm:1@sha256:abc', startedAt: 0, requests: 4, refused: 0, unlinked: 1, passThrough: { serverjs: 1, config: 1, destination: 1 }, ...(error && { error }) } },
     hits,
@@ -334,11 +334,21 @@ function serverRecords(error?: string): RunRecords {
 
 test('the summary counts the server container calls by link, in the line and in --json', () => {
   const summary = buildSummary(serverRecords(), [], 'run.jsonl');
-  expect(summary.serverContainer).toEqual({ calls: 4, exact: 2, probable: 1, unlinked: 1, forwarded: 3 });
+  expect(summary.serverContainer).toEqual({ calls: 4, exact: 2, probable: 1, unlinked: 1, forwarded: 3, notExact: { eventId: { none: 1, noMatch: 1, several: 0 }, clientId: { noClientId: 0, noSameKeyHit: 0, severalSameKeyHits: 0, answeredBefore: 2 } } });
   const text = formatSummary(summary);
   expect(text).toContain('Server container: image ok; 4 vendor calls, 2 linked exactly, 1 probable, 1 unlinked; 3 requests forwarded to Google');
   expect(text).toContain('Not shown: Stape-only features');
   expect(JSON.parse(JSON.stringify(summary)).serverContainer.calls).toBe(4);
+});
+
+test('notExact holds counts only and is not in the text line', () => {
+  const records = serverRecords();
+  expect(JSON.stringify(records)).toMatch(/hit_.*req_.*run_|run_.*req_.*hit_|req_.*hit_/);
+  const summary = buildSummary(records, [], 'run.jsonl');
+  const json = JSON.stringify(summary.serverContainer?.notExact);
+  expect(json).toContain('answeredBefore');
+  expect(json).not.toMatch(/hit_|req_|run_/);
+  expect(formatSummary(summary)).not.toContain('notExact');
 });
 
 test('a container that failed shows its error class, and the stand-in stays marked', () => {

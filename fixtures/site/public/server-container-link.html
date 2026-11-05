@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server container link</title>
+<script src="/fixture-config.js"></script>
+</head>
+<body>
+<h1>Server container link</h1>
+<p>Sends GA4 hits to the mock server container, so its calls link or miss in a set way. Options in the query: <code>n</code> hits, <code>en</code> event name, <code>cid</code>, <code>eid</code>, <code>copy=1</code>, <code>after=1</code>, <code>delayMs</code> and <code>gap</code> ms between hits. <code>window.pwSendLinkHits(options)</code> takes the same options.</p>
+<script>
+(function () {
+  function send(o) {
+    var q = new URLSearchParams({ v: '2', tid: 'G-PWTEST0001', en: o.en });
+    if (o.cid) q.set('cid', o.cid);
+    if (o.eid) {
+      q.set('ep.event_id', o.eid);
+      q.set('event_id', o.eid);
+    }
+    if (o.copy) q.set('ga4', 'copy');
+    if (o.after) q.set('answer', 'after');
+    if (o.delayMs) q.set('delayMs', String(o.delayMs));
+    return fetch(window.__PW_FIXTURE.sgtmUrl + '/g/collect?' + q.toString(), {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: ''
+    }).catch(function () {});
+  }
+
+  function pause(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  window.pwSendLinkHits = function (options) {
+    var o = Object.assign({ n: 1, en: 'purchase', gap: 0 }, options);
+    var chain = Promise.resolve();
+    for (var i = 0; i < o.n; i++) {
+      chain = chain.then(function () { return send(o); }).then(function () { return pause(o.gap); });
+    }
+    return chain.then(function () { return true; });
+  };
+
+  var q = new URLSearchParams(location.search);
+  if (q.get('n') || q.get('en')) {
+    window.pwSendLinkHits({
+      n: Number(q.get('n') || 1),
+      en: q.get('en') || 'purchase',
+      cid: q.get('cid') || '',
+      eid: q.get('eid') || '',
+      copy: q.get('copy') === '1',
+      after: q.get('after') === '1',
+      delayMs: Number(q.get('delayMs') || 0),
+      gap: Number(q.get('gap') || 0)
+    });
+  }
+})();
+</script>
+</body>
+</html>
