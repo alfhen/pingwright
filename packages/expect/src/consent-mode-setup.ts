@@ -14,7 +14,7 @@ export interface ConsentModeSetup {
 }
 
 function tagId(hit: Hit): string {
-  const tid = hit.params.tid;
+  const tid = hit.params.tid ?? (hit.params.conversionId ? `AW-${hit.params.conversionId}` : undefined);
   return tid && TAG_ID.test(tid) ? tid : '(no tag ID)';
 }
 

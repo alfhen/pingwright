@@ -87,6 +87,12 @@ test('hits are grouped per Google tag ID and an odd tid is not quoted', () => {
   expect(r.message).not.toContain('example.com');
 });
 
+test('a google-ads hit is named by its conversion ID', () => {
+  const ads = hit('13l3r3r3r5', { vendor: 'google-ads', params: { conversionId: '000000001' } });
+  const r = consentModeSetup([ads], []);
+  expect(r.message).toContain('Google tag AW-000000001 never set ad_storage');
+});
+
 test('the built-in warns by default and fails when the scenario says so', () => {
   const h = hit('13r3r3l3r5');
   const find = (yaml: string) => evaluate([h], parseScenario(yaml)).find((r) => r.expectation === 'builtin: consentModeSetup')!;
