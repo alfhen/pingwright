@@ -1,6 +1,6 @@
 # Project layout
 
-Tagreeve does not make you use a folder layout. These are the folders to use if you want runs to be easy to find and safe to commit. `tagreeve init` makes the scenario and baseline folders and the `.gitignore` line for you.
+Tagreeve does not make you use a folder layout. These are the folders to use if you want runs to be easy to find and safe to commit. `tagreeve init` makes the scenario and baseline folders, a starter `config.yml` and the `.gitignore` line for you.
 
 ```text
 your-repo/
@@ -12,7 +12,7 @@ your-repo/
         server-checkout.yml
     baselines/                  # committed
       checkout.json
-    config.yml                  # committed, the project config
+    config.yml                  # committed, the project config (init writes a starter)
     trackers.json               # committed, the default for --tracker-list
     stores.json                 # committed, the default for suite --stores
     autoconsent/                # committed, *.json is the default for --autoconsent-rules

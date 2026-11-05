@@ -423,7 +423,9 @@ The Google image and the base images are pinned by digest. `TAGREEVE_SERVER_CONT
 
 ### `tagreeve init`
 
-Sets up the folders in the current directory. It makes `tagreeve/scenarios/` and `tagreeve/baselines/`, and adds `/tagreeve/runs/` to `./.gitignore`. It skips the line when git already ignores `tagreeve/runs/`, or when `.gitignore` already has it. It writes no scenario and no config file, never overwrites a file, and prints what it created or skipped. It exits 0.
+Sets up the folders in the current directory. It makes `tagreeve/scenarios/` and `tagreeve/baselines/`, writes a starter `tagreeve/config.yml`, and adds `/tagreeve/runs/` to `./.gitignore`. The config holds `configSchemaVersion: 1` and comment lines that name the allowed keys (`site`, `out`, `options`), with no values. It skips the line when git already ignores `tagreeve/runs/`, or when `.gitignore` already has it. It writes no scenario, never overwrites a file, and prints what it created or skipped, for example `Created tagreeve/config.yml` or `Skipped tagreeve/config.yml: it exists`. It exits 0. If a write fails, it prints `Could not write <relative path>: <reason>` on stderr and exits 2. Lines for the steps already done stay on stdout.
+
+`--json` prints `{ "items": [{ "path": "tagreeve/scenarios/", "action": "created" }, …] }` on stdout and nothing else. `action` is `created`, `skipped` or `added`. `init` takes no other option: any other option is a usage error with exit 2.
 
 `run` and `suite` print one warning on stderr when the record folder is inside a git work tree and git does not ignore it: `Warning: <folder> is not in .gitignore. Records hold full request bodies; do not commit them. Run tagreeve init or add the folder to .gitignore.` The warning never fails a run. Git is asked about a file inside the folder, so a rule such as `records/**` or `*.jsonl` counts as ignoring it. It is silent outside a git work tree, or when `git` is not installed.
 

@@ -12,7 +12,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - `baseline save` refuses a scenario, store or variant name that could write outside `tagreeve/baselines/`. It exits 2 and asks for an explicit path (#1069).
 
-<!-- I07 -->
+- `tagreeve init` writes a starter `tagreeve/config.yml` when none exists (#1086). `init --json` prints `{ "items": [...] }`, and any other option is a usage error (#1051). A failed `init` names the relative path, keeps the lines already printed and exits 2 (#1048).
 
 - A project config without `configSchemaVersion` now says which line to add (#1085). `configSchemaVersion: 1` is in the README and the 0.6.0-rc.1 notes below.
 
