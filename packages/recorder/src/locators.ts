@@ -151,10 +151,15 @@ function readBlockingControls(max: number): BlockingControl[] {
   const found: BlockingControl[] = [];
   const skipped = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'OPTION', 'DATALIST', 'BUTTON', 'SCRIPT', 'STYLE']);
   const plain = new Set(['A', 'ABBR', 'B', 'EM', 'I', 'SMALL', 'SPAN', 'STRONG', 'U']);
-  const isPlain = (e: Element): boolean => plain.has(e.tagName) && !e.id && !e.hasAttribute('role') && !e.hasAttribute('hidden') && !e.getAttributeNames().some((a) => a.startsWith('aria-'));
+  const allowedAttrs: Record<string, readonly string[]> = { A: ['href', 'title', 'target', 'rel'], ABBR: ['title'] };
+  const isPlain = (e: Element): boolean => plain.has(e.tagName) && e.getAttributeNames().every((a) => allowedAttrs[e.tagName]?.includes(a));
+  const pointsAt = (el: Element, label: Element): boolean =>
+    !!label.id && ['aria-describedby', 'aria-errormessage', 'aria-labelledby'].some((a) => (el.getAttribute(a) ?? '').split(/\s+/).includes(label.id));
+  const isErrorLabel = (el: Element, label: Element): boolean =>
+    label.hasAttribute('role') || label.hasAttribute('hidden') || label.getAttributeNames().some((a) => a.startsWith('aria-')) || pointsAt(el, label);
   // Undefined when the label is not the only one or holds anything but text and plain inline elements: a validation library may add its error there.
-  const labelText = (labels: NodeListOf<HTMLLabelElement> | undefined): string | undefined => {
-    if (!labels || labels.length !== 1) return undefined;
+  const labelText = (el: Element, labels: NodeListOf<HTMLLabelElement> | undefined): string | undefined => {
+    if (!labels || labels.length !== 1 || isErrorLabel(el, labels[0]!)) return undefined;
     let text = '';
     let plainOnly = true;
     const walker = document.createTreeWalker(labels[0]!, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
@@ -174,8 +179,8 @@ function readBlockingControls(max: number): BlockingControl[] {
     return aria || el.getAttribute('name') || el.id;
   };
   const nameOf = (el: Element, reason: BlockReason): string => {
-    if (reason === 'required, not ticked') {
-      const text = labelText((el as HTMLInputElement).labels ?? undefined);
+    if (reason === 'required, not ticked' && !el.getAttribute('aria-label')?.trim()) {
+      const text = labelText(el, (el as HTMLInputElement).labels ?? undefined);
       if (text) return text;
     }
     return attributeName(el);
