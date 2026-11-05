@@ -1,0 +1,7 @@
+start: /page-load-hit
+steps:
+  - wait: 1s
+expect:
+  must:
+    - { vendor: ga4, event: page_view }
+options: { seed: 1, allowUnknownDestination: true, builtins: { sandboxPageUrl: warn } }
