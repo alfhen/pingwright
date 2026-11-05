@@ -1,6 +1,7 @@
 import { newId, type ConsentEpoch, type Flag, type Hit, type Request, type RunRecords, type Step } from '@tagreeve/core';
-import { expect, test } from 'vitest';
-import { diffRuns, diffShapes, hitShape, type ShapeKey, type ShapeTuple } from './diff.ts';
+import { describe, expect, test } from 'vitest';
+import type { DataLayerEvent } from '@tagreeve/core';
+import { diffPushes, diffRuns, diffShapes, hitShape, pushGroups, type PushGroup, type ShapeKey, type ShapeTuple } from './diff.ts';
 
 const state = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' } as const;
 const consent = { ...state, raw: { gcs: 'G100' } };
@@ -468,4 +469,114 @@ test('hitShape puts a linked server hit in the epoch of its via hit and an unlin
 test('the time of a linked server hit within its via epoch does not change the shape', () => {
   expect(hitShape(serverRun(140, true))).toEqual(hitShape(serverRun(250, true)));
   expect(diffRuns(serverRun(140, true), serverRun(250, true))).toEqual({ warnings: [], added: [], removed: [], changed: [], countMismatches: [], flags: [] });
+});
+
+let pushN = 0;
+function addPush(run: RunRecords, item: Record<string, unknown>, over: Partial<DataLayerEvent> = {}): void {
+  pushN += 1;
+  run.dataLayerEvents.push({
+    type: 'dataLayerEvent', id: `dle_${pushN}`, runId: run.run.id, stepId: null, t: pushN, event: String(item.event ?? ''),
+    gtmUniqueEventId: null, args: [item], isConsentCommand: false, frame: { main: true, n: 0 }, ...over,
+  } as unknown as DataLayerEvent);
+}
+
+const embedded = { frame: { main: false, n: 1 } };
+
+describe('push shapes in diffRuns', () => {
+  test('runs without pushes have no dataLayer section', () => {
+    expect(diffRuns(makeRun(), makeRun()).dataLayer).toBeUndefined();
+  });
+
+  test('names a missing path, a new path and a type change, and ignores values and counts', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'purchase', ecommerce: { value: 25.5, currency: 'USD' }, value: 10 });
+    addPush(a, { event: 'purchase', ecommerce: { value: 1, currency: 'EUR' }, value: 3 });
+    addPush(b, { event: 'purchase', value: '10', ecommerce: { currency: 'USD' }, extra: true });
+    const d = diffRuns(a, b).dataLayer!;
+    expect(d.pathsRemoved).toEqual([{ epoch: 'undecided', event: 'purchase', frame: 'main', path: 'ecommerce.value', types: ['number'] }]);
+    expect(d.pathsAdded).toEqual([{ epoch: 'undecided', event: 'purchase', frame: 'main', path: 'extra', types: ['boolean'] }]);
+    expect(d.typeChanges).toEqual([{ epoch: 'undecided', event: 'purchase', frame: 'main', path: 'value', a: ['number'], b: ['string'] }]);
+    expect(d.changed).toBe(true);
+    expect(JSON.stringify(d)).not.toContain('25.5');
+  });
+
+  test('the same shapes in another order and count are not a change', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'a_event', x: 1 });
+    addPush(a, { event: 'b_event', y: 'v' });
+    addPush(b, { event: 'b_event', y: 'w' });
+    addPush(b, { event: 'a_event', x: 2 });
+    addPush(b, { event: 'a_event', x: 3 });
+    expect(diffRuns(a, b).dataLayer).toMatchObject({ changed: false, moved: [] });
+  });
+
+  test('an event that is gone or new', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'old_event' });
+    addPush(b, { event: 'new_event' });
+    const d = diffRuns(a, b).dataLayer!;
+    expect(d.eventsRemoved).toEqual([{ epoch: 'undecided', event: 'old_event', frame: 'main' }]);
+    expect(d.eventsAdded).toEqual([{ epoch: 'undecided', event: 'new_event', frame: 'main' }]);
+  });
+
+  test('an event in another frame is removed and new, and the same event with acrossFrames', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'add_to_cart', currency: 'USD' }, embedded);
+    addPush(b, { event: 'add_to_cart', currency: 'USD' });
+    const split = diffRuns(a, b).dataLayer!;
+    expect(split.eventsRemoved).toEqual([{ epoch: 'undecided', event: 'add_to_cart', frame: 'embedded' }]);
+    expect(split.eventsAdded).toEqual([{ epoch: 'undecided', event: 'add_to_cart', frame: 'main' }]);
+    expect(split.moved).toEqual([]);
+    const merged = diffRuns(a, b, { acrossFrames: true }).dataLayer!;
+    expect(merged.eventsRemoved).toEqual([]);
+    expect(merged.eventsAdded).toEqual([]);
+    expect(merged.changed).toBe(false);
+    expect(merged.moved).toEqual([{ event: 'add_to_cart', kind: 'frame', epoch: 'undecided', from: 'embedded', to: 'main' }]);
+  });
+
+  test('acrossFrames still reports a path that differs', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'add_to_cart', currency: 'USD' }, embedded);
+    addPush(b, { event: 'add_to_cart' });
+    expect(diffRuns(a, b, { acrossFrames: true }).dataLayer!.pathsRemoved.map((p) => p.path)).toEqual(['currency']);
+  });
+
+  test('an event that moved to the next consent epoch is a move, not a change', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'view_item', id: 'x' });
+    b.consentEpochs.push(epoch(b.run.id, 'granted', 100));
+    addPush(b, { event: 'view_item', id: 'x' }, { t: 200 });
+    const d = diffRuns(a, b).dataLayer!;
+    expect(d.moved).toEqual([{ event: 'view_item', kind: 'epoch', frame: 'main', from: 'undecided', to: 'granted' }]);
+    expect(d.eventsAdded).toEqual([]);
+    expect(d.eventsRemoved).toEqual([]);
+    expect(d.changed).toBe(false);
+  });
+
+  test('keys that look like values read (other)', () => {
+    const run = makeRun();
+    addPush(run, { event: 'purchase', extra: { 'fake.person@example.test': 'pw-secret-value' } });
+    const text = JSON.stringify(pushGroups(run));
+    expect(text).toContain('extra.(other)');
+    expect(text).not.toContain('fake.person');
+    expect(text).not.toContain('pw-secret-value');
+  });
+});
+
+describe('diffPushes', () => {
+  const group = (over: Partial<PushGroup> = {}): PushGroup => ({ epoch: 'undecided', event: 'e', frame: 'main', paths: [], ...over });
+
+  test('a move needs neighbouring epochs and equal paths', () => {
+    const paths = [{ path: 'x', types: ['string'] }];
+    const order = ['undecided', 'granted', 'rejected'];
+    expect(diffPushes([group({ paths })], [group({ epoch: 'granted', paths })], { epochOrder: order }).moved).toHaveLength(1);
+    expect(diffPushes([group({ paths })], [group({ epoch: 'rejected', paths })], { epochOrder: order }).moved).toHaveLength(0);
+    expect(diffPushes([group({ paths })], [group({ epoch: 'granted', paths: [] })], { epochOrder: order }).changed).toBe(true);
+  });
 });

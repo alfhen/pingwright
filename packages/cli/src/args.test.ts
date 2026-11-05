@@ -233,6 +233,7 @@ test.each(['run', 'suite', 'diff', 'baseline', 'report', 'init', 'template', 'in
 
 test('diff help lists the diff options, not the run options', () => {
   const text = helpText('diff');
+  expect(text).toContain('--across-frames');
   expect(text).toContain('--all-flags');
   expect(text).toContain('--by-page');
   expect(text).not.toContain('--network');

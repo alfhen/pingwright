@@ -1,5 +1,5 @@
 import { readRun, type RunRecords } from '@tagreeve/core';
-import { diffRuns, type ChangedHit, type DiffKey, type DiffResult } from '@tagreeve/expect';
+import { diffRuns, type ChangedHit, type DiffKey, type DiffResult, type PushDiff } from '@tagreeve/expect';
 import type { DiffArgs } from './args.ts';
 import type { Io } from './run.ts';
 
@@ -41,6 +41,23 @@ export function flagChangeLabel(f: { kind: string; host: string; a: number; b: n
   return `${f.host ? `${f.kind} ${f.host}` : f.kind}: ${f.a} -> ${f.b}`;
 }
 
+/** One line per push change, with key paths and types only. */
+export function describePushDiff(d: PushDiff): string[] {
+  const at = (r: { epoch: string; frame: string }) => `[epoch ${r.epoch}, frame ${r.frame}]`;
+  return [
+    ...d.eventsRemoved.map((r) => `removed event ${r.event} ${at(r)}`),
+    ...d.eventsAdded.map((r) => `new event ${r.event} ${at(r)}`),
+    ...d.pathsRemoved.map((p) => `missing path ${p.path} (${p.types.join('|')}) in ${p.event} ${at(p)}`),
+    ...d.pathsAdded.map((p) => `new path ${p.path} (${p.types.join('|')}) in ${p.event} ${at(p)}`),
+    ...d.typeChanges.map((p) => `type change ${p.path}: ${p.a.join('|')} -> ${p.b.join('|')} in ${p.event} ${at(p)}`),
+    ...d.moved.map((m) =>
+      m.kind === 'frame'
+        ? `moved event ${m.event} from frame ${m.from} to ${m.to} [epoch ${m.epoch}]`
+        : `moved event ${m.event} from epoch ${m.from} to ${m.to} [frame ${m.frame}]`,
+    ),
+  ];
+}
+
 export function formatDiff(result: DiffResult, a: string, b: string, options: { allFlags?: boolean } = {}): string {
   const tree: Tree = new Map();
   for (const h of result.added) add(tree, h.key, `added${where(h.key, h.step, h.page)}: ${h.hitId}`);
@@ -57,9 +74,11 @@ export function formatDiff(result: DiffResult, a: string, b: string, options: { 
   const shownFlags = options.allFlags ? result.flags : result.flags.filter((f) => !f.allowed);
   const hiddenFlags = result.flags.length - shownFlags.length;
 
+  const pushLines = result.dataLayer ? describePushDiff(result.dataLayer) : [];
+
   const out = [`Diff ${a} -> ${b}`];
   for (const warning of result.warnings) out.push(`Warning: ${warning}`);
-  if (tree.size === 0 && shownFlags.length === 0) out.push('No differences.');
+  if (tree.size === 0 && shownFlags.length === 0 && pushLines.length === 0) out.push('No differences.');
   for (const [epoch, vendors] of [...tree].sort(([x], [y]) => x.localeCompare(y))) {
     out.push('', `Epoch ${epoch}`);
     for (const [vendor, events] of [...vendors].sort(([x], [y]) => x.localeCompare(y))) {
@@ -69,6 +88,10 @@ export function formatDiff(result: DiffResult, a: string, b: string, options: { 
         for (const line of lines) out.push(`      ${line}`);
       }
     }
+  }
+  if (pushLines.length) {
+    out.push('', 'dataLayer');
+    for (const line of pushLines) out.push(`  ${line}`);
   }
   if (shownFlags.length) {
     out.push('', 'Flags');
@@ -90,7 +113,7 @@ async function load(path: string): Promise<RunRecords> {
 /** Returns 0 once both files read. An unreadable or invalid file throws, and main turns that into exit 2. */
 export async function diffCommand(args: DiffArgs, io: Io): Promise<number> {
   const [a, b] = await Promise.all([load(args.a), load(args.b)]);
-  const result = diffRuns(a, b, { byPage: args.byPage });
+  const result = diffRuns(a, b, { byPage: args.byPage, acrossFrames: args.acrossFrames });
   for (const [path, run] of [[args.a, a], [args.b, b]] as const) {
     if (run.truncatedAtLine) result.warnings.push(`${path}: truncated at line ${run.truncatedAtLine}; later records are missing from the diff`);
   }

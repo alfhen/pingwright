@@ -59,6 +59,7 @@ export interface DiffArgs {
   a: string;
   b: string;
   byPage: boolean;
+  acrossFrames: boolean;
   allFlags: boolean;
   json: boolean;
 }
@@ -118,7 +119,7 @@ export type HelpTopic = (typeof COMMANDS)[number];
 
 export const USAGE = `Usage:
   tagreeve run <scenario.yml> [--site <url>] [options]
-  tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--all-flags] [--json]
+  tagreeve diff <a.jsonl> <b.jsonl> [--by-page] [--across-frames] [--all-flags] [--json]
   tagreeve baseline save <run.jsonl> [<baseline.json>] [--by-page]
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
@@ -206,10 +207,11 @@ ${USAGE.slice(USAGE.indexOf('  --site <url>               The site to test. With
 
 const DIFF_USAGE = `Usage: tagreeve diff <a.jsonl> <b.jsonl> [options]
 
-Compares the hits of two run records. It exits 0 whether or not they differ.
+Compares the hits and the dataLayer push shapes of two run records. It exits 0 whether or not they differ.
 
 Options:
   --by-page                  Add the page path to each key
+  --across-frames            Treat a push as the same event whichever frame sent it
   --all-flags                Also show flag count changes for hosts allowed by allowUnknownDestination and for platform hosts (hidden by default)
   --json                     Print the full diff result as JSON
   -h, --help                 Show this help
@@ -327,6 +329,7 @@ const OPTIONS = {
   html: { type: 'string' },
   'by-page': { type: 'boolean' },
   'all-flags': { type: 'boolean' },
+  'across-frames': { type: 'boolean' },
   version: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
@@ -413,7 +416,7 @@ function parseCommand(argv: string[]): Command {
   }
   if (command === 'diff') {
     if (rest.length !== 2) throw new UsageError('diff takes two JSONL files');
-    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
+    return { command: 'diff', a: rest[0]!, b: rest[1]!, byPage: values['by-page'] ?? false, acrossFrames: values['across-frames'] ?? false, allFlags: values['all-flags'] ?? false, json: values.json ?? false };
   }
   if (command === 'baseline') {
     if (rest[0] !== 'save') throw new UsageError('baseline needs a subcommand: save');
