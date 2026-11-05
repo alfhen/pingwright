@@ -17,7 +17,7 @@ Agent-first testing for tags and consent. Tagreeve plays a visitor in a real bro
 >
 > **In 0.3:** `body.has` and `body.only` rules on the field names of a hit; `cookie` rules; a `deniedIdentifiers` check that fails when an identifier goes out on a denied hit; `tagreeve suite` runs a folder of scenarios against several GTM builds; `tagreeve report` writes an HTML report of one run or a suite; a Done button in the handoff window; `click` and `wait` by role and name or from a list of selectors; a `select` step; the `server` network mode; record schema version 2. `deniedIdentifiers` fails by default, so a run that passed in 0.2 can exit 1. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **In 0.6.0-rc.1:** `run` and `suite` write to `tagreeve/runs/<date>/` by default; `tagreeve init` makes the folders; `tagreeve/config.yml` holds `site`, `out` and scenario options; `--label` names a run; `baseline save` and `suite --baseline` use `tagreeve/baselines/`; a scenario with `network: live` no longer loads; a `wait` timeout lists the controls that block submission; Shop Pay hosts are platform hosts; and a server container call links exactly by client ID and event name when only one browser hit fits. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.6.0-rc.1".
+> **In 0.6.0-rc.1:** `run` and `suite` write to `tagreeve/runs/<date>/` by default; `tagreeve init` makes the folders; `tagreeve/config.yml` holds `site`, `out` and scenario options and must start with `configSchemaVersion: 1`; `--label` names a run; `baseline save` and `suite --baseline` use `tagreeve/baselines/`; a scenario with `network: live` no longer loads; a `wait` timeout lists the controls that block submission; Shop Pay hosts are platform hosts; and a server container call links exactly by client ID and event name when only one browser hit fits. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.6.0-rc.1".
 >
 > **In 0.5.0:** a hit rule takes `sentBy: browser` or `sentBy: server`, so a rule on a Google host can ignore the server container's own forwarding; a missing `tagreeve-sgtm` image stops a suite before any scenario starts, and the message lists the local tags; the server container guide shows how to test an unpublished server workspace through its preview environment; and the text and `--json` summaries show query names only and mask value-like path segments, for every form of URL. Records keep the full detail. What is still open is in [CHANGELOG.md](CHANGELOG.md) under "Known in 0.5.0".
 >
@@ -106,6 +106,13 @@ Node 22.18 or later. `npm i -g tagreeve@next` installs the newest release candid
 
 4. `tagreeve run scenario.yml --site https://staging.example.com`
 5. Read the summary, and the full record in `tagreeve/runs/<date>/run_<id>.jsonl`.
+
+To share the site between runs, put it in `tagreeve/config.yml`, then leave out `--site`:
+
+```yaml
+configSchemaVersion: 1
+site: https://shop.example
+```
 
 `consent: none` needs a banner that autoconsent detects. If none is shown, the run stops with "banner not shown" and exit code 2. Vendor keys are `ga4`, `google-ads`, `meta`, `meta-capi`, `pinterest`, `sgtm`, and every vendor on the tracker list (`linkedin`, `microsoft-uet`, `reddit`) or in a `--tracker-list` file. A scenario that names any other vendor is rejected when it is parsed.
 

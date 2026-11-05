@@ -4,7 +4,7 @@
 
 Not released yet. The newest release is 0.6.0-rc.1, below.
 
-<!-- V07 -->
+- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. Nothing writes the new fields yet. A version 4 record reads as before.
 
 <!-- J07 -->
 
@@ -14,7 +14,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- I07 -->
 
-<!-- F07 -->
+- A project config without `configSchemaVersion` now says which line to add (#1085). `configSchemaVersion: 1` is in the README and the 0.6.0-rc.1 notes below.
 
 - The `suite` old-runs notice names the real folder and prints after the payment gates. The suite site, folder and test-payment errors now add the help hint.
 
@@ -90,7 +90,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - New command `tagreeve init`: it makes `tagreeve/scenarios/` and `tagreeve/baselines/` and adds `/tagreeve/runs/` to `.gitignore`. `run` and `suite` now print a warning when the record folder is in a git work tree and not ignored (#811).
 
-- New file `tagreeve/config.yml`, and `--config <file>` to read another one. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. The file is plain YAML: anchors, aliases, tags and merge keys are refused. No error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
+- New file `tagreeve/config.yml`, and `--config <file>` to read another one. The file must start with `configSchemaVersion: 1`. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. The file is plain YAML: anchors, aliases, tags and merge keys are refused. No error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
 
 - `baseline save <record>` with one path writes `tagreeve/baselines/<scenario>[.<store>][.<variant>].json` and makes the folder. `run --baseline` with no file reads `tagreeve/baselines/<scenario>.json`; put the bare flag last. New `suite --baseline [<folder>]` checks every cell against its own baseline file. It reads all the files before a browser starts and exits 2 when one is missing. A drifting cell is `FAIL (baseline drift)`, the suite exits 1, and `suite.json` cells get `baseline: { file, drift, added, removed, countChanges }` (#811).
 
