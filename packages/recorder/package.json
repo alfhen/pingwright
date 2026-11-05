@@ -9,7 +9,7 @@
     "@tagreeve/core": "workspace:*",
     "@tagreeve/decoders": "workspace:*",
     "@tagreeve/expect": "workspace:*",
-    "node-forge": "1.4.0",
+    "node-forge": "1.4.2",
     "playwright": "1.64.1",
     "tldts": "7.4.18"
   },
