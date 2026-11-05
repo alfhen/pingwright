@@ -217,10 +217,10 @@ function redactUrl(raw: string): string {
 }
 
 /** Replaces each URL in a flag detail and keeps the words around it, so the host parsers still match. */
-export function redactFlagDetail(detail: string, kind?: string): string {
+export function redactFlagDetail(detail: string, kind: string): string {
   const page = RECEIVED_PAGE.exec(detail);
   if (page) return `${page[1]}${redactUrl(page[2]!)}${page[3]}`;
-  const tail = kind === undefined || URL_ENDING_KINDS.has(kind) ? URL_AT_END.exec(detail) : null;
+  const tail = URL_ENDING_KINDS.has(kind) ? URL_AT_END.exec(detail) : null;
   if (tail) return `${tail[1]}${redactUrl(tail[2]!)}`;
   return detail.replace(URL_TOKEN, redactUrl);
 }
