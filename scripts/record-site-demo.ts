@@ -169,6 +169,8 @@ async function readRecords(path: string): Promise<TagreeveRecord[]> {
     .map((line) => JSON.parse(line) as TagreeveRecord);
 }
 
+const fixDate = (text: string) => text.replace(/tagreeve\/runs\/\d{4}-\d{2}-\d{2}\//g, 'tagreeve/runs/2026-01-15/');
+
 const toJsonl = (records: TagreeveRecord[]) => records.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
 /** The first result of the summary that `tagreeve run --json` prints for this record, as `jq '.results[0]'` shows it. */
@@ -194,7 +196,7 @@ async function record(): Promise<void> {
 
     for (const s of demoScenarios) {
       console.error(`Recording ${s}`);
-      const result = check(s, await cli(['run', `tagreeve/${s}.yml`, '--site', site.url, '--out', 'runs', '--seed', String(demoSeeds[s])], work));
+      const result = check(s, await cli(['run', `tagreeve/${s}.yml`, '--site', site.url, '--seed', String(demoSeeds[s])], work));
       const path = /^Record: (\S+)$/m.exec(result.stdout)?.[1];
       if (!path) throw new Error(`${s}: no record path in the output\n${result.stdout}`);
       const raw = await readRecords(join(work, path));
@@ -206,7 +208,7 @@ async function record(): Promise<void> {
       runIds.set(s, runId);
       await writeFile(join(clean, 'runs', `${runId}.jsonl`), scrubbed);
       written.set(`${s}.jsonl`, scrubbed);
-      written.set(`${s}.txt`, rewriteHosts(result.stdout, site));
+      written.set(`${s}.txt`, fixDate(rewriteHosts(result.stdout, site)));
       if (s === 'reject') written.set('reject.json', rewriteHosts(firstJsonResult(await readRun(join(work, path)), path), site));
     }
 
@@ -214,8 +216,8 @@ async function record(): Promise<void> {
     written.set('diff.txt', diff.stdout);
 
     console.error('Recording the suite');
-    const suite = check('suite', await cli(['suite', 'tagreeve/', '--site', site.url, '--out', 'runs', '--seed', String(demoSeeds.suite)], work));
-    written.set('suite.txt', rewriteHosts(suite.stderr + suite.stdout, site));
+    const suite = check('suite', await cli(['suite', 'tagreeve/', '--site', site.url, '--seed', String(demoSeeds.suite)], work));
+    written.set('suite.txt', fixDate(rewriteHosts(suite.stderr + suite.stdout, site)));
 
     for (const [name, text] of written) {
       const leaks = demoLeaks(text);
