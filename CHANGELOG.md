@@ -10,7 +10,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- Z07 -->
 
-<!-- K07 -->
+- `baseline save` refuses a scenario, store or variant name that could write outside `tagreeve/baselines/`. It exits 2 and asks for an explicit path (#1069).
 
 <!-- I07 -->
 
