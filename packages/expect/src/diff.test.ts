@@ -559,6 +559,16 @@ describe('push shapes in diffRuns', () => {
     expect(d.changed).toBe(false);
   });
 
+  test('push groups come back in the same order whatever the push order', () => {
+    const a = makeRun();
+    const b = makeRun();
+    addPush(a, { event: 'b_event' }, embedded);
+    addPush(a, { event: 'a_event' });
+    addPush(b, { event: 'a_event' });
+    addPush(b, { event: 'b_event' }, embedded);
+    expect(pushGroups(a)).toEqual(pushGroups(b));
+  });
+
   test('keys that look like values read (other)', () => {
     const run = makeRun();
     addPush(run, { event: 'purchase', extra: { 'fake.person@example.test': 'pw-secret-value' } });
