@@ -196,7 +196,7 @@ Issues still open that you can meet:
 - The tag-firing reporter templates, `expectedTags` and `tagreeve init` are planned for 0.6.0.
 - The node-forge bump (#719) waits until node-forge 1.4.2, published 2026-10-27, is two weeks old, so it lands on or after 2026-11-10.
 
-The other open `review-minor` issues are open in the 0.6.0 milestone.
+The other open `review-minor` issues are open in the 0.6.0 milestone. They are test gaps, wording and edge cases.
 
 ## 0.5.0-rc.2
 
