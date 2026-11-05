@@ -275,3 +275,34 @@ test('an extra item pushed through the saved push is recorded', () => {
   expect(page.run('dataLayer.length')).toBe(2);
   expect(argsOf(page.sent).map((a) => ((a as Array<{ event: string }>)[0]!).event).sort()).toEqual(['a', 'extra']);
 });
+
+test('the same object pushed twice through a drop wrapper is reported twice', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push = function () { return 0; }; const o = { event: 'a' }; dataLayer.push(o); dataLayer.push(o);`);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'a' }]]);
+});
+
+test('the same object pushed twice through an Array.prototype.push wrapper is reported twice', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push = function () { return Array.prototype.push.apply(this, arguments); };
+    const o = { event: 'a' }; dataLayer.push(o); dataLayer.push(o);`);
+  expect(page.run('dataLayer.length')).toBe(2);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'a' }]]);
+});
+
+test('a marker-guarded install runs the page wrapper once however often it is called', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.n = 0;
+    function install() { if (dataLayer.push.mine) return; const saved = dataLayer.push;
+      const w = function () { n++; return saved.apply(this, arguments); }; w.mine = true; dataLayer.push = w; }
+    install(); install(); install(); dataLayer.push({ event: 'a' });`);
+  expect(page.run('n')).toBe(1);
+  expect(page.run('dataLayer.length')).toBe(1);
+  expect(page.sent).toHaveLength(1);
+});
+
+test('assigning a non-function to push is kept, as without the hook', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push = undefined;`);
+  expect(page.run('dataLayer.push')).toBeUndefined();
+});

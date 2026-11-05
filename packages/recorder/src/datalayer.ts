@@ -56,47 +56,65 @@ export const dataLayerInitScript = `(() => {
       return;
     }
     // Each entry runs its own implementation, so a saved push reaches the same one whenever it is called, in any
-    // unwrap order. The first entry that sees an item reports it, so a push is recorded once however wrappers call
-    // each other. Primitives cannot be tracked and are reported at the outermost call only.
+    // unwrap order. A call to the current top entry from outside any push is a new push and always reports its
+    // objects. Any other call reports an object only if no entry has reported it yet, so a push is recorded once
+    // however wrappers call each other. Primitives cannot be tracked and are reported at the outermost call only.
+    // An assigned function is wrapped in a Proxy, so the page still sees its own properties on it.
     const seen = new WeakSet();
+    const callIt = Reflect.apply;
+    const entries = new WeakMap();
+    const known = new WeakSet();
     let depth = 0;
-    const entryFor = (impl, base) =>
-      function (...items) {
+    let top;
+    const isObject = (item) => item !== null && (typeof item === 'object' || typeof item === 'function');
+    const entryFor = (impl, base) => {
+      let entry;
+      const run = (thisArg, items) => {
+        const outermost = depth === 0;
+        const newPush = outermost && entry === top;
         const fresh = items.filter((item) => {
-          if (item !== null && (typeof item === 'object' || typeof item === 'function')) {
-            if (seen.has(item)) return false;
+          if (isObject(item)) {
+            const wasSeen = seen.has(item);
             seen.add(item);
-            return true;
+            return newPush || !wasSeen;
           }
-          return depth === 0;
+          return outermost;
         });
         const started = fresh.map((item) => ({ item, t: clock(), args: argsOf(item) }));
         depth++;
         try {
-          return impl.apply(this, items);
+          return callIt(impl, thisArg, items);
         } finally {
           depth--;
-          if (base) for (const item of items) if (item !== null && (typeof item === 'object' || typeof item === 'function')) seen.delete(item);
+          if (base) for (const item of items) if (isObject(item)) seen.delete(item);
           for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
         }
       };
-    const known = new Set();
-    let top = entryFor(layer.push, true);
-    known.add(top);
+      entry = base
+        ? function (...items) {
+            return run(this, items);
+          }
+        : new Proxy(impl, { apply: (target, thisArg, items) => run(thisArg, items) });
+      known.add(entry);
+      return entry;
+    };
+    top = entryFor(layer.push, true);
     try {
       Object.defineProperty(layer, 'push', {
         configurable: true,
         enumerable: false,
         get: () => top,
         set: (fn) => {
-          if (typeof fn !== 'function') return;
-          if (!known.has(fn)) {
-            const entry = entryFor(fn, false);
-            known.add(entry);
-            top = entry;
+          if (typeof fn !== 'function' || known.has(fn)) {
+            top = fn;
             return;
           }
-          top = fn;
+          let entry = entries.get(fn);
+          if (!entry) {
+            entry = entryFor(fn, false);
+            entries.set(fn, entry);
+          }
+          top = entry;
         },
       });
     } catch {
