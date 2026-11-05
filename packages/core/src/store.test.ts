@@ -237,7 +237,7 @@ test('RunWriter stamps the current record schema version', async () => {
   expect(first.recordSchemaVersion).toBe(RECORD_SCHEMA_VERSION);
   const warnings: string[] = [];
   const read = await readRun(writer.path, { onWarning: (m) => warnings.push(m) });
-  expect(read.run.recordSchemaVersion).toBe(4);
+  expect(read.run.recordSchemaVersion).toBe(5);
   expect(warnings).toEqual([]);
 });
 
@@ -259,6 +259,22 @@ test('a version 3 file keeps the server container fields and a version 2 file re
   expect(read.hits[0]!.via).toEqual(hit.via);
   const v2 = await readRun(await writeRecords('v2.jsonl', [{ ...makeRun(), recordSchemaVersion: 2 }]), { onWarning: (m) => warnings.push(m) });
   expect(v2.run.serverContainer).toBeUndefined();
+  expect(warnings).toEqual([]);
+});
+
+test('a version 5 file reads its tag reports and a version 4 file reads with no warning', async () => {
+  const run: Run = { ...makeRun(), recordSchemaVersion: 5 };
+  const report = (n: number) => ({
+    type: 'tagReport', id: newId('tagReport'), runId: run.id, stepId: null, container: 'GTM-PWTEST1', side: 'web', t: n,
+    event: 'page_view', gtmUniqueEventId: n, frame: { main: true, n: 0 },
+    tags: [{ id: '1', name: 'GA4', status: 'success', executionTime: 3 }],
+  });
+  const warnings: string[] = [];
+  const v5 = await readRun(await writeRecords('v5.jsonl', [run, report(1), report(2)]), { onWarning: (m) => warnings.push(m) });
+  expect(v5.tagReports).toHaveLength(2);
+  expect(v5.tagReports[0]).toMatchObject({ t: 1, frame: { main: true, n: 0 } });
+  const v4 = await readRun(await writeRecords('v4.jsonl', [{ ...makeRun(), recordSchemaVersion: 4 }]), { onWarning: (m) => warnings.push(m) });
+  expect(v4.tagReports).toEqual([]);
   expect(warnings).toEqual([]);
 });
 

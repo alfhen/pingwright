@@ -367,7 +367,7 @@ With `--baseline`, a cell has `baseline: { file, drift, added, removed, countCha
 
 `suite.json` has `suiteSchemaVersion: 3`, `label` when `--label` is given, `defaults` and `stores`, a list of `{ name, site }` with the origin only. A diff has a `store`. Store vars are not written. Without `--stores`, `stores` is `[]`, cells have empty `labels` and nothing else changes.
 
-`defaults` lists each file or folder used because its flag was not given, as `{ setting, path }` with a fixed relative path such as `tagreeve/trackers.json`. The settings are `scenarios`, `trackerList`, `autoconsentRules` (one entry per file), `stores`, `config` and `baseline`. A bare `--baseline` gives the file (`run`) or the folder (`suite`). The key is absent when no default was used. The text table and the text summary of `run` show one line, such as `Defaults: tagreeve/trackers.json (tracker list)`, and the `--json` summary of `run` has the same `defaults` list.
+`defaults` lists each file or folder used because its flag was not given, as `{ setting, path }` with a fixed relative path such as `tagreeve/trackers.json`. The settings are `scenarios`, `trackerList`, `autoconsentRules` (one entry per file), `stores`, `config` and `baseline`. `defaults` lists input files found by a path default, including the default `tagreeve/config.yml`. It does not list the record folder, which is `path` in the summary, and it does not list an `out` that came from `--config`. A bare `--baseline` gives the file (`run`) or the folder (`suite`). The key is absent when no default was used. The text table and the text summary of `run` show one line, such as `Defaults: tagreeve/trackers.json (tracker list)`, and the `--json` summary of `run` has the same `defaults` list.
 
 ### `tagreeve report <run.jsonl | suite dir> --html <out.html>`
 
@@ -452,7 +452,7 @@ options:
 
 | Key | Meaning |
 | --- | --- |
-| `configSchemaVersion` | Required. Always `1`. |
+| `configSchemaVersion` | Required. Always `1`. Put `configSchemaVersion: 1` on the first line. Without it every run exits 2 and the error names the line to add. |
 | `site` | An http or https URL with no user name or password. Used when `--site` is not given. |
 | `out` | A folder. Records go to `<out>/<YYYY-MM-DD>[-<label>]/`, as the default folder does. Only `--out` is used exactly as given. |
 | `options` | `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. Each is checked like the same option in a scenario. |
@@ -471,7 +471,7 @@ tagreeve/config.yml: line 3, gtmOverride: not allowed in the project config. Pas
 
 `--allow-test-payment` needs `--site` on the command line (or `--stores` for `suite`). A `site` in the config is not enough, because the flag names the host of the `--site`.
 
-When the file comes from the default path, the text summary lists it on the `Defaults:` line, and `--json` has `{ "setting": "config", "path": "tagreeve/config.yml" }` in `defaults`. A `--config` path is not listed.
+When the file comes from the default path, the text summary lists it on the `Defaults:` line, and `--json` has `{ "setting": "config", "path": "tagreeve/config.yml" }` in `defaults`. A `--config` path is not listed, and neither is an `out` from the config.
 
 ## Exit codes
 
