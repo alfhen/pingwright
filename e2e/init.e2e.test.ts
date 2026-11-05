@@ -69,3 +69,24 @@ test('outside a git work tree there is no warning', async () => {
   expect((await readdir(join(cwd, 'records'))).some((n) => /^run_.*\.jsonl$/.test(n))).toBe(true);
   await rm(cwd, { recursive: true, force: true });
 }, 120_000);
+
+test('init writes a starter config that a run reads, and --json prints items', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'tagreeve-init-'));
+  const init = await tagreeve(cwd, ['init']);
+  expect(init.code, init.stderr).toBe(0);
+  expect(init.stdout).toContain('Created tagreeve/config.yml');
+  expect(await readFile(join(cwd, 'tagreeve/config.yml'), 'utf8')).toMatch(/^configSchemaVersion: 1\n/);
+
+  const run = await tagreeve(cwd, ['run', scenario('from-label'), '--site', site.url, '--out', 'records']);
+  expect(run.code, run.stderr).toBeLessThanOrEqual(1);
+  expect(run.stdout).toMatch(/Defaults: .*tagreeve\/config\.yml/);
+
+  const again = await tagreeve(cwd, ['init', '--json']);
+  expect(again.code, again.stderr).toBe(0);
+  const parsed = JSON.parse(again.stdout) as { items: Array<{ path: string; action: string }> };
+  expect(parsed.items).toContainEqual({ path: 'tagreeve/config.yml', action: 'skipped' });
+
+  const bogus = await tagreeve(cwd, ['init', '--bogus']);
+  expect(bogus.code).toBe(2);
+  await rm(cwd, { recursive: true, force: true });
+}, 180_000);

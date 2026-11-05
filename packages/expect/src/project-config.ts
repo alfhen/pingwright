@@ -101,7 +101,7 @@ export function parseProjectConfig(text: string, file: string): ProjectConfig {
   };
   checkKeys(raw, [], CONFIG_KEYS);
 
-  if (raw.configSchemaVersion === undefined) report(1, 'configSchemaVersion', `required, ${configSchemaVersion}`);
+  if (raw.configSchemaVersion === undefined) report(1, 'configSchemaVersion', `required. Add the line "configSchemaVersion: ${configSchemaVersion}" at the top of the file.`);
   else if (raw.configSchemaVersion !== configSchemaVersion) fail(['configSchemaVersion'], `must be ${configSchemaVersion}`);
 
   const config: ProjectConfig = { options: {} };
