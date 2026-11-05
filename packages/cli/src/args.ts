@@ -393,6 +393,7 @@ function parseCommand(argv: string[]): Command {
     return { command: 'help', topic: command as HelpTopic };
   }
   if (values.help || command === undefined) return { command: 'help' };
+  if (values['across-frames'] && command !== 'diff') throw new UsageError('--across-frames is only for diff.');
   if (command === 'init') {
     if (rest.length) throw new UsageError('init takes no arguments');
     const other = Object.keys(values).find((key) => key !== 'json');
