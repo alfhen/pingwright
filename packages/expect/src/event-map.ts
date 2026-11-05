@@ -9,6 +9,7 @@ export interface EventMap {
 
 const EVENT_NAME = /^[A-Za-z0-9_.: -]{1,200}$/;
 const PATH_NAME = /^[A-Za-z0-9_.()[\]*-]{1,200}$/;
+const ROOT = '.';
 const TOP_KEYS = new Set(['events', 'paths']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,7 +42,7 @@ export function parseEventMap(text: string, file: string): EventMap {
     const out: Record<string, string> = Object.create(null) as Record<string, string>;
     for (const [from, to] of Object.entries(renames)) {
       if (!PATH_NAME.test(from)) throw new Error(`${file}: paths.${event} has a key that is not a key path.`);
-      if (typeof to !== 'string' || !PATH_NAME.test(to)) throw new Error(`${file}: paths.${event}.${from} must be a key path.`);
+      if (typeof to !== 'string' || (to !== ROOT && !PATH_NAME.test(to))) throw new Error(`${file}: paths.${event}.${from} must be a key path.`);
       out[from] = to;
     }
     map.paths[event] = out;
@@ -54,10 +55,14 @@ export function builtInEventName(event: string): string {
   return /^(consent|gtag) /.test(event) ? event : ga4EventName(event);
 }
 
-function renamePath(path: string, renames: Record<string, string>): string {
+// A rename to "." moves the paths below the source to the root, and drops the source path itself.
+function renamePath(path: string, renames: Record<string, string>): string | undefined {
   for (const [from, to] of Object.entries(renames)) {
-    if (path === from) return to;
-    if (path.startsWith(`${from}.`) || path.startsWith(`${from}[`)) return `${to}${path.slice(from.length)}`;
+    if (path === from) return to === ROOT ? undefined : to;
+    if (path.startsWith(`${from}.`) || path.startsWith(`${from}[`)) {
+      const rest = path.slice(from.length);
+      return to === ROOT ? rest.replace(/^\./, '') : `${to}${rest}`;
+    }
   }
   return path;
 }
@@ -67,11 +72,16 @@ export function mapPushGroups(groups: PushGroup[], rename: (event: string) => st
   return groups.map((g) => {
     const event = rename(g.event);
     const renames = Object.hasOwn(paths, event) ? paths[event]! : undefined;
-    return {
-      ...g,
-      event,
-      paths: renames ? g.paths.map((p) => ({ ...p, path: renamePath(p.path, renames) })) : g.paths,
-    };
+    if (!renames) return { ...g, event };
+    // A root rename maps an object push to a gtag event push, which has no `event` key.
+    const toGtag = Object.values(renames).includes(ROOT);
+    const mapped: PushGroup['paths'] = [];
+    for (const p of g.paths) {
+      if (toGtag && p.path === 'event') continue;
+      const path = renamePath(p.path, renames);
+      if (path !== undefined) mapped.push({ ...p, path });
+    }
+    return { ...g, event, paths: mapped };
   });
 }
 

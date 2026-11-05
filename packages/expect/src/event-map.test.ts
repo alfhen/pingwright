@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { PushGroup } from './diff.ts';
+import { diffPushes } from './diff.ts';
 import { normalizePushGroups, parseEventMap } from './event-map.ts';
 
 const group = (event: string, paths: string[] = []): PushGroup => ({ epoch: 'undecided', event, frame: 'main', paths: paths.map((path) => ({ path, types: ['string'] })) });
@@ -59,5 +60,19 @@ describe('normalizePushGroups', () => {
     const out = normalizePushGroups([group('purchase', ['ecommerce', 'ecommerce.items[*].id', 'ecommerceX', 'value']), group('other', ['ecommerce'])], map);
     expect(out[0]!.paths.map((p) => p.path)).toEqual(['data', 'data.items[*].id', 'ecommerceX', 'value']);
     expect(out[1]!.paths.map((p) => p.path)).toEqual(['ecommerce']);
+  });
+
+  test('a rename to the root maps an object push to a gtag event push', () => {
+    const map = parseEventMap('{"paths":{"purchase":{"ecommerce":"."}}}', 'm.json');
+    const object = group('purchase', ['event', 'ecommerce.value', 'ecommerce.items[*].id']);
+    const gtag = group('purchase', ['value', 'items[*].id']);
+    expect(normalizePushGroups([object], map)[0]!.paths.map((p) => p.path)).toEqual(['value', 'items[*].id']);
+    expect(diffPushes([object], [gtag], { eventMap: map }).changed).toBe(false);
+    expect(diffPushes([object], [gtag]).changed).toBe(true);
+  });
+
+  test('a root rename drops the source path itself', () => {
+    const map = parseEventMap('{"paths":{"purchase":{"ecommerce":"."}}}', 'm.json');
+    expect(normalizePushGroups([group('purchase', ['event', 'ecommerce', 'ecommerce[*]'])], map)[0]!.paths.map((p) => p.path)).toEqual(['[*]']);
   });
 });
