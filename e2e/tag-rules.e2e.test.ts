@@ -107,6 +107,9 @@ test('tag rules and expectedTags read the workspace build, with names filled and
   expect(meta.pass).toBe(false);
   expect(meta.evidence.length).toBeGreaterThan(0);
   expect(meta.evidence.every((id) => id.startsWith('tag_') && reportIds.has(id))).toBe(true);
+  expect(meta.note).toBeUndefined();
+  expect(meta.message).toContain('13 Meta - PageView');
+  expect([...meta.evidence].sort()).toEqual(tagReports.filter((r) => r.tags.some((t) => t.id === '13')).map((r) => r.id).sort());
   expect(result(json.summary!, 'X *')).toMatchObject({ pass: false, note: 'tagNameUnknown' });
   expect(json.code).toBe(1);
 

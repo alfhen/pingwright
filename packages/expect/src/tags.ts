@@ -95,7 +95,8 @@ export function evaluateTagRule(rule: Rule, input: TagRuleInput): TagRuleOutcome
     }
 
   const want = rule.kind === 'must' ? (rule.count ?? { op: '>=' as const, n: 1 }) : { op: '=' as const, n: 0 };
-  if (countHolds(want, matches.length) !== countHolds(want, matches.length + unknownEntries)) {
+  const verdicts = new Set(Array.from({ length: unknownEntries + 1 }, (_, k) => countHolds(want, matches.length + k)));
+  if (verdicts.size > 1) {
     return {
       pass: false,
       evidence: [...unknown],
@@ -129,7 +130,7 @@ export type TagsContainerSummary =
 
 const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id, 'en', { numeric: true });
 
-/** Counts, IDs and masked names. `notFired` is set only for the override container, and only when it has `expectedTags`. */
+/** Counts, IDs and masked names. `notFired` is set only for the override container that sent a report. */
 export function summarizeTags(reports: readonly TagReport[], expected: ExpectedTags | undefined): Record<string, TagsContainerSummary> | undefined {
   const out: Record<string, TagsContainerSummary> = {};
   const containers = [...new Set(reports.map((r) => r.container))].sort();
@@ -150,7 +151,7 @@ export function summarizeTags(reports: readonly TagReport[], expected: ExpectedT
         fired.set(tag.id, entry);
       }
     let notFired: { id: string; name: string | null }[] | null = null;
-    if (expected?.container === container && expected.tags.length > 0) {
+    if (expected?.container === container) {
       const web = new Set(own.filter((r) => r.side === 'web').flatMap((r) => r.tags.map((t) => t.id)));
       notFired = expected.tags
         .filter((t) => !web.has(t.id))

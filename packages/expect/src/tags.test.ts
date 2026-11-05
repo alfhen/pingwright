@@ -82,6 +82,11 @@ test('a name pattern on a tag with no name anywhere cannot be evaluated when the
   expect(run('  must:\n    - { tag: { name: "X *" } }\n', REPORTS)[0]).toMatchObject({ note: 'tagNameUnknown' });
 });
 
+test('an exact count with unnamed entries and no named match cannot be evaluated', () => {
+  const unnamed = [report({ tags: [tag('13', null), tag('14', null)] })];
+  expect(run('  must:\n    - { tag: { name: "GA4*" }, count: 1 }\n', unnamed)[0]).toMatchObject({ pass: false, note: 'tagNameUnknown' });
+});
+
 test('names in a message are masked and the email never appears', () => {
   const records = [report({ tags: [tag('88', 'Lead - pw-fixture@example.com')] })];
   const [r] = run('  mustNot:\n    - { tag: { id: "88" } }\n', records);
@@ -110,7 +115,7 @@ test('summarizeTags: a container with no report has one shape, and notFired is n
   const other = summarizeTags(REPORTS, { container: 'GTM-PWNOVER', tags: [{ id: '1', name: null }] })!;
   expect(other['GTM-PWTEST1']).toMatchObject({ notFired: null });
   expect(other['GTM-PWNOVER']).toEqual({ reports: 0, hint: 'tagreeve template web --json' });
-  expect((summarizeTags(REPORTS, { container: 'GTM-PWTEST1', tags: [] })!['GTM-PWTEST1'] as { notFired: unknown }).notFired).toBeNull();
+  expect((summarizeTags(REPORTS, { container: 'GTM-PWTEST1', tags: [] })!['GTM-PWTEST1'] as { notFired: unknown }).notFired).toEqual([]);
 });
 
 test('summarizeTags masks an email name and a strange status, and keeps [redacted]', () => {
