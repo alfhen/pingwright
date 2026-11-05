@@ -35,7 +35,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - `baseline save <record> x/y.json` makes the folder `x/` (#1076). `suite --baseline` hints at the ordering when the scenario folder is missing (#1075), gives a hint that fits an invalid file (#1074), no longer finds a missing file by matching `ENOENT` in the message (#1073), and exits 2 when two cells map to one baseline file name (#1068). The `suite --baseline` docs describe the drift text as it is (#1077).
 
-<!-- E07 -->
+- Added `tag` rules, in `must` and `mustNot`: `tag: { id: "77" }` or `tag: { name: "GA4 - *" }`, with optional `container`, `event`, `status` and `side`, and `count`, `after` and `from`. They read the web tag reports. A rule with no report cannot be evaluated (`noTagReports`), and a name pattern on a tag with no name does the same (`tagNameUnknown`). The summary has a `Tags` line and a `tags` field with the fired tags and, from `expectedTags` in the GTM override file, the expected tags that did not fire. That never fails a run (#922).
 
 - `diff` and `baseline` compare the masked `dataLayer` push shapes (#940). `diff` lists a gone or new event, a missing or new key path and a type change, and `diff --across-frames` treats an event that moved between frames as the same event. A baseline gets an optional `dataLayer` section. Push changes are warnings and never change the exit code. A baseline saved by 0.6.0-rc.1 still loads and warns "pushes not compared". `baselineSchemaVersion` stays 1.
 

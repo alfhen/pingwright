@@ -1,0 +1,10 @@
+start: /container/tags
+steps:
+  - wait: 4s
+expect:
+  must:
+    - { tag: { id: "77" } }
+    - { tag: { name: "X *" } }
+  mustNot:
+    - { tag: { name: "Meta *" } }
+options: { seed: 1, allowUnknownDestination: true }

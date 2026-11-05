@@ -1,6 +1,6 @@
 import { guardFieldName, maskValuePath, OTHER_NAME, platformHostFor } from '@tagreeve/decoders';
 import type { Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
-import { isServerHit, judgeIndex, NO_EVENT, pushShapes, viaHitOf, type PushShapes } from '@tagreeve/expect';
+import { isServerHit, judgeIndex, NO_EVENT, pushShapes, summarizeTags, tagLabel, viaHitOf, type PushShapes, type TagsContainerSummary } from '@tagreeve/expect';
 import { formatDefaults, type DefaultEntry } from './project-config.ts';
 import { NOTE_TEXT } from './report/model.ts';
 
@@ -40,6 +40,8 @@ export interface Summary {
   hits: Record<string, Record<string, number>>;
   /** Masked shapes of the pushes to the dataLayer. Absent when the run recorded none. */
   dataLayer?: PushShapes;
+  /** Per container: the tags that reported and, for the override container, the expected tags that did not. Names are masked. Absent without reports or a GTM override. */
+  tags?: Record<string, TagsContainerSummary>;
   epochs: { label: string; state?: string; startT: number; endT: number | null }[];
   flags: { kind: string; detail: string }[];
   /** Optional fill entries that were skipped because the field was not on the page. */
@@ -103,6 +105,8 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
   const testPayment = testPaymentOf(records);
   const serverContainer = serverContainerOf(records);
   const dataLayer = pushShapes({ steps: records.steps, dataLayerEvents: records.dataLayerEvents ?? [] });
+  const override = records.run.gtmOverride;
+  const tags = summarizeTags(records.tagReports ?? [], override ? { container: override.container, tags: override.expectedTags } : undefined);
   return {
     runId: records.run.id,
     ...(records.run.label !== undefined && { label: records.run.label }),
@@ -111,6 +115,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     ok: results.every(passesGate),
     hits: countHits(records.hits),
     ...(dataLayer.pushes > 0 && { dataLayer }),
+    ...(tags && { tags }),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
     flags: records.flags.map((f) => ({ kind: f.kind, detail: redactFlagDetail(f.detail) })),
     ...(testPayment && { testPayment }),
@@ -245,6 +250,24 @@ function dataLayerLine({ pushes, steps }: PushShapes): string {
   return `dataLayer: ${pushes} push${pushes === 1 ? '' : 'es'}, ${events.length} event${events.length === 1 ? '' : 's'}${list}; shapes in --json`;
 }
 
+const TAGS_SHOWN = 5;
+
+function tagList(items: string[]): string {
+  return items.length > TAGS_SHOWN ? `${items.slice(0, TAGS_SHOWN).join(', ')} and ${items.length - TAGS_SHOWN} more` : items.join(', ');
+}
+
+function tagsLine(container: string, entry: TagsContainerSummary): string {
+  if (!('fired' in entry)) return `Tags: no reports from ${container}. Install the reporter: ${entry.hint}`;
+  const failed = entry.fired.filter((t) => Object.keys(t.statuses).some((s) => s !== 'success'));
+  const parts = [`${entry.fired.length} fired`];
+  if (failed.length > 0) {
+    const shown = failed.map((t) => `${tagLabel(t.id, t.name)}: ${Object.keys(t.statuses).filter((s) => s !== 'success').join('/')}`);
+    parts.push(`${failed.length} failed (${tagList(shown)})`);
+  }
+  if (entry.notFired?.length) parts.push(`${entry.notFired.length} expected did not fire (${tagList(entry.notFired.map((t) => tagLabel(t.id, t.name)))})`);
+  return `Tags ${container}: ${parts.join(', ')}`;
+}
+
 export function formatSummary(summary: Summary): string {
   const lines: string[] = [];
   if (summary.label !== undefined) lines.push(`Label: ${summary.label}`);
@@ -262,6 +285,7 @@ export function formatSummary(summary: Summary): string {
     lines.push(`  ${vendor}: ${Object.entries(events).map(([e, n]) => `${e} x${n}`).join(', ')}`);
   }
   if (summary.dataLayer) lines.push(dataLayerLine(summary.dataLayer));
+  for (const [container, entry] of Object.entries(summary.tags ?? {})) lines.push(tagsLine(container, entry));
   lines.push('Consent epochs');
   for (const e of summary.epochs) {
     const label = e.label === 'withdrawn' && e.state ? `withdrawn, ${e.state}` : e.label;

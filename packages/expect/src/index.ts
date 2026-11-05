@@ -6,3 +6,4 @@ export * from './consent-mode-setup.ts';
 export * from './payment-providers.ts';
 export * from './project-config.ts';
 export * from './push-shape.ts';
+export * from './tags.ts';

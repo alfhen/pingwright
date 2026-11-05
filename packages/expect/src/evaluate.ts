@@ -14,6 +14,7 @@ import {
   type Flag,
   type HashForms,
   type DataLayerEvent,
+  type TagReport,
   type Hit,
   type Identity,
   type TagreeveRecord,
@@ -30,6 +31,7 @@ import {
 import { GA4_BODY_ONLY_IGNORE, type MultipartBody, bodyEntries, guardFieldName, multipartPartName, splitMultipart, META_BODY_ONLY_IGNORE, META_CAPI_BODY_ONLY_IGNORE, META_CAPI_PARAM_NAMES, metaCapiBaseParam, SGTM_BODY_ONLY_IGNORE, isSandboxPageUrl, maskValuePath, matchesIgnoreList, identifierClass, identifierSignal, type IdentifierClass } from '@tagreeve/decoders';
 import { consentModeSetup } from './consent-mode-setup.ts';
 import { hostMatches } from './hosts.ts';
+import { evaluateTagRule, type ExpectedTags } from './tags.ts';
 import { consentFields, countHolds, describeCount, type ConsentField, type Filter, type Rule, type Scenario, type BuiltinName } from './scenario.ts';
 
 export type EvalEpoch = ConsentEpoch;
@@ -58,6 +60,8 @@ interface Context {
   steps: Step[];
   responses: Response[];
   checkpoints: Checkpoint[];
+  tagReports: TagReport[];
+  expectedTags?: ExpectedTags;
   networkMode?: Run['networkMode'];
   grace: number;
   identity?: Identity;
@@ -82,6 +86,8 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
     steps: records.filter((r): r is Step => r.type === 'step'),
     responses: records.filter((r): r is Response => r.type === 'response'),
     checkpoints: records.filter((r): r is Checkpoint => r.type === 'checkpoint'),
+    tagReports: records.filter((r): r is TagReport => r.type === 'tagReport'),
+    ...(runRecord?.gtmOverride && { expectedTags: { container: runRecord.gtmOverride.container, tags: runRecord.gtmOverride.expectedTags } }),
     networkMode: runRecord?.networkMode,
     grace: options.graceWindowMs ?? scenario.options.graceWindow ?? DEFAULT_GRACE_MS,
     identity: options.identity ?? identityOf(runRecord),
@@ -108,7 +114,7 @@ export function evaluate(records: readonly Input[], scenario: Scenario, options:
       const outcome = evaluateRule(rule, ctx);
       const { pass, evidence, message } = outcome;
       const passes = (c: Context) => evaluateRuleHits(rule, c).pass;
-      const scoped = isScoped(rule);
+      const scoped = !rule.tag && isScoped(rule);
       const note = outcome.note ?? (pass && scoped && passRestsOnProbableLink(ctx, passes) ? 'serverSendProbableLink' : undefined);
       add(`${kind}: ${rule.description}`, pass, evidence, message, undefined, note, scoped && (pass || failureRestsOnProbableLink(ctx, passes)));
     }
@@ -135,7 +141,7 @@ function ruleWindowStart(rule: Rule, ctx: Context): { at: number; text: string }
 
 function evaluateRule(rule: Rule, ctx: Context): RuleOutcome {
   const outcome = evaluateRuleHits(rule, ctx);
-  if (rule.cookie || !isScoped(rule)) return outcome;
+  if (rule.cookie || rule.tag || !isScoped(rule)) return outcome;
   const unjudged = ctx.hits.filter((h) => isUnlinkedServerHit(h, ctx.index) && matchesFilter(h, { ...rule.filter, consent: {} }, ctx));
   if (unjudged.length === 0) return outcome;
   if (rule.kind === 'mustNot') {
@@ -180,6 +186,11 @@ function failureRestsOnProbableLink(ctx: Context, passes: (ctx: Context) => bool
 }
 
 function evaluateRuleHits(rule: Rule, ctx: Context): RuleOutcome {
+  if (rule.tag) {
+    const window = ruleWindowStart(rule, ctx);
+    if (window && 'message' in window) return window;
+    return evaluateTagRule(rule, { reports: ctx.tagReports, expected: ctx.expectedTags, window });
+  }
   if (rule.cookie) return evaluateCookieRule(rule, rule.cookie, ctx);
   const anywhere = (h: Hit) => ctx.anywhere?.has(h.id) ?? false;
   let hits = ctx.hits.filter((h) => matchesFilter(h, anywhere(h) ? { ...rule.filter, consent: {} } : rule.filter, ctx));
