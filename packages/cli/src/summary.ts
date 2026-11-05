@@ -138,7 +138,7 @@ export function buildSummary(records: RunRecords, results: Result[], path: strin
     ...(dataLayer.pushes > 0 && { dataLayer }),
     ...(tags && { tags }),
     epochs: records.consentEpochs.map((e) => ({ label: e.label, state: stateName(e.state), startT: e.startT, endT: e.endT })),
-    flags: records.flags.map((f) => ({ kind: f.kind, detail: redactFlagDetail(f.detail) })),
+    flags: records.flags.map((f) => ({ kind: f.kind, detail: redactFlagDetail(f.detail, f.kind) })),
     ...(testPayment && { testPayment }),
     ...(records.run.testServerContainer && { testServerContainer: true as const }),
     ...(serverContainer && { serverContainer }),
@@ -199,6 +199,7 @@ const URL_TOKEN = /[a-z][a-z0-9+.-]*:\/\/\S+/gi;
 const URL_PARTS = /^(?:(?:([a-z][a-z0-9+.-]*:)?\/\/)([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#.*)?$/is;
 // The URL runs to the end of the detail, so a space inside it does not end it.
 const RECEIVED_PAGE = /^(\S+ received )(.+)( as the page)$/s;
+const URL_ENDING_KINDS = new Set(['unknownDestination', 'firstPartySubdomain', 'platformHost', 'stubBypass', 'possibleRedirectHop']);
 const URL_AT_END = /^(.*?(?:\b[A-Z]+ |: ))((?:[a-z][a-z0-9+.-]*:)?\/\/.*|\/.*)$/s;
 
 // A raw name is checked, so a decoded `&`, `=`, `?` or space cannot break the shape. A bare item may be a value.
@@ -216,10 +217,10 @@ function redactUrl(raw: string): string {
 }
 
 /** Replaces each URL in a flag detail and keeps the words around it, so the host parsers still match. */
-export function redactFlagDetail(detail: string): string {
+export function redactFlagDetail(detail: string, kind: string): string {
   const page = RECEIVED_PAGE.exec(detail);
   if (page) return `${page[1]}${redactUrl(page[2]!)}${page[3]}`;
-  const tail = URL_AT_END.exec(detail);
+  const tail = URL_ENDING_KINDS.has(kind) ? URL_AT_END.exec(detail) : null;
   if (tail) return `${tail[1]}${redactUrl(tail[2]!)}`;
   return detail.replace(URL_TOKEN, redactUrl);
 }

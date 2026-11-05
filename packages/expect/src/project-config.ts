@@ -1,4 +1,4 @@
-import { LineCounter, isAlias, isMap as isYamlMap, isPair, isScalar, parseDocument, visit, type Node } from 'yaml';
+import { LineCounter, Scalar, isAlias, isMap as isYamlMap, isPair, isScalar, parseDocument, visit, type Node } from 'yaml';
 import { parseOptions, type Path, type ScenarioOptions } from './scenario.ts';
 
 export const configSchemaVersion = 1;
@@ -42,7 +42,7 @@ function validSite(value: unknown): boolean {
 /** `file` is only used in messages. Messages never hold a value from the file. */
 export function parseProjectConfig(text: string, file: string): ProjectConfig {
   const lines = new LineCounter();
-  const doc = parseDocument(text, { lineCounter: lines, uniqueKeys: true, logLevel: 'silent' });
+  const doc = parseDocument(text, { lineCounter: lines, uniqueKeys: true, logLevel: 'error' });
   const issues: string[] = [];
   const lineAt = (node: Node | null | undefined): number => (node?.range ? lines.linePos(node.range[0]).line : 1);
 
@@ -76,7 +76,7 @@ export function parseProjectConfig(text: string, file: string): ProjectConfig {
   visit(doc, {
     Pair(_, pair) {
       const key = pair.key;
-      if (!isScalar(key) || typeof key.value !== 'string' || key.value === '<<') return refuse(isScalar(key) || isAlias(key) ? key : (key as Node));
+      if (!isScalar(key) || typeof key.value !== 'string' || key.type !== Scalar.PLAIN || key.value === '<<') return refuse(isScalar(key) || isAlias(key) ? key : (key as Node));
     },
     Node(_, node) {
       if (isAlias(node) || node.anchor || node.tag) return refuse(node);

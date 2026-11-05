@@ -415,6 +415,24 @@ test('the sandboxPageUrl message names the page by host and path only', () => {
   expect(message).toContain(new URL(SANDBOX).host + new URL(SANDBOX).pathname);
 });
 
+test('the sandboxPageUrl message masks a relative page segment that holds a space', () => {
+  const bad = hit({ page: '/web-pixels@abc/sandbox/modern/pw fake name/x' });
+  const message = run('start: /', [bad]).find((r) => r.expectation === 'builtin: sandboxPageUrl')!.message;
+  expect(message).not.toContain('pw fake name');
+  expect(message).toContain('(other)');
+});
+
+test('a sentBy: browser rule next to an unlinked server hit passes with no note', () => {
+  const server = hit({ vendor: 'meta', t: 1500 }, { captured: 'serverContainer' });
+  const q = (sentBy: string) => `steps:\n  - { visit: /, label: go }\nexpect:\n  mustNot:\n    - { vendor: meta, sentBy: ${sentBy}, from: go }`;
+  const step: Step = { type: 'step', id: newId('step'), runId, index: 0, label: 'go', startedAt: 900, endedAt: 1000 };
+  const browser = rule(q('browser'), [step, server]);
+  expect(browser.pass).toBe(true);
+  expect(browser.note).toBeUndefined();
+  expect(browser.severity).toBeUndefined();
+  expect(rule(q('server'), [step, server])).toMatchObject({ pass: false, severity: 'warn', note: 'serverSendUnlinked' });
+});
+
 test('built-in possibleRealData comes from flags', () => {
   const flag: Flag = { type: 'flag', id: newId('flag'), runId, kind: 'possibleRealData', recordIds: ['req_Y'], detail: 'email in postData' };
   const check = evaluate([flag], parseScenario('start: /')).find((r) => r.expectation === 'builtin: possibleRealData')!;

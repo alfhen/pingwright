@@ -114,6 +114,9 @@ describe('refused keys', () => {
     ['a !!str tag', `${head}site: !!str FAKE-SITE\n`, 2],
     ['a custom tag', `${head}out: !custom FAKE-OUT\n`, 2],
     ['a flow map key', `${head}? { gtmOverride: "gtm_auth=FAKE-AUTH-VALUE" }\n: x\n`, 2],
+    ['a double-quoted key with an escaped newline', `${head}"a\\nFAKE line 9, x: ok": 1\n`, 2],
+    ['a single-quoted key', `${head}'FAKE-KEY': 1\n`, 2],
+    ['a block-scalar key', `${head}? |\n  FAKE-KEY\n: 1\n`, 2],
     ['a number key', `${head}1: FAKE-VALUE\n`, 2],
   ])('%s names the line and never the text', (_, text, line) => {
     const warn = vi.spyOn(process, 'emitWarning');
@@ -122,6 +125,12 @@ describe('refused keys', () => {
     expect(out).not.toMatch(/FAKE/);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  test('a second YAML document exits 2 without its text', () => {
+    const out = errorOf(`${head}---\nnetwork: live\nFAKE: [\n`);
+    expect(out).toMatch(/^tagreeve\/config\.yml: line \d+: not valid YAML$/);
+    expect(out).not.toMatch(/FAKE|live/);
   });
 
   test('a YAML syntax error names only the line', () => {

@@ -104,7 +104,7 @@ test('options.network accepts stub and server and refuses live', () => {
   expect(parseScenario(`start: /\noptions:\n  network: stub\nsteps:\n  - visit: /\n`).options.network).toBe('stub');
   expect(parseScenario(`start: /\noptions:\n  network: server\nsteps:\n  - visit: /\n`).options.network).toBe('server');
   expect(errorOf(`start: /\noptions:\n  network: live\nsteps:\n  - visit: /\n`)).toContain('options.network: live is not allowed in a scenario. Pass --network live on the command line.');
-  expect(errorOf(`start: /\noptions:\n  network: fast\nsteps:\n  - visit: /\n`)).toContain('must be one of stub, server');
+  expect(errorOf(`start: /\noptions:\n  network: fast\nsteps:\n  - visit: /\n`)).toMatch(/must be one of stub, server$/m);
 });
 
 test('requires start and rejects unknown top-level keys', () => {

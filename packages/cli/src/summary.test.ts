@@ -389,8 +389,8 @@ test.each([
 });
 
 test('a value-like query name is shown as (other)', () => {
-  expect(redactFlagDetail(`GET https://t.example.net/u/a?${EMAIL}=1&${HASH}&ok=2`)).toBe('GET https://t.example.net/u/a?(other)&ok');
-  expect(redactFlagDetail('GET https://user:secret@t.example.net/a')).toBe('GET https://t.example.net/a');
+  expect(redactFlagDetail(`GET https://t.example.net/u/a?${EMAIL}=1&${HASH}&ok=2`, 'unknownDestination')).toBe('GET https://t.example.net/u/a?(other)&ok');
+  expect(redactFlagDetail('GET https://user:secret@t.example.net/a', 'unknownDestination')).toBe('GET https://t.example.net/a');
 });
 
 test('the summary of a name=value URL is the same after buildSummary then formatFlags', () => {
@@ -426,7 +426,7 @@ test.each([
   ['with a space in the path', 'GET https://t.example.net/a/b c/d?x=1', 'GET https://t.example.net/a/(other)/d?x'],
   ['a space in the query name', 'GET /a?pw fake name=1', 'GET /a?(other)'],
 ])('redactFlagDetail redacts a %s URL', (_form, detail, shown) => {
-  expect(redactFlagDetail(detail)).toBe(shown);
+  expect(redactFlagDetail(detail, 'unknownDestination')).toBe(shown);
 });
 
 test.each([
@@ -435,27 +435,39 @@ test.each([
   ['with a space', 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/cart?q=a b c as the page', 'ga4 received https://shop.example.com/web-pixels@abc/sandbox/modern/cart?q as the page'],
   ['holding " received "', 'ga4 received /web-pixels@abc/sandbox/modern/?q=pw-test@example.test received x as the page', 'ga4 received /web-pixels@abc/sandbox/modern/?q as the page'],
 ])('the sandboxPageUrl page is redacted when it is %s', (_form, detail, shown) => {
-  expect(redactFlagDetail(detail)).toBe(shown);
+  expect(redactFlagDetail(detail, 'sandboxPageUrl')).toBe(shown);
+});
+
+test('an unloadGap detail whose event name holds ": /" keeps its advice text', () => {
+  const detail = 'dataLayer event x: /pw-test@example.test was pushed after unload. Wait longer before leaving the page.';
+  expect(redactFlagDetail(detail, 'unloadGap')).toBe(detail);
+  expect(redactFlagDetail('GET /a?email=1', 'stubBypass')).toBe('GET /a?email');
+});
+
+test('buildSummary keeps the advice text of an unloadGap flag whose event name holds ": /"', () => {
+  const detail = 'dataLayer event x: /pw-test@example.test was pushed after unload. Wait longer before leaving the page.';
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [{ kind: 'unloadGap', detail }], steps: [] } as unknown as RunRecords;
+  expect(buildSummary(records, [], 'p').flags[0]!.detail).toBe(detail);
 });
 
 test('a path segment that holds an email, a phone or a hash reads (other)', () => {
   const detail = `GET https://t.example.net/account/${FAKE_EMAIL}/${encodeURIComponent(PHONE)}/${HASH}/orders`;
-  expect(redactFlagDetail(detail)).toBe('GET https://t.example.net/account/(other)/(other)/(other)/orders');
+  expect(redactFlagDetail(detail, 'unknownDestination')).toBe('GET https://t.example.net/account/(other)/(other)/(other)/orders');
 });
 
 test('a sandbox prefix keeps its web-pixels hash and mode', () => {
-  expect(redactFlagDetail(`ga4 received https://shop.example.com/web-pixels@${'a1b2c3'.repeat(6)}/custom/web-pixel-1@1/sandbox/modern/cart/${HASH} as the page`)).toBe(
+  expect(redactFlagDetail(`ga4 received https://shop.example.com/web-pixels@${'a1b2c3'.repeat(6)}/custom/web-pixel-1@1/sandbox/modern/cart/${HASH} as the page`, 'sandboxPageUrl')).toBe(
     `ga4 received https://shop.example.com/web-pixels@${'a1b2c3'.repeat(6)}/custom/web-pixel-1@1/sandbox/modern/cart/(other) as the page`,
   );
 });
 
 test('a bare query item reads (other) and a name=value item shows its name', () => {
-  expect(redactFlagDetail('GET https://t.example.net/a?pwfake-cookie-value-0001')).toBe('GET https://t.example.net/a?(other)');
-  expect(redactFlagDetail('GET https://t.example.net/a?ok=1&pwfake-cookie-value-0001')).toBe('GET https://t.example.net/a?ok&(other)');
+  expect(redactFlagDetail('GET https://t.example.net/a?pwfake-cookie-value-0001', 'unknownDestination')).toBe('GET https://t.example.net/a?(other)');
+  expect(redactFlagDetail('GET https://t.example.net/a?ok=1&pwfake-cookie-value-0001', 'unknownDestination')).toBe('GET https://t.example.net/a?ok&(other)');
 });
 
 test('a percent-encoded separator in a query name does not split it', () => {
-  expect(redactFlagDetail('GET https://t.example.net/a?k%26sid%3Dpwfake-cookie-value-0001=1&ok=2')).toBe('GET https://t.example.net/a?(other)&ok');
+  expect(redactFlagDetail('GET https://t.example.net/a?k%26sid%3Dpwfake-cookie-value-0001=1&ok=2', 'unknownDestination')).toBe('GET https://t.example.net/a?(other)&ok');
 });
 
 test('a buildSummary flag with a relative page leaks nothing', () => {
