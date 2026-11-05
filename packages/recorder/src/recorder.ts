@@ -50,7 +50,7 @@ import {
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
 import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
-import { buildDataLayerNotHookedFlag } from './datalayer-names.ts';
+import { buildDataLayerNotHookedFlag, loaderLayerName } from './datalayer-names.ts';
 import { parseTagReport, TAG_REPORT_BINDING } from './tag-report.ts';
 import { buildFlags, buildUnloadGapFlags, type FrameRef } from './flags.ts';
 import { mergeNetLog, NavigationWindows, parseNetLog, watchNetLogDir, type NetLogRequest } from './netlog.ts';
@@ -201,6 +201,7 @@ export class Recorder {
   private collectorHandler: CollectorHandler = () => undefined;
   private readonly requests = new Map<PwRequest, Request>();
   private readonly extraRequests: Request[] = [];
+  private readonly loaderLayers: { id: Id<'req'>; name: string }[] = [];
   private readonly unloadKeys = new Set<string>();
   private readonly routed = new Set<string>();
   /** Memory only: never a record field. */
@@ -533,6 +534,9 @@ export class Recorder {
       postData: body === null ? null : body.slice(0, MAX_POST_DATA),
       outcome: 'passed',
     };
+    // Read before handoff redaction, which blanks the query.
+    const loaderName = loaderLayerName(record);
+    if (loaderName !== undefined) this.loaderLayers.push({ id: record.id, name: loaderName });
     record = this.redactForHandoff(record);
     this.requests.set(request, record);
     const frameId = this.requestFrameId(request);
@@ -1083,7 +1087,7 @@ export class Recorder {
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }
-    const notHooked = buildDataLayerNotHookedFlag({ runId: this.runId, requests, hooked: this.options.dataLayerNames ?? [] });
+    const notHooked = buildDataLayerNotHookedFlag({ runId: this.runId, loaders: this.loaderLayers, hooked: this.options.dataLayerNames ?? [] });
     if (notHooked) flags.push(notHooked);
     this.recordServerContainer(requests, hits, containerCounts, flags);
     const consentEpochs = this.buildConsentEpochs();
