@@ -1,5 +1,5 @@
 import { guardFieldName, maskValuePath, OTHER_NAME, platformHostFor } from '@tagreeve/decoders';
-import type { Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
+import type { HitLinkMiss, Result, ResultNote, RunRecords, ServerContainerErrorClass, Severity } from '@tagreeve/core';
 import { isServerHit, judgeIndex, NO_EVENT, pushShapes, summarizeTags, tagLabel, viaHitOf, type PushShapes, type TagsContainerSummary } from '@tagreeve/expect';
 import { formatDefaults, type DefaultEntry } from './project-config.ts';
 import { NOTE_TEXT } from './report/model.ts';
@@ -23,7 +23,14 @@ export interface ServerContainerSummary {
   unlinked: number;
   /** Requests the proxy forwarded to Google. */
   forwarded: number;
+  /** Why the calls that are not `exact` are not: each such call counts once under each rule. */
+  notExact: NotExactCounts;
   error?: ServerContainerErrorClass;
+}
+
+export interface NotExactCounts {
+  eventId: Record<HitLinkMiss['eventId'], number>;
+  clientId: Record<HitLinkMiss['clientId'], number>;
 }
 
 export interface Summary {
@@ -84,6 +91,19 @@ function testPaymentOf(records: RunRecords): Summary['testPayment'] {
   return payment && { provider: payment.provider, host: new URL(records.run.site).hostname, testMode: payment.testMode ?? 'marker' };
 }
 
+function notExactCounts(hits: RunRecords['hits']): NotExactCounts {
+  const out: NotExactCounts = {
+    eventId: { none: 0, noMatch: 0, several: 0 },
+    clientId: { noClientId: 0, noSameKeyHit: 0, severalSameKeyHits: 0, answeredBefore: 0 },
+  };
+  for (const { linkMiss } of hits) {
+    if (!linkMiss) continue;
+    out.eventId[linkMiss.eventId] += 1;
+    out.clientId[linkMiss.clientId] += 1;
+  }
+  return out;
+}
+
 function serverContainerOf(records: RunRecords): ServerContainerSummary | undefined {
   const container = records.run.serverContainer;
   if (!container) return undefined;
@@ -97,6 +117,7 @@ function serverContainerOf(records: RunRecords): ServerContainerSummary | undefi
     probable: linked.filter((h) => h.via?.confidence === 'probable').length,
     unlinked: sent.length - linked.length,
     forwarded: serverjs + config + destination,
+    notExact: notExactCounts(sent),
     ...(container.error && { error: container.error }),
   };
 }

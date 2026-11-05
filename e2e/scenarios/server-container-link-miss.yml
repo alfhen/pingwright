@@ -1,0 +1,14 @@
+start: /server-container-link
+steps:
+  - evaluate: "window.pwSendLinkHits({ en: 'link_none', cid: 'pw-client-none-1', copy: true })"
+  - wait: 2s
+  - evaluate: "window.pwSendLinkHits({ en: 'link_nomatch' })"
+  - wait: 2s
+  - evaluate: "window.pwSendLinkHits({ n: 2, en: 'link_several', eid: 'pw-eid-several-1' })"
+  - wait: 2s
+  - evaluate: "window.pwSendLinkHits({ n: 2, en: 'link_samekey', cid: 'pw-client-same-1', copy: true, after: true, gap: 1000 })"
+  - wait: 2s
+expect:
+  must: []
+  mustNot: []
+options: { seed: 1, network: server, serverHosts: [127.0.0.1], allowUnknownDestination: true, builtins: { possibleRealData: warn } }

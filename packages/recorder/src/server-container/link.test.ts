@@ -244,3 +244,86 @@ describe('rule 3: a shared value', () => {
     expect(link([[pixelReq, pixel], [callReq, hit(callReq, 'google-ads', 'conversion', 300)]])[1]).toBeUndefined();
   });
 });
+
+describe('linkMiss', () => {
+  const browserCall = (cid: string, t: number) => request(`https://sgtm.example.invalid/g/collect?cid=${cid}&en=Purchase`, { t });
+  const serverCall = (cid: string | null, t: number) => serverRequest(`https://www.google-analytics.com/g/collect?${cid ? `cid=${cid}&` : ''}en=Purchase`, { t });
+  const linked = (pairs: Array<[Request, Hit]>, inFlight?: Array<[Request, InFlightWindow]>) =>
+    linkServerHits({
+      hits: pairs.map(([, h]) => h),
+      requests: pairs.map(([r]) => r),
+      serverHosts: hosts,
+      identity,
+      ...(inFlight ? { inFlight: new Map(inFlight.map(([r, w]) => [r.id, w])) } : {}),
+    });
+  const missOf = (pairs: Array<[Request, Hit]>, inFlight?: Array<[Request, InFlightWindow]>) => linked(pairs, inFlight).map((h) => h.linkMiss);
+
+  test('an exact link by event ID has none, and a browser hit has none', () => {
+    const capiReq = serverRequest('https://graph.facebook.com/v21.0/1/events', { t: 50 });
+    const capi = hit(capiReq, 'meta-capi', 'Purchase', 50, { eventId: 'evt-12345678' });
+    expect(missOf([[pixelReq, pixel], [capiReq, capi]])).toEqual([undefined, undefined]);
+  });
+
+  test('an exact link by client ID has none', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0001', 150);
+    expect(missOf([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]], [[b, { sentAt: 100, answeredAt: 200 }]])[1]).toBeUndefined();
+  });
+
+  test('no event ID and no client ID', () => {
+    const c = serverCall(null, 150);
+    expect(missOf([[c, hit(c, 'ga4', 'Purchase', 150)]])[0]).toEqual({ eventId: 'none', clientId: 'noClientId' });
+  });
+
+  test('no event name is none and noClientId', () => {
+    const c = serverCall('pw-client-0001', 150);
+    expect(missOf([[c, hit(c, 'ga4', null, 150, { event_id: 'evt-12345678' })]])[0]).toEqual({ eventId: 'none', clientId: 'noClientId' });
+  });
+
+  test('an event ID no browser hit carries is noMatch', () => {
+    const c = serverCall(null, 150);
+    expect(missOf([[pixelReq, pixel], [c, hit(c, 'ga4', 'Purchase', 150, { event_id: 'other-1234567' })]])[1]).toMatchObject({ eventId: 'noMatch' });
+  });
+
+  test('an event ID two browser hits carry is several', () => {
+    const other = request('https://www.facebook.com/tr/?id=1&ev=Purchase&eid=evt-12345678', { t: 20 });
+    const c = serverCall(null, 150);
+    const call = hit(c, 'ga4', 'Purchase', 150, { event_id: 'evt-12345678' });
+    expect(missOf([[pixelReq, pixel], [other, hit(other, 'meta', 'Purchase', 20, { eid: 'evt-12345678' })], [c, call]])[2]).toMatchObject({ eventId: 'several' });
+  });
+
+  test('a client ID no browser hit shares is noSameKeyHit', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0002', 150);
+    expect(missOf([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]])[1]).toEqual({ eventId: 'none', clientId: 'noSameKeyHit' });
+  });
+
+  test('two same-key hits are severalSameKeyHits', () => {
+    const a = browserCall('pw-client-0001', 100);
+    const b = browserCall('pw-client-0001', 110);
+    const c = serverCall('pw-client-0001', 150);
+    const windows: Array<[Request, InFlightWindow]> = [[a, { sentAt: 100, answeredAt: 200 }], [b, { sentAt: 110, answeredAt: 200 }]];
+    expect(missOf([[a, hit(a, 'ga4', 'Purchase', 100)], [b, hit(b, 'ga4', 'Purchase', 110)], [c, hit(c, 'ga4', 'Purchase', 150)]], windows)[2]).toEqual({ eventId: 'none', clientId: 'severalSameKeyHits' });
+  });
+
+  test('one same-key hit answered before the call is answeredBefore, and keeps its probable via', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0001', 250);
+    const call = linked([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 250)]], [[b, { sentAt: 100, answeredAt: 200 }]])[1];
+    expect(call?.linkMiss).toEqual({ eventId: 'none', clientId: 'answeredBefore' });
+    expect(call?.via).toMatchObject({ confidence: 'probable' });
+  });
+
+  test('one same-key hit with no window is answeredBefore', () => {
+    const b = browserCall('pw-client-0001', 100);
+    const c = serverCall('pw-client-0001', 150);
+    expect(missOf([[b, hit(b, 'ga4', 'Purchase', 100)], [c, hit(c, 'ga4', 'Purchase', 150)]])[1]).toMatchObject({ clientId: 'answeredBefore' });
+  });
+
+  test('the reason holds no ID or value', () => {
+    const c = serverCall('pw-client-0001', 150);
+    const text = JSON.stringify(missOf([[c, hit(c, 'ga4', 'Purchase', 150, { event_id: 'evt-12345678' })]]));
+    expect(text).not.toContain('pw-client');
+    expect(text).not.toContain('evt-');
+  });
+});
