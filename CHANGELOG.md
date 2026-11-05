@@ -4,7 +4,7 @@
 
 Not released yet. The newest release is 0.6.0-rc.1, below.
 
-<!-- V07 -->
+- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. Nothing writes the new fields yet. A version 4 record reads as before.
 
 <!-- J07 -->
 
