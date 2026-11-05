@@ -160,6 +160,10 @@ Pages (they load no shop scripts, and they load the real gtag.js and fbevents.js
 
 `/delayed-hit` needs no internet access. It sends one GA4 `page_view` image hit to `www.google-analytics.com` after `?delay=<ms>` (default 1500), with `?gcs=<value>` (default `G100`). Stub the collection path so no hit leaves the machine. Scenarios use it to land the same hit in different steps.
 
+## Page-load hit page
+
+`/page-load-hit` has no scripts. It sends one GA4 `page_view` image hit to `www.google-analytics.com` from the markup, so the hit leaves before the `load` event and a visit step always ends after it. Stub the collection path so no hit leaves the machine. Scenarios use it where a step-boundary rule must not depend on timing.
+
 ## Pages for 0.3
 
 `/sgtm-leak`, `/identifiers`, `/cookies` and `/select` load `/assets/banner.js`, not `site.js`: a banner (`#pw-consent-banner`, `#pw-accept`, `#pw-reject`, `#pw-cookie-settings`), a Consent Mode default with all four signals denied, and no sandboxed pixel, no unknown pixel, no gtag.js and no fbevents.js. `/tiles`, `/handoff` and `/handoff/second` load neither script and have no banner, so a scenario must not use a consent step on them. All of these pages need no internet access. Hits to `google-analytics.com` and `facebook.com` are images that a test or a stub-mode run answers locally. Hits to `sgtmUrl` go to the loopback mock host. A run with these pages can exit 0. A scenario that adds a page with `site.js` sets `builtins: { sandboxPageUrl: warn }`.
