@@ -51,36 +51,46 @@ export const dataLayerInitScript = `(() => {
   const hook = (layer) => {
     if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
     Object.defineProperty(layer, '__tagreeveHooked', { value: true });
-    // entries[k] runs impls[k]. A wrapper saves the getter's value, which is the entry below it, so a call through
-    // that reference reaches the next implementation down whenever it is made. Only the top entry reports,
-    // so a push the page makes while a wrapper runs still goes through every wrapper and is recorded once.
-    const impls = [layer.push];
-    const entries = [];
-    const entryFor = (k) =>
+    // Each entry runs its own implementation, so a saved push reaches the same one whenever it is called, in any
+    // unwrap order. The first entry that sees an item reports it, so a push is recorded once however wrappers call
+    // each other. Primitives cannot be tracked and are reported at the outermost call only.
+    const seen = new WeakSet();
+    let depth = 0;
+    const entryFor = (impl) =>
       function (...items) {
-        if (k !== impls.length - 1) return impls[k].apply(this, items);
-        const started = items.map((item) => ({ item, t: clock(), args: argsOf(item) }));
+        const fresh = items.filter((item) => {
+          if (item !== null && (typeof item === 'object' || typeof item === 'function')) {
+            if (seen.has(item)) return false;
+            seen.add(item);
+            return true;
+          }
+          return depth === 0;
+        });
+        const started = fresh.map((item) => ({ item, t: clock(), args: argsOf(item) }));
+        depth++;
         try {
-          return impls[k].apply(this, items);
+          return impl.apply(this, items);
         } finally {
+          depth--;
           for (const { item, t, args } of started) post({ t, args, uid: stampOf(item) });
         }
       };
-    entries.push(entryFor(0));
+    const known = new Set();
+    let top = entryFor(layer.push);
+    known.add(top);
     Object.defineProperty(layer, 'push', {
       configurable: true,
       enumerable: false,
-      get: () => entries[impls.length - 1],
+      get: () => top,
       set: (fn) => {
         if (typeof fn !== 'function') return;
-        const k = entries.indexOf(fn);
-        if (k >= 0) {
-          if (k < impls.length) impls.length = k + 1;
+        if (!known.has(fn)) {
+          const entry = entryFor(fn);
+          known.add(entry);
+          top = entry;
           return;
         }
-        impls.push(fn);
-        entries.length = impls.length - 1;
-        entries.push(entryFor(impls.length - 1));
+        top = fn;
       },
     });
     for (const item of layer) post({ t: clock(), args: argsOf(item), uid: stampOf(item) });

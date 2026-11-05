@@ -224,3 +224,54 @@ test('putting the saved push back removes the wrapper', () => {
   expect(page.run('dataLayer.length')).toBe(2);
   expect(page.sent).toHaveLength(2);
 });
+
+test('a cached entry still runs its own wrapper after an out-of-order unwrap', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.log = [];
+    const s0 = dataLayer.push;
+    dataLayer.push = function () { log.push(1); return s0.apply(this, arguments); };
+    const s1 = dataLayer.push;
+    dataLayer.push = function () { log.push(2); return s1.apply(this, arguments); };
+    globalThis.cached = dataLayer.push;
+    dataLayer.push = s0;`);
+  expect(() => page.run(`cached.call(dataLayer, { event: 'a' })`)).not.toThrow();
+  expect(page.run('dataLayer.length')).toBe(1);
+  expect(page.run('log')).toEqual([2, 1]);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }]]);
+});
+
+test('a saved call-through keeps its wrapper when a new wrapper is added after an unwrap', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.log = [];
+    const s0 = dataLayer.push;
+    dataLayer.push = function () { log.push(1); return s0.apply(this, arguments); };
+    const s1 = dataLayer.push;
+    dataLayer.push = function () { log.push(2); return s1.apply(this, arguments); };
+    dataLayer.push = s0;
+    const s2 = dataLayer.push;
+    dataLayer.push = function () { log.push(3); return s2.apply(this, arguments); };
+    s1.call(dataLayer, { event: 'a' });`);
+  expect(page.run('log')).toEqual([1]);
+});
+
+test('a cached top entry assigned back after a restore is active again', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; globalThis.n = 0;
+    const s0 = dataLayer.push;
+    dataLayer.push = function () { n++; return s0.apply(this, arguments); };
+    globalThis.top = dataLayer.push;
+    dataLayer.push = s0;
+    dataLayer.push = top;
+    dataLayer.push({ event: 'a' });`);
+  expect(page.run('dataLayer.push === top')).toBe(true);
+  expect(page.run('n')).toBe(1);
+});
+
+test('an extra item pushed through the saved push is recorded', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; const s0 = dataLayer.push;
+    dataLayer.push = function () { s0.call(this, { event: 'extra' }); return s0.apply(this, arguments); };
+    dataLayer.push({ event: 'a' });`);
+  expect(page.run('dataLayer.length')).toBe(2);
+  expect(argsOf(page.sent).map((a) => ((a as Array<{ event: string }>)[0]!).event).sort()).toEqual(['a', 'extra']);
+});
