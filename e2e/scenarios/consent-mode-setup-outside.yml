@@ -1,0 +1,4 @@
+start: /consent-mode-hits?gcs=G111&gcd=13r3r3r3r5
+steps:
+  - wait: 1s
+options: { seed: 1, allowUnknownDestination: true }

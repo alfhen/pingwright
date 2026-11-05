@@ -506,6 +506,14 @@ describe('server container hits', () => {
     expect(model.rows[0]!.segments.some((s) => s.mark === 'leak')).toBe(false);
   });
 
+  test('the tag report notes have their texts', () => {
+    const noReports = result('tag: GA4', false, { severity: 'warn', note: 'noTagReports' });
+    const noName = result('tag: GA4', false, { severity: 'warn', note: 'tagNameUnknown' });
+    const model = buildReportModel(records({ results: [noReports, noName] }));
+    expect(model.expectations[0]!.note).toBe('cannot evaluate: no tag report from this container. Install the reporter: tagreeve template web --json');
+    expect(model.expectations[1]!.note).toBe('cannot evaluate: the tag has no name in its report or in expectedTags');
+  });
+
   test('an unlinked hit named in the evidence of a failed exact leak is not marked as a leak', () => {
     const sent = server('meta-capi', 500, undefined);
     sent.hit.idFields = ['user_data.em[]'];

@@ -40,9 +40,9 @@ const isAdsCollect = (r: Request) =>
   /^\/(ccm\/collect|pagead\/)/.test(url(r).pathname);
 const isTagManagerPing = (r: Request) => /(^|\.)googletagmanager\.com$/.test(url(r).hostname) && /^\/(a|td)\/?$/.test(url(r).pathname);
 
-describe('record schema version 4', () => {
+describe('record schema version 5', () => {
   test('the run holds the version and the grace window', () => {
-    expect(records.run.recordSchemaVersion).toBe(4);
+    expect(records.run.recordSchemaVersion).toBe(5);
     expect(records.run.graceWindowMs).toBe(120);
   });
 

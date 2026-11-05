@@ -1,6 +1,6 @@
 # Project layout
 
-Tagreeve does not make you use a folder layout. These are the folders to use if you want runs to be easy to find and safe to commit. `tagreeve init` makes the scenario and baseline folders and the `.gitignore` line for you.
+Tagreeve does not make you use a folder layout. These are the folders to use if you want runs to be easy to find and safe to commit. `tagreeve init` makes the scenario and baseline folders, a starter `config.yml` and the `.gitignore` line for you.
 
 ```text
 your-repo/
@@ -12,7 +12,7 @@ your-repo/
         server-checkout.yml
     baselines/                  # committed
       checkout.json
-    config.yml                  # committed, the project config
+    config.yml                  # committed, the project config (init writes a starter)
     trackers.json               # committed, the default for --tracker-list
     stores.json                 # committed, the default for suite --stores
     autoconsent/                # committed, *.json is the default for --autoconsent-rules
@@ -64,4 +64,4 @@ Give the run a label with `--label`, such as `--label ca-307-live`. Tagreeve put
 
 ## Suite reads one level
 
-`tagreeve suite` with no folder uses `tagreeve/scenarios/`, and with no `--site` or `--stores` it uses `tagreeve/stores.json`. `tagreeve suite tagreeve/scenarios/` runs the `*.yml` and `*.yaml` files at the top level of the folder. It does not look into subfolders. Put scenarios that need a server container in a subfolder such as `server/` and run them with `tagreeve run`. The suite skips the subfolder without a message. Scenarios with a handoff step can stay at the top level: the suite shows them as SKIPPED, and runs them with `--with-handoff`.
+`tagreeve suite` with no folder uses `tagreeve/scenarios/`, and with no `--site` or `--stores` it uses the `site` in `tagreeve/config.yml`, or else `tagreeve/stores.json`. If both exist, `suite` exits 2 and asks for `--site` or `--stores`. `tagreeve suite tagreeve/scenarios/` runs the `*.yml` and `*.yaml` files at the top level of the folder. It does not look into subfolders. Put scenarios that need a server container in a subfolder such as `server/` and run them with `tagreeve run`. The suite skips the subfolder without a message. Scenarios with a handoff step can stay at the top level: the suite shows them as SKIPPED, and runs them with `--with-handoff`.

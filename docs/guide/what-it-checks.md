@@ -42,6 +42,8 @@ You write expectations per state. For example: "Meta must send nothing while the
 
 [Reading a run's results](./reading-results.md) shows how epochs appear in the output.
 
+Google tags also send the Consent Mode signals they were set up with. Tagreeve warns when a Google hit shows a signal that was never set, for example a setup that misses `ad_user_data` and `ad_personalization`.
+
 ## Stub mode
 
 By default, a run is in stub mode. In stub mode, Tagreeve records each known tracking request and then answers it itself. Your test visits do not add fake traffic to real reports.
