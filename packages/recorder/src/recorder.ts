@@ -467,7 +467,7 @@ export class Recorder {
 
   private frameRef(frame: Frame): DataLayerFrame {
     this.frameDocumentId(frame);
-    return { main: frame.parentFrame() === null, n: this.frameNumbers.get(frame)! };
+    return { main: frame === frame.page().mainFrame(), n: this.frameNumbers.get(frame)! };
   }
 
   /** A frame document is the frame plus how many navigation requests the frame has started. Held in memory only. */

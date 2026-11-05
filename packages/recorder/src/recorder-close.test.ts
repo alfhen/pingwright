@@ -12,6 +12,19 @@ describe('Recorder.close', () => {
   });
 });
 
+describe('Recorder.frameRef', () => {
+  it('marks a detached child frame as not main', () => {
+    const Ctor = Recorder as unknown as new (...args: unknown[]) => Recorder;
+    const recorder = new Ctor({ networkMode: 'live' }, {}, {}, undefined, undefined, undefined, undefined);
+    const frameRef = (recorder as unknown as { frameRef(frame: unknown): { main: boolean; n: number } }).frameRef.bind(recorder);
+    const main = { parentFrame: () => null, page: () => page };
+    const page = { mainFrame: () => main };
+    const detached = { parentFrame: () => null, page: () => page };
+    expect(frameRef(main).main).toBe(true);
+    expect(frameRef(detached).main).toBe(false);
+  });
+});
+
 describe('Recorder.close and late tag reports', () => {
   function recorderWith(reports: number) {
     const browser = { close: vi.fn().mockRejectedValue(new Error('stop here')) };
