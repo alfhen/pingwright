@@ -399,3 +399,45 @@ describe('sentBy', () => {
     expect(() => parseScenario('start: /\nexpect:\n  must:\n    - { cookie: _a, sentBy: browser }\n')).toThrow(/sentBy/);
   });
 });
+
+describe('tag rules', () => {
+  const parse = (rule: string, kind: 'must' | 'mustNot' = 'must') => parseScenario(`start: /\nsteps:\n  - visit: /\nexpect:\n  ${kind}:\n    - ${rule}\n`).expect[kind][0]!;
+
+  test('an id or a name, with the optional fields', () => {
+    expect(parse('{ tag: { id: 45 } }').tag).toEqual({ id: '45' });
+    expect(parse('{ tag: { name: "GA4 - *", container: GTM-PWTEST1, event: purchase, status: [failure], side: web } }').tag).toEqual({
+      name: 'GA4 - *',
+      container: 'GTM-PWTEST1',
+      event: 'purchase',
+      status: ['failure'],
+      side: 'web',
+    });
+    expect(parse('{ tag: { id: "45" }, count: 2 }').count).toEqual({ op: '=', n: 2 });
+  });
+
+  test('exactly one of id and name', () => {
+    expect(() => parse('{ tag: {} }')).toThrow(/exactly one of id or name/);
+    expect(() => parse('{ tag: { id: "1", name: "x" } }')).toThrow(/exactly one of id or name/);
+  });
+
+  test('bad selector values and unknown keys', () => {
+    expect(() => parse('{ tag: { id: "1", side: both } }')).toThrow(/web or server/);
+    expect(() => parse('{ tag: { id: "1", container: nope } }')).toThrow(/container ID/);
+    expect(() => parse('{ tag: { id: "1", colour: red } }')).toThrow(/unknown key/);
+    expect(() => parse('{ tag: GA4 }')).toThrow(/mapping/);
+  });
+
+  test('before and in say consent scopes are not built, and hit keys are refused', () => {
+    expect(() => parse('{ tag: { id: "1" }, before: consent }')).toThrow(/consent scopes/);
+    expect(() => parse('{ tag: { id: "1" }, in: epoch(denied) }')).toThrow(/consent scopes/);
+    expect(() => parse('{ tag: { id: "1" }, vendor: ga4 }')).toThrow(/tag cannot be combined with vendor/);
+  });
+
+  test('after names a step label', () => {
+    expect(() => parse('{ tag: { id: "1" }, after: nope }')).toThrow(/not a step label/);
+  });
+
+  test('count is only valid under must', () => {
+    expect(() => parse('{ tag: { id: "1" }, count: 2 }', 'mustNot')).toThrow(/only valid under must/);
+  });
+});

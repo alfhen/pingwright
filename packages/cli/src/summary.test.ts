@@ -504,3 +504,46 @@ test('a run with no pushes has no dataLayer line or field', () => {
   expect(summary).not.toHaveProperty('dataLayer');
   expect(formatSummary(summary)).not.toContain('dataLayer');
 });
+
+const tagRecords = (over: Record<string, unknown>) => ({ run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [], steps: [], dataLayerEvents: [], tagReports: [], ...over }) as unknown as RunRecords;
+const tagReport = (id: string, tags: { id: string; name: string | null; status: string }[], container = 'GTM-PWTEST1') => ({ type: 'tagReport', id, container, side: 'web', event: 'gtm.js', t: 1, tags });
+const gtmOverride = (expectedTags: { id: string; name: string | null }[], container = 'GTM-PWTEST1') => ({ container, gtmPreview: 'env-1', gtmAuth: '[redacted]', applied: [], expectedTags });
+
+test('the Tags line counts fired and failed tags and names the expected tags that did not fire', () => {
+  const records = tagRecords({
+    run: { id: 'run_1', gtmOverride: gtmOverride([{ id: '13', name: 'Meta - PageView' }, { id: '45', name: 'GA4 - Purchase' }]) },
+    tagReports: [tagReport('tag_1', [{ id: '11', name: 'GA4 - Config', status: 'success' }, { id: '13', name: null, status: 'failure' }, { id: '14', name: null, status: 'success' }])],
+  });
+  const summary = buildSummary(records, [result(true)], 'p');
+  expect(formatSummary(summary)).toContain('Tags GTM-PWTEST1: 3 fired, 1 failed (13 Meta - PageView: failure), 1 expected did not fire (45 GA4 - Purchase)');
+  expect(summary.tags!['GTM-PWTEST1']).toMatchObject({ reports: 1, notFired: [{ id: '45', name: 'GA4 - Purchase' }] });
+});
+
+test('an override run with no report says so, and --json has one shape with the hint', () => {
+  const summary = buildSummary(tagRecords({ run: { id: 'run_1', gtmOverride: gtmOverride([{ id: '45', name: null }]) } }), [result(true)], 'p');
+  expect(formatSummary(summary)).toContain('Tags: no reports from GTM-PWTEST1. Install the reporter: tagreeve template web --json');
+  expect(summary.tags).toEqual({ 'GTM-PWTEST1': { reports: 0, hint: 'tagreeve template web --json' } });
+});
+
+test('reports without an override give fired tags and a null notFired', () => {
+  const summary = buildSummary(tagRecords({ tagReports: [tagReport('tag_1', [{ id: '11', name: 'GA4 - Config', status: 'success' }])] }), [result(true)], 'p');
+  expect(formatSummary(summary)).toContain('Tags GTM-PWTEST1: 1 fired');
+  expect(summary.tags!['GTM-PWTEST1']).toMatchObject({ notFired: null });
+});
+
+test('a run with no reports and no override has no Tags line or field', () => {
+  const summary = buildSummary(tagRecords({}), [result(true)], 'p');
+  expect(summary).not.toHaveProperty('tags');
+  expect(formatSummary(summary)).not.toContain('Tags');
+});
+
+test('tag names in the summary are masked: an email reads (other), the redacted auth stays', () => {
+  const records = tagRecords({
+    tagReports: [tagReport('tag_1', [{ id: '88', name: 'Lead - pw-fixture@example.com', status: 'failure' }, { id: '89', name: '[redacted]', status: 'success' }])],
+  });
+  const summary = buildSummary(records, [result(true)], 'p');
+  const text = formatSummary(summary);
+  expect(text).toContain('88 (other): failure');
+  expect(JSON.stringify(summary) + text).not.toContain('pw-fixture');
+  expect(JSON.stringify(summary)).toContain('[redacted]');
+});

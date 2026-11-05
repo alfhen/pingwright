@@ -59,6 +59,8 @@ With `--server-container`, the text summary has a `Server container` line, for e
 
 When the run recorded pushes to the `dataLayer`, the text summary has one line after the hits, for example `dataLayer: 14 pushes, 6 events (add_to_cart, purchase, view_item, …); shapes in --json`. `--json` has `dataLayer: { pushes, steps: [{ step, events: [{ event, frame, count, paths: [{ path, types }], ids }] }] }`. A group is one event name in one frame kind (`main`, `embedded` or `unknown`) in one step. `paths` are the key paths of the pushed object with the value types seen (`string`, `number`, `boolean`, `null`, `object`, `array`), and `ids` are the `dle_` records. An array index reads `[*]`, as in `ecommerce.items[*].item_id`. A key or event name that looks like a value, such as an email, a Shopify GID or a token, reads `(other)`. No pushed value is printed. `gtm.*` pushes have a count and no paths. A consent command shows as `consent default` or `consent update` with its signal names. The key is absent when the run recorded no pushes.
 
+When the page sent tag reports, or the run has a `--gtm-override`, the text summary has a `Tags` line after the `dataLayer` line for each container, for example `Tags GTM-PWTEST1: 6 fired, 1 failed (13 Meta - PageView: failure), 1 expected did not fire (45 GA4 - Purchase)`. `fired` counts every tag that appeared in a report, failed ones included. A run with an override and no report from its container prints `Tags: no reports from GTM-PWTEST1. Install the reporter: tagreeve template web --json`. `--json` has `tags: { "<container>": { reports, fired: [{ id, name, nameFrom, count, statuses }], notFired: [{ id, name }] | null } }`. `nameFrom` is `report`, `expectedTags` or `null`; `count` is the number of report entries, and `statuses` counts them per status. `notFired` is set only for the override container and only when `expectedTags` is not empty, and is `null` otherwise. A container with no report is `{ "reports": 0, "hint": "tagreeve template web --json" }`. A tag name that holds an email, a phone or another value reads `(other)`. The key is absent without reports and without an override. See [Rules on tags](#rules-on-tags).
+
 Tracker list: `--tracker-list <file>` takes a JSON array of `{ "vendor", "host", "paths"?, "source" }` entries, with the same checks as the built-in list. `vendor` is a lowercase key that is not a built-in decoder key (`ga4`, `google-ads`, `meta`, `meta-capi`, `pinterest`, `sgtm`), `host` is an exact host or `*.domain`, `paths` are path prefixes and `source` is an https link to the vendor's docs. In `stub` mode, a request to a listed path is stubbed for every resource type, and a request to a listed host without paths is stubbed unless it is a script, stylesheet, font or document load. A whole-host image or other request with no query and no body is stubbed but gives no hit. Each other such request becomes a minimal hit with the entry's vendor, the event and page when the URL has a common parameter for them, unknown consent and transport `tracker-list`. A listed vendor is a valid `vendor:` key in the scenario, and its requests are not flagged as `unknownDestination`. A request that a built-in decoder matches stays with that decoder. The file is read before the scenario, and a bad file exits 2.
 
 First-party hosts: the registrable domain of `--site` is first party, so `--site https://www.shop.co.uk` does not flag `shop.co.uk` or `*.shop.co.uk` as `unknownDestination`. Data-carrying requests to those subdomains that no decoder matches are listed as `firstPartySubdomain` and do not fail the run. IP addresses and `localhost` are first party only as the exact `--site` host. Scenario options:
@@ -256,6 +258,26 @@ expect:
 
 In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for that reason, so a passing result in `stub` mode ends with `stub mode: stubbed endpoints set no cookies` and has `note: stubNoCookies`. To see the cookies of a server container, run with `--network server` and list its host in `options.serverHosts`, or use `--network live`. In `server` mode a send from `pagehide` or `visibilitychange` to a server host is still answered in the page, so a cookie that such a send would set is not seen, and a passing cookie rule can miss it.
 
+### Rules on tags
+
+`tag` checks the tag reports of the web tag reporter (see [`tagreeve template web`](#tagreeve-template-web)). A match is one tag entry in one report, and the evidence is the `tag_` record ID of that report.
+
+```yaml
+expect:
+  must:
+    - { tag: { id: "77" } }
+    - { tag: { name: "GA4 - *", event: purchase }, after: checkout }
+  mustNot:
+    - { tag: { name: "Meta *", status: [failure, exception, timeout] } }
+```
+
+- `tag` holds exactly one of `id` or `name`. `name` is a tag name or a glob. Optional keys: `container` (a container ID), `event` (the `dataLayer` event name, or a glob), `status` (one status or a list) and `side` (`web` or `server`; default both). Without `status`, any status matches, so a tag that sent data and then failed still counts.
+- The entry takes `count`, `after` and `from`, and nothing else. `before` and `in` are scenario errors: consent scopes on tag rules are not built.
+- A rule with no report for its container and side cannot be evaluated. It fails with `note: noTagReports` and never passes. That includes a page without the reporter and a run from before record version 5.
+- A name pattern needs a name. A tag's name is the one in the report, else the one in the override file's `expectedTags` for that container. If a tag has neither and the verdict depends on it, the rule cannot be evaluated and fails with `note: tagNameUnknown`.
+- Names are shown through the value guard: an email or phone in a tag name reads `(other)`.
+- "Did not fire" does not fail a run. `notFired` in `tags` lists the expected tags with no entry in a web report. Use a `must` rule to fail on one tag. A full tag list holds tags that a given scenario never triggers, and a report lost at a navigation looks the same as a tag that did not fire.
+
 ### GTM override
 
 `--gtm-override <file>` takes JSON with the values of a GTM preview. Tagreeve never calls the GTM API, so you supply them.
@@ -264,7 +286,7 @@ In `stub` mode a stubbed endpoint sets no cookies. A cookie rule can pass for th
 {"container": "GTM-XXXXXXX", "gtmAuth": "…", "gtmPreview": "env-12", "expectedTags": [{"id": "45", "name": "GA4 - Purchase"}]}
 ```
 
-`container` must match `^GTM-[A-Z0-9]+$`. `expectedTags` is stored in the run record and not evaluated yet. A page with the Tagreeve tag reporter template in the workspace now puts a tag report for each event in the record, but no rule or note reads them. See [design §8.5](design.md#85-what-the-server-container-sends-on).
+`container` must match `^GTM-[A-Z0-9]+$`. `expectedTags` is stored in the run record. The summary compares it with the web tag reports of the override container and lists the expected tags that did not fire (`notFired`, see [Rules on tags](#rules-on-tags)). It also fills a tag name that the report left out. It never fails a run. See [design §8.5](design.md#85-what-the-server-container-sends-on).
 
 When the page requests `https://www.googletagmanager.com/gtm.js?id=<container>`, Tagreeve fetches `gtm.js?id=<container>&gtm_auth=<gtmAuth>&gtm_preview=<gtmPreview>&gtm_cookies_win=x` and answers the page with that build. The page's own request URL is not changed. If the page's request has `l=<name>` (a data layer that is not `dataLayer`) or `gtm_debug`, they are copied to the preview fetch. The override applies to that run in the test browser only. It applies when the page loads the container script itself, and when a Stape-style custom loader fetches it. In the loader case the loader script stays in place and its request is answered with the preview build; the record says `way: "loader"`. A real Stape custom loader script has a URL like `https://load.<sgtm host>/<random>.js?<key>=<obfuscated>`, and nothing in the URL names the container. For a cross-origin script request with a `.js` path and a query to the site's registrable domain or a `firstPartyHosts` host (on a loopback site, loopback hosts only), Tagreeve fetches the script and, if its body holds the container ID, answers with the preview build instead. The record says `way: "loader"`, with a `loses` note, because the loader script is replaced. Query values are never listed in messages, since they may hold per-site keys. That fetch runs in Playwright's request client, not Chromium, so it uses the Playwright cookie jar and stores any `Set-Cookie` from the script response. A script that answers with a redirect is not fetched further: Chromium follows it, and a hop to a collection endpoint is stubbed or flagged `stubBypass` as usual. Scripts on other hosts are left to Chromium. Scripts served from the site's own origin are neither sniffed nor listed.
 

@@ -48,6 +48,21 @@ export interface Rule {
   body?: { has?: string[]; only?: string[]; ignore?: string[] };
   /** Cookie names or `*` globs. A cookie rule selects cookies, not hits. */
   cookie?: string[];
+  /** A tag rule selects entries of tag reports, not hits. */
+  tag?: TagSelector;
+}
+
+export interface TagSelector {
+  id?: string;
+  /** A tag name or a `*` glob. */
+  name?: string;
+  container?: string;
+  /** The dataLayer event name the report is for, or a `*` glob. */
+  event?: string;
+  /** Without it any status matches. */
+  status?: string[];
+  /** Without it both sides match. */
+  side?: 'web' | 'server';
 }
 
 /** A selector string, a role and accessible name, or a list of selectors tried in order. */
@@ -154,6 +169,9 @@ export class ScenarioError extends Error {
 const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'outcome', 'count', 'before', 'in', 'after', 'from', 'sentBy']);
 const GROUP_KEYS = ['consent', 'ids', 'params', 'identity', 'body'] as const;
 const COOKIE_RULE_KEYS = ['cookie', 'before', 'in', 'after', 'from'];
+const TAG_RULE_KEYS = ['tag', 'count', 'after', 'from'];
+const TAG_SELECTOR_KEYS = ['id', 'name', 'container', 'event', 'status', 'side'];
+const MAX_TAG_TEXT = 200;
 const BODY_KEYS = ['has', 'only', 'ignore'] as const;
 const MAX_FIELD_NAME = 64;
 const CONSENT_VALUES = ['granted', 'denied', 'unknown'];
@@ -627,6 +645,41 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
     }
   }
 
+  function parseTagSelector(v: unknown, path: Path): TagSelector | undefined {
+    if (!isMap(v)) {
+      fail(path, 'must be a mapping with id or name');
+      return undefined;
+    }
+    const before = issues.length;
+    const tag: TagSelector = {};
+    const text = (key: string, raw: unknown, max: number): string | undefined => {
+      const value = typeof raw === 'number' ? String(raw) : raw;
+      if (typeof value !== 'string' || !value) fail([...path, key], 'must be a non-empty string');
+      else if (value.length > max) fail([...path, key], `is at most ${max} characters`);
+      else return value;
+      return undefined;
+    };
+    for (const [key, raw] of Object.entries(v)) {
+      const p = [...path, key];
+      if (key === 'id') tag.id = text(key, raw, MAX_FIELD_NAME);
+      else if (key === 'name') tag.name = text(key, raw, MAX_TAG_TEXT);
+      else if (key === 'event') tag.event = text(key, raw, MAX_TAG_TEXT);
+      else if (key === 'container') {
+        if (typeof raw === 'string' && /^GTM-[A-Z0-9]+$/.test(raw)) tag.container = raw;
+        else fail(p, 'must be a container ID such as GTM-XXXXXXX');
+      } else if (key === 'status') {
+        const items = Array.isArray(raw) ? raw : [raw];
+        if (items.length === 0 || !items.every((x) => typeof x === 'string' && x && x.length <= MAX_FIELD_NAME)) fail(p, 'must be a status or a list of statuses');
+        else tag.status = items as string[];
+      } else if (key === 'side') {
+        if (raw === 'web' || raw === 'server') tag.side = raw;
+        else fail(p, 'must be web or server');
+      } else fail(p, `unknown key, expected one of ${TAG_SELECTOR_KEYS.join(', ')}`);
+    }
+    if ((tag.id === undefined) === (tag.name === undefined) && issues.length === before) fail(path, 'needs exactly one of id or name');
+    return issues.length === before ? tag : undefined;
+  }
+
   function parseRule(kind: Rule['kind'], entry: unknown, path: Path): Rule | undefined {
     if (!isMap(entry)) {
       fail(path, 'must be a mapping of filters and rule keys');
@@ -689,6 +742,9 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         const l = list(k, v);
         if (l?.some((name) => name.length > MAX_FIELD_NAME)) fail(p, `cookie names are at most ${MAX_FIELD_NAME} characters`);
         else if (l) rule.cookie = l;
+      } else if (k === 'tag') {
+        const tag = parseTagSelector(v, p);
+        if (tag) rule.tag = tag;
       } else if (k === 'vendor') {
         const l = list(k, v, [...vendorKeys, ...trackerVendorKeys, ...extraVendorKeys]);
         if (l) filter.vendor = l;
@@ -740,6 +796,11 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
     if (rule.cookie) {
       const mixed = Object.keys(flat).filter((k) => !COOKIE_RULE_KEYS.includes(k));
       if (mixed.length) fail(path, `cookie cannot be combined with ${mixed.join(', ')}; it only takes before, in, after and from`);
+    }
+    if (rule.tag) {
+      if (rule.before || rule.inEpoch) fail(path, 'consent scopes (before, in) on tag rules are not built; use after or from');
+      const mixed = Object.keys(flat).filter((k) => !TAG_RULE_KEYS.includes(k) && k !== 'before' && k !== 'in');
+      if (mixed.length) fail(path, `tag cannot be combined with ${mixed.join(', ')}; it only takes count, after and from`);
     }
     if (rule.from && rule.after) fail(path, 'use either from or after, not both');
     if (rule.before && rule.inEpoch) fail(path, 'use either before or in, not both');
