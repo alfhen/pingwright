@@ -76,6 +76,7 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. A `pagehide` or `visibilitychange` send to a server host is answered in the page, so the cookies it would set are not seen. A passing cookie rule in `server` mode can miss them. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
 | `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData`, `deniedIdentifiers`, `earlyIdentifiers` and `consentModeSetup`. `earlyIdentifiers` and `consentModeSetup` are `warn` by default and every other check is `fail`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
+| `dataLayerNames` | List of up to 8 global names, for example `[myLayer]`, that the recorder hooks besides `dataLayer`. Use it when the container loads with a custom `l=` name. Each name is a plain identifier of up to 64 characters (letters, digits, `_`, `$`), and not `__proto__`, `constructor` or `prototype`. A push to a named layer is recorded with `layer` set to its name. A global is hooked only when it is absent or a configurable array. Without the option, a Google loader with an `l=` name that is not hooked gives one `dataLayerNotHooked` flag that names the option. |
 | `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` and `earlyIdentifiers` treat as analytics identifiers, matched against the field names of each hit. |
 
 Locators: `click` and `wait` take a selector string, or a mapping:
@@ -506,7 +507,7 @@ options:
 | `configSchemaVersion` | Required. Always `1`. Put `configSchemaVersion: 1` on the first line. Without it every run exits 2 and the error names the line to add. |
 | `site` | An http or https URL with no user name or password. Used when `--site` is not given. |
 | `out` | A folder. Records go to `<out>/<YYYY-MM-DD>[-<label>]/`, as the default folder does. Only `--out` is used exactly as given. |
-| `options` | `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. Each is checked like the same option in a scenario. |
+| `options` | `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore`, `dataLayerNames` and `identifierFields`. Each is checked like the same option in a scenario. |
 
 The config never overrides a scenario. A scenario's own option wins, and a list in the scenario replaces the config's list. `builtins` merges per check, and the scenario wins for a check it sets. A flag on the command line wins over both.
 

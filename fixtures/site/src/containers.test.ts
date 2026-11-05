@@ -44,6 +44,23 @@ describe('resolveContainer', () => {
   });
 });
 
+describe('the data layer name', () => {
+  const body = (extra: Record<string, string>) => {
+    const r = resolveContainer(params({ id: containerId, ...extra }), third);
+    if (r.status !== 200) throw new Error('no container');
+    return r.body;
+  };
+
+  test('l= names the global the container pushes to', () => {
+    expect(body({ l: 'myLayer' })).toContain('var layer = "myLayer";');
+    expect(body({})).toContain('var layer = "dataLayer";');
+  });
+
+  test('a name that is not an identifier falls back to dataLayer', () => {
+    for (const l of ['a b', '__proto__', '1x', 'x'.repeat(65)]) expect(body({ l })).toContain('var layer = "dataLayer";');
+  });
+});
+
 describe('the opt-in tag reporter', () => {
   const body = (extra: Record<string, string> = {}) => {
     const r = resolveContainer(params({ id: containerId, ...extra }), third);

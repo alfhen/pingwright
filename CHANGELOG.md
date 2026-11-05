@@ -47,7 +47,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- L07 -->
 
-<!-- N07 -->
+- Add `options.dataLayerNames` to hook a `dataLayer` under a custom name (an `l=` name). Pushes to it are recorded with `layer`. A Google loader that names a layer that is not hooked gives a `dataLayerNotHooked` flag (#927).
 
 <!-- A07 -->
 

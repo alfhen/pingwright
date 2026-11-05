@@ -128,6 +128,8 @@ export interface ScenarioOptions {
   cartRequest?: string;
   /** dataLayer event names or `*` globs that `unloadGap` never reports. */
   unloadGapIgnore?: string[];
+  /** Up to 8 names of page globals to hook besides `dataLayer`, for a container loaded with a custom `l=` name. */
+  dataLayerNames?: string[];
   /** Extra field names or `*` globs that `deniedIdentifiers` and `earlyIdentifiers` treat as analytics identifiers, matched against `Hit.fields`. */
   identifierFields?: string[];
   /** Hosts or `*.domain` wildcards that `server` mode passes through to the network. Every other collection request stays stubbed. */
@@ -180,7 +182,10 @@ const NETWORKS = ['stub', 'server'];
 const CONSENT_ANSWERS = ['accept', 'reject', 'none', 'withdraw'];
 const STEP_KINDS = ['visit', 'click', 'fill', 'select', 'consent', 'wait', 'addToCart', 'evaluate', 'checkpoint', 'handoff', 'payment'];
 const TOP_KEYS = ['start', 'vars', 'identity', 'steps', 'expect', 'options'];
-const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'platformHosts', 'cartRequest', 'unloadGapIgnore', 'builtins', 'identifierFields', 'serverHosts', 'viewport'];
+const OPTION_KEYS = ['network', 'seed', 'consentTimeout', 'graceWindow', 'optionalTimeout', 'allowUnknownDestination', 'firstPartyHosts', 'platformHosts', 'cartRequest', 'unloadGapIgnore', 'dataLayerNames', 'builtins', 'identifierFields', 'serverHosts', 'viewport'];
+const MAX_DATALAYER_NAMES = 8;
+const DATALAYER_NAME = /^[A-Za-z_$][\w$]{0,63}$/;
+const UNSAFE_NAMES = ['__proto__', 'constructor', 'prototype'];
 
 const HOST_HINT = ', each a host such as cdn.example.com or a wildcard such as *.example.com';
 
@@ -273,6 +278,12 @@ export function parseOptions(raw: unknown, path: Path, fail: (path: Path, messag
       } else if (k === 'unloadGapIgnore') {
         if (Array.isArray(v) && v.every((x) => typeof x === 'string' && x !== '')) options.unloadGapIgnore = v as string[];
         else fail(p, 'must be a list of event names or globs such as consent_*');
+      } else if (k === 'dataLayerNames') {
+        const names: unknown[] = Array.isArray(v) ? v : [];
+        if (!Array.isArray(v) || v.length === 0 || v.length > MAX_DATALAYER_NAMES) fail(p, `must be a list of 1 to ${MAX_DATALAYER_NAMES} global names such as myLayer`);
+        else if (!names.every((x) => typeof x === 'string' && DATALAYER_NAME.test(x) && !UNSAFE_NAMES.includes(x))) {
+          fail(p, `each name must be a plain identifier of at most 64 characters (letters, digits, _ and $), and not ${UNSAFE_NAMES.join(', ')}`);
+        } else options.dataLayerNames = [...new Set(v as string[])];
       } else if (k === 'serverHosts') {
         if (!Array.isArray(v) || v.length === 0 || !v.every(isServerHostPattern)) fail(p, `must be a non-empty list of hosts${HOST_HINT}`);
         else {
