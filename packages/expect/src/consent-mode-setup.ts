@@ -22,9 +22,9 @@ function list(names: readonly string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-/** Judges Google hits by their own `gcd`. Server container hits are left out: their consent signals come from the browser hit they link to. */
+/** Judges Google hits by their own `gcd`. The caller leaves out server container hits: their consent signals come from the browser hit they link to. */
 export function consentModeSetup(hits: readonly Hit[], dataLayer: readonly DataLayerEvent[]): ConsentModeSetup {
-  const google = hits.filter((h) => GOOGLE_VENDORS.has(h.vendor) && !h.via);
+  const google = hits.filter((h) => GOOGLE_VENDORS.has(h.vendor));
   if (google.length === 0) return { pass: true, evidence: [], message: 'Expected Consent Mode signals to be set on Google hits, found no Google hits.' };
 
   const unset = new Map<string, Set<GcdSignalName>>();

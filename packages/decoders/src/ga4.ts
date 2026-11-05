@@ -31,12 +31,12 @@ export type GcdSignal = { notSet: true } | { notSet: false; default: ConsentValu
 const GCD_LETTERS: Record<string, GcdSignal> = {
   p: { notSet: false, default: 'denied', update: 'unknown' },
   q: { notSet: false, default: 'denied', update: 'denied' },
-  r: { notSet: false, default: 'granted', update: 'unknown' },
-  t: { notSet: false, default: 'granted', update: 'granted' },
+  r: { notSet: false, default: 'denied', update: 'granted' },
+  t: { notSet: false, default: 'granted', update: 'unknown' },
   m: { notSet: false, default: 'unknown', update: 'denied' },
   n: { notSet: false, default: 'unknown', update: 'granted' },
-  u: { notSet: false, default: 'unknown', update: 'denied' },
-  v: { notSet: false, default: 'unknown', update: 'granted' },
+  u: { notSet: false, default: 'granted', update: 'denied' },
+  v: { notSet: false, default: 'granted', update: 'granted' },
   l: { notSet: true },
 };
 

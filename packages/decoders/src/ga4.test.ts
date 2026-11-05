@@ -221,13 +221,13 @@ test('gcdSignals pins each letter class', () => {
   const s = gcdSignals('13p3q3r3t5');
   expect(s?.ad_storage).toEqual({ notSet: false, default: 'denied', update: 'unknown' });
   expect(s?.analytics_storage).toEqual({ notSet: false, default: 'denied', update: 'denied' });
-  expect(s?.ad_user_data).toEqual({ notSet: false, default: 'granted', update: 'unknown' });
-  expect(s?.ad_personalization).toEqual({ notSet: false, default: 'granted', update: 'granted' });
+  expect(s?.ad_user_data).toEqual({ notSet: false, default: 'denied', update: 'granted' });
+  expect(s?.ad_personalization).toEqual({ notSet: false, default: 'granted', update: 'unknown' });
   const u = gcdSignals('13m3n3u3v5');
   expect(u?.ad_storage).toEqual({ notSet: false, default: 'unknown', update: 'denied' });
   expect(u?.analytics_storage).toEqual({ notSet: false, default: 'unknown', update: 'granted' });
-  expect(u?.ad_user_data).toEqual({ notSet: false, default: 'unknown', update: 'denied' });
-  expect(u?.ad_personalization).toEqual({ notSet: false, default: 'unknown', update: 'granted' });
+  expect(u?.ad_user_data).toEqual({ notSet: false, default: 'granted', update: 'denied' });
+  expect(u?.ad_personalization).toEqual({ notSet: false, default: 'granted', update: 'granted' });
   expect(gcdSignals('13l3r3l3r5')).toMatchObject({ ad_storage: { notSet: true }, analytics_storage: { notSet: false }, ad_user_data: { notSet: true } });
 });
 

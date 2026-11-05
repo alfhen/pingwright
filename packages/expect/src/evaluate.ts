@@ -1028,7 +1028,7 @@ function builtInChecks(
   }
 
   const consentMode = consentModeSetup(
-    ctx.hits,
+    ctx.hits.filter((h) => !ctx.serverHitIds.has(h.id)),
     records.filter((r): r is DataLayerEvent => r.type === 'dataLayerEvent'),
   );
   add('consentModeSetup', consentMode.pass, consentMode.evidence, consentMode.message);

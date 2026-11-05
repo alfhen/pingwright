@@ -58,9 +58,21 @@ test('no Google hits passes', () => {
   expect(r.evidence).toEqual([]);
 });
 
-test('a server container hit is left to the browser hit it links to', () => {
-  const via = { requestId: 'req_x', rule: 'eventId', confidence: 'exact' } as unknown as Hit['via'];
-  expect(consentModeSetup([hit('13l3l3l3l5', { via })], []).pass).toBe(true);
+test('an unlinked server container hit is not judged', () => {
+  const request = { type: 'request', id: newId('request'), runId, stepId: null, t: 500, method: 'GET', url: 'https://sgtm.example.com/g/collect', resourceType: 'image', frameUrl: 'http://localhost:3000/', initiator: null, headers: {}, postData: null, outcome: 'stubbed', captured: 'serverContainer' } as const;
+  const server = hit('13l3l3l3l5', { requestId: request.id });
+  const find = (records: Parameters<typeof evaluate>[0]) => evaluate(records, parseScenario('start: /')).find((r) => r.expectation === 'builtin: consentModeSetup')!;
+  expect(find([request, server]).pass).toBe(true);
+  expect(find([hit('13l3l3l3l5')]).pass).toBe(false);
+});
+
+test('u and v letters count as a default', () => {
+  const v1 = consentModeSetup([hit('13v3v3l3l5')], []);
+  expect(v1.pass).toBe(false);
+  expect(v1.message).toContain('without the two v2 signals');
+  const full = consentModeSetup([hit('13v3v3v3v5')], []);
+  expect(full.pass).toBe(true);
+  expect(full.message).toContain('default set outside the dataLayer');
 });
 
 test('hits are grouped per Google tag ID and an odd tid is not quoted', () => {
