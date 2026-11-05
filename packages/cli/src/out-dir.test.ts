@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { OLD_RUNS_NOTICE, oldRunsNotice, resolveOutDir } from './out-dir.ts';
+import { oldRunsNotice, oldRunsNoticeText, resolveOutDir } from './out-dir.ts';
 
 let dir: string;
 const originalTz = process.env.TZ;
@@ -55,10 +55,18 @@ test('no notice when runs holds no records', async () => {
 test('a notice when runs holds a run record', async () => {
   await mkdir(join(dir, 'runs'));
   await writeFile(join(dir, 'runs', 'run_old.jsonl'), '');
-  expect(await oldRunsNotice(dir)).toBe(OLD_RUNS_NOTICE);
+  expect(await oldRunsNotice(dir)).toBe(oldRunsNoticeText());
 });
 
 test('a notice when runs holds a suite folder', async () => {
   await mkdir(join(dir, 'runs', 'suite_old'), { recursive: true });
-  expect(await oldRunsNotice(dir)).toBe(OLD_RUNS_NOTICE);
+  expect(await oldRunsNotice(dir)).toBe(oldRunsNoticeText());
+});
+
+test('the notice shows the folder it is given, with the label, not a placeholder', async () => {
+  await mkdir(join(dir, 'runs'));
+  await writeFile(join(dir, 'runs', 'run_old.jsonl'), '');
+  const text = await oldRunsNotice(dir, join('tagreeve', 'runs', '2026-11-04-x1'));
+  expect(text).toContain(`records now go to ${join('tagreeve', 'runs', '2026-11-04-x1')}/.`);
+  expect(text).not.toContain('<date>');
 });

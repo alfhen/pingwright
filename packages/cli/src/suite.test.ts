@@ -897,3 +897,93 @@ test('cell text for a drifting cell', () => {
   expect(cellText({ status: 'fail', exitCode: 1, failed: { rules: 1, checks: [] }, baseline: { drift: true } })).toBe('FAIL: 1 rule, baseline drift');
   expect(cellText({ status: 'pass', exitCode: 0, baseline: { drift: false } })).toBe('PASS');
 });
+
+const HINT = 'Run tagreeve suite --help for the options.';
+const oldRuns = { 'runs/run_old.jsonl': '' };
+const todayFolders = (): string[] => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const at = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return [at(new Date(Date.now() - 60_000)), at(new Date())];
+};
+
+test('the missing site, the missing folder and the test-payment refusals carry the suite help hint', async () => {
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID }, async () => {
+    const c = capture();
+    expect(await suiteCommand(bare(), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('suite needs a site');
+    expect(c.err()).toContain(HINT);
+  });
+  await inProject({}, async () => {
+    const c = capture();
+    expect(await suiteCommand(bare({ site: 'https://x.example.com' }), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('suite needs a scenario folder');
+    expect(c.err()).toContain(HINT);
+  });
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID }, async () => {
+    const c = capture();
+    expect(await suiteCommand(bare({ allowTestPayment: 'localhost' }), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('--allow-test-payment needs --site or --stores');
+    expect(c.err()).toContain(HINT);
+  });
+  const { dir, out } = await workDir({ 'pay.yml': PAYMENT });
+  const stores = await storesFile(dir, [{ name: 'local', site: 'http://localhost:4000' }]);
+  const restore = await allowHost(dir, 'localhots');
+  try {
+    const c = capture();
+    expect(await suiteCommand(args(dir, out, { site: undefined, stores, withTestPayment: true, allowTestPayment: 'localhots' }), c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('--allow-test-payment localhots');
+    expect(c.err()).toContain(HINT);
+  } finally {
+    restore();
+  }
+});
+
+test('without --out the suite folder is tagreeve/runs/<date>/suite_<id>/ and the notice names it once', async () => {
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID, ...oldRuns }, async (root) => {
+    const c = capture();
+    expect(await suiteCommand(bare({ out: undefined, site: 'https://x.example.com' }), c.io, recorder())).toBe(0);
+    const [folder] = await readdir(join(root, 'tagreeve', 'runs'));
+    expect(todayFolders()).toContain(folder);
+    const inside = await readdir(join(root, 'tagreeve', 'runs', folder!));
+    expect(inside).toHaveLength(1);
+    expect(inside[0]).toMatch(/^suite_/);
+    const notice = c.err().split('\n').filter((l) => l.includes('holds older records'));
+    expect(notice).toHaveLength(1);
+    expect(notice[0]).toContain(`records now go to ${join('tagreeve', 'runs', folder!)}/.`);
+    expect(notice[0]).not.toContain('<date>');
+  });
+});
+
+test('--out gives no notice, and a refused test payment prints no notice', async () => {
+  await inProject({ 'tagreeve/scenarios/a.yml': VALID, ...oldRuns }, async (root) => {
+    const c = capture();
+    expect(await suiteCommand(bare({ out: join(root, 'o'), site: 'https://x.example.com' }), c.io, recorder())).toBe(0);
+    expect(await readdir(join(root, 'o'))).toHaveLength(1);
+    expect(c.err()).not.toContain('holds older records');
+  });
+  const files = { 'tagreeve/scenarios/pay.yml': PAYMENT, 'tagreeve/stores.json': STORES, ...oldRuns };
+  await inProject(files, async () => {
+    const c = capture();
+    const refused = bare({ out: undefined, stores: 'tagreeve/stores.json', withTestPayment: true, allowTestPayment: 'localhots' });
+    expect(await suiteCommand(refused, c.io, recorder())).toBe(2);
+    expect(c.err()).toContain('--allow-test-payment localhots: no store');
+    expect(c.err()).not.toContain('holds older records');
+  });
+});
+
+test('a --stores cell record holds the store name and none of the store site, path, query or var values', async () => {
+  const { dir, out } = await workDir({ 'a.yml': DECLARED });
+  const stores = await storesFile(dir, [{ name: 'se', site: 'https://shop.example.se/private/path?token=abc', vars: { size: 'pw-secret-value' } }]);
+  const written: string[] = [];
+  const run = async (spec: RunSpec): Promise<RunOutcome> => {
+    await mkdir(out, { recursive: true });
+    const path = join(out, `raw-${written.length}.jsonl`);
+    await writeFile(path, `${JSON.stringify({ type: 'run', id: 'run_1', scenario: spec.scenarioName })}\n`);
+    written.push(await readFile(await labelRecord(path, spec), 'utf8'));
+    return pass;
+  };
+  expect(await suiteCommand(args(dir, out, { site: undefined, stores }), capture().io, { run })).toBe(0);
+  const runLine = JSON.parse(written[0]!.split('\n')[0]!) as Record<string, unknown>;
+  expect(runLine.store).toBe('se');
+  for (const leak of ['token=abc', 'private', 'pw-secret-value', 'shop.example.se']) expect(written[0]).not.toContain(leak);
+});
