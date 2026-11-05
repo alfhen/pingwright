@@ -4,7 +4,7 @@
 
 Not released yet. The newest release is 0.6.0-rc.1, below.
 
-- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. Nothing writes the new fields yet. A version 4 record reads as before.
+- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. A version 4 record reads as before.
 
 <!-- J07 -->
 
@@ -50,6 +50,8 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 - A server container call that is not `exact` records why (#1084). Each such hit has `linkMiss`, with a class name for rule 1 (`eventId`: `none`, `noMatch`, `several`) and rule 2 (`clientId`: `noClientId`, `noSameKeyHit`, `severalSameKeyHits`, `answeredBefore`). `--json` `serverContainer.notExact` holds the counts, with no IDs and no values. The linking rule is unchanged. The server container guide says to send a unique event ID with each event for an exact link, and that the client ID rule rarely fires on a multi-page run.
 
 <!-- N07 -->
+
+- Add `options.dataLayerNames` to hook a `dataLayer` under a custom name (an `l=` name). Pushes to it are recorded with `layer`. A Google loader that names a layer that is not hooked gives a `dataLayerNotHooked` flag (#927).
 
 - `diff` and `baseline` treat a Shopify standard event and its GA4 name as the same `dataLayer` event, for example `checkout_completed` and `purchase` (#930). The table is `SHOPIFY_TO_GA4` in `@tagreeve/decoders`, shared with the `unloadGap` check. `diff --event-map <file>` renames events and key paths of the first run to those of the second. A map file error names the file and the key, never a value.
 

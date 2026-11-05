@@ -155,6 +155,12 @@ describe('mergeOptions', () => {
     expect(mergeOptions({ serverHosts: ['sgtm.example.com'] }, scenario.options)).toEqual({ network: 'server', serverHosts: ['sgtm.example.com'] });
   });
 
+  test('dataLayerNames is allowed in the project config, and a scenario list replaces it', () => {
+    const config = parseProjectConfig(`${head}options:\n  dataLayerNames: [myLayer]\n`, FILE);
+    expect(config.options).toEqual({ dataLayerNames: ['myLayer'] });
+    expect(mergeOptions(config.options, { dataLayerNames: ['other'] }).dataLayerNames).toEqual(['other']);
+  });
+
   test('config options stay when the scenario has none', () => {
     expect(mergeOptions({ unloadGapIgnore: ['x_*'] }, {})).toEqual({ unloadGapIgnore: ['x_*'] });
   });

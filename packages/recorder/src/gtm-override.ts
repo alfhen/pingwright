@@ -193,7 +193,7 @@ export function matchesLoaderPattern(url: string, resourceType: string, loader: 
   return resourceType === 'script' && loader?.match !== undefined && new RegExp(loader.match).test(url);
 }
 
-const GOOGLE_HOST = /(^|\.)(googletagmanager|google-analytics|googleadservices|doubleclick)\.(com|net)$/;
+export const GOOGLE_HOST = /(^|\.)(googletagmanager|google-analytics|googleadservices|doubleclick)\.(com|net)$/;
 
 /** A script request that could be a Stape loader: a `.js` path with a query, on a host that is not Google's. */
 export function isLoaderCandidate(url: string, resourceType: string): boolean {

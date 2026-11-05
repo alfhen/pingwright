@@ -21,7 +21,7 @@ export class ProjectConfigError extends Error {
 
 const CONFIG_KEYS = ['configSchemaVersion', 'site', 'out', 'options'];
 /** The scenario options a project may share. The rest (`network`, `seed`, timeouts, `cartRequest`, `viewport`) stay in the scenario or on the command line. */
-const CONFIG_OPTION_KEYS = ['allowUnknownDestination', 'builtins', 'firstPartyHosts', 'platformHosts', 'serverHosts', 'unloadGapIgnore', 'identifierFields'];
+const CONFIG_OPTION_KEYS = ['allowUnknownDestination', 'builtins', 'firstPartyHosts', 'platformHosts', 'serverHosts', 'unloadGapIgnore', 'dataLayerNames', 'identifierFields'];
 /** Refused at the top level and in `options`: each widens what a run may do or holds a secret. */
 const REFUSED_KEYS = ['network', 'serverContainer', 'serverContainerConfig', 'allowTestPayment', 'gtmOverride'];
 

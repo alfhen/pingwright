@@ -8,9 +8,10 @@ const MAIN = { main: true, n: 0 };
 interface Sent {
   t: number;
   args: string;
+  layer?: string;
 }
 
-function pageWith(setup: string): { sent: Sent[]; run: (code: string) => unknown } {
+function pageWith(setup: string, names: string[] = []): { sent: Sent[]; run: (code: string) => unknown } {
   const sent: Sent[] = [];
   const sandbox: Record<string, unknown> = {
     performance: { timeOrigin: 1000, now: () => 5 },
@@ -21,7 +22,7 @@ function pageWith(setup: string): { sent: Sent[]; run: (code: string) => unknown
     },
   };
   sandbox.window = sandbox;
-  runInNewContext(setup + dataLayerInitScript, sandbox);
+  runInNewContext(setup + dataLayerInitScript(names), sandbox);
   return { sent, run: (code) => runInNewContext(code, sandbox) };
 }
 
@@ -118,4 +119,47 @@ test('a large gtag call keeps the command, so a consent update is still a consen
   const event = dataLayerEventFromPayload(page.sent[0]!, newId('run'), 0, MAIN);
   expect(event).toMatchObject({ isConsentCommand: true });
   expect((event?.args[2] as Record<string, unknown>).analytics_storage).toBe('granted');
+});
+
+test('a named layer is hooked and its pushes carry the layer name', () => {
+  const page = pageWith('', ['myLayer']);
+  page.run(`window.myLayer = window.myLayer || []; myLayer.push({ event: 'a' }); window.dataLayer = []; dataLayer.push({ event: 'b' });`);
+  expect(page.sent.map((s) => s.layer)).toEqual(['myLayer', undefined]);
+  expect(page.run('myLayer.length')).toBe(1);
+  const runId = newId('run');
+  expect(dataLayerEventFromPayload(page.sent[0]!, runId, 0, MAIN)?.layer).toBe('myLayer');
+  expect(dataLayerEventFromPayload(page.sent[1]!, runId, 0, MAIN)).not.toHaveProperty('layer');
+});
+
+test('a layer name that is not an identifier is dropped from the payload', () => {
+  const runId = newId('run');
+  expect(dataLayerEventFromPayload({ t: 1, args: '[{"event":"x"}]', layer: 'a b' }, runId, 0, MAIN)).not.toHaveProperty('layer');
+  expect(dataLayerEventFromPayload({ t: 1, args: '[{"event":"x"}]', layer: 'dataLayer' }, runId, 0, MAIN)).not.toHaveProperty('layer');
+});
+
+test('a name is trapped only when absent or a configurable array', () => {
+  const page = pageWith(
+    `Object.defineProperty(window, 'fixed', { value: [], configurable: false }); window.early = [{ event: 'early' }];`,
+    ['fixed', 'Shopify', 'early', 'location', '__proto__', 'constructor', 'prototype', 'toString'],
+  );
+  page.run(`early.push({ event: 'late' });`);
+  expect(page.sent.map((s) => s.layer)).toEqual(['early', 'early']);
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify')`)).toBeUndefined();
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'fixed').value.length`)).toBe(0);
+  expect(page.run(`Object.prototype.hasOwnProperty.call(window, 'toString')`)).toBe(false);
+});
+
+test('names outside the identifier pattern never reach the script', () => {
+  const script = dataLayerInitScript(['ok', 'x"; alert(1); "', 'a-b']);
+  expect(script).toContain('["dataLayer","ok"]');
+  expect(script).not.toContain('alert');
+});
+
+test('Shopify and location are not trapped while absent', () => {
+  expect(dataLayerInitScript(['Shopify', 'location', 'ok'])).toContain('["dataLayer","ok"]');
+  const page = pageWith('', ['Shopify', 'location']);
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify')`)).toBeUndefined();
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'location')`)).toBeUndefined();
+  page.run(`window.Shopify = { theme: 1 };`);
+  expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify').value.theme`)).toBe(1);
 });

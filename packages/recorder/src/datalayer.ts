@@ -1,13 +1,21 @@
+import { DATALAYER_NAME_PATTERN, NEVER_TRAPPED_NAMES } from '@tagreeve/expect';
 import { newId, pageTimeToEpoch, type DataLayerEvent, type DataLayerFrame, type EpochMs, type Id } from '@tagreeve/core';
 
 export const DATALAYER_BINDING = '__tagreeveDataLayer';
 
+export const DEFAULT_DATALAYER = 'dataLayer';
+
 /**
- * Runs in every frame before page scripts. dataLayer may be created before or after this runs,
- * so the property is trapped and an existing array is hooked at once.
+ * Runs in every frame before page scripts. A layer may be created before or after this runs,
+ * so its property is trapped and an existing array is hooked at once. `dataLayer` is always hooked,
+ * then each of `names`.
  */
-export const dataLayerInitScript = `(() => {
+export function dataLayerInitScript(names: readonly string[] = []): string {
+  const all = [DEFAULT_DATALAYER, ...names.filter((name) => name !== DEFAULT_DATALAYER && isDataLayerName(name))];
+  return `(() => {
   const binding = ${JSON.stringify(DATALAYER_BINDING)};
+  const names = ${JSON.stringify([...new Set(all)])};
+  const unsafe = ${JSON.stringify(NEVER_TRAPPED_NAMES)};
   const MAX = 10000;
   const clock = () => performance.timeOrigin + performance.now();
   const plain = (k, v) => (typeof v === 'function' || v instanceof Node ? undefined : v);
@@ -34,38 +42,55 @@ export const dataLayerInitScript = `(() => {
       return JSON.stringify(['[unserializable]']);
     }
   };
-  const report = (item) => {
+  const report = (item, layerName) => {
     const isArgs = Object.prototype.toString.call(item) === '[object Arguments]';
     const send = window[binding];
     if (typeof send !== 'function') return;
-    send({ t: clock(), args: safe(isArgs ? Array.from(item) : [item]) }).catch(() => {});
+    const payload = { t: clock(), args: safe(isArgs ? Array.from(item) : [item]) };
+    if (layerName !== 'dataLayer') payload.layer = layerName;
+    send(payload).catch(() => {});
   };
-  const hook = (layer) => {
+  const hook = (layer, layerName) => {
     if (!Array.isArray(layer) || layer.__tagreeveHooked) return;
     Object.defineProperty(layer, '__tagreeveHooked', { value: true });
     const push = layer.push;
     layer.push = function (...items) {
-      for (const item of items) report(item);
+      for (const item of items) report(item, layerName);
       return push.apply(this, items);
     };
-    for (const item of layer) report(item);
+    for (const item of layer) report(item, layerName);
   };
-  let current = window.dataLayer;
-  hook(current);
-  Object.defineProperty(window, 'dataLayer', {
-    configurable: true,
-    enumerable: true,
-    get: () => current,
-    set: (value) => {
-      current = value;
-      hook(value);
-    },
-  });
+  const trappable = (name) => {
+    if (unsafe.includes(name)) return false;
+    const found = Object.getOwnPropertyDescriptor(window, name);
+    if (!found) return !(name in window);
+    return found.configurable === true && 'value' in found && Array.isArray(found.value);
+  };
+  for (const name of names) {
+    if (!trappable(name)) continue;
+    let current = window[name];
+    hook(current, name);
+    Object.defineProperty(window, name, {
+      configurable: true,
+      enumerable: true,
+      get: () => current,
+      set: (value) => {
+        current = value;
+        hook(value, name);
+      },
+    });
+  }
 })();`;
+}
 
 export interface DataLayerPayload {
   t: number;
   args: string;
+  layer?: string;
+}
+
+export function isDataLayerName(name: unknown): name is string {
+  return typeof name === 'string' && DATALAYER_NAME_PATTERN.test(name) && !NEVER_TRAPPED_NAMES.includes(name);
 }
 
 function isConsentCommand(args: unknown[]): boolean {
@@ -115,5 +140,6 @@ export function dataLayerEventFromPayload(
     args,
     isConsentCommand: isConsentCommand(args),
     frame: { main: frame.main, n: frame.n },
+    ...(isDataLayerName(payload.layer) && payload.layer !== DEFAULT_DATALAYER ? { layer: payload.layer } : {}),
   };
 }

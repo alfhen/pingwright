@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer renamed</title>
+<script src="https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1&amp;l=myLayer"></script>
+</head>
+<body>
+<h1>DataLayer renamed</h1>
+<p>Loads the fake container with <code>l=myLayer</code>, so the container and this page push to <code>window.myLayer</code>. Nothing is pushed to <code>dataLayer</code>. The page then reports how many items <code>myLayer</code> holds, as a request to <code>/datalayer-renamed-count</code>.</p>
+<script>
+window.myLayer = window.myLayer || [];
+window.myLayer.push({ event: 'renamed_one' });
+window.myLayer.push({ event: 'renamed_two' });
+fetch('/datalayer-renamed-count?n=' + window.myLayer.length).catch(function () {});
+</script>
+</body>
+</html>

@@ -39,17 +39,23 @@ export type ContainerResult = { status: 200; build: BuildName; body: string } | 
 // `build=workspace` asks for the workspace build explicitly and so needs the full set.
 export function resolveContainer(params: URLSearchParams, thirdPartyUrl: string, tagLogUrl = `${thirdPartyUrl}/tag-report-log`): ContainerResult {
   if (params.get('id') !== containerId) return { status: 404 };
+  const layer = layerName(params.get('l'));
   const given = workspaceParams.filter((k) => params.has(k));
-  if (given.length === 0 && params.get('build') !== 'workspace') return { status: 200, build: 'published', body: buildScript('published', thirdPartyUrl, tagLogUrl) };
+  if (given.length === 0 && params.get('build') !== 'workspace') return { status: 200, build: 'published', body: buildScript('published', thirdPartyUrl, tagLogUrl, layer) };
   if (workspaceParams.every((k) => params.get(k) === fakeWorkspace[k])) {
-    return { status: 200, build: 'workspace', body: buildScript('workspace', thirdPartyUrl, tagLogUrl) };
+    return { status: 200, build: 'workspace', body: buildScript('workspace', thirdPartyUrl, tagLogUrl, layer) };
   }
   return { status: 404 };
 }
 
+// Like real GTM, the container pushes to the global that `l=` names.
+function layerName(value: string | null): string {
+  return value !== null && /^[A-Za-z_$][\w$]{0,63}$/.test(value) && !['__proto__', 'constructor', 'prototype'].includes(value) ? value : 'dataLayer';
+}
+
 // The workspace build echoes its gtm_auth on purpose, so redaction can be tested. It does so everywhere except
 // /container/direct, which stays a control without echo traffic.
-function buildScript(build: BuildName, thirdPartyUrl: string, tagLogUrl: string): string {
+function buildScript(build: BuildName, thirdPartyUrl: string, tagLogUrl: string, layer = 'dataLayer'): string {
   const workspace = build === 'workspace';
   const third = JSON.stringify(thirdPartyUrl);
   const echo = workspace
@@ -75,8 +81,9 @@ function buildScript(build: BuildName, thirdPartyUrl: string, tagLogUrl: string)
 (function () {
   window.google_tag_manager = window.google_tag_manager || {};
   window.google_tag_manager[${JSON.stringify(containerId)}] = {};
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+  var layer = ${JSON.stringify(layer)};
+  window[layer] = window[layer] || [];
+  window.gtag = window.gtag || function () { window[layer].push(arguments); };
   gtag('consent', 'default', {
     ad_storage: ${workspace ? "'granted'" : "'denied'"},
     analytics_storage: 'denied',
