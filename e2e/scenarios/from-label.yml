@@ -1,9 +1,8 @@
-start: /
+start: /page-load-hit
 steps:
-  - consent: accept
-  - visit: /products/fake-tee
+  - visit: /page-load-hit
     label: product
-  - wait: 3s
+  - wait: 1s
 expect:
   must:
     - { vendor: ga4, event: page_view, from: product }

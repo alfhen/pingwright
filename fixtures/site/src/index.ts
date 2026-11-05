@@ -63,6 +63,7 @@ const pages: Record<string, string> = {
   '/server-container': 'server-container.html',
   '/meta-purchase-no-hash': 'meta-purchase-no-hash.html',
   '/delayed-hit': 'delayed-hit.html',
+  '/page-load-hit': 'page-load-hit.html',
   '/sgtm-leak': 'sgtm-leak.html',
   '/identifiers': 'identifiers.html',
   '/cookies': 'cookies.html',
