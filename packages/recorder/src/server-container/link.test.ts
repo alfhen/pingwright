@@ -322,7 +322,12 @@ describe('linkMiss', () => {
 
   test('the reason holds no ID or value', () => {
     const c = serverCall('pw-client-0001', 150);
-    const text = JSON.stringify(missOf([[c, hit(c, 'ga4', 'Purchase', 150, { event_id: 'evt-12345678' })]]));
+    const h = hit(c, 'ga4', 'Purchase', 150, { event_id: 'evt-12345678' });
+    expect(JSON.stringify([c, h])).toContain('pw-client-0001');
+    expect(JSON.stringify([c, h])).toContain('evt-12345678');
+    const miss = missOf([[c, h]]);
+    expect(miss).toBeDefined();
+    const text = JSON.stringify(miss);
     expect(text).not.toContain('pw-client');
     expect(text).not.toContain('evt-');
   });

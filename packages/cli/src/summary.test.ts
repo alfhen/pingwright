@@ -342,9 +342,12 @@ test('the summary counts the server container calls by link, in the line and in 
 });
 
 test('notExact holds counts only and is not in the text line', () => {
-  const summary = buildSummary(serverRecords(), [], 'run.jsonl');
+  const records = serverRecords();
+  expect(JSON.stringify(records)).toMatch(/hit_.*req_.*run_|run_.*req_.*hit_|req_.*hit_/);
+  const summary = buildSummary(records, [], 'run.jsonl');
   const json = JSON.stringify(summary.serverContainer?.notExact);
-  expect(json).not.toMatch(/hit_|request_|run_/);
+  expect(json).toContain('answeredBefore');
+  expect(json).not.toMatch(/hit_|req_|run_/);
   expect(formatSummary(summary)).not.toContain('notExact');
 });
 

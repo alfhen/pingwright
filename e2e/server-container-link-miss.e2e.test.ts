@@ -98,7 +98,13 @@ describe('why a container call is not exact', () => {
     const text = JSON.stringify(summary.serverContainer.notExact) + JSON.stringify(records.hits.map((h) => h.linkMiss ?? null));
     for (const id of IDS) expect(text).not.toContain(id);
     expect(text).not.toMatch(/https?:/);
-    const all = (await readFile((JSON.parse(result.stdout) as { path: string }).path, 'utf8')) + result.stdout + result.stderr;
+    const record = await readFile((JSON.parse(result.stdout) as { path: string }).path, 'utf8');
+    for (const id of IDS) {
+      expect(record).toContain(id);
+      expect(result.stdout).not.toContain(id);
+      expect(result.stderr).not.toContain(id);
+    }
+    const all = record + result.stdout + result.stderr;
     expect(all).not.toContain(CONFIG);
     expect(all).not.toContain('pw-fixture-auth');
   });
