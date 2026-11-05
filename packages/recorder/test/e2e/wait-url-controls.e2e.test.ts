@@ -148,6 +148,24 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
     expected: 'text "Phone" (aria-invalid)',
     forbidden: 'Fakeld',
   },
+  {
+    name: 'the only name source is the control own describedby target',
+    html: '<input id="q1" name="q1" aria-invalid="true" aria-describedby="q1-error"><label id="q1-error" for="q1" class="help-block">Fakeq1 is not valid</label>',
+    expected: 'text "q1" (aria-invalid)',
+    forbidden: 'Fakeq1',
+  },
+  {
+    name: 'the only labelledby source is the control own describedby target',
+    html: '<input name="q2" aria-invalid="true" aria-labelledby="q2-err" aria-describedby="q2-err"><span id="q2-err">Fakeq2 is not valid</span>',
+    expected: 'text "q2" (aria-invalid)',
+    forbidden: 'Fakeq2',
+  },
+  {
+    name: 'the only name source is the control own errormessage target',
+    html: '<input id="q3" name="q3" aria-invalid="true" aria-errormessage="q3-error"><label id="q3-error" for="q3">Fakeq3 is not valid</label>',
+    expected: 'text "q3" (aria-invalid)',
+    forbidden: 'Fakeq3',
+  },
   { name: '.invalid', html: '<label>Inv <input name="iv" aria-invalid="true"> <span class="invalid">Fakeinvalid is wrong</span></label>', expected: 'text "Inv" (aria-invalid)', forbidden: 'Fakeinvalid' },
   {
     name: '.error-message',
@@ -191,20 +209,27 @@ test.each(GUARD_CASES)('name guard: $name', async ({ html, expected, forbidden }
   }
 });
 
-test('the name reader clones nothing, so no label image loads again', async () => {
+test('the name reader never clones a node', async () => {
   const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
   try {
     const page = await recorder.context.newPage();
-    const hits: string[] = [];
-    recorder.context.on('request', (r) => {
-      if (r.url().includes('m15-probe.gif')) hits.push(r.url());
+    await page.setContent(
+      '<!doctype html><body><form><label>Pic <m15-probe></m15-probe><input aria-invalid="true"></label></form></body>',
+    );
+    await page.evaluate(() => {
+      const w = window as unknown as { m15Clones: number };
+      w.m15Clones = 0;
+      customElements.define('m15-probe', class extends HTMLElement {
+        constructor() {
+          super();
+          w.m15Clones += 1;
+        }
+      });
     });
-    await page.setContent('<!doctype html><body><form><label>Pic <img src="/m15-probe.gif"><input aria-invalid="true"></label></form></body>');
-    await page.waitForLoadState('load');
-    const before = hits.length;
+    const before = await page.evaluate(() => (window as unknown as { m15Clones: number }).m15Clones);
     const listed = await blockingControls(recorder.context);
     expect(listed).toEqual(['text "Pic" (aria-invalid)']);
-    expect(hits.length).toBe(before);
+    expect(await page.evaluate(() => (window as unknown as { m15Clones: number }).m15Clones)).toBe(before);
   } finally {
     await recorder.close().catch(() => undefined);
   }

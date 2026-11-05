@@ -169,9 +169,12 @@ function readBlockingControls(max: number): BlockingControl[] {
   };
   const joinSources = (sources: Element[], el: Element): string => {
     const own = new Set(`${el.getAttribute('aria-describedby') ?? ''} ${el.getAttribute('aria-errormessage') ?? ''}`.split(/\s+/));
-    const texts = sources.map((source) => ({ own: source.id !== '' && own.has(source.id), text: cleanText(source, el) }));
-    const kept = texts.filter((t) => !t.own);
-    return (kept.some((t) => t.text.trim()) ? kept : texts).map((t) => t.text).join(' ').replace(/\s+/g, ' ').trim();
+    return sources
+      .filter((source) => source.id === '' || !own.has(source.id))
+      .map((source) => cleanText(source, el))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   };
   const nameOf = (el: Element): string => {
     const aria = el.getAttribute('aria-label');
