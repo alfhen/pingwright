@@ -48,7 +48,7 @@ test('an unticked required checkbox is named', async () => {
 });
 
 test('a control that the page marks aria-invalid after Pay is named', async () => {
-  expect(await failureOf('/terms-aria-invalid')).toContain('Blocking controls: checkbox "I agree to the terms and conditions" (aria-invalid).');
+  expect(await failureOf('/terms-aria-invalid')).toContain('Blocking controls: checkbox "terms" (aria-invalid).');
 });
 
 test('with no blocking control the message is the plain one', async () => {
@@ -77,7 +77,7 @@ test('each signal is read from the real page and no value, placeholder, error te
   expect(cityMessage).not.toBe('');
   expect(error).not.toContain(cityMessage);
   expect(error).toContain(
-    'Blocking controls: email "Email" (aria-invalid), text "City" (invalid), text "Region" (aria-invalid), text "Postcode" (invalid), text "Street" (aria-invalid), checkbox "Send me the newsletter" (required, not ticked), text "State" (invalid), text "Suburb" (invalid), text "Town" (invalid), checkbox "I accept the terms" (required, not ticked).',
+    'Blocking controls: email "email" (aria-invalid), text "city" (invalid), text "region" (aria-invalid), text "postcode" (invalid), text "street" (aria-invalid), checkbox "news" (required, not ticked), text "state" (invalid), text "suburb" (invalid), text "town" (invalid), checkbox "I accept the terms" (required, not ticked).',
   );
   const forbidden = [
     ...Object.values(values),
@@ -103,61 +103,61 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
   {
     name: 'select and option',
     html: '<label>Country <select name="c" required><option value="">Choose a country</option><option value="f">Fakeland</option></select></label>',
-    expected: 'select "Country" (invalid)',
+    expected: 'select "c" (invalid)',
     forbidden: 'Fakeland',
   },
-  { name: 'textarea', html: '<label>Notes <textarea name="n" aria-invalid="true">Faketext</textarea></label>', expected: 'textarea "Notes" (aria-invalid)', forbidden: 'Faketext' },
-  { name: 'script', html: '<label>Script <script>var fakescript = 1</script><input name="s" aria-invalid="true"></label>', expected: 'text "Script" (aria-invalid)', forbidden: 'fakescript' },
-  { name: 'style', html: '<label>Style <style>.fakestyle { color: red }</style><input name="y" aria-invalid="true"></label>', expected: 'text "Style" (aria-invalid)', forbidden: 'fakestyle' },
-  { name: 'aria-live', html: '<label>Live <input name="l" aria-invalid="true"> <span aria-live="polite">Fakelive is wrong</span></label>', expected: 'text "Live" (aria-invalid)', forbidden: 'Fakelive' },
-  { name: '.invalid-feedback', html: '<label>Feedback <input name="f" aria-invalid="true"> <div class="invalid-feedback">Fakefeedback is wrong</div></label>', expected: 'text "Feedback" (aria-invalid)', forbidden: 'Fakefeedback' },
-  { name: '.field-error', html: '<label>Fielderr <input name="e" aria-invalid="true"> <span class="field-error">Fakefielderr is wrong</span></label>', expected: 'text "Fielderr" (aria-invalid)', forbidden: 'Fakefielderr' },
+  { name: 'textarea', html: '<label>Notes <textarea name="n" aria-invalid="true">Faketext</textarea></label>', expected: 'textarea "n" (aria-invalid)', forbidden: 'Faketext' },
+  { name: 'script', html: '<label>Script <script>var fakescript = 1</script><input name="s" aria-invalid="true"></label>', expected: 'text "s" (aria-invalid)', forbidden: 'fakescript' },
+  { name: 'style', html: '<label>Style <style>.fakestyle { color: red }</style><input name="y" aria-invalid="true"></label>', expected: 'text "y" (aria-invalid)', forbidden: 'fakestyle' },
+  { name: 'aria-live', html: '<label>Live <input name="l" aria-invalid="true"> <span aria-live="polite">Fakelive is wrong</span></label>', expected: 'text "l" (aria-invalid)', forbidden: 'Fakelive' },
+  { name: '.invalid-feedback', html: '<label>Feedback <input name="f" aria-invalid="true"> <div class="invalid-feedback">Fakefeedback is wrong</div></label>', expected: 'text "f" (aria-invalid)', forbidden: 'Fakefeedback' },
+  { name: '.field-error', html: '<label>Fielderr <input name="e" aria-invalid="true"> <span class="field-error">Fakefielderr is wrong</span></label>', expected: 'text "e" (aria-invalid)', forbidden: 'Fakefielderr' },
   {
     name: '.field__message--error',
     html: '<label>Message <input name="m" aria-invalid="true"> <span class="field__message--error">Fakemessage is wrong</span></label>',
-    expected: 'text "Message" (aria-invalid)',
+    expected: 'text "m" (aria-invalid)',
     forbidden: 'Fakemessage',
   },
   {
     name: 'a separate error label that is an aria-describedby target',
     html: '<input id="jq" name="jq" aria-invalid="true" aria-describedby="jq-error"><label for="jq">Region</label> <label id="jq-error" for="jq" class="error">Fakejq is not a region</label>',
-    expected: 'text "Region" (aria-invalid)',
+    expected: 'text "jq" (aria-invalid)',
     forbidden: 'Fakejq',
   },
   {
     name: 'an aria-labelledby source that is itself role=status',
     html: '<input name="ls" aria-invalid="true" aria-labelledby="ls-name ls-status"><span id="ls-name">Phone</span> <span id="ls-status" role="status">Fakels is wrong</span>',
-    expected: 'text "Phone" (aria-invalid)',
+    expected: 'text "ls" (aria-invalid)',
     forbidden: 'Fakels',
   },
   {
     name: 'an aria-labelledby source that is an output',
     html: '<input name="lo" aria-invalid="true" aria-labelledby="lo-name lo-out"><span id="lo-name">Fax</span> <output id="lo-out">Fakelo is wrong</output>',
-    expected: 'text "Fax" (aria-invalid)',
+    expected: 'text "lo" (aria-invalid)',
     forbidden: 'Fakelo',
   },
   {
     name: 'a describedby error label with a framework class',
     html: '<label for="hb">Region</label><input id="hb" aria-invalid="true" aria-describedby="hb-error"><label id="hb-error" class="help-block" for="hb">Fakehb is not a region</label>',
-    expected: 'text "Region" (aria-invalid)',
+    expected: 'text "hb" (aria-invalid)',
     forbidden: 'Fakehb',
   },
   {
     name: 'an aria-labelledby source that is a describedby target',
     html: '<input aria-invalid="true" aria-labelledby="ld-name ld-err" aria-describedby="ld-err"><span id="ld-name">Phone</span> <span id="ld-err">Fakeld is wrong</span>',
-    expected: 'text "Phone" (aria-invalid)',
+    expected: 'text (aria-invalid)',
     forbidden: 'Fakeld',
   },
   {
     name: 'a separate label that another element names in aria-describedby',
     html: '<div role="group" aria-describedby="g-err"><input id="g" aria-invalid="true"><label for="g">Gift</label> <label id="g-err" for="g">Fakeg is wrong</label></div>',
-    expected: 'text "Gift" (aria-invalid)',
+    expected: 'text "g" (aria-invalid)',
     forbidden: 'Fakeg',
   },
   {
     name: 'an aria-labelledby source that another element names in aria-describedby',
     html: '<input aria-invalid="true" aria-labelledby="n1 e1"><span id="n1">Phone</span> <span id="e1">Fakeo is wrong</span><input aria-describedby="e1">',
-    expected: ['text "Phone" (aria-invalid)'],
+    expected: ['text (aria-invalid)'],
     forbidden: 'Fakeo',
   },
   {
@@ -178,24 +178,24 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
     expected: 'text "q3" (aria-invalid)',
     forbidden: 'Fakeq3',
   },
-  { name: '.invalid', html: '<label>Inv <input name="iv" aria-invalid="true"> <span class="invalid">Fakeinvalid is wrong</span></label>', expected: 'text "Inv" (aria-invalid)', forbidden: 'Fakeinvalid' },
+  { name: '.invalid', html: '<label>Inv <input name="iv" aria-invalid="true"> <span class="invalid">Fakeinvalid is wrong</span></label>', expected: 'text "iv" (aria-invalid)', forbidden: 'Fakeinvalid' },
   {
     name: '.error-message',
     html: '<label>Em <input name="em" aria-invalid="true"> <span class="error-message">Fakeem is wrong</span></label>',
-    expected: 'text "Em" (aria-invalid)',
+    expected: 'text "em" (aria-invalid)',
     forbidden: 'Fakeem',
   },
-  { name: 'aria-invalid descendant', html: '<label>Ai <input name="ai" aria-invalid="true"> <span aria-invalid="true">Fakeai</span></label>', expected: ['text "Ai" (aria-invalid)', 'control (aria-invalid)'], forbidden: 'Fakeai' },
+  { name: 'aria-invalid descendant', html: '<label>Ai <input name="ai" aria-invalid="true"> <span aria-invalid="true">Fakeai</span></label>', expected: ['text "ai" (aria-invalid)', 'control (aria-invalid)'], forbidden: 'Fakeai' },
   {
     name: 'aria-errormessage descendant',
     html: '<label>Aem <input name="aem" aria-invalid="true"> <span aria-errormessage="zz">Fakeaem</span></label>',
-    expected: 'text "Aem" (aria-invalid)',
+    expected: 'text "aem" (aria-invalid)',
     forbidden: 'Fakeaem',
   },
   {
     name: 'option outside a select',
     html: '<label>Opt <input name="op" aria-invalid="true" list="dl"><datalist id="dl"><option>Fakeopt</option></datalist></label>',
-    expected: 'text "Opt" (aria-invalid)',
+    expected: 'text "op" (aria-invalid)',
     forbidden: 'Fakeopt',
   },
   {
@@ -226,7 +226,7 @@ test('the name reader never clones a node', async () => {
   try {
     const page = await recorder.context.newPage();
     await page.setContent(
-      '<!doctype html><body><form><label>Pic <m15-probe></m15-probe><input aria-invalid="true"></label></form></body>',
+      '<!doctype html><body><form><label>Pic <m15-probe></m15-probe><input type="checkbox" required></label></form></body>',
     );
     await page.evaluate(() => {
       const w = window as unknown as { m15Clones: number };
@@ -240,7 +240,7 @@ test('the name reader never clones a node', async () => {
     });
     const before = await page.evaluate(() => (window as unknown as { m15Clones: number }).m15Clones);
     const listed = await blockingControls(recorder.context);
-    expect(listed).toEqual(['text "Pic" (aria-invalid)']);
+    expect(listed).toEqual(['checkbox "Pic" (required, not ticked)']);
     expect(await page.evaluate(() => (window as unknown as { m15Clones: number }).m15Clones)).toBe(before);
   } finally {
     await recorder.close().catch(() => undefined);

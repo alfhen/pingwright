@@ -21,7 +21,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 - Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
 - Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
 
-- A `wait` timeout message no longer holds error text from `role=status`, `<output>` or the common error classes, and a terms checkbox whose label is its own `aria-describedby` target keeps its visible name.
+- Fix: a `wait` timeout message never holds error text in a blocking control's name. An invalid control is named by its `aria-label`, `name` or `id`. Only a required checkbox that is not ticked uses its visible label.
 
 <!-- M20 -->
 

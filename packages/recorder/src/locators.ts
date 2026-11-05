@@ -146,53 +146,30 @@ interface BlockingControl {
   reason: BlockReason;
 }
 
-/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. Clones nothing, so no page code runs and no image loads. */
+/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. Clones nothing, so no page code runs and no image loads. Only a checkbox that is required and not ticked is named by its label text; every other control is named by `aria-label`, `name` or `id`, so no error text can reach a name. */
 function readBlockingControls(max: number): BlockingControl[] {
   const found: BlockingControl[] = [];
-  const validationText =
-    'input, select, textarea, option, script, style, output, [role="alert"], [role="status"], [aria-live], [aria-invalid="true"], [aria-errormessage], .error, .invalid, .error-message, .invalid-feedback, .field-error, .text-danger, .field__message--error';
-  const messageIds = new Set<string>();
-  const describedIds = new Set<string>();
-  for (const holder of document.querySelectorAll('[aria-errormessage], [aria-describedby]')) {
-    for (const id of (holder.getAttribute('aria-errormessage') ?? '').split(/\s+/)) if (id) messageIds.add(id);
-    for (const id of (holder.getAttribute('aria-describedby') ?? '').split(/\s+/)) if (id) describedIds.add(id);
-  }
-  const isMessage = (n: Element) => n.matches(validationText) || messageIds.has(n.id) || describedIds.has(n.id);
-  const cleanText = (source: Element, control: Element): string => {
-    if (!source.contains(control) && isMessage(source)) return '';
-    const walker = document.createTreeWalker(source, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && isMessage(n as Element) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
-    });
+  const skipped = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'OPTION', 'BUTTON', 'SCRIPT', 'STYLE']);
+  const labelText = (labels: Iterable<Element>): string => {
     let text = '';
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
-    return text;
+    for (const label of labels) {
+      const walker = document.createTreeWalker(label, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && skipped.has((n as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      });
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
+    }
+    return text.replace(/\s+/g, ' ').trim();
   };
-  const joinSources = (sources: Element[], el: Element): string => {
-    const own = new Set(`${el.getAttribute('aria-describedby') ?? ''} ${el.getAttribute('aria-errormessage') ?? ''}`.split(/\s+/));
-    return sources
-      .filter((source) => source.id === '' || !own.has(source.id))
-      .map((source) => cleanText(source, el))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+  const attributeName = (el: Element): string => {
+    const aria = el.getAttribute('aria-label')?.trim();
+    return aria || el.getAttribute('name') || el.id;
   };
-  const nameOf = (el: Element): string => {
-    const aria = el.getAttribute('aria-label');
-    if (aria?.trim()) return aria;
-    const ids = el.getAttribute('aria-labelledby');
-    if (ids) {
-      const text = joinSources(
-        ids.split(/\s+/).flatMap((id) => document.getElementById(id) ?? []),
-        el,
-      );
+  const nameOf = (el: Element, reason: BlockReason): string => {
+    if (reason === 'required, not ticked') {
+      const text = labelText((el as HTMLInputElement).labels ?? []);
       if (text) return text;
     }
-    const labels = (el as HTMLInputElement).labels;
-    if (labels && labels.length > 0) {
-      const text = joinSources([...labels], el);
-      if (text) return text;
-    }
-    return el.getAttribute('name') ?? '';
+    return attributeName(el);
   };
   for (const el of document.querySelectorAll('input, select, textarea, [aria-invalid="true"]')) {
     if (el instanceof HTMLInputElement && (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' || el.type === 'reset' || el.type === 'image')) continue;
@@ -204,7 +181,7 @@ function readBlockingControls(max: number): BlockingControl[] {
     else if (el.getAttribute('aria-invalid') === 'true') reason = 'aria-invalid';
     if (!reason) continue;
     const kind = el instanceof HTMLInputElement ? el.type : (el.getAttribute('role') ?? el.tagName.toLowerCase());
-    found.push({ kind, name: nameOf(el), reason });
+    found.push({ kind, name: nameOf(el, reason), reason });
     if (found.length >= max) break;
   }
   return found;
