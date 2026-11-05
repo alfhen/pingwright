@@ -113,6 +113,28 @@ The report gives each server vendor its own row, for example `Google Ads (google
 
 A rule that should judge only the browser, or only the container, takes `sentBy: browser` or `sentBy: server`. A browser-only `mustNot` on a Google host then ignores the container's own calls. See [Rules by sender](../cli.md#rules-by-sender).
 
+### Make a link exact
+
+Send a unique event ID with each event, for example the GA4 parameter `event_id`, and have the container's tags pass it on. A call whose event ID and event name match exactly one browser hit links by event ID, and that link is `exact`. This is the way to make a leak through the container fail a run. Whether the GA4 tag in sGTM passes `event_id` on is something to check in your own container, in a field test.
+
+The client ID link is narrower. It is `exact` only when exactly one browser hit with that client ID and event name was sent to the container before the call, and its request was still waiting for an answer. On a run with several pages, one client ID is on every hit of the same event name, so two or more hits usually match and the link stays `probable`. Do not count on it.
+
+### Why a call is not exact
+
+`--json` has `serverContainer.notExact` with counts for the calls that are not `exact`. Each such call counts once under each rule, and the record gives the same two reasons on the hit as `linkMiss`. Neither holds an ID or a value.
+
+| Rule | Field | Value | Meaning |
+| --- | --- | --- | --- |
+| Event ID | `eventId` | `none` | The call has no event ID or no event name. The container may not pass `event_id` on. |
+| | | `noMatch` | No browser hit has that event ID and event name. |
+| | | `several` | More than one browser hit has them. |
+| Client ID | `clientId` | `noClientId` | The call has no event name or no client ID of at least 8 characters. |
+| | | `noSameKeyHit` | No earlier browser hit to a `serverHosts` host has that client ID and event name. |
+| | | `severalSameKeyHits` | Two or more do. |
+| | | `answeredBefore` | One does, but the call came after its answer, or it has no answer time. The container answers before its tags send. |
+
+A high `eventId.none` count means the container does not pass the event ID on. A high `clientId.answeredBefore` count means it answers first. These counts only explain a link that is not exact. They do not show that an exact link went to the right browser hit.
+
 With `--json`, the same counts are in the `serverContainer` field. If the container fails to start or stops during the run, the record is still written and the run exits with code 2. See the [CLI reference](../cli.md) for the details, and [Reading a run's results](./reading-results.md) for the rest of the summary.
 
 ## What it does not show

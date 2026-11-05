@@ -1,4 +1,4 @@
-import { hashEmail, type Hit, type Identity, type Request } from '@tagreeve/core';
+import { hashEmail, type Hit, type HitLinkMiss, type Identity, type Request } from '@tagreeve/core';
 import { isServerHostUrl } from '../stub.ts';
 
 /** A shared value shorter than this proves nothing. */
@@ -115,6 +115,7 @@ export function linkServerHits({ hits, requests, serverHosts, identity, inFlight
     if (!isServer(f)) return f.hit;
     const exact = f.eventId === undefined ? [] : browser.filter((b) => b.eventId === f.eventId && b.hit.event === f.hit.event);
     if (exact.length === 1) return { ...f.hit, via: { hitId: exact[0]!.hit.id, by: 'eventId', confidence: 'exact' } };
+    const eventIdMiss: HitLinkMiss['eventId'] = f.eventId === undefined || f.hit.event === null ? 'none' : exact.length === 0 ? 'noMatch' : 'several';
     const callAt = f.request?.t;
     const sameKey =
       callAt === undefined || f.hit.event === null
@@ -132,12 +133,21 @@ export function linkServerHits({ hits, requests, serverHosts, identity, inFlight
     if (only && window && callAt !== undefined && callAt < window.answeredAt) {
       return { ...f.hit, via: { hitId: only.hit.id, by: 'clientId', confidence: 'exact' } };
     }
+    const clientIdMiss: HitLinkMiss['clientId'] =
+      f.hit.event === null || f.clientIds.size === 0
+        ? 'noClientId'
+        : sameKey.length === 0
+          ? 'noSameKeyHit'
+          : sameKey.length > 1
+            ? 'severalSameKeyHits'
+            : 'answeredBefore';
+    const linkMiss: HitLinkMiss = { eventId: eventIdMiss, clientId: clientIdMiss };
     const earlier = browser.flatMap((b) => {
       const by = b.hit.t <= f.hit.t ? sharedKind(f, b) : undefined;
       return by ? [{ b, by }] : [];
     });
     const pool = earlier.some((c) => c.b.onServerHost) ? earlier.filter((c) => c.b.onServerHost) : earlier;
     const latest = pool.reduce<(typeof pool)[number] | undefined>((best, c) => (best === undefined || c.b.hit.t >= best.b.hit.t ? c : best), undefined);
-    return latest ? { ...f.hit, via: { hitId: latest.b.hit.id, by: latest.by, confidence: 'probable' } } : f.hit;
+    return latest ? { ...f.hit, via: { hitId: latest.b.hit.id, by: latest.by, confidence: 'probable' }, linkMiss } : { ...f.hit, linkMiss };
   });
 }

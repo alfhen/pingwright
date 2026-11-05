@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer event map</title>
+</head>
+<body>
+<h1>DataLayer event map</h1>
+<p>Build a pushes <code>checkout_completed</code>, <code>legacy_promo</code> and <code>cart_update</code> with <code>cart.total</code>. Build b pushes <code>purchase</code>, <code>promo_selected</code> and <code>cart_update</code> with <code>cart.amount</code>. The values are fake.</p>
+<script>
+var build = new URLSearchParams(location.search).get('build') === 'b' ? 'b' : 'a';
+window.dataLayer = window.dataLayer || [];
+if (build === 'b') {
+  window.dataLayer.push({ event: 'purchase', value: 10, currency: 'USD' });
+  window.dataLayer.push({ event: 'promo_selected', promo: { code: 'pw-secret-value-1' } });
+  window.dataLayer.push({ event: 'cart_update', cart: { amount: 5 } });
+} else {
+  window.dataLayer.push({ event: 'checkout_completed', value: 10, currency: 'USD' });
+  window.dataLayer.push({ event: 'legacy_promo', promo: { code: 'pw-secret-value-1' } });
+  window.dataLayer.push({ event: 'cart_update', cart: { total: 5 } });
+}
+</script>
+</body>
+</html>

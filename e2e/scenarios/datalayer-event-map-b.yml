@@ -1,0 +1,4 @@
+start: /datalayer-event-map?build=b
+steps:
+  - wait: 1s
+options: { seed: 1, allowUnknownDestination: true }
