@@ -226,17 +226,22 @@ async function fillVerified(element: ElementHandle, field: CardField, cardHost: 
   const tryMs = (): number => Math.max(1, Math.min(FILL_TRY_MS, deadline - Date.now()));
   for (;;) {
     const frame = await frameStillServed(element, cardHost, field);
+    const checkedUrl = frame.url();
     const inputs = frame.locator(field.input).filter({ visible: true });
     const count = await inputs.count();
     if (count === 1) {
+      let handle: ElementHandle | undefined;
       try {
-        const handle = await inputs.elementHandle({ timeout: tryMs() });
-        await frameStillServed(element, cardHost, field);
+        handle = await inputs.elementHandle({ timeout: tryMs() });
+        if ((await frameStillServed(element, cardHost, field)).url() !== checkedUrl) throw new OwnReason(GONE_FRAME);
         await handle.fill(value, { timeout: tryMs() });
         return;
       } catch (error) {
         if (!(error instanceof Error && error.name === 'TimeoutError')) {
-          await frameStillServed(element, cardHost, field);
+          if (error instanceof OwnReason) throw error;
+          const moved = (await frameStillServed(element, cardHost, field)).url() !== checkedUrl;
+          const attached = handle ? await handle.evaluate((e) => e.isConnected).catch(() => false) : true;
+          if (moved || !attached) throw new OwnReason(GONE_FRAME);
           throw error;
         }
         if (Date.now() >= deadline) throw error;

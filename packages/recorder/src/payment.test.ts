@@ -116,6 +116,7 @@ function fake(setup: Setup = {}) {
                   if (setup.navigateDuringResolve) navigate(frame, setup.navigateDuringResolve);
                   const bound = frame.generation;
                   return {
+                    evaluate: async () => frame.generation === bound,
                     fill: async (value: string, options?: { timeout?: number }) => {
                       if (setup.navigateDuringFill && !navigated++) navigate(frame, setup.navigateDuringFill);
                       const detached = (): Error => new Error('elementHandle.fill: Element is not attached to the DOM');
@@ -320,6 +321,13 @@ describe('duplicate frames and inputs', () => {
 
   test('a frame that navigates during a fill try that would succeed gets nothing typed', async () => {
     const { error, log, record } = await play({ navigateDuringFill: 'http://127.0.0.1:4000/elsewhere.html' });
+    expect(fills(log)).toEqual([]);
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a frame that moves to another accepted document during a fill gives the gone-frame reason', async () => {
+    const { error, log, record } = await play({ navigateDuringFill: 'http://127.0.0.1:4000/card-frame-extra-input' });
     expect(fills(log)).toEqual([]);
     expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
     expect(record.payment).toBeUndefined();
