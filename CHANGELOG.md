@@ -16,7 +16,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- F07 -->
 
-- The old-runs notice names the real folder and prints after the payment gates. The suite site, folder and test-payment errors now add the help hint.
+- The `suite` old-runs notice names the real folder and prints after the payment gates. The suite site, folder and test-payment errors now add the help hint.
 
 <!-- M14 -->
 
