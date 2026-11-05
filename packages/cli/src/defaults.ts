@@ -2,7 +2,7 @@ import { readdir, stat } from 'node:fs/promises';
 
 export type DefaultSetting = 'scenarios' | 'trackerList' | 'autoconsentRules' | 'stores' | 'baseline';
 
-/** A file or folder used because its flag was not given. `path` is a fixed relative name; a baseline path ends in the scenario's file name. */
+/** A file or folder used because its flag was not given. `path` is a fixed relative name; a baseline path is the default file for `run` or the default folder for `suite`. */
 export interface DefaultUsed {
   setting: DefaultSetting;
   path: string;

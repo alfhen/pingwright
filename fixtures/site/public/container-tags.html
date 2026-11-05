@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Container tag reports</title>
+<script src="https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1"></script>
+<script>pwContainer.reportTags();</script>
+</head>
+<body>
+<h1>Container tag reports</h1>
+<script>
+if (window === window.top) {
+  var frame = document.createElement('iframe');
+  frame.setAttribute('sandbox', 'allow-scripts');
+  frame.hidden = true;
+  frame.src = '/container/tags';
+  document.body.appendChild(frame);
+}
+</script>
+</body>
+</html>

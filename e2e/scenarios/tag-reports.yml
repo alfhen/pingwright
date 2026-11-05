@@ -1,0 +1,7 @@
+start: /container/tags
+steps:
+  - wait: 4s
+expect:
+  mustNot:
+    - { vendor: ga4, event: purchase }
+options: { seed: 1, allowUnknownDestination: true }

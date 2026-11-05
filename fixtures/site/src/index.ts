@@ -15,6 +15,8 @@ export interface FixtureSite {
   sgtmRequests: string[];
   cardSubmits: string[];
   cardExtras: string[];
+  /** The body of each `callInWindow` the container shim made, in order: what the tag reporter template sent. */
+  tagReportLog: string[];
   close(): Promise<void>;
 }
 
@@ -84,6 +86,7 @@ const pages: Record<string, string> = {
   '/container/echo': 'container-echo.html',
   '/container/echo-frame': 'container-echo-frame.html',
   '/container/noversion': 'container-noversion.html',
+  '/container/tags': 'container-tags.html',
   '/container/stape': 'container-stape.html',
   '/container/sandbox': 'container-sandbox.html',
   '/container/stape-script': 'container-stape-script.html',
@@ -233,9 +236,18 @@ function sgtmHandler(thirdPartyUrl: string, received: string[], requests: string
   };
 }
 
-function thirdPartyHandler(_req: IncomingMessage, res: ServerResponse): void {
-  res.writeHead(200, { 'content-type': 'image/gif' });
-  res.end(gif);
+function thirdPartyHandler(tagReportLog: string[]) {
+  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (req.method === 'POST' && new URL(req.url ?? '/', 'http://127.0.0.1').pathname === '/tag-report-log') {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      tagReportLog.push(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(204, { 'cache-control': 'no-store' }).end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'image/gif' });
+    res.end(gif);
+  };
 }
 
 const cardFrames = ['card-frame', 'card-frame-extra-input', 'card-frame-number', 'card-frame-exp', 'card-frame-csc'];
@@ -282,7 +294,9 @@ function closeServer(server: Server): Promise<void> {
 
 export async function startFixtureSite(): Promise<FixtureSite> {
   const received: string[] = [];
-  const thirdParty = createServer(thirdPartyHandler);
+  const tagReportLog: string[] = [];
+  const thirdPartyRoute = thirdPartyHandler(tagReportLog);
+  const thirdParty = createServer((req, res) => void thirdPartyRoute(req, res));
   const thirdPartyUrl = `http://127.0.0.1:${await listen(thirdParty)}`;
   const sgtmRequests: string[] = [];
   const sgtm = createServer(sgtmHandler(thirdPartyUrl, received, sgtmRequests));
@@ -307,6 +321,7 @@ export async function startFixtureSite(): Promise<FixtureSite> {
     sgtmRequests,
     cardSubmits,
     cardExtras,
+    tagReportLog,
     close: async () => {
       await Promise.all([shop, sgtm, thirdParty, container, paymentFrame].map(closeServer));
     },
