@@ -21,23 +21,43 @@ function gcsValue(flag: string | undefined): ConsentValue {
   return 'unknown';
 }
 
-// gcd letters per signal: https://complianz.io/consent-mode-for-7-0
-const GCD_LETTERS: Record<string, ConsentValue> = {
-  p: 'denied',
-  q: 'denied',
-  r: 'granted',
-  t: 'granted',
-  m: 'denied',
-  n: 'granted',
-  u: 'denied',
-  v: 'granted',
-  l: 'unknown',
+export const GCD_SIGNALS = ['ad_storage', 'analytics_storage', 'ad_user_data', 'ad_personalization'] as const;
+export type GcdSignalName = (typeof GCD_SIGNALS)[number];
+
+/** `notSet` is the letter `l`. Otherwise the default and update values the letter stands for; `unknown` means the letter says nothing about that one. */
+export type GcdSignal = { notSet: true } | { notSet: false; default: ConsentValue; update: ConsentValue };
+
+// gcd letters per signal, community-documented only: https://complianz.io/consent-mode-for-7-0
+const GCD_LETTERS: Record<string, GcdSignal> = {
+  p: { notSet: false, default: 'denied', update: 'unknown' },
+  q: { notSet: false, default: 'denied', update: 'denied' },
+  r: { notSet: false, default: 'granted', update: 'unknown' },
+  t: { notSet: false, default: 'granted', update: 'granted' },
+  m: { notSet: false, default: 'unknown', update: 'denied' },
+  n: { notSet: false, default: 'unknown', update: 'granted' },
+  u: { notSet: false, default: 'unknown', update: 'denied' },
+  v: { notSet: false, default: 'unknown', update: 'granted' },
+  l: { notSet: true },
 };
 
-/** Order in the string: ad_storage, analytics_storage, ad_user_data, ad_personalization. */
-function parseGcd(gcd: string | undefined): ConsentValue[] | undefined {
+/** The single `gcd` letter table. Letters sit at positions 2, 4, 6 and 8 of the string. Undefined when `gcd` is absent or too short. */
+export function gcdSignals(gcd: string | undefined): Record<GcdSignalName, GcdSignal> | undefined {
   if (!gcd || gcd.length < 9) return undefined;
-  return [2, 4, 6, 8].map((i) => GCD_LETTERS[gcd[i]!] ?? 'unknown');
+  const out = {} as Record<GcdSignalName, GcdSignal>;
+  GCD_SIGNALS.forEach((name, i) => {
+    out[name] = GCD_LETTERS[gcd[2 + 2 * i]!] ?? { notSet: false, default: 'unknown', update: 'unknown' };
+  });
+  return out;
+}
+
+function gcdValue(signal: GcdSignal): ConsentValue {
+  if (signal.notSet) return 'unknown';
+  return signal.update !== 'unknown' ? signal.update : signal.default;
+}
+
+function parseGcd(gcd: string | undefined): ConsentValue[] | undefined {
+  const signals = gcdSignals(gcd);
+  return signals && GCD_SIGNALS.map((name) => gcdValue(signals[name]));
 }
 
 function pick(...values: (ConsentValue | undefined)[]): ConsentValue {

@@ -71,7 +71,7 @@ First-party hosts: the registrable domain of `--site` is first party, so `--site
 | `unloadGapIgnore` | List of dataLayer event names or `*` globs, for example `['consent_*']`, that the `unloadGap` warning never reports. The warning covers frame pushes shortly before a navigation and before the run ends. Use it for custom events that are not meant to produce a hit. |
 | `serverHosts` | List of hosts or `*.domain` wildcards for `--network server`. Collection requests to them pass through, and every other one is still stubbed. A host other than `localhost`, `127.0.0.1` or `::1` prints a warning on stderr. A wildcard on a public suffix (`*.com`), a vendor host (Google, Meta, Pinterest) and a tracker-list host are scenario errors. `server` mode without `serverHosts` exits 2. A `pagehide` or `visibilitychange` send to a server host is answered in the page, so the cookies it would set are not seen. A passing cookie rule in `server` mode can miss them. |
 | `allowUnknownDestination` | `true` allows every unknown destination. A list of hosts or wildcards allows only those, and every other unknown destination still fails. |
-| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData`, `deniedIdentifiers` and `earlyIdentifiers`. `earlyIdentifiers` is `warn` by default and every other check is `fail`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
+| `builtins` | Severity per built-in check: `fail` (the default) or `warn`. The names are `unknownDestination`, `sandboxPageUrl`, `possibleRealData`, `deniedIdentifiers`, `earlyIdentifiers` and `consentModeSetup`. `earlyIdentifiers` and `consentModeSetup` are `warn` by default and every other check is `fail`. Any other name or severity is a scenario error. See [Exit codes](#exit-codes). |
 | `identifierFields` | List of field names or `*` globs, for example `['visitor_key', 'x_*']`, that `deniedIdentifiers` and `earlyIdentifiers` treat as analytics identifiers, matched against the field names of each hit. |
 
 Locators: `click` and `wait` take a selector string, or a mapping:
@@ -538,4 +538,17 @@ options:
 ```
 
 In the report, a flagged hit gets the `leak` mark with the label `identifiers sent before an answer`, judged per field: a hit with `em` is `leak`, and a hit with only `fbp` stays `early`. The label `identifiers sent while denied` wins when a hit is in both checks. The verdict reads `identifiers go out to <vendor> in the undecided state`.
+
+### consentModeSetup
+
+The `consentModeSetup` check warns when a Google hit (`ga4` or `google-ads`) shows a Consent Mode signal that was never set. It reads the `gcd` value of each hit, so it judges the hit as the browser sent it and not the order of dataLayer pushes. A signal is never set when its `gcd` letter is `l`. A default for `ad_storage` and `analytics_storage` without `ad_user_data` and `ad_personalization` is the usual case: the setup was written for Consent Mode v1 and misses the two v2 signals.
+
+The result names the Google tag ID (`tid`) and the signals, groups them per tag ID, and links to [Google's Consent Mode page](https://developers.google.com/tag-platform/security/guides/consent). Its evidence is the hit IDs. It never prints a `gcd` value. Server container hits are not judged: their consent signals come from the browser hit they link to.
+
+When the hits show a default and no frame pushed a `consent default` to the dataLayer, the check passes and says "default set outside the dataLayer (template API, TCF or other)". That is information, not a warning. The `gcd` letters are documented only by the community, not by Google, so treat the result as a hint to look at the setup. The default severity is `warn`. To make the check fail a run, set it to `fail`:
+
+```yaml
+options:
+  builtins: { consentModeSetup: fail }
+```
 

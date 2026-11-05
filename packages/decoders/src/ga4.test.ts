@@ -1,6 +1,6 @@
 import { newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { decodeRequest, decoders, isCollectionEndpoint, isSandboxPageUrl } from './index.ts';
+import { decodeRequest, decoders, gcdSignals, isCollectionEndpoint, isSandboxPageUrl } from './index.ts';
 
 const PAGE = 'http://localhost:3000/products/fake-tee';
 const SANDBOX = 'http://localhost:3000/web-pixels@0.0.0-fixture/sandbox/modern/';
@@ -215,4 +215,23 @@ test('decodes /g/collect under a site path prefix', () => {
   expect(decodeRequest(r)[0]).toMatchObject({ vendor: 'ga4', event: 'page_view' });
   expect(isCollectionEndpoint(req('https://shop.example.com/metrics/g/collect?en=page_view'))).toBe(false);
   expect(isCollectionEndpoint(req(`https://shop.example.com/g/collector?${BASE}`))).toBe(false);
+});
+
+test('gcdSignals pins each letter class', () => {
+  const s = gcdSignals('13p3q3r3t5');
+  expect(s?.ad_storage).toEqual({ notSet: false, default: 'denied', update: 'unknown' });
+  expect(s?.analytics_storage).toEqual({ notSet: false, default: 'denied', update: 'denied' });
+  expect(s?.ad_user_data).toEqual({ notSet: false, default: 'granted', update: 'unknown' });
+  expect(s?.ad_personalization).toEqual({ notSet: false, default: 'granted', update: 'granted' });
+  const u = gcdSignals('13m3n3u3v5');
+  expect(u?.ad_storage).toEqual({ notSet: false, default: 'unknown', update: 'denied' });
+  expect(u?.analytics_storage).toEqual({ notSet: false, default: 'unknown', update: 'granted' });
+  expect(u?.ad_user_data).toEqual({ notSet: false, default: 'unknown', update: 'denied' });
+  expect(u?.ad_personalization).toEqual({ notSet: false, default: 'unknown', update: 'granted' });
+  expect(gcdSignals('13l3r3l3r5')).toMatchObject({ ad_storage: { notSet: true }, analytics_storage: { notSet: false }, ad_user_data: { notSet: true } });
+});
+
+test('gcdSignals is undefined for a missing or short gcd', () => {
+  expect(gcdSignals(undefined)).toBeUndefined();
+  expect(gcdSignals('13r3')).toBeUndefined();
 });

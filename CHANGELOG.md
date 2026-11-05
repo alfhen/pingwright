@@ -8,7 +8,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- J07 -->
 
-<!-- Z07 -->
+- Added the built-in check `consentModeSetup`. It warns when a Google hit shows a Consent Mode signal that was never set (`gcd` letter `l`), for example a default without `ad_user_data` and `ad_personalization`. It is `warn` by default and `options.builtins.consentModeSetup: fail` makes it fail the run.
 
 <!-- K07 -->
 
