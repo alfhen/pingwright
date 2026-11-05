@@ -438,6 +438,12 @@ test.each([
   expect(redactFlagDetail(detail)).toBe(shown);
 });
 
+test('an unloadGap detail whose event name holds ": /" keeps its advice text', () => {
+  const detail = 'dataLayer event x: /pw-test@example.test was pushed after unload. Wait longer before leaving the page.';
+  expect(redactFlagDetail(detail, 'unloadGap')).toBe(detail);
+  expect(redactFlagDetail('GET /a?email=1', 'stubBypass')).toBe('GET /a?email');
+});
+
 test('a path segment that holds an email, a phone or a hash reads (other)', () => {
   const detail = `GET https://t.example.net/account/${FAKE_EMAIL}/${encodeURIComponent(PHONE)}/${HASH}/orders`;
   expect(redactFlagDetail(detail)).toBe('GET https://t.example.net/account/(other)/(other)/(other)/orders');

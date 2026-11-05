@@ -113,7 +113,7 @@ export function parseViewportText(text: string): Viewport | undefined {
 export const VIEWPORT_HINT = `a size such as 390x844, with each side from ${VIEWPORT_MIN} to ${VIEWPORT_MAX}`;
 
 export interface ScenarioOptions {
-  network?: NetworkMode;
+  network?: Exclude<NetworkMode, 'live'>;
   seed?: number;
   consentTimeout?: number;
   graceWindow?: number;
@@ -261,7 +261,7 @@ export function parseOptions(raw: unknown, path: Path, fail: (path: Path, messag
       if (!keys.includes(k)) fail(p, `unknown option, expected one of ${keys.join(', ')}`);
       else if (k === 'network') {
         if (v === 'live') fail(p, 'live is not allowed in a scenario. Pass --network live on the command line.');
-        else if (typeof v === 'string' && NETWORKS.includes(v)) options.network = v as NetworkMode;
+        else if (typeof v === 'string' && NETWORKS.includes(v)) options.network = v as Exclude<NetworkMode, 'live'>;
         else fail(p, `must be one of ${NETWORKS.join(', ')}`);
       } else if (k === 'seed') {
         if (typeof v === 'number' && Number.isInteger(v)) options.seed = v;

@@ -954,7 +954,7 @@ function pageWithoutQuery(page: string | null): string {
     const url = new URL(page.startsWith('//') ? `http:${page}` : page);
     return `${url.host}${maskValuePath(url.pathname, '(other)')}`;
   } catch {
-    return maskValuePath(page.split(/[?#]/)[0]!, '(other)');
+    return maskValuePath(page.split(/[?#]/)[0]!.replace(/\s/g, '%20'), '(other)');
   }
 }
 
@@ -1440,9 +1440,8 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 
 // The base reads raw characters and a leaf decoded ones, so a JSON escape or a joined name shifts a value's edge. Such a twin is
 // merged into the field's finding, never dropped, so nothing a whole-body scan finds is lost. Only a reading from the body itself
-// merges, and only when the shorter value never stands alone in the body: a different value in the URL, or a longer value
-// elsewhere, keeps its own finding.
-// A shorter value that only ever appears inside a longer one in the raw body is merged into it, even when the two are different values.
+// merges. A shorter value that only ever appears inside a longer one in the raw body is merged into it, even when the two are
+// different values. A different value in the URL, or a longer value elsewhere, keeps its own finding.
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.includes(short)) return false;

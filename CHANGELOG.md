@@ -57,6 +57,8 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- M16 -->
 
+- Fix config and summary text. A quoted or block-scalar key in the project config exits 2, and so does a second YAML document (#1063, #1062). A relative sandbox page with a space is masked like an absolute one (#920). A flag detail that is not a URL keeps its advice text when an event name holds `: /` (#918).
+
 <!-- R12 -->
 
 ## 0.6.0-rc.1
