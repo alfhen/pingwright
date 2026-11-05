@@ -149,6 +149,18 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
     forbidden: 'Fakeld',
   },
   {
+    name: 'a separate label that another element names in aria-describedby',
+    html: '<div role="group" aria-describedby="g-err"><input id="g" aria-invalid="true"><label for="g">Gift</label> <label id="g-err" for="g">Fakeg is wrong</label></div>',
+    expected: 'text "Gift" (aria-invalid)',
+    forbidden: 'Fakeg',
+  },
+  {
+    name: 'an aria-labelledby source that another element names in aria-describedby',
+    html: '<input aria-invalid="true" aria-labelledby="n1 e1"><span id="n1">Phone</span> <span id="e1">Fakeo is wrong</span><input aria-describedby="e1">',
+    expected: ['text "Phone" (aria-invalid)'],
+    forbidden: 'Fakeo',
+  },
+  {
     name: 'the only name source is the control own describedby target',
     html: '<input id="q1" name="q1" aria-invalid="true" aria-describedby="q1-error"><label id="q1-error" for="q1" class="help-block">Fakeq1 is not valid</label>',
     expected: 'text "q1" (aria-invalid)',

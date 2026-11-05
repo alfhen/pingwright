@@ -159,7 +159,7 @@ function readBlockingControls(max: number): BlockingControl[] {
   }
   const isMessage = (n: Element) => n.matches(validationText) || messageIds.has(n.id) || describedIds.has(n.id);
   const cleanText = (source: Element, control: Element): string => {
-    if (!source.contains(control) && (messageIds.has(source.id) || source.matches(validationText))) return '';
+    if (!source.contains(control) && isMessage(source)) return '';
     const walker = document.createTreeWalker(source, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && isMessage(n as Element) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
     });
