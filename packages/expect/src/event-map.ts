@@ -40,6 +40,7 @@ export function parseEventMap(text: string, file: string): EventMap {
     if (!EVENT_NAME.test(event)) throw new Error(`${file}: "paths" has a name that is not an event name.`);
     if (!isRecord(renames)) throw new Error(`${file}: paths.${event} must be an object.`);
     const out: Record<string, string> = Object.create(null) as Record<string, string>;
+    if (Object.hasOwn(renames, ROOT) && Object.keys(renames).length > 1) throw new Error(`${file}: paths.${event} with the "${ROOT}" source key takes no other key.`);
     for (const [from, to] of Object.entries(renames)) {
       if (!PATH_NAME.test(from)) throw new Error(`${file}: paths.${event} has a key that is not a key path.`);
       if (typeof to !== 'string' || (to !== ROOT && !PATH_NAME.test(to))) throw new Error(`${file}: paths.${event}.${from} must be a key path.`);
@@ -58,7 +59,8 @@ export function builtInEventName(event: string): string {
 
 // A rename to "." moves the paths below the source to the root, and drops the source path itself. A rename from "." moves every root path under the target.
 function renamePath(path: string, renames: Record<string, string>): string | undefined {
-  for (const [from, to] of Object.entries(renames)) {
+  const bySpecificity = Object.entries(renames).sort(([x], [y]) => y.length - x.length);
+  for (const [from, to] of bySpecificity) {
     if (path === from) return to === ROOT ? undefined : to;
     if (path.startsWith(`${from}.`) || path.startsWith(`${from}[`)) {
       const rest = path.slice(from.length);

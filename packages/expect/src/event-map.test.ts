@@ -26,6 +26,7 @@ describe('parseEventMap', () => {
     ['{"events":[]}', '"events" must be an object'],
     ['{"paths":{"b":{"x":"<script>"}}}', 'paths.b.x must be a key path'],
     ['{"paths":{"b":"x"}}', 'paths.b must be an object'],
+    ['{"paths":{"b":{".":"e","value":"total"}}}', 'paths.b with the "." source key takes no other key'],
   ])('rejects %s', (text, message) => {
     expect(() => parseEventMap(text, 'm.json')).toThrow(message);
   });
@@ -45,6 +46,12 @@ describe('parseEventMap', () => {
 });
 
 describe('normalizePushGroups', () => {
+  test('the longest matching source key renames a path, whatever the file order', () => {
+    const map = parseEventMap('{"paths":{"b":{"ecommerce":"data","ecommerce.value":"value"}}}', 'm.json');
+    const [mapped] = normalizePushGroups([group('b', ['ecommerce.value', 'ecommerce.id'])], map);
+    expect(mapped!.paths.map((p) => p.path)).toEqual(['value', 'data.id']);
+  });
+
   test('applies the built-in table and leaves consent and gtag labels alone', () => {
     const out = normalizePushGroups([group('checkout_completed'), group('consent update'), group('gtag config'), group('constructor')]);
     expect(out.map((g) => g.event)).toEqual(['purchase', 'consent update', 'gtag config', 'constructor']);
