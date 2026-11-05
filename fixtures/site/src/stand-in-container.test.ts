@@ -1,7 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import net from 'node:net';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import tls from 'node:tls';
+import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { createRunCa } from '../../../packages/recorder/src/server-container/ca.ts';
@@ -61,6 +64,23 @@ async function until(check: () => boolean, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (!check() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
 }
+
+describe('the stand-in tee', () => {
+  it('exits non-zero without NODE_EXTRA_CA_CERTS and writes nothing', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'tagreeve-tee-test-'));
+    try {
+      const env = { ...process.env };
+      delete env.NODE_EXTRA_CA_CERTS;
+      const tee = fileURLToPath(new URL('../../../e2e/stand-in-tee.ts', import.meta.url));
+      const result = spawnSync(process.execPath, ['--experimental-transform-types', tee], { cwd, env, encoding: 'utf8', timeout: 20_000 });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('NODE_EXTRA_CA_CERTS is not set');
+      expect(readdirSync(cwd)).toEqual([]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('stand-in container', () => {
   it('is an executable file', () => {
@@ -247,6 +267,50 @@ describe('stand-in container', () => {
       expect(took).toBeLessThan(4000);
       await until(() => sockets[0]!.destroyed);
       expect(sockets[0]!.destroyed).toBe(true);
+    });
+  });
+
+  describe('a proxy that cuts a response off after it started', () => {
+    let cutter: net.Server;
+    let cutPort: number;
+    let started: number;
+    let cutSockets: net.Socket[];
+
+    beforeEach(async () => {
+      started = 0;
+      cutSockets = [];
+      cutter = net.createServer((socket) => {
+        cutSockets.push(socket);
+        socket.on('error', () => {});
+        socket.once('data', (data) => {
+          const host = /^CONNECT ([^:\s]+):/.exec(data.toString('utf8'))?.[1] ?? 'localhost';
+          socket.write('HTTP/1.1 200 Connection established\r\n\r\n');
+          const leaf = ca.leafFor(host);
+          const secure = new tls.TLSSocket(socket, { isServer: true, key: leaf.keyPem, cert: leaf.certPem });
+          secure.on('error', () => {});
+          secure.once('data', () => {
+            started++;
+            secure.write('HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\npartial');
+          });
+        });
+      });
+      await new Promise<void>((resolve) => cutter.listen(0, '127.0.0.1', resolve));
+      cutPort = (cutter.address() as net.AddressInfo).port;
+    });
+
+    afterEach(async () => {
+      for (const socket of cutSockets) socket.destroy();
+      await new Promise<void>((resolve) => cutter.close(() => resolve()));
+    });
+
+    it('close settles within its limit, not at the socket timeout', async () => {
+      standIn = createStandIn({ HTTP_PROXY: `http://u:p@127.0.0.1:${cutPort}`, NODE_EXTRA_CA_CERTS: ca.certPath, PORT: '0' }, { socketTimeoutMs: 60_000 });
+      await standIn.listen();
+      await until(() => started > 0);
+      expect(started).toBeGreaterThan(0);
+      const begun = Date.now();
+      await standIn.close();
+      expect(Date.now() - begun).toBeLessThan(4000);
     });
   });
 });

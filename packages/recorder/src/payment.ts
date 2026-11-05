@@ -235,20 +235,27 @@ async function fillVerified(element: ElementHandle, field: CardField, cardHost: 
         await handle.fill(value, { timeout: tryMs() });
         return;
       } catch (error) {
-        if (!(error instanceof Error && error.name === 'TimeoutError') || Date.now() >= deadline) throw error;
+        if (!(error instanceof Error && error.name === 'TimeoutError')) {
+          await frameStillServed(element, cardHost, field);
+          throw error;
+        }
+        if (Date.now() >= deadline) throw error;
         continue;
       }
     }
     if (Date.now() >= deadline) {
       const current = await frameStillServed(element, cardHost, field).catch(() => undefined);
-      throw new OwnReason(current ? await countReason(current, count, typed) : GONE_FRAME);
+      if (!current) throw new OwnReason(GONE_FRAME);
+      const reason = await countReason(current, pathOf(current.url()), count, typed);
+      await frameStillServed(element, cardHost, field);
+      throw new OwnReason(reason);
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
 /** The frame's path and the name, autocomplete and type of each visible input. Never a value, a placeholder or a label. */
-async function countReason(frame: Frame, count: number, typed: string[]): Promise<string> {
+async function countReason(frame: Frame, path: string, count: number, typed: string[]): Promise<string> {
   const attribute = (v: string | null): string => scrub((v ?? '').replace(/\s+/g, ' '), typed).slice(0, 40);
   let inputs = ' none visible';
   try {
@@ -260,7 +267,7 @@ async function countReason(frame: Frame, count: number, typed: string[]): Promis
   } catch {
     inputs = ' inputs not readable';
   }
-  return `${count} visible inputs match in ${pathOf(frame.url())}:${inputs}`;
+  return `${count} visible inputs match in ${path}:${inputs}`;
 }
 
 function typedValues(provider: PaymentProvider, card: string, identity: Identity): string[] {

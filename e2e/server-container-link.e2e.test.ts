@@ -9,9 +9,10 @@ import { run, type CliRun } from './cli-helpers.ts';
 
 const CONFIG = Buffer.from('id=GTM-PWTEST1&env=1&auth=pw-fixture-auth').toString('base64');
 const PROXY_PASSWORD_MARK = /HTTP_PROXY|Proxy-Authorization/;
+const URL_USERINFO = /\/\/[^\s/@:]+:[^\s/@]+@/;
+const ACCESS_TOKEN = 'pw-fixture-access-token';
 const CLIENT_ID = 'pw-client-0001';
-const STAND_IN_EMAIL = 'pw-fixture@example.invalid';
-const STAND_IN_EMAIL_HASH = createHash('sha256').update(STAND_IN_EMAIL).digest('hex');
+const STAND_IN_EMAIL_HASH = createHash('sha256').update('pw-fixture@example.invalid').digest('hex');
 
 let upstream: http.Server;
 let env: Record<string, string>;
@@ -53,11 +54,14 @@ async function expectPrecondition(r: CliRun): Promise<Hit> {
 async function expectNoLeaks(r: CliRun): Promise<void> {
   const text = r.records ? await readFile((JSON.parse(r.stdout) as { path: string }).path, 'utf8') : '';
   const all = text + r.stdout + r.stderr;
+  expect(text).toContain(STAND_IN_EMAIL_HASH);
+  expect('http://user:secret@127.0.0.1:1').toMatch(URL_USERINFO);
   expect(all).not.toContain(CONFIG);
   expect(all).not.toContain('pw-fixture-auth');
-  expect(all).not.toContain(STAND_IN_EMAIL);
+  expect(all).not.toContain(ACCESS_TOKEN);
   expect(r.stdout + r.stderr).not.toContain(STAND_IN_EMAIL_HASH);
   expect(all).not.toMatch(PROXY_PASSWORD_MARK);
+  expect(r.stdout + r.stderr).not.toMatch(URL_USERINFO);
 }
 
 describe('a client ID link while the browser request is in flight', () => {

@@ -22,7 +22,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- M15 -->
 
-<!-- M20 -->
+- A test payment fill that loses its card frame to a navigation reports "the card frame is gone or not served from the card host", not a Playwright message. The input count reason keeps the path of the document that was checked.
 
 <!-- W07 -->
 
