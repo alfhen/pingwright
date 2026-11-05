@@ -403,3 +403,45 @@ test('assigning a non-function to push is kept, as without the hook', async () =
   page.run(`window.dataLayer = []; dataLayer.push = undefined;`);
   expect(page.run('dataLayer.push')).toBeUndefined();
 });
+
+test('an unshifted item is reported once and the last item is not reported again', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }); dataLayer.push({ event: 'purchase' });
+    dataLayer.unshift(['consent', 'default', {}]); dataLayer.push({ event: 'c' });`);
+  await page.settle();
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'purchase' }], [['consent', 'default', {}]], [{ event: 'c' }]]);
+});
+
+test('a spliced-in item is reported once', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }, { event: 'b' }); dataLayer.splice(1, 0, { event: 'z' });`);
+  await page.settle();
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }], [{ event: 'z' }]]);
+});
+
+test('items added after the array shrank in the same task are reported with an assigned native push', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push = Array.prototype.push; dataLayer.push({ event: 'a' }, { event: 'b' });`);
+  await page.settle();
+  page.run(`dataLayer.splice(0); dataLayer.push({ event: 'c' }, { event: 'd' });`);
+  await page.settle();
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }], [{ event: 'c' }], [{ event: 'd' }]]);
+});
+
+test('a shift followed by a push is reported with an assigned native push', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push = Array.prototype.push; dataLayer.push({ event: 'a' }, { event: 'b' });`);
+  await page.settle();
+  page.run(`dataLayer.shift(); dataLayer.push({ event: 'c' });`);
+  await page.settle();
+  expect(argsOf(page.sent)).toEqual([[{ event: 'a' }], [{ event: 'b' }], [{ event: 'c' }]]);
+});
+
+test('a wrapper that sends some items to unshift gives one record per item', async () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; const saved = dataLayer.push;
+    dataLayer.push = function (a, b) { saved.call(this, a); this.unshift(b); return this.length; };
+    dataLayer.push({ event: 'a' }, { event: 'x' }); dataLayer.push({ event: 'b' }, { event: 'y' });`);
+  await page.settle();
+  expect(argsOf(page.sent).map((a) => (a as Array<{ event: string }>)[0]!.event).sort()).toEqual(['a', 'b', 'x', 'y']);
+});

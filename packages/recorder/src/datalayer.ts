@@ -59,21 +59,42 @@ export const dataLayerInitScript = `(() => {
     }
     const callIt = Reflect.apply;
     const base = layer.push;
-    let known = layer.length;
+    const slice = Array.prototype.slice;
+    let seen = callIt(slice, layer, []);
     let queued = false;
+    // Items that reached the array since the last call, in array order. Pushes only append, but unshift, splice
+    // and shrink-then-grow do not, so when the recorded items are no longer a prefix the array is compared with
+    // them as a multiset by identity: the same object pushed twice still counts twice.
+    const fresh = () => {
+      const size = seen.length;
+      if (layer.length >= size && (size === 0 || layer[size - 1] === seen[size - 1])) {
+        const added = callIt(slice, layer, [size]);
+        for (let i = 0; i < added.length; i++) seen[size + i] = added[i];
+        return added;
+      }
+      const counts = new Map();
+      for (const item of seen) counts.set(item, (counts.get(item) || 0) + 1);
+      const added = [];
+      const now = callIt(slice, layer, []);
+      for (const item of now) {
+        const left = counts.get(item) || 0;
+        if (left > 0) counts.set(item, left - 1);
+        else added.push(item);
+      }
+      seen = now;
+      return added;
+    };
     // The id is read in a microtask, so an id a call-through wrapper sets after the push returned is picked up.
-    const report = (from, to, t = clock()) => {
-      const items = [];
-      for (let i = from; i < to; i++) items.push({ item: layer[i], args: argsOf(layer[i]) });
+    const report = (added, t = clock()) => {
+      const items = added.map((item) => ({ item, args: argsOf(item) }));
       queueMicrotask(() => {
         for (const { item, args } of items) post({ t, args, uid: stampOf(item) });
       });
     };
     const sync = () => {
       queued = false;
-      const from = known;
-      known = layer.length;
-      if (known > from) report(from, known);
+      const added = fresh();
+      if (added.length > 0) report(added);
     };
     const schedule = () => {
       if (queued) return;
@@ -83,16 +104,13 @@ export const dataLayerInitScript = `(() => {
     const record = function (...items) {
       if (this !== layer) return callIt(base, this, items);
       sync();
-      const from = known;
       const t = clock();
       try {
         return callIt(base, this, items);
       } finally {
-        const to = layer.length;
-        // A push nested inside the base may already have reported part of from..to.
-        const start = Math.max(from, known);
-        known = to;
-        if (to > start) report(start, to, t);
+        // A push nested inside the base may already have reported part of the new items.
+        const added = fresh();
+        if (added.length > 0) report(added, t);
       }
     };
     let assigned = record;
@@ -113,7 +131,7 @@ export const dataLayerInitScript = `(() => {
     try {
       addEventListener('pagehide', sync);
     } catch {}
-    for (let i = 0; i < known; i++) report(i, i + 1);
+    for (const item of seen) report([item]);
     return sync;
   };
   let current = window.dataLayer;
