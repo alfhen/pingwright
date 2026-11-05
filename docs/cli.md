@@ -290,7 +290,7 @@ Exit codes: `diff` exits 0 whether or not the runs differ. A file that is missin
 
 ### `tagreeve baseline save <run.jsonl> [<baseline.json>]`
 
-Writes the shape of one run to a small file you can commit, so a later run can be checked for drift in CI. It does not open a browser. With one path, it writes `tagreeve/baselines/<name>`, makes the folder and prints the path. The name is `<scenario>[.<store>][.<variant>].json`: the scenario file name without `.yml`, the store of a `suite --stores` cell, and the variant unless it is `published`. A record of schema version 3 or lower that has a variant has no store, so with one path `baseline save` exits 2 and asks for an explicit path.
+Writes the shape of one run to a small file you can commit, so a later run can be checked for drift in CI. It does not open a browser. With one path, it writes `tagreeve/baselines/<name>`, makes the folder and prints the path. The name is `<scenario>[.<store>][.<variant>].json`: the scenario file name without `.yml`, the store of a `suite --stores` cell, and the variant unless it is `published`. A record of schema version 3 or lower that has a variant has no store, so with one path `baseline save` exits 2 and asks for an explicit path. It does the same when the scenario, store or variant in the record could not name a file inside that folder, such as a name with a path separator or `..`, so a crafted scenario name cannot write elsewhere.
 
 | Option | Meaning |
 | --- | --- |
