@@ -22,12 +22,24 @@ const SETTING_TEXT: Record<DefaultSetting, string> = {
   baseline: 'baseline',
 };
 
+function isAbsent(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
+// The message names the fixed relative path only; the OS message would add an absolute one.
+function unreadable(path: string, error: unknown): Error {
+  const code = (error as { code?: unknown }).code;
+  return new Error(`Cannot read ${path}${typeof code === 'string' ? ` (${code})` : ''}. Fix its permissions or remove it.`);
+}
+
 async function isKind(path: string, kind: 'file' | 'directory'): Promise<boolean> {
   try {
     const info = await stat(path);
     return kind === 'file' ? info.isFile() : info.isDirectory();
-  } catch {
-    return false;
+  } catch (error) {
+    if (isAbsent(error)) return false;
+    throw unreadable(path, error);
   }
 }
 
@@ -49,8 +61,9 @@ export async function resolveAutoconsentRules(flags: string[] | undefined, used:
   let names: string[];
   try {
     names = (await readdir(DEFAULT_AUTOCONSENT_DIR)).filter((name) => name.endsWith('.json')).sort();
-  } catch {
-    return [];
+  } catch (error) {
+    if (isAbsent(error)) return [];
+    throw unreadable(DEFAULT_AUTOCONSENT_DIR, error);
   }
   const paths: string[] = [];
   for (const name of names) {

@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { outDir, root, site } from './cli-helpers.ts';
+import { outDir, root, scenario, site } from './cli-helpers.ts';
 
 const cli = join(root, 'dist/cli.js');
 
@@ -62,13 +62,14 @@ test('suite with no folder and no site runs on each default store, and --site le
     ]);
     const saved = await suiteJson(cwd);
     expect(JSON.parse(saved)).toMatchObject({ defaults: manifest.defaults });
-    for (const text of [first.stdout, first.stderr, saved]) {
-      expect(text).not.toContain(cwd);
-      expect(text).not.toContain(homedir());
-    }
-
     const text = await tagreeve(cwd, ['suite']);
     expect(text.code, text.stderr).toBe(0);
+    const runOut = await tagreeve(cwd, ['run', join('tagreeve', 'scenarios', 'a.yml'), '--site', site.url]);
+    expect(runOut.code, runOut.stderr).toBe(0);
+    for (const output of [first.stdout, first.stderr, saved, text.stdout, text.stderr, runOut.stdout, runOut.stderr]) {
+      for (const value of [cwd, homedir(), root, tmpdir(), outDir]) expect(output).not.toContain(value);
+      expect(output.replace(/https?:\/\/\S+/g, '')).not.toMatch(/(?:^|[\s"'(=])\/(?:Users|home|private|var|tmp|opt|root|mnt)\//m);
+    }
     expect(text.stdout).toContain('Defaults: tagreeve/scenarios (scenario folder), tagreeve/trackers.json (tracker list), tagreeve/stores.json (stores)');
 
     const explicit = await tagreeve(cwd, ['suite', '--site', site.url, '--json']);
@@ -87,19 +88,23 @@ test('--allow-test-payment is refused with no site on the command line, even whe
   const cwd = await project(site.url);
   const xdg = await mkdtemp(join(outDir, 'xdg-'));
   try {
+    await copyFile(scenario('test-payment'), join(cwd, 'tagreeve', 'scenarios', 'pay.yml'));
     await mkdir(join(xdg, 'tagreeve'));
     const allowlist = join(xdg, 'tagreeve', 'test-payment-hosts.json');
     await writeFile(allowlist, JSON.stringify([host]));
     await chmod(allowlist, 0o600);
-    const env = { XDG_CONFIG_HOME: xdg };
+    const env = { XDG_CONFIG_HOME: xdg, TAGREEVE_TEST_LOOPBACK_IS_HOSTED: '1' };
+    const payment = ['--with-test-payment', '--allow-test-payment', host];
 
-    const refused = await tagreeve(cwd, ['suite', '--allow-test-payment', host], env);
+    const refused = await tagreeve(cwd, ['suite', ...payment], env);
     expect(refused.code).toBe(2);
-    expect(refused.stderr).toContain('--allow-test-payment');
+    expect(refused.stderr).toContain('--allow-test-payment needs --site or --stores on the command line. A default file never supplies the host a test payment runs on.');
     await expect(readdir(join(cwd, 'tagreeve', 'runs'))).rejects.toThrow();
 
-    const allowed = await tagreeve(cwd, ['suite', '--site', site.url, '--allow-test-payment', host], env);
+    const allowed = await tagreeve(cwd, ['suite', '--stores', 'tagreeve/stores.json', ...payment, '--json'], env);
     expect(allowed.code, allowed.stderr).toBe(0);
+    const cells = (JSON.parse(allowed.stdout) as Manifest).cells;
+    expect(cells.filter((c) => c.scenario === 'pay').map((c) => c.status)).toEqual(['pass', 'pass']);
   } finally {
     await rm(cwd, { recursive: true, force: true });
     await rm(xdg, { recursive: true, force: true });

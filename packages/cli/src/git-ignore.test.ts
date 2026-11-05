@@ -47,6 +47,7 @@ test('outside a work tree the answer is unknown and no warning is printed', asyn
 
 test('a missing git on PATH is silent', async () => {
   await initRepo();
+  expect(await isUnignoredInWorkTree(join(dir, 'records'))).toBe(true);
   process.env.PATH = join(dir, 'no-bin');
   expect(await isUnignoredInWorkTree(join(dir, 'records'))).toBe(false);
 });
@@ -57,4 +58,15 @@ test('the warning names the folder', async () => {
   await warnIfNotIgnored(join(dir, 'records'), (t) => lines.push(t));
   expect(lines).toHaveLength(1);
   expect(lines[0]).toBe(`Warning: ${join(dir, 'records')} is not in .gitignore. Records hold full request bodies; do not commit them. Run tagreeve init or add the folder to .gitignore.\n`);
+});
+
+test.each(['records/**', 'records/*', '*.jsonl'])('the rule "%s" ignores the records, so an existing folder gives no warning', async (rule) => {
+  await initRepo();
+  await writeFile(join(dir, '.gitignore'), `${rule}\n`);
+  expect(await isUnignoredInWorkTree(join(dir, 'records'))).toBe(false);
+  await mkdir(join(dir, 'records'));
+  expect(await isUnignoredInWorkTree(join(dir, 'records'))).toBe(false);
+  const lines: string[] = [];
+  await warnIfNotIgnored(join(dir, 'records'), (t) => lines.push(t));
+  expect(lines).toEqual([]);
 });

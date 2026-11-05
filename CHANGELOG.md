@@ -10,7 +10,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- Z07 -->
 
-<!-- K07 -->
+- `baseline save` refuses a scenario, store or variant name that could write outside `tagreeve/baselines/`. It exits 2 and asks for an explicit path (#1069).
 
 <!-- I07 -->
 
@@ -18,7 +18,8 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- M13 -->
 
-<!-- M14 -->
+- Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
+- Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
 
 - A `wait` timeout message no longer holds error text from `role=status`, `<output>` or the common error classes, and a terms checkbox whose label is its own `aria-describedby` target keeps its visible name.
 
@@ -72,7 +73,7 @@ Release candidate. Install it with `npm i -g tagreeve@next`.
 
 - A suite verdict names a built-in check that failed in a run unless that run's own report already named it. A stores file now refuses a rules file that exists but cannot be read.
 
-A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that moves to another host before the input count is reported gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
+A test card fill is now bound to the card frame document that was checked. If the frame navigates during a fill, nothing is typed into the new document. A frame that has gone, or is no longer served from the card host or at the path of the field, when the input is checked gives the gone-frame reason, and input attributes in that reason are scrubbed of typed values.
 
 - A plain address field on a Conversions API event is reported as plain, not as a wrong hash.
 
