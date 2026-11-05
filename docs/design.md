@@ -331,7 +331,7 @@ With `--server-container`, the container runs on the user's machine and every ve
 
 **Server preview.** The `X-Gtm-Server-Preview` header is not planned. Only a signed-in person in the GTM UI sees the preview data, and Tagreeve cannot read it without the GTM API, which it never calls. A server workspace is tested with a config from its preview environment and `--server-container`. No code sends the header.
 
-**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports.
+**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. The recorder writes web `TagReport` records (see §15.6), but no rule reads one yet. It can be evaluated against those reports.
 
 **Out of scope.** Stape's logs and the API of any hosted service. Tagreeve runs no hosted service. Everything runs on the user's machine. The opt-in server container feature runs the user's own container in the user's Docker, and the container downloads its own configuration from Google, as it always does.
 
