@@ -158,8 +158,8 @@ function readBlockingControls(max: number): BlockingControl[] {
     for (const id of (holder.getAttribute('aria-describedby') ?? '').split(/\s+/)) if (id) describedIds.add(id);
   }
   const isMessage = (n: Element) => n.matches(validationText) || messageIds.has(n.id) || describedIds.has(n.id);
-  const cleanText = (source: Element): string => {
-    if (messageIds.has(source.id)) return '';
+  const cleanText = (source: Element, control: Element): string => {
+    if (!source.contains(control) && (messageIds.has(source.id) || source.matches(validationText))) return '';
     const walker = document.createTreeWalker(source, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && isMessage(n as Element) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
     });
@@ -176,7 +176,7 @@ function readBlockingControls(max: number): BlockingControl[] {
         .split(/\s+/)
         .map((id) => {
           const source = document.getElementById(id);
-          return source ? cleanText(source) : '';
+          return source ? cleanText(source, el) : '';
         })
         .join(' ')
         .replace(/\s+/g, ' ')
@@ -186,7 +186,7 @@ function readBlockingControls(max: number): BlockingControl[] {
     const labels = (el as HTMLInputElement).labels;
     if (labels && labels.length > 0) {
       const text = [...labels]
-        .map((label) => cleanText(label))
+        .map((label) => cleanText(label, el))
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim();

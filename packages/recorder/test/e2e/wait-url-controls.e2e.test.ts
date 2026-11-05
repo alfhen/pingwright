@@ -6,6 +6,7 @@ import { startFixtureSite, type FixtureSite } from '@tagreeve/fixture-site';
 import type { Page } from 'playwright';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { launchRecorder, playScenario } from '../../src/index.ts';
+import { blockingControls } from '../../src/locators.ts';
 
 let site: FixtureSite;
 let outDir: string;
@@ -96,4 +97,58 @@ test('each signal is read from the real page and no value, placeholder, error te
     'token',
   ];
   for (const secret of forbidden) expect(error).not.toContain(secret);
+});
+
+const GUARD_CASES: { name: string; html: string; expected: string; forbidden: string }[] = [
+  {
+    name: 'select and option',
+    html: '<label>Country <select name="c" required><option value="">Choose a country</option><option value="f">Fakeland</option></select></label>',
+    expected: 'select "Country" (invalid)',
+    forbidden: 'Fakeland',
+  },
+  { name: 'textarea', html: '<label>Notes <textarea name="n" aria-invalid="true">Faketext</textarea></label>', expected: 'textarea "Notes" (aria-invalid)', forbidden: 'Faketext' },
+  { name: 'script', html: '<label>Script <script>var fakescript = 1</script><input name="s" aria-invalid="true"></label>', expected: 'text "Script" (aria-invalid)', forbidden: 'fakescript' },
+  { name: 'style', html: '<label>Style <style>.fakestyle { color: red }</style><input name="y" aria-invalid="true"></label>', expected: 'text "Style" (aria-invalid)', forbidden: 'fakestyle' },
+  { name: 'aria-live', html: '<label>Live <input name="l" aria-invalid="true"> <span aria-live="polite">Fakelive is wrong</span></label>', expected: 'text "Live" (aria-invalid)', forbidden: 'Fakelive' },
+  { name: '.invalid-feedback', html: '<label>Feedback <input name="f" aria-invalid="true"> <div class="invalid-feedback">Fakefeedback is wrong</div></label>', expected: 'text "Feedback" (aria-invalid)', forbidden: 'Fakefeedback' },
+  { name: '.field-error', html: '<label>Fielderr <input name="e" aria-invalid="true"> <span class="field-error">Fakefielderr is wrong</span></label>', expected: 'text "Fielderr" (aria-invalid)', forbidden: 'Fakefielderr' },
+  {
+    name: '.field__message--error',
+    html: '<label>Message <input name="m" aria-invalid="true"> <span class="field__message--error">Fakemessage is wrong</span></label>',
+    expected: 'text "Message" (aria-invalid)',
+    forbidden: 'Fakemessage',
+  },
+  {
+    name: 'a separate error label that is an aria-describedby target',
+    html: '<input id="jq" name="jq" aria-invalid="true" aria-describedby="jq-error"><label for="jq">Region</label> <label id="jq-error" for="jq" class="error">Fakejq is not a region</label>',
+    expected: 'text "Region" (aria-invalid)',
+    forbidden: 'Fakejq',
+  },
+  {
+    name: 'an aria-labelledby source that is itself role=status',
+    html: '<input name="ls" aria-invalid="true" aria-labelledby="ls-name ls-status"><span id="ls-name">Phone</span> <span id="ls-status" role="status">Fakels is wrong</span>',
+    expected: 'text "Phone" (aria-invalid)',
+    forbidden: 'Fakels',
+  },
+  {
+    name: 'an aria-labelledby source that is an output',
+    html: '<input name="lo" aria-invalid="true" aria-labelledby="lo-name lo-out"><span id="lo-name">Fax</span> <output id="lo-out">Fakelo is wrong</output>',
+    expected: 'text "Fax" (aria-invalid)',
+    forbidden: 'Fakelo',
+  },
+  { name: 'aria-label name', html: '<input aria-label="Accept the privacy policy" type="checkbox" required>', expected: 'checkbox "Accept the privacy policy" (required, not ticked)', forbidden: 'Fakenothing' },
+  { name: 'name attribute fallback', html: '<input name="promo_code" aria-invalid="true">', expected: 'text "promo_code" (aria-invalid)', forbidden: 'Fakenothing' },
+];
+
+test.each(GUARD_CASES)('name guard: $name', async ({ html, expected, forbidden }) => {
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: site.url });
+  try {
+    const page = await recorder.context.newPage();
+    await page.setContent(`<!doctype html><body><form>${html}</form></body>`);
+    const listed = await blockingControls(recorder.context);
+    expect(listed).toEqual([expected]);
+    expect(listed.join(' ')).not.toContain(forbidden);
+  } finally {
+    await recorder.close().catch(() => undefined);
+  }
 });
