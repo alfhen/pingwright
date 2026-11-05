@@ -29,4 +29,6 @@ await build({
 });
 mkdirSync(path('dist/rules'), { recursive: true });
 cpSync(path('packages/consent/rules/fixture-site.json'), path('dist/rules/fixture-site.json'));
+mkdirSync(path('dist/templates'), { recursive: true });
+cpSync(path('packages/recorder/src/gtm-templates/web-tag-reporter.tpl'), path('dist/templates/tagreeve-tag-reporter.tpl'));
 chmodSync(path('dist/cli.js'), 0o755);

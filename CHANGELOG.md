@@ -27,7 +27,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- W07 -->
 
-<!-- C07 -->
+- Added `tagreeve template web`. It prints the web tag reporter's GTM template. `--json` prints the template with the setup fields and steps, so an agent can install it with its own GTM access. Tagreeve never calls the GTM API.
 
 - The `--json` summary has `dataLayer`: the shape of each push per step, event and frame, with key paths and types, array indexes as `[*]` and no values. A key or event name that looks like a value reads `(other)`. The text summary has one `dataLayer:` line with the push and event counts (#928).
 

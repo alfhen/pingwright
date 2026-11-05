@@ -431,6 +431,30 @@ Sets up the folders in the current directory. It makes `tagreeve/scenarios/` and
 
 `run` and `suite` print one warning on stderr when the record folder is inside a git work tree and git does not ignore it: `Warning: <folder> is not in .gitignore. Records hold full request bodies; do not commit them. Run tagreeve init or add the folder to .gitignore.` The warning never fails a run. Git is asked about a file inside the folder, so a rule such as `records/**` or `*.jsonl` counts as ignoring it. It is silent outside a git work tree, or when `git` is not installed.
 
+### `tagreeve template web`
+
+Prints the GTM template of the web tag reporter to stdout, byte for byte, and exits 0. It needs no network, and Tagreeve never calls the GTM API. You import the template in a GTM workspace yourself, or an agent does it with its own GTM access. An unknown name, no name, or any option other than `--json` exits 2 with usage.
+
+`--json` prints one object for an agent:
+
+```json
+{
+  "templateVersion": 1,
+  "name": "web",
+  "fileName": "tagreeve-tag-reporter.tpl",
+  "template": "<the .tpl text>",
+  "setup": {
+    "trigger": { "type": "customEvent", "eventName": ".*", "regex": true },
+    "consent": "noAdditionalConsentRequired",
+    "tagMetadata": { "includeTagName": true, "key": "name" },
+    "publish": false
+  },
+  "steps": ["…"]
+}
+```
+
+`steps` are short imperative sentences in order: import the template in a workspace, add one tag of that type with the trigger and consent above, turn on "Include tag name" with the key `name` in each tag's Additional Tag Metadata (or list the names in `expectedTags`), never publish the version, run with `--gtm-override`, and check that `tags[<container>].reports` in the `--json` output is greater than 0. An entry with `reports: 0` and a `hint` means the install failed. `publish` is always `false`. The object holds no container ID and no value from a run.
+
 ### `tagreeve install-browser`
 
 Installs Chromium with the Playwright version Tagreeve depends on.
