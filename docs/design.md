@@ -331,7 +331,7 @@ With `--server-container`, the container runs on the user's machine and every ve
 
 **Server preview.** The `X-Gtm-Server-Preview` header is not planned. Only a signed-in person in the GTM UI sees the preview data, and Tagreeve cannot read it without the GTM API, which it never calls. A server workspace is tested with a config from its preview environment and `--server-container`. No code sends the header.
 
-**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. No code writes a `TagReport` (`Recorder.close` sets `tagReports: []`), and no rule reads one. It can be evaluated once a reporter writes reports.
+**`expectedTags`.** The override file accepts `expectedTags`, and the run stores it. Nothing evaluates it. The recorder writes web `TagReport` records (see §15.6), but no rule reads one yet. It can be evaluated against those reports.
 
 **Out of scope.** Stape's logs and the API of any hosted service. Tagreeve runs no hosted service. Everything runs on the user's machine. The opt-in server container feature runs the user's own container in the user's Docker, and the container downloads its own configuration from Google, as it always does.
 
@@ -543,7 +543,8 @@ Where the code in 0.6 differs from the design above. Sections 15.1 to 15.5 still
 - **Path defaults and the project config.** Four settings read a default file or folder under `tagreeve/` when it exists and the flag is not given (§12). `tagreeve/config.yml` is plain YAML and holds `site`, `out` and some scenario options. It refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. A default file never supplies the host of a test payment.
 - **`live` is a command-line choice.** A scenario with `options.network: live` is a scenario error (§5.3).
 - **Exact container links.** A container call links to a browser hit by client ID and event name (`via.by: "clientId"`, `confidence: "exact"`) when exactly one browser hit with them had its request to the container in flight. Ties and different event names stay `probable`. The rule is proven only when the container answers the browser after its tags send; the field test of 0.6.0-rc.1 checks this.
-- **Not built:** the server tag reporter, the server preview header, the web tag reporter and `expectedTags` (goal 2, rc.2), the Shopify bridge, a full `microsoft-uet` decoder, the collector origin bridge and a `mobile` preset.
+- **Web tag reports are recorded.** The recorder exposes `tagreeveTagReport` with `context.exposeBinding` on every run and writes one `TagReport` (`side: "web"`) for each call, with the step it arrived in and the frame (`{ main, n }`) it came from. It keeps only the known keys. A call that does not fit (a bad container ID, a long field, more than 500 tags, a tag ID that is not digits) becomes an `invalidReport` whose error names the field, for example `tagReport:tagId`, and holds none of the payload. The version string fills `Run.containerVersions[container]`. After the last step, `close` waits until no report has come for 0.5 s, up to 2.5 s, because GTM calls back up to its event timeout after an event; a run with no reports does not wait. Every `Request` also gets `frame` (`{ main, n }`, never a URL), taken from the same frame numbers; a request with no frame, such as a worker request, has none. Nothing reads reports yet: `expectedTags` is still stored and not evaluated.
+- **Not built:** the server tag reporter, the server preview header, evaluation of `expectedTags` (goal 2, rc.2), the Shopify bridge, a full `microsoft-uet` decoder, the collector origin bridge and a `mobile` preset.
 
 ## 16. Related tools
 

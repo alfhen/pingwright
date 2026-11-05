@@ -1,3 +1,5 @@
+import { templateShim, type FixtureTag } from './template-shim.ts';
+
 export const containerId = 'GTM-PWTEST1';
 export const noVersionContainerId = 'GTM-PWNOVER';
 
@@ -7,6 +9,26 @@ export const fakeWorkspace = {
   gtm_cookies_win: 'x',
 } as const;
 
+export const fakeEmail = 'pw-fixture@example.com';
+
+// Tag 45 never fires in either build. The workspace build drops 12 and adds 13, 14, 77, 88 and 89.
+export const fixtureTags: Record<'published' | 'workspace', FixtureTag[]> = {
+  published: [
+    { id: '11', name: 'GA4 - Config', status: 'success', executionTime: 4 },
+    { id: '12', status: 'failure', executionTime: 2 },
+  ],
+  workspace: [
+    { id: '11', name: 'GA4 - Config', status: 'success', executionTime: 4 },
+    { id: '13', status: 'failure', executionTime: 2 },
+    { id: '14', status: 'success', executionTime: 3 },
+    { id: '77', name: 'GA4 - Workspace Only', status: 'success', executionTime: 5 },
+    { id: '88', name: `Lead - ${fakeEmail}`, status: 'success', executionTime: 1 },
+    { id: '89', name: `Auth - ${fakeWorkspace.gtm_auth}`, status: 'success', executionTime: 1 },
+  ],
+};
+
+export const containerVersion: Record<BuildName, string> = { published: '3', workspace: '4' };
+
 export type BuildName = 'published' | 'workspace';
 
 const workspaceParams = Object.keys(fakeWorkspace) as (keyof typeof fakeWorkspace)[];
@@ -15,19 +37,19 @@ export type ContainerResult = { status: 200; build: BuildName; body: string } | 
 
 // Preview parameters are all-or-nothing: a partial or wrong set never gets the workspace build.
 // `build=workspace` asks for the workspace build explicitly and so needs the full set.
-export function resolveContainer(params: URLSearchParams, thirdPartyUrl: string): ContainerResult {
+export function resolveContainer(params: URLSearchParams, thirdPartyUrl: string, tagLogUrl = `${thirdPartyUrl}/tag-report-log`): ContainerResult {
   if (params.get('id') !== containerId) return { status: 404 };
   const given = workspaceParams.filter((k) => params.has(k));
-  if (given.length === 0 && params.get('build') !== 'workspace') return { status: 200, build: 'published', body: buildScript('published', thirdPartyUrl) };
+  if (given.length === 0 && params.get('build') !== 'workspace') return { status: 200, build: 'published', body: buildScript('published', thirdPartyUrl, tagLogUrl) };
   if (workspaceParams.every((k) => params.get(k) === fakeWorkspace[k])) {
-    return { status: 200, build: 'workspace', body: buildScript('workspace', thirdPartyUrl) };
+    return { status: 200, build: 'workspace', body: buildScript('workspace', thirdPartyUrl, tagLogUrl) };
   }
   return { status: 404 };
 }
 
 // The workspace build echoes its gtm_auth on purpose, so redaction can be tested. It does so everywhere except
 // /container/direct, which stays a control without echo traffic.
-function buildScript(build: BuildName, thirdPartyUrl: string): string {
+function buildScript(build: BuildName, thirdPartyUrl: string, tagLogUrl: string): string {
   const workspace = build === 'workspace';
   const third = JSON.stringify(thirdPartyUrl);
   const echo = workspace
@@ -70,5 +92,6 @@ function buildScript(build: BuildName, thirdPartyUrl: string): string {
     }
   };
 })();
+${templateShim({ container: containerId, version: containerVersion[build], tags: fixtureTags[build], logUrl: tagLogUrl })}
 `;
 }

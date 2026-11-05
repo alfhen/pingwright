@@ -308,3 +308,32 @@ test('baseline save with one path writes tagreeve/baselines/<name> and makes the
     process.chdir(before);
   }
 });
+
+test('baseline save with a path in a missing folder makes the folder', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const run = makeRun(['a_event']);
+  const path = join(dir, 'run.jsonl');
+  await writeFile(path, [run.run, ...run.consentEpochs, ...run.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  expect(await main(['baseline', 'save', path, join(dir, 'x', 'y', 'b.json')], { stdout: () => {}, stderr: () => {} })).toBe(0);
+  expect(JSON.parse(await readFile(join(dir, 'x', 'y', 'b.json'), 'utf8'))).toMatchObject({ scenario: 's.yml' });
+});
+
+test('baseline save exits 2 with a short message when the folder cannot be made', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const run = makeRun(['a_event']);
+  const path = join(dir, 'run.jsonl');
+  await writeFile(path, [run.run, ...run.consentEpochs, ...run.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  await writeFile(join(dir, 'file'), '');
+  const err: string[] = [];
+  expect(await main(['baseline', 'save', path, join(dir, 'file', 'b.json')], { stdout: () => {}, stderr: (t) => err.push(t) })).toBe(2);
+  expect(err.join('')).toContain('Cannot make the folder for');
+  expect(err.join('')).not.toContain('ENOENT:');
+});
+
+test('readBaseline marks a missing file by its errno code, not by its message', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const { readBaseline } = await import('./baseline.ts');
+  await expect(readBaseline(join(dir, 'ENOENT.json'))).rejects.toMatchObject({ code: 'missing' });
+  await writeFile(join(dir, 'bad.json'), '{bad');
+  await expect(readBaseline(join(dir, 'bad.json'))).rejects.toMatchObject({ code: 'invalid' });
+});
