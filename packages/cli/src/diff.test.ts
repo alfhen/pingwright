@@ -11,9 +11,11 @@ const empty: DiffResult = { warnings: [], added: [], removed: [], changed: [], c
 const key = (epoch: string, vendor: string, event: string) => ({ epoch, vendor, event });
 
 test('parses diff with its options', () => {
-  expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--by-page', '--json'])).toEqual({ command: 'diff', a: 'a.jsonl', b: 'b.jsonl', byPage: true, allFlags: false, json: true });
+  expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--by-page', '--json'])).toEqual({ command: 'diff', a: 'a.jsonl', b: 'b.jsonl', byPage: true, acrossFrames: false, allFlags: false, json: true });
   expect(parseCli(['diff', 'a', 'b'])).toMatchObject({ byPage: false, allFlags: false, json: false });
   expect(parseCli(['diff', 'a', 'b', '--all-flags'])).toMatchObject({ allFlags: true });
+  expect(parseCli(['diff', 'a', 'b', '--across-frames'])).toMatchObject({ acrossFrames: true });
+  expect(parseCli(['diff', 'a', 'b'])).toMatchObject({ acrossFrames: false });
   expect(() => parseCli(['diff', 'a'])).toThrow(UsageError);
 });
 
@@ -145,5 +147,39 @@ describe('flag changes', () => {
 
   test('a flag with a host names it', () => {
     expect(flagChangeLabel({ host: 'api.example.com', kind: 'unloadGap', a: 0, b: 1 })).toBe('unloadGap api.example.com: 0 -> 1');
+  });
+});
+
+describe('dataLayer lines', () => {
+  const pushes = {
+    eventsAdded: [{ epoch: 'undecided', event: 'add_to_cart', frame: 'main' }],
+    eventsRemoved: [{ epoch: 'undecided', event: 'add_to_cart', frame: 'embedded' }],
+    pathsAdded: [],
+    pathsRemoved: [{ epoch: 'undecided', event: 'purchase', frame: 'main', path: 'ecommerce.value', types: ['number'] }],
+    typeChanges: [{ epoch: 'undecided', event: 'purchase', frame: 'main', path: 'value', a: ['number'], b: ['string'] }],
+    moved: [{ event: 'view_item', kind: 'frame' as const, epoch: 'undecided', from: 'embedded', to: 'main' }],
+    changed: true,
+  };
+
+  test('lists each push change under a dataLayer heading', () => {
+    const text = formatDiff({ ...empty, dataLayer: pushes }, 'a.jsonl', 'b.jsonl');
+    expect(text).toBe(
+      [
+        'Diff a.jsonl -> b.jsonl',
+        '',
+        'dataLayer',
+        '  removed event add_to_cart [epoch undecided, frame embedded]',
+        '  new event add_to_cart [epoch undecided, frame main]',
+        '  missing path ecommerce.value (number) in purchase [epoch undecided, frame main]',
+        '  type change value: number -> string in purchase [epoch undecided, frame main]',
+        '  moved event view_item from frame embedded to main [epoch undecided]',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  test('an unchanged dataLayer section still says no differences', () => {
+    const none = { eventsAdded: [], eventsRemoved: [], pathsAdded: [], pathsRemoved: [], typeChanges: [], moved: [], changed: false };
+    expect(formatDiff({ ...empty, dataLayer: none }, 'a', 'b')).toContain('No differences.');
   });
 });

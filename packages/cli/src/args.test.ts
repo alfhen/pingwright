@@ -141,6 +141,10 @@ test.each([
   [['run', 's.yml', '--site', 'http://x.test', '--bogus'], 'bogus'],
   [['run', 's.yml', '--site', 'http://x.test', '--variant', 'workspace=o.json'], 'not an option of run'],
   [['run', 's.yml', '--site', 'http://x.test', '--with-handoff'], 'not an option of run'],
+  [['run', 's.yml', '--site', 'http://x.test', '--across-frames'], 'only for diff'],
+  [['suite', '--across-frames'], 'only for diff'],
+  [['baseline', 'save', 'r.jsonl', '--across-frames'], 'only for diff'],
+  [['report', 'r.jsonl', '--html', 'o.html', '--across-frames'], 'only for diff'],
   [['dance'], 'Unknown command'],
 ])('usage error for %j', (argv, message) => {
   expect(() => parseCli(argv)).toThrow(UsageError);
@@ -233,6 +237,7 @@ test.each(['run', 'suite', 'diff', 'baseline', 'report', 'init', 'template', 'in
 
 test('diff help lists the diff options, not the run options', () => {
   const text = helpText('diff');
+  expect(text).toContain('--across-frames');
   expect(text).toContain('--all-flags');
   expect(text).toContain('--by-page');
   expect(text).not.toContain('--network');

@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, isAbsolute } from 'node:path';
 import { readRun, type RunRecords } from '@tagreeve/core';
-import { diffShapes, hitShape, type DiffKey, type ShapeDiff, type ShapeKey, type ShapeMove } from '@tagreeve/expect';
+import { diffPushes, diffShapes, hitShape, pushGroups, type DiffKey, type PushGroup, type ShapeDiff, type ShapeKey, type ShapeMove } from '@tagreeve/expect';
 import { PUBLISHED_VARIANT, type BaselineArgs } from './args.ts';
+import { describePushDiff } from './diff.ts';
 import { DEFAULT_BASELINES } from './defaults.ts';
 import type { Io } from './run.ts';
 import { STORE_NAME } from './stores.ts';
@@ -17,6 +18,8 @@ export interface BaselineFile {
   site: string;
   byPage: boolean;
   keys: ShapeKey[];
+  /** Masked push shapes: key paths and types, no value. Absent in a file saved by 0.6.0-rc.1. */
+  dataLayer?: PushGroup[];
 }
 
 export type BaselineErrorCode = 'missing' | 'unreadable' | 'invalid' | 'usage';
@@ -42,6 +45,7 @@ export function buildBaseline(records: RunRecords, byPage: boolean): BaselineFil
     site: hostOf(records.run.site),
     byPage,
     keys: hitShape(records, { byPage }),
+    dataLayer: pushGroups(records),
   };
 }
 
@@ -64,6 +68,20 @@ function validKey(k: unknown): k is ShapeKey {
   );
 }
 
+const FRAME_KINDS = new Set(['main', 'embedded', 'unknown']);
+
+function validPushGroup(g: unknown): g is PushGroup {
+  return (
+    isRecord(g) &&
+    typeof g.epoch === 'string' &&
+    typeof g.event === 'string' &&
+    typeof g.frame === 'string' &&
+    FRAME_KINDS.has(g.frame) &&
+    Array.isArray(g.paths) &&
+    g.paths.every((p) => isRecord(p) && typeof p.path === 'string' && isStringArray(p.types))
+  );
+}
+
 /** The messages never quote the file, which a user may have edited by hand. */
 export function parseBaseline(text: string, label: string): BaselineFile {
   let json: unknown;
@@ -78,6 +96,9 @@ export function parseBaseline(text: string, label: string): BaselineFile {
     throw new BaselineError(`${label} has baselineSchemaVersion ${found}, and this Tagreeve reads ${BASELINE_SCHEMA_VERSION}`, 'invalid');
   }
   if (typeof json.scenario !== 'string' || typeof json.site !== 'string' || typeof json.byPage !== 'boolean' || !Array.isArray(json.keys) || !json.keys.every(validKey)) {
+    throw new BaselineError(`${label} is not a valid baseline file`, 'invalid');
+  }
+  if (json.dataLayer !== undefined && !(Array.isArray(json.dataLayer) && json.dataLayer.every(validPushGroup))) {
     throw new BaselineError(`${label} is not a valid baseline file`, 'invalid');
   }
   return json as unknown as BaselineFile;
@@ -160,6 +181,12 @@ export function compareBaseline(baseline: BaselineFile, records: RunRecords): Ba
   const epochOrder = [...records.consentEpochs].sort((x, y) => x.startT - y.startT).map((e) => e.label);
   const diff = diffShapes(baseline.keys, hitShape(records, { byPage: baseline.byPage }), { epochOrder });
   warnings.push(...diff.moved.map(describeMove));
+  if (baseline.dataLayer === undefined) {
+    warnings.push('dataLayer pushes not compared: the baseline has no push shapes (saved by 0.6.0-rc.1). Save it again to compare them.');
+  } else {
+    const pushes = diffPushes(baseline.dataLayer, pushGroups(records), { epochOrder });
+    warnings.push(...describePushDiff(pushes).map((line) => `dataLayer ${line}`));
+  }
   return {
     drift: diff.drift,
     added: diff.added.length,

@@ -337,3 +337,56 @@ test('readBaseline marks a missing file by its errno code, not by its message', 
   await writeFile(join(dir, 'bad.json'), '{bad');
   await expect(readBaseline(join(dir, 'bad.json'))).rejects.toMatchObject({ code: 'invalid' });
 });
+
+function pushTo(run: RunRecords, item: Record<string, unknown>, id: string): void {
+  run.dataLayerEvents.push({
+    type: 'dataLayerEvent', id, runId: run.run.id, stepId: null, t: 1, event: String(item.event), gtmUniqueEventId: null,
+    args: [item], isConsentCommand: false, frame: { main: true, n: 0 },
+  } as never);
+}
+
+test('a baseline holds masked push shapes and no pushed value', () => {
+  const run = makeRun(['page_view']);
+  pushTo(run, { event: 'purchase', value: 25.5, extra: { 'fake.person@example.test': 'pw-secret-value' } }, 'dle_1');
+  const baseline = buildBaseline(run, false);
+  expect(baseline.dataLayer).toEqual([
+    {
+      epoch: 'undecided', event: 'purchase', frame: 'main',
+      paths: [{ path: 'event', types: ['string'] }, { path: 'extra.(other)', types: ['string'] }, { path: 'value', types: ['number'] }],
+    },
+  ]);
+  const text = JSON.stringify(baseline);
+  for (const leak of ['25.5', 'fake.person', 'pw-secret-value']) expect(text).not.toContain(leak);
+});
+
+test('push drift is a warning and never drift', () => {
+  const saved = makeRun(['page_view']);
+  pushTo(saved, { event: 'purchase', value: 1, gone: 'x' }, 'dle_1');
+  const baseline = parseBaseline(JSON.stringify(buildBaseline(saved, false)), 'b.json');
+  const now = makeRun(['page_view']);
+  pushTo(now, { event: 'purchase', value: 'one' }, 'dle_2');
+  pushTo(now, { event: 'view_item' }, 'dle_3');
+  const summary = compareBaseline(baseline, now);
+  expect(summary.drift).toBe(false);
+  expect(summary.warnings).toEqual(
+    expect.arrayContaining([
+      'dataLayer new event view_item [epoch undecided, frame main]',
+      'dataLayer missing path gone (string) in purchase [epoch undecided, frame main]',
+      'dataLayer type change value: number -> string in purchase [epoch undecided, frame main]',
+    ]),
+  );
+});
+
+test('a baseline from 0.6.0-rc.1 has no push shapes, loads and says pushes are not compared', () => {
+  const rc1 = { baselineSchemaVersion: 1, scenario: 's.yml', site: 'localhost', byPage: false, keys: buildBaseline(makeRun(['page_view']), false).keys };
+  const baseline = parseBaseline(JSON.stringify(rc1), 'rc1.json');
+  expect(baseline.dataLayer).toBeUndefined();
+  const summary = compareBaseline(baseline, makeRun(['page_view']));
+  expect(summary.drift).toBe(false);
+  expect(summary.warnings.some((w) => w.startsWith('dataLayer pushes not compared'))).toBe(true);
+});
+
+test('a baseline with a malformed dataLayer section is invalid and the message does not quote it', () => {
+  const file = { ...buildBaseline(makeRun(['page_view']), false), dataLayer: [{ epoch: 'x', event: 'pw-secret-value', frame: 'sideways', paths: [] }] };
+  expect(() => parseBaseline(JSON.stringify(file), 'b.json')).toThrow(/not a valid baseline file$/);
+});

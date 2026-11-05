@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer build</title>
+</head>
+<body>
+<h1>DataLayer build</h1>
+<p>Build a pushes a <code>purchase</code> with <code>ecommerce.value</code> and a numeric <code>value</code>, and an <code>add_to_cart</code> from an embedded frame. Build b drops <code>ecommerce.value</code>, makes <code>value</code> a string and pushes <code>add_to_cart</code> from the top frame. Build b also pushes an event named like an email address, with a token-like key and a Shopify GID key, so the masking shows in a diff. All values are fake.</p>
+<iframe id="child" title="Embedded frame" hidden></iframe>
+<script>
+var q = new URLSearchParams(location.search);
+var build = q.get('build') === 'b' ? 'b' : 'a';
+window.dataLayer = window.dataLayer || [];
+if (q.get('child')) {
+  window.dataLayer.push({ event: 'add_to_cart', ecommerce: { currency: 'USD', items: [{ item_id: 'sku-1' }] } });
+} else {
+  var purchase = build === 'b'
+    ? { event: 'purchase', ecommerce: { currency: 'USD' }, value: '10' }
+    : { event: 'purchase', ecommerce: { currency: 'USD', value: 25.5 }, value: 10 };
+  if (build === 'b') {
+    purchase.extra = { 'gid://shopify/Product/1234567890': 'pw-secret-value-2' };
+  }
+  window.dataLayer.push(purchase);
+  if (build === 'b') {
+    var token = { event: 'fake.person@example.test' };
+    token['deadbeefdeadbeefdeadbeefdeadbeef'] = 'tok-value';
+    window.dataLayer.push(token);
+  }
+  if (build === 'b') {
+    window.dataLayer.push({ event: 'add_to_cart', ecommerce: { currency: 'USD', items: [{ item_id: 'sku-1' }] } });
+  } else {
+    document.getElementById('child').src = '/datalayer-build?child=1';
+  }
+}
+</script>
+</body>
+</html>

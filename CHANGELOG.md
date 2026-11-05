@@ -37,7 +37,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- E07 -->
 
-<!-- B07 -->
+- `diff` and `baseline` compare the masked `dataLayer` push shapes (#940). `diff` lists a gone or new event, a missing or new key path and a type change, and `diff --across-frames` treats an event that moved between frames as the same event. A baseline gets an optional `dataLayer` section. Push changes are warnings and never change the exit code. A baseline saved by 0.6.0-rc.1 still loads and warns "pushes not compared". `baselineSchemaVersion` stays 1.
 
 <!-- X07 -->
 
