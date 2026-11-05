@@ -232,6 +232,10 @@ test('diff help lists the diff options, not the run options', () => {
   expect(text).not.toContain('--network');
 });
 
+test('diff help says --all-flags also covers platform hosts', () => {
+  expect(helpText('diff')).toContain('and for platform hosts');
+});
+
 test('suite help lists the suite options', () => {
   expect(helpText('suite')).toContain('--with-handoff');
   expect(helpText('suite')).toContain('--stores');

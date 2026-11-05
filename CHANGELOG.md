@@ -16,7 +16,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - A project config without `configSchemaVersion` now says which line to add (#1085). `configSchemaVersion: 1` is in the README and the 0.6.0-rc.1 notes below.
 
-<!-- M13 -->
+- The old-runs notice, for `run` and `suite`, names the real folder. The `suite` notice prints after the payment gates, and the suite site, folder and test-payment errors now add the help hint.
 
 - Fix: a default rule, tracker, stores or scenario path that cannot be read now exits 2 with its fixed relative path. Only a missing path counts as absent. A folder or a dangling link named `*.json` in `tagreeve/autoconsent` is not listed.
 - Fix: the git-ignore warning no longer shows when a rule such as `records/**` or `*.jsonl` ignores the record files.
