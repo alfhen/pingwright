@@ -43,8 +43,8 @@ async function failureOf(path: string, valuesOf?: (page: Page) => Promise<void>)
   }
 }
 
-test('an unticked required checkbox is named', async () => {
-  expect(await failureOf('/terms-required')).toContain('Blocking controls: checkbox "I agree to the terms and conditions" (required, not ticked).');
+test('an unticked required checkbox is named by its name attribute', async () => {
+  expect(await failureOf('/terms-required')).toContain('Blocking controls: checkbox "terms" (required, not ticked).');
 });
 
 test('a control that the page marks aria-invalid after Pay is named', async () => {
@@ -77,7 +77,7 @@ test('each signal is read from the real page and no value, placeholder, error te
   expect(cityMessage).not.toBe('');
   expect(error).not.toContain(cityMessage);
   expect(error).toContain(
-    'Blocking controls: email "email" (aria-invalid), text "city" (invalid), text "region" (aria-invalid), text "postcode" (invalid), text "street" (aria-invalid), checkbox "news" (required, not ticked), text "state" (invalid), text "suburb" (invalid), text "town" (invalid), checkbox "I accept the terms" (required, not ticked).',
+    'Blocking controls: email "email" (aria-invalid), text "city" (invalid), text "region" (aria-invalid), text "postcode" (invalid), text "street" (aria-invalid), checkbox "news" (required, not ticked), text "state" (invalid), text "suburb" (invalid), text "town" (invalid), checkbox "accept_terms" (required, not ticked).',
   );
   const forbidden = [
     ...Object.values(values),
@@ -186,7 +186,7 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
   {
     name: 'a checkbox label that wraps a select, textarea, script, style, button and datalist',
     html: '<label><input type="checkbox" name="w" required> Accept <select><option>Fakeland</option></select><textarea>Faketext</textarea><script>var fakescript = 1</script><style>.fakestyle { color: red }</style><button>Fakebutton</button><datalist id="dl"><option>Fakeopt</option></datalist> terms</label>',
-    expected: 'checkbox "Accept terms" (required, not ticked)',
+    expected: 'checkbox "w" (required, not ticked)',
     forbidden: 'Fake',
   },
   {
@@ -249,8 +249,8 @@ const GUARD_CASES: { name: string; html: string; expected: string | string[]; fo
   {
     name: 'a wrapping label with an error class',
     html: '<label class="error">Terms <input type="checkbox" required></label>',
-    expected: 'checkbox "Terms" (required, not ticked)',
-    forbidden: 'Fakenothing',
+    expected: 'checkbox (required, not ticked)',
+    forbidden: 'Terms',
   },
   { name: 'aria-label name', html: '<input aria-label="Accept the privacy policy" type="checkbox" required>', expected: 'checkbox "Accept the privacy policy" (required, not ticked)', forbidden: 'Fakenothing' },
   { name: 'name attribute fallback', html: '<input name="promo_code" aria-invalid="true">', expected: 'text "promo_code" (aria-invalid)', forbidden: 'Fakenothing' },

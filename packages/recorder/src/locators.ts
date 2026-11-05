@@ -146,45 +146,10 @@ interface BlockingControl {
   reason: BlockReason;
 }
 
-/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. Clones nothing, so no page code runs and no image loads. Only a checkbox that is required and not ticked is named by its label text; every other control is named by `aria-label`, `name` or `id`, so no error text can reach a name. */
+/** Runs in the page. Reads `validity` and attributes only, never a value, and never calls `checkValidity()` or `reportValidity()`. Clones nothing, so no page code runs and no image loads. Every control is named by `aria-label`, `name` or `id` and never by page text, so no error text can reach a name. */
 function readBlockingControls(max: number): BlockingControl[] {
   const found: BlockingControl[] = [];
-  const skipped = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'OPTION', 'DATALIST', 'BUTTON', 'SCRIPT', 'STYLE']);
-  const plain = new Set(['A', 'ABBR', 'B', 'EM', 'I', 'SMALL', 'SPAN', 'STRONG', 'U']);
-  const allowedAttrs: Record<string, readonly string[]> = { A: ['href', 'title', 'target', 'rel'], ABBR: ['title'] };
-  const isPlain = (e: Element): boolean => plain.has(e.tagName) && e.getAttributeNames().every((a) => allowedAttrs[e.tagName]?.includes(a));
-  const pointsAt = (el: Element, label: Element): boolean =>
-    !!label.id && ['aria-describedby', 'aria-errormessage', 'aria-labelledby'].some((a) => (el.getAttribute(a) ?? '').split(/\s+/).includes(label.id));
-  const isErrorLabel = (el: Element, label: Element): boolean =>
-    label.hasAttribute('role') || label.hasAttribute('hidden') || label.getAttributeNames().some((a) => a.startsWith('aria-')) || pointsAt(el, label);
-  // Undefined when the label is not the only one or holds anything but text and plain inline elements: a validation library may add its error there.
-  const labelText = (el: Element, labels: NodeListOf<HTMLLabelElement> | undefined): string | undefined => {
-    if (!labels || labels.length !== 1 || isErrorLabel(el, labels[0]!)) return undefined;
-    let text = '';
-    let plainOnly = true;
-    const walker = document.createTreeWalker(labels[0]!, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => {
-        if (n.nodeType !== Node.ELEMENT_NODE) return NodeFilter.FILTER_ACCEPT;
-        const e = n as Element;
-        if (skipped.has(e.tagName)) return NodeFilter.FILTER_REJECT;
-        if (!isPlain(e)) plainOnly = false;
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeType === Node.TEXT_NODE) text += `${n.nodeValue ?? ''} `;
-    return plainOnly ? text.replace(/\s+/g, ' ').trim() : undefined;
-  };
-  const attributeName = (el: Element): string => {
-    const aria = el.getAttribute('aria-label')?.trim();
-    return aria || el.getAttribute('name') || el.id;
-  };
-  const nameOf = (el: Element, reason: BlockReason): string => {
-    if (reason === 'required, not ticked' && !el.getAttribute('aria-label')?.trim()) {
-      const text = labelText(el, (el as HTMLInputElement).labels ?? undefined);
-      if (text) return text;
-    }
-    return attributeName(el);
-  };
+  const nameOf = (el: Element): string => el.getAttribute('aria-label')?.trim() || el.getAttribute('name') || el.id;
   for (const el of document.querySelectorAll('input, select, textarea, [aria-invalid="true"]')) {
     if (el instanceof HTMLInputElement && (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' || el.type === 'reset' || el.type === 'image')) continue;
     const input = el as HTMLInputElement;
@@ -195,7 +160,7 @@ function readBlockingControls(max: number): BlockingControl[] {
     else if (el.getAttribute('aria-invalid') === 'true') reason = 'aria-invalid';
     if (!reason) continue;
     const kind = el instanceof HTMLInputElement ? el.type : (el.getAttribute('role') ?? el.tagName.toLowerCase());
-    found.push({ kind, name: nameOf(el, reason), reason });
+    found.push({ kind, name: nameOf(el), reason });
     if (found.length >= max) break;
   }
   return found;
