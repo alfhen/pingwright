@@ -40,7 +40,13 @@ export function unsafeFileTargets(markdown: string): string[] {
       targets.push(...words.slice(1));
     }
   }
-  const unquoted = targets.map((t) => t.replace(/^(["'])(.*)\1$/, '$2'));
+  // The shell expands ~ and $HOME only outside quotes, except $HOME inside double quotes.
+  const unquoted = targets.map((t) => {
+    const m = /^(["'])(.*)\1$/.exec(t);
+    if (!m) return t;
+    if (m[1] === '"' && m[2]!.startsWith('$HOME/')) return m[2]!;
+    return /^[~$]/.test(m[2]!) ? t : m[2]!;
+  });
   return unquoted.filter((t) => !allowedTarget.test(t) || /(^|\/)\.\.(\/|$)/.test(t));
 }
 
@@ -106,6 +112,10 @@ test.each([
   ['spaced descriptor redirects', '```bash\ncat > ~/a >& 2\ncat >& -\n```', []],
   ['a tee target after an input redirect', '```bash\ntee < ~/plain.txt sgtm-config.txt\n```', ['sgtm-config.txt']],
   ['a quoted home target', '```bash\ntee "$HOME/config.txt"\n```', []],
+  ['a double-quoted tilde target', '```bash\ncat > "~/x"\n```', ['"~/x"']],
+  ['a single-quoted tilde target', "```bash\ncat > '~/x'\n```", ["'~/x'"]],
+  ['a single-quoted $HOME target', "```bash\ncat > '$HOME/x'\n```", ["'$HOME/x'"]],
+  ['a quoted tilde tee target', '```bash\ntee "~/sgtm-config.txt"\n```', ['"~/sgtm-config.txt"']],
   ['a quoted relative target', '```bash\ncat > "out.txt"\n```', ['out.txt']],
   ['home targets and stderr redirects', '```bash\ncat > ~/a 2>&1\nchmod 600 ~/a\n```', []],
 ])('the target check catches %s', (_name, markdown, expected) => {
