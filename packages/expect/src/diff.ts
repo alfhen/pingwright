@@ -2,6 +2,7 @@ import { maskValuePath, stripSandboxPrefix } from '@tagreeve/decoders';
 import type { ConsentEpoch, Hit, HitIds, RunRecords } from '@tagreeve/core';
 import { consentFields } from './scenario.ts';
 import { epochForHit, judgeIndex, judgedAt } from './evaluate.ts';
+import { normalizePushGroups, type EventMap } from './event-map.ts';
 import { pushShapes, type PushFrameKind, type PushPath } from './push-shape.ts';
 
 export interface DiffOptions {
@@ -9,6 +10,8 @@ export interface DiffOptions {
   byPage?: boolean;
   /** Merges the frame kinds of the pushes, so an event that moved to another frame is the same event. */
   acrossFrames?: boolean;
+  /** Renames events and key paths of the first run to those of the second, for the `dataLayer` comparison. */
+  eventMap?: EventMap;
 }
 
 export interface DiffKey {
@@ -111,7 +114,7 @@ export function diffRuns(a: RunRecords, b: RunRecords, options: DiffOptions = {}
   const pushesA = pushGroups(a);
   const pushesB = pushGroups(b);
   if (pushesA.length > 0 || pushesB.length > 0) {
-    result.dataLayer = diffPushes(pushesA, pushesB, { acrossFrames: options.acrossFrames, epochOrder: epochOrder(b) });
+    result.dataLayer = diffPushes(pushesA, pushesB, { acrossFrames: options.acrossFrames, epochOrder: epochOrder(b), eventMap: options.eventMap });
   }
   return result;
 }
@@ -168,6 +171,8 @@ export interface PushDiffOptions {
   acrossFrames?: boolean;
   /** The labels of the current run's consent epochs, in order. A move is judged against this order. */
   epochOrder?: string[];
+  /** A user map. It renames the events and paths of the first side to the names of the second. */
+  eventMap?: EventMap;
 }
 
 function epochOrder(run: RunRecords): string[] {
@@ -230,8 +235,8 @@ const typesId = (n: PushNode) => JSON.stringify([...n.types].sort(([x], [y]) => 
 /** Compares push shapes. Nothing here is drift: the caller reports the changes as warnings. */
 export function diffPushes(a: PushGroup[], b: PushGroup[], options: PushDiffOptions = {}): PushDiff {
   const result: PushDiff = { eventsAdded: [], eventsRemoved: [], pathsAdded: [], pathsRemoved: [], typeChanges: [], moved: [], changed: false };
-  const na = pushNodes(a, options.acrossFrames ?? false);
-  const nb = pushNodes(b, options.acrossFrames ?? false);
+  const na = pushNodes(normalizePushGroups(a, options.eventMap), options.acrossFrames ?? false);
+  const nb = pushNodes(normalizePushGroups(b), options.acrossFrames ?? false);
   const gone: PushNode[] = [];
   const fresh: PushNode[] = [];
   for (const id of [...new Set([...na.keys(), ...nb.keys()])].sort()) {

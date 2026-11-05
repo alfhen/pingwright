@@ -51,7 +51,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- N07 -->
 
-<!-- A07 -->
+- `diff` and `baseline` treat a Shopify standard event and its GA4 name as the same `dataLayer` event, for example `checkout_completed` and `purchase` (#930). The table is `SHOPIFY_TO_GA4` in `@tagreeve/decoders`, shared with the `unloadGap` check. `diff --event-map <file>` renames events and key paths of the first run to those of the second. A map file error names the file and the key, never a value.
 
 <!-- M16 -->
 

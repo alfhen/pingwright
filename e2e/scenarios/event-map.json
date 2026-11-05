@@ -1,0 +1,4 @@
+{
+  "events": { "legacy_promo": "promo_selected" },
+  "paths": { "cart_update": { "cart.total": "cart.amount" } }
+}

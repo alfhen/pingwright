@@ -145,6 +145,8 @@ test.each([
   [['suite', '--across-frames'], 'only for diff'],
   [['baseline', 'save', 'r.jsonl', '--across-frames'], 'only for diff'],
   [['report', 'r.jsonl', '--html', 'o.html', '--across-frames'], 'only for diff'],
+  [['run', 's.yml', '--site', 'http://x.test', '--event-map', 'm.json'], 'only for diff'],
+  [['baseline', 'save', 'r.jsonl', '--event-map', 'm.json'], 'only for diff'],
   [['dance'], 'Unknown command'],
 ])('usage error for %j', (argv, message) => {
   expect(() => parseCli(argv)).toThrow(UsageError);
@@ -238,6 +240,7 @@ test.each(['run', 'suite', 'diff', 'baseline', 'report', 'init', 'template', 'in
 test('diff help lists the diff options, not the run options', () => {
   const text = helpText('diff');
   expect(text).toContain('--across-frames');
+  expect(text).toContain('--event-map <file>');
   expect(text).toContain('--all-flags');
   expect(text).toContain('--by-page');
   expect(text).not.toContain('--network');

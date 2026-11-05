@@ -12,6 +12,7 @@ const key = (epoch: string, vendor: string, event: string) => ({ epoch, vendor, 
 
 test('parses diff with its options', () => {
   expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--by-page', '--json'])).toEqual({ command: 'diff', a: 'a.jsonl', b: 'b.jsonl', byPage: true, acrossFrames: false, allFlags: false, json: true });
+  expect(parseCli(['diff', 'a.jsonl', 'b.jsonl', '--event-map', 'm.json'])).toMatchObject({ command: 'diff', eventMap: 'm.json' });
   expect(parseCli(['diff', 'a', 'b'])).toMatchObject({ byPage: false, allFlags: false, json: false });
   expect(parseCli(['diff', 'a', 'b', '--all-flags'])).toMatchObject({ allFlags: true });
   expect(parseCli(['diff', 'a', 'b', '--across-frames'])).toMatchObject({ acrossFrames: true });

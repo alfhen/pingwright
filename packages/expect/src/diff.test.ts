@@ -1,6 +1,7 @@
 import { newId, type ConsentEpoch, type Flag, type Hit, type Request, type RunRecords, type Step } from '@tagreeve/core';
 import { describe, expect, test } from 'vitest';
 import type { DataLayerEvent } from '@tagreeve/core';
+import { parseEventMap } from './event-map.ts';
 import { diffPushes, diffRuns, diffShapes, hitShape, pushGroups, type PushGroup, type ShapeKey, type ShapeTuple } from './diff.ts';
 
 const state = { analytics: 'denied', ads: 'denied', adUserData: 'denied', adPersonalization: 'denied' } as const;
@@ -588,5 +589,20 @@ describe('diffPushes', () => {
     expect(diffPushes([group({ paths })], [group({ epoch: 'granted', paths })], { epochOrder: order }).moved).toHaveLength(1);
     expect(diffPushes([group({ paths })], [group({ epoch: 'rejected', paths })], { epochOrder: order }).moved).toHaveLength(0);
     expect(diffPushes([group({ paths })], [group({ epoch: 'granted', paths: [] })], { epochOrder: order }).changed).toBe(true);
+  });
+
+  test('the built-in table makes a Shopify name and its GA4 name the same event', () => {
+    const paths = [{ path: 'value', types: ['number'] }];
+    const d = diffPushes([group({ event: 'checkout_completed', paths })], [group({ event: 'purchase', paths })]);
+    expect(d.changed).toBe(false);
+    expect(diffPushes([group({ event: 'custom_a', paths })], [group({ event: 'custom_b', paths })]).changed).toBe(true);
+  });
+
+  test('a user map renames an event and a path of the first side', () => {
+    const eventMap = parseEventMap(JSON.stringify({ events: { custom_a: 'custom_b' }, paths: { custom_b: { 'ecommerce.total': 'value' } } }), 'm.json');
+    const a = [group({ event: 'custom_a', paths: [{ path: 'ecommerce.total', types: ['number'] }] })];
+    const b = [group({ event: 'custom_b', paths: [{ path: 'value', types: ['number'] }] })];
+    expect(diffPushes(a, b, { eventMap }).changed).toBe(false);
+    expect(diffPushes(a, b).changed).toBe(true);
   });
 });
