@@ -27,7 +27,7 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 <!-- W07 -->
 
-<!-- C07 -->
+- Added `tagreeve template web`. It prints the web tag reporter's GTM template. `--json` prints the template with the setup fields and steps, so an agent can install it with its own GTM access. Tagreeve never calls the GTM API.
 
 <!-- U07 -->
 
