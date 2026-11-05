@@ -47,6 +47,9 @@ test('old records in ./runs/ give the notice once, and --out runs gives none', a
   await writeFile(join(cwd, 'runs', 'run_old.jsonl'), '');
   const noisy = await runIn(cwd, []);
   expect(noisy.stderr.split(NOTICE).length - 1).toBe(1);
+  expect(noisy.stderr).not.toContain('<date>');
+  const date = (JSON.parse(noisy.stdout) as { path: string }).path.match(/\d{4}-\d{2}-\d{2}/)![0];
+  expect(noisy.stderr).toContain(`records now go to ${join('tagreeve', 'runs', date)}/.`);
   const quiet = await runIn(cwd, ['--out', 'runs']);
   expect((await readdir(join(cwd, 'runs'))).filter((n) => /^run_.*\.jsonl$/.test(n) && n !== 'run_old.jsonl')).toHaveLength(1);
   expect(quiet.stderr).not.toContain(NOTICE);

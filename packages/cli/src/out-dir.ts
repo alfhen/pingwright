@@ -17,11 +17,11 @@ export function resolveOutDir({ out, now, label, base = 'tagreeve/runs' }: OutDi
 
 export const LABEL_PATTERN = /^[a-z0-9-]{1,40}$/;
 
-export function oldRunsNoticeText(folder = 'tagreeve/runs/<date>'): string {
+export function oldRunsNoticeText(folder: string): string {
   return `Note: records now go to ${folder}/. ./runs/ holds older records; pass --out runs to keep using it.\n`;
 }
 
-export async function oldRunsNotice(cwd: string, folder?: string): Promise<string | undefined> {
+export async function oldRunsNotice(cwd: string, folder: string): Promise<string | undefined> {
   let names: string[];
   try {
     names = await readdir(join(cwd, 'runs'));

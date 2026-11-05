@@ -388,7 +388,7 @@ export async function runCommand(args: RunArgs, io: Io): Promise<number> {
   warnTestLoopbackHosted(io);
   const out = resolveOutDir({ out: args.out, now: new Date(), label: args.label, base: loaded?.config.out });
   if (args.out === undefined && loaded?.config.out === undefined) {
-    const notice = await oldRunsNotice(process.cwd());
+    const notice = await oldRunsNotice(process.cwd(), out);
     if (notice) io.stderr(notice);
   }
   await warnIfNotIgnored(out, io.stderr);
