@@ -480,3 +480,27 @@ test('the Defaults line names the project config first, and a --config path is n
   expect(text).toContain('Defaults: tagreeve/config.yml (project config), tagreeve/trackers.json (tracker list)');
   expect(formatSummary({ ...base, defaults: [{ setting: 'config', path: 'tagreeve/config.yml' }] })).toContain('Defaults: tagreeve/config.yml (project config)');
 });
+
+test('the dataLayer line counts pushes and events, and no pushed value reaches the summary', () => {
+  const dle = (event: string, id: number) => ({ id: `dle_${id}`, stepId: null, event, args: [{ event, secret: 'value-1' }], isConsentCommand: false, frame: { main: true, n: 0 } });
+  const records = {
+    run: { id: 'run_1' },
+    hits: [],
+    consentEpochs: [],
+    flags: [],
+    steps: [],
+    dataLayerEvents: [dle('purchase', 1), dle('purchase', 2), dle('add_to_cart', 3), dle('view_item', 4), dle('page_view', 5)],
+  } as unknown as RunRecords;
+  const summary = buildSummary(records, [result(true)], 'p');
+  expect(summary.dataLayer!.pushes).toBe(5);
+  const text = formatSummary(summary);
+  expect(text).toContain('dataLayer: 5 pushes, 4 events (add_to_cart, page_view, purchase, …); shapes in --json');
+  expect(JSON.stringify(summary)).not.toContain('value-1');
+});
+
+test('a run with no pushes has no dataLayer line or field', () => {
+  const records = { run: { id: 'run_1' }, hits: [], consentEpochs: [], flags: [], steps: [], dataLayerEvents: [] } as unknown as RunRecords;
+  const summary = buildSummary(records, [result(true)], 'p');
+  expect(summary).not.toHaveProperty('dataLayer');
+  expect(formatSummary(summary)).not.toContain('dataLayer');
+});

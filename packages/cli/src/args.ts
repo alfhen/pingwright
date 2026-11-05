@@ -12,7 +12,7 @@ export class UsageError extends Error {
   }
 }
 
-const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'init', 'install-browser', 'server-container'] as const;
+const COMMANDS = ['run', 'suite', 'diff', 'baseline', 'report', 'init', 'template', 'install-browser', 'server-container'] as const;
 
 export function usageHint(command: string | undefined): string {
   return `Run tagreeve ${command ? `${command} ` : ''}--help for the options.`;
@@ -112,7 +112,7 @@ export interface ServerContainerArgs {
   action: 'build';
 }
 
-export type Command = RunArgs | { command: 'init'; json: boolean } | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
+export type Command = RunArgs | { command: 'init'; json: boolean } | { command: 'template'; name: 'web'; json: boolean } | DiffArgs | BaselineArgs | ReportArgs | SuiteArgs | ServerContainerArgs | { command: 'install-browser' } | { command: 'version' } | { command: 'help'; topic?: HelpTopic };
 
 export type HelpTopic = (typeof COMMANDS)[number];
 
@@ -123,6 +123,7 @@ export const USAGE = `Usage:
   tagreeve report <run.jsonl | suite-dir> --html <out.html>
   tagreeve suite [<dir>] [--site <url> | --stores <stores.json>] [--variant published] [--variant name=override.json] [options]
   tagreeve init [--json]
+  tagreeve template web [--json]
   tagreeve server-container build
   tagreeve install-browser
   tagreeve --version
@@ -241,6 +242,15 @@ Options:
   -h, --help                 Show this help
 `;
 
+const TEMPLATE_USAGE = `Usage: tagreeve template web [--json]
+
+Prints the GTM template of the web tag reporter. Import it in a GTM workspace as a custom tag template. It needs no network and never calls the GTM API.
+
+Options:
+  --json                     Print one JSON object with the template text and the setup steps for an agent
+  -h, --help                 Show this help
+`;
+
 const INSTALL_BROWSER_USAGE = `Usage: tagreeve install-browser
 
 Installs the Chromium that Tagreeve drives. It takes no options.
@@ -264,6 +274,7 @@ const HELP_TEXT: Record<HelpTopic, string> = {
   baseline: BASELINE_USAGE,
   report: REPORT_USAGE,
   init: INIT_USAGE,
+  template: TEMPLATE_USAGE,
   'install-browser': INSTALL_BROWSER_USAGE,
   'server-container': SERVER_CONTAINER_USAGE,
 };
@@ -384,6 +395,12 @@ function parseCommand(argv: string[]): Command {
     const other = Object.keys(values).find((key) => key !== 'json');
     if (other) throw new UsageError(`init does not take --${other}.`);
     return { command: 'init', json: values.json ?? false };
+  }
+  if (command === 'template') {
+    if (rest[0] !== 'web' || rest.length !== 1) throw new UsageError('template needs a name: web');
+    const other = Object.keys(values).find((key) => key !== 'json');
+    if (other) throw new UsageError(`template does not take --${other}.`);
+    return { command: 'template', name: 'web', json: values.json ?? false };
   }
   if (command === 'install-browser') {
     if (rest.length) throw new UsageError('install-browser takes no arguments');

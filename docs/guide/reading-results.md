@@ -10,6 +10,7 @@ Hits
   sgtm: (no event) x1
   meta: PageView x1
   google-ads: page_view x1
+dataLayer: 6 pushes, 3 events (add_to_cart, page_view, view_item); shapes in --json
 Consent epochs
   undecided (to end)
 Flags
@@ -33,11 +34,12 @@ Result: fail (3 of 7)
 Record: tagreeve/runs/2026-11-03/run_01M66G9DA0714WFS5QHQM5A0NX.jsonl
 ```
 
-The summary has five parts:
+The summary has six parts:
 
 | Part | What it shows |
 | --- | --- |
 | Hits | Each vendor and event, and how many times it was sent. |
+| dataLayer | The number of pushes to the `dataLayer` and the event names. Shown when the page pushed something. |
 | Consent epochs | The periods of consent in the run. |
 | Flags | Things worth a look. Some flags have a built-in check that fails the run, such as `unknownDestination`. Other flags only inform. |
 | Expectations | Your expectations and the built-in checks, each with PASS, FAIL or WARN. |
@@ -51,6 +53,10 @@ This is the full output. It is not shortened. Here is how to read the less obvio
 - `sandboxPageUrl` is a flag for a hit that gives a sandboxed iframe's address as the page. A sandboxed iframe is a small page inside your page with limited rights. Shopify uses one for its custom pixels.
 - `(2 before narrowing)` is the number of hits that matched `vendor` in the whole run. Tagreeve then kept only the hits that `before: consent` selects. Here both hits stayed.
 - `evidence` lists the IDs of the records behind the failure.
+
+## What the page pushed to the dataLayer
+
+With `--json`, the summary has `dataLayer` with the shape of each push: the event, the frame it came from, how many times it was pushed, the key paths with their types, and the IDs of the records. Compare the shapes before and after you rebuild a GTM config to see whether the page still sends the same data. An array index reads `[*]`, so `items[3].item_id` is `items[*].item_id`. A key or event name that looks like a value, such as an email, a Shopify GID or a token, reads `(other)`. No pushed value is printed. The full push, with its values, is in the record file.
 
 ## Hits sent by the server container
 

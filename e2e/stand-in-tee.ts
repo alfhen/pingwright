@@ -6,7 +6,11 @@ import type { StandInEnv } from '../fixtures/site/src/stand-in-container.ts';
 
 // The runner stops a seam command with SIGKILL, so the stand-in runs in this process: a child
 // would be orphaned. The tee file sits next to the CA file, which the runner always passes.
-const target = join(dirname(process.env.NODE_EXTRA_CA_CERTS ?? ''), 'stand-in-stderr.log');
+if (!process.env.NODE_EXTRA_CA_CERTS) {
+  console.error('NODE_EXTRA_CA_CERTS is not set');
+  process.exit(1);
+}
+const target = join(dirname(process.env.NODE_EXTRA_CA_CERTS), 'stand-in-stderr.log');
 const write = process.stderr.write.bind(process.stderr) as (chunk: string | Uint8Array, ...rest: unknown[]) => boolean;
 process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
   appendFileSync(target, chunk);

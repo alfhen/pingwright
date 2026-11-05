@@ -218,7 +218,7 @@ Tagreeve will not change GTM containers or sign in to Google. An agent that edit
 | `decoders` | One plugin per vendor, with synthetic fixtures as tests | 0.5 (GA4, Google Ads, Meta, Meta Conversions API, Pinterest, Stape, server-container data client, tracker list; hit field names) |
 | `consent` | Banner handling through DuckDuckGo autoconsent, Consent Mode probe, epochs | 0.1 |
 | `expect` | Scenario format, expectations, `deniedIdentifiers`, diff engine | 0.5 |
-| `cli` | `tagreeve run`, `diff`, `suite`, `report`, `baseline`, `server-container build`, `install-browser` | 0.5 |
+| `cli` | `tagreeve run`, `diff`, `suite`, `report`, `baseline`, `server-container build`, `template web`, `install-browser` | 0.5 |
 | `gtm` | Tag-firing reporter templates | not built yet |
 | `platforms/shopify` | Custom-pixel bridge, sandbox URL handling, checkout handoff | not built yet |
 

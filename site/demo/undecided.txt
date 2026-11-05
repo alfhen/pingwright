@@ -3,6 +3,7 @@ Hits
   sgtm: (no event) x2
   meta: PageView x2
   google-ads: page_view x2, view_item x1
+dataLayer: 13 pushes, 6 events (consent default, gtag config, gtag js, …); shapes in --json
 Consent epochs
   undecided (to end)
 Flags
@@ -11,17 +12,17 @@ Flags
 Expectations
   FAIL mustNot: {"vendor":["meta","google-ads"],"before":"consent"}
        Expected no matching hits before consent, found 5 matching hits (5 before narrowing).
-       evidence: hit_01M6NM9FGE4D5Z9WBRTM3Z9YBH, hit_01M6NM9FGGCTQQABXV82STR7J9, hit_01M6NM9FGGCTQQABXV82STR7JD, hit_01M6NM9FGH05E1HYYCB8ZK9SKG, hit_01M6NM9FGH05E1HYYCB8ZK9SKH
+       evidence: hit_01M6NWFSKR6EJZ9ZH24X8M0EA6, hit_01M6NWFSKR6EJZ9ZH24X8M0EA8, hit_01M6NWFSKS3411XNEVD8GRC8QZ, hit_01M6NWFSKS3411XNEVD8GRC8R1, hit_01M6NWFSKS3411XNEVD8GRC8R2
   PASS must: {"vendor":"ga4","event":"page_view","count":">=2"}
-       evidence: hit_01M6NM9FGBFWMXPTRH8GQTY8Z0, hit_01M6NM9FGFBJNKV64YVEV71H13, hit_01M6NM9FGFBJNKV64YVEV71H14, hit_01M6NM9FGGCTQQABXV82STR7JA, hit_01M6NM9FGGCTQQABXV82STR7JC and 1 more
+       evidence: hit_01M6NWFSKJ1KN977GX3D5C0J58, hit_01M6NWFSKN6Y6EX0Z0FTAJ65SW, hit_01M6NWFSKR6EJZ9ZH24X8M0EA7, hit_01M6NWFSKR6EJZ9ZH24X8M0EA9, hit_01M6NWFSKS3411XNEVD8GRC8QY and 1 more
   PASS builtin: unknownDestination
-       evidence: flg_01M6NM9FGQET8EE4V4Y872YGGC, flg_01M6NM9FGR6H04ZXCCCY9RA54E
+       evidence: flg_01M6NWFSKVAV6027Q8WHP8X1AT, flg_01M6NWFSKW8DKDH4K8VSSFZP3C
   WARN builtin: sandboxPageUrl
        Expected no hit to carry a sandbox URL as its page, found 2: staging.northwind.example/web-pixels@0.0.0-fixture/sandbox/modern/.
-       evidence: hit_01M6NM9FGFBJNKV64YVEV71H13, hit_01M6NM9FGGCTQQABXV82STR7JC
+       evidence: hit_01M6NWFSKN6Y6EX0Z0FTAJ65SW, hit_01M6NWFSKS3411XNEVD8GRC8QY
   PASS builtin: deniedIdentifiers
   PASS builtin: earlyIdentifiers
   PASS builtin: consentModeSetup
   PASS builtin: possibleRealData
 Result: fail (1 of 8) with 1 warning
-Record: runs/run_01M6NM95TRBZ5JH8M85TEGPHQQ.jsonl
+Record: runs/run_01M6NWFJV3CX90PVHAMDYFWE4S.jsonl

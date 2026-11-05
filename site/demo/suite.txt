@@ -7,8 +7,8 @@ reject      FAIL: 2 rules
 undecided   FAIL: 1 rule
 
 Records
-  accept published: runs/suite_01M6NMA66W2KFGM5XVZP4FT6R3/accept.published.jsonl
-  reject published: runs/suite_01M6NMA66W2KFGM5XVZP4FT6R3/reject.published.jsonl
-  undecided published: runs/suite_01M6NMA66W2KFGM5XVZP4FT6R3/undecided.published.jsonl
+  accept published: runs/suite_01M6NWG8861S3NNKFWT2D5QWGB/accept.published.jsonl
+  reject published: runs/suite_01M6NWG8861S3NNKFWT2D5QWGB/reject.published.jsonl
+  undecided published: runs/suite_01M6NWG8861S3NNKFWT2D5QWGB/undecided.published.jsonl
 
-Manifest: runs/suite_01M6NMA66W2KFGM5XVZP4FT6R3/suite.json
+Manifest: runs/suite_01M6NWG8861S3NNKFWT2D5QWGB/suite.json

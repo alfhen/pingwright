@@ -88,11 +88,16 @@ test('identity.hashesMatch fails a plain ct, zp or country on a Conversions API 
   const plain = run([capiHit(good, { ct: [identity.city] })], rule);
   expect(plain.pass).toBe(false);
   expect(plain.message).toContain('unhashed city');
-  expect(plain.message).not.toContain(identity.city);
   const zip = run([capiHit(good, { zp: ['00000'] })], rule);
   expect(zip.pass).toBe(false);
   expect(zip.message).toContain('plain postal code');
   expect(zip.message).not.toContain('hashed postal code values');
+  for (const text of [plain.message, zip.message]) {
+    expect(text).not.toContain(identity.city);
+    expect(text).not.toContain(identity.email);
+    expect(text).not.toContain(good);
+    expect(text).not.toContain('00000');
+  }
 });
 
 test('identity.hashesMatch counts a Conversions API hit once however many plain address fields it carries', () => {
@@ -102,6 +107,7 @@ test('identity.hashesMatch counts a Conversions API hit once however many plain 
   const result = run([capiHit(good), bad], rule);
   expect(result.pass).toBe(false);
   expect(result.message).toContain('(1 of 2 hits)');
+  expect(result.message).toContain('a plain city, postal code and country, not a hash (1 of 2 hits)');
   expect(result.evidence).toEqual([bad.hit.id]);
 });
 
@@ -122,6 +128,12 @@ test('identity.hashesMatch checks the second value of ct and fn', () => {
   const wrongCity = run([capiHit(good, { ct: [city, 'c'.repeat(64)] })], rule);
   expect(wrongCity.message).toContain('Not matching: user_data.city.1.');
   expect(wrongCity.message).toMatch(/Matching: email\.$/);
+  for (const text of [wrongCity.message]) {
+    expect(text).not.toContain(identity.city);
+    expect(text).not.toContain(city);
+    expect(text).not.toContain('c'.repeat(64));
+    expect(text).not.toContain(good);
+  }
   expect(run([capiHit(good, { fn: [sha(identity.firstName.toLowerCase()), 'c'.repeat(64)] })], rule).pass).toBe(false);
   const filtered = run([capiHit(good, { ct: [city, identity.city] })], '{ vendor: meta-capi, ids.hashes.ct.matchesIdentity: true }');
   expect(filtered.pass).toBe(false);

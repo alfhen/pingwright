@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from 'vitest';
+import { readRun } from '../packages/core/src/index.ts';
 import { run, runText } from './cli-helpers.ts';
 
 const SECRETS = ['pw-flag.user', 'pw-flag.user%40example.test', 'pw-flag.user@example.test', '34b6319597f5649a26a95fff3b8cbd56ddb809f5b88647df59523a8d5f51979c', 'pwfake-cookie-value-0001'];
@@ -10,6 +11,9 @@ test('flag detail in the summary shows query names only, and the record keeps th
   const text = await runText('flag-detail-privacy');
   const path = /^Record: (.+)$/m.exec(text.stdout)![1]!;
   const recordText = await readFile(path, 'utf8');
+  const textBypass = (await readRun(path)).flags.filter((f) => f.kind === 'stubBypass');
+  expect(textBypass.length).toBeGreaterThan(0);
+  expect(textBypass.some((f) => f.detail.includes(SECRETS[3]!))).toBe(true);
 
   const kinds = new Set(records.flags.map((f) => f.kind));
   expect(kinds).toContain('unknownDestination');

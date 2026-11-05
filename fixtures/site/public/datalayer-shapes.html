@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer shapes</title>
+</head>
+<body>
+<h1>DataLayer shapes</h1>
+<p>Pushes a <code>purchase</code> with items, a key that is a fake email, an event named with a fake email, a Shopify GID key and a consent default. An embedded frame pushes a key that is a fake checkout token. All values are fake.</p>
+<iframe id="child" title="Embedded frame"></iframe>
+<script>
+var q = new URLSearchParams(location.search);
+window.dataLayer = window.dataLayer || [];
+if (q.get('child')) {
+  var token = {};
+  token['deadbeefdeadbeefdeadbeefdeadbeef'] = 'tok-value';
+  window.dataLayer.push({ event: 'embedded_push', checkout: token });
+} else {
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag('consent', 'default', { ad_storage: 'denied', analytics_storage: 'denied' });
+  var extra = { 'fake.person@example.test': 'pw-secret-value-1', 'gid://shopify/Product/1234567890': 'pw-secret-value-2' };
+  window.dataLayer.push({
+    event: 'purchase',
+    ecommerce: {
+      value: 25.5,
+      currency: 'USD',
+      items: [{ item_id: 'sku-1', price: 10 }, { item_id: 'sku-2', price: 15.5 }, { item_id: 'sku-3', price: 0 }, { item_id: 'sku-4', price: 0 }],
+    },
+    extra: extra,
+  });
+  window.dataLayer.push({ event: 'fake.person@example.test', note: 'pw-secret-value-3' });
+  document.getElementById('child').src = '/datalayer-shapes?child=1';
+}
+</script>
+</body>
+</html>

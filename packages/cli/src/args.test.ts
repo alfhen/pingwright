@@ -51,6 +51,12 @@ test('other commands', () => {
   expect(parseCli(['init', '--json'])).toEqual({ command: 'init', json: true });
   expect(() => parseCli(['init', '--site', 'https://x.example'])).toThrow('init does not take --site');
   expect(() => parseCli(['init', 'x'])).toThrow('init takes no arguments');
+  expect(parseCli(['template', 'web'])).toEqual({ command: 'template', name: 'web', json: false });
+  expect(parseCli(['template', 'web', '--json'])).toEqual({ command: 'template', name: 'web', json: true });
+  expect(() => parseCli(['template'])).toThrow('template needs a name');
+  expect(() => parseCli(['template', 'server'])).toThrow('template needs a name');
+  expect(() => parseCli(['template', 'web', 'x'])).toThrow('template needs a name');
+  expect(() => parseCli(['template', 'web', '--site', 'https://x.example'])).toThrow('template does not take --site');
   expect(parseCli([])).toEqual({ command: 'help' });
   expect(parseCli(['run', '--help'])).toEqual({ command: 'help', topic: 'run' });
   expect(parseCli(['--help'])).toEqual({ command: 'help' });
@@ -220,7 +226,7 @@ test('an unknown option is one short line', () => {
   }
 });
 
-test.each(['run', 'suite', 'diff', 'baseline', 'report', 'init', 'install-browser', 'server-container'] as const)('%s --help prints the help of that command', (command) => {
+test.each(['run', 'suite', 'diff', 'baseline', 'report', 'init', 'template', 'install-browser', 'server-container'] as const)('%s --help prints the help of that command', (command) => {
   expect(parseCli([command, '--help'])).toEqual({ command: 'help', topic: command });
   expect(helpText(command)).toContain(`Usage: tagreeve ${command}`);
 });
@@ -230,6 +236,10 @@ test('diff help lists the diff options, not the run options', () => {
   expect(text).toContain('--all-flags');
   expect(text).toContain('--by-page');
   expect(text).not.toContain('--network');
+});
+
+test('diff help says --all-flags also covers platform hosts', () => {
+  expect(helpText('diff')).toContain('and for platform hosts');
 });
 
 test('suite help lists the suite options', () => {
