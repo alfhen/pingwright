@@ -43,6 +43,7 @@ export function parseEventMap(text: string, file: string): EventMap {
     for (const [from, to] of Object.entries(renames)) {
       if (!PATH_NAME.test(from)) throw new Error(`${file}: paths.${event} has a key that is not a key path.`);
       if (typeof to !== 'string' || (to !== ROOT && !PATH_NAME.test(to))) throw new Error(`${file}: paths.${event}.${from} must be a key path.`);
+      if (from === ROOT && to === ROOT) throw new Error(`${file}: paths.${event}.${from} must name a key path to move the root under.`);
       out[from] = to;
     }
     map.paths[event] = out;
@@ -55,7 +56,7 @@ export function builtInEventName(event: string): string {
   return /^(consent|gtag) /.test(event) ? event : ga4EventName(event);
 }
 
-// A rename to "." moves the paths below the source to the root, and drops the source path itself.
+// A rename to "." moves the paths below the source to the root, and drops the source path itself. A rename from "." moves every root path under the target.
 function renamePath(path: string, renames: Record<string, string>): string | undefined {
   for (const [from, to] of Object.entries(renames)) {
     if (path === from) return to === ROOT ? undefined : to;
@@ -73,6 +74,12 @@ export function mapPushGroups(groups: PushGroup[], rename: (event: string) => st
     const event = rename(g.event);
     const renames = Object.hasOwn(paths, event) ? paths[event]! : undefined;
     if (!renames) return { ...g, event };
+    const under = Object.hasOwn(renames, ROOT) ? renames[ROOT]! : undefined;
+    if (under !== undefined) {
+      // A gtag event push has no `event` key; the object push it maps to has one.
+      const moved = g.paths.map((p) => ({ ...p, path: p.path.startsWith('[') ? `${under}${p.path}` : `${under}.${p.path}` }));
+      return { ...g, event, paths: g.paths.some((p) => p.path === 'event') ? g.paths : [{ path: 'event', types: ['string'] }, ...moved] };
+    }
     // A root rename maps an object push to a gtag event push, which has no `event` key.
     const toGtag = Object.values(renames).includes(ROOT);
     const mapped: PushGroup['paths'] = [];

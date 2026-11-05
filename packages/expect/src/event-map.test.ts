@@ -75,4 +75,17 @@ describe('normalizePushGroups', () => {
     const map = parseEventMap('{"paths":{"purchase":{"ecommerce":"."}}}', 'm.json');
     expect(normalizePushGroups([group('purchase', ['event', 'ecommerce', 'ecommerce[*]'])], map)[0]!.paths.map((p) => p.path)).toEqual(['[*]']);
   });
+
+  test('a rename from the root maps a gtag event push to an object push', () => {
+    const map = parseEventMap('{"paths":{"purchase":{".":"ecommerce"}}}', 'm.json');
+    const gtag = group('purchase', ['value', 'items[*].id', '[*]']);
+    const object = group('purchase', ['event', 'ecommerce.value', 'ecommerce.items[*].id', 'ecommerce[*]']);
+    expect(normalizePushGroups([gtag], map)[0]!.paths.map((p) => p.path).sort()).toEqual(['ecommerce.items[*].id', 'ecommerce.value', 'ecommerce[*]', 'event']);
+    expect(diffPushes([gtag], [object], { eventMap: map }).changed).toBe(false);
+    expect(diffPushes([gtag], [object]).changed).toBe(true);
+  });
+
+  test('a root to root rename is rejected', () => {
+    expect(() => parseEventMap('{"paths":{"purchase":{".":"."}}}', 'm.json')).toThrow('paths.purchase');
+  });
 });
