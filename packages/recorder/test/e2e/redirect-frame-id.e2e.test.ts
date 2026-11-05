@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { recordVisit } from '../../src/index.ts';
+import { launchRecorder } from '../../src/index.ts';
 
 let server: Server;
 let port: number;
@@ -37,7 +37,12 @@ afterAll(async () => {
 });
 
 test('a redirected hit from the top frame does not cover a push from an embedded frame with the same URL', async () => {
-  const { records } = await recordVisit({ networkMode: 'stub', outDir, site: `http://localhost:${port}`, startUrl: `http://localhost:${port}/`, waitMs: 1500 });
+  const startUrl = `http://localhost:${port}/`;
+  const recorder = await launchRecorder({ networkMode: 'stub', outDir, site: `http://localhost:${port}` });
+  await recorder.visit(startUrl);
+  await recorder.wait(1500);
+  const waitEnd = Date.now();
+  const { records } = await recorder.close();
   const hop = records.requests.find((q) => q.initiator === 'redirect' && q.url.includes('en=other_frame_ga'));
   expect(hop).toBeDefined();
   expect(hop!.frameUrl).toBe(`http://localhost:${port}/`);
@@ -46,6 +51,7 @@ test('a redirected hit from the top frame does not cover a push from an embedded
   const hit = records.hits.find((h) => h.requestId === hop!.id);
   expect(hit?.vendor).toBe('ga4');
   expect(hit!.t).toBeGreaterThanOrEqual(push!.t);
+  expect(hit!.t).toBeLessThan(waitEnd);
   const gaps = records.flags.filter((f) => f.kind === 'unloadGap');
   expect(gaps).toHaveLength(1);
   expect(gaps[0]!.recordIds).toEqual([push!.id]);

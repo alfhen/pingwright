@@ -55,6 +55,14 @@ async function start(extra: Partial<Parameters<typeof createRecordingProxy>[0]> 
   return proxy;
 }
 
+/** A proxy that opens when it should have been refused is kept in `proxy`, so afterEach closes it. */
+function openForRefusal(options: Parameters<typeof createRecordingProxy>[0]): Promise<RecordingProxy> {
+  return createRecordingProxy(options).then((opened) => {
+    proxy = opened;
+    return opened;
+  });
+}
+
 function basic(p: RecordingProxy, secret = p.credential): string {
   return `Basic ${Buffer.from(`${p.username}:${secret}`).toString('base64')}`;
 }
@@ -302,9 +310,7 @@ describe('recording proxy', () => {
   });
 
   it.each(['0.0.0.0', '0', '::', '::0', '[::]', '0:0:0:0:0:0:0:0', '0000::', '::ffff:0.0.0.0', ''])('refuses the unspecified address %j', async (host) => {
-    await expect(
-      createRecordingProxy({ host, port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) }),
-    ).rejects.toThrow(/wildcard/);
+    await expect(openForRefusal({ host, port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) })).rejects.toThrow(/wildcard/);
   });
 
   const loopbackName = ['lo0', 'lo'].find((name) => networkInterfaces()[name]?.some((entry) => entry.family === 'IPv6'));
@@ -312,7 +318,7 @@ describe('recording proxy', () => {
   it.skipIf(!loopbackName)('refuses a scoped unspecified host through the check after listen', async () => {
     const host = `::%${loopbackName}`;
     const options = { host, port: 0, ca, handler: () => ({ status: 200 }), forward: () => ({ status: 200 }) };
-    await expect(createRecordingProxy(options)).rejects.toThrow(/wildcard/);
+    await expect(openForRefusal(options)).rejects.toThrow(/wildcard/);
   });
 
   it('rejects within 1 s when a client is connected before the address check', async () => {
