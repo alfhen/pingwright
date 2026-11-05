@@ -47,7 +47,7 @@ test('run --label with no --out writes to tagreeve/runs/<date>-<label>/ and stor
   expect(names.some((n) => /^run_.*\.jsonl$/.test(n))).toBe(true);
   const records = await readRun(join(cwd, summary.path));
   expect(records.run.label).toBe('ca-307-live');
-  expect(records.run.recordSchemaVersion).toBe(4);
+  expect(records.run.recordSchemaVersion).toBe(5);
 }, 120_000);
 
 test('--label with --out uses the folder as given and still stores the label', async () => {
