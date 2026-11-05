@@ -681,20 +681,20 @@ test('labelRecord writes the label, the store and the variant on the run line an
     await writeFile(path, `${JSON.stringify({ type: 'run', id: 'run_1', scenario: 's' })}\n{"type":"step","id":"step_1"}\n`);
     return path;
   };
-  const labelled = await labelRecord(await writeRun('a.jsonl'), { label: 'x', out: root });
+  const labelled = await labelRecord(await writeRun('a.jsonl'), { label: 'x', out: root, site: 'https://x.example.com' });
   expect(labelled).toBe(join(root, 'a.jsonl'));
   const [first, second] = (await readFile(labelled, 'utf8')).split('\n');
   expect(JSON.parse(first!)).toMatchObject({ id: 'run_1', label: 'x' });
   expect(JSON.parse(first!)).not.toHaveProperty('variant');
   expect(second).toBe('{"type":"step","id":"step_1"}');
 
-  const moved = await labelRecord(await writeRun('b.jsonl'), { label: 'x', store: 'se', variant: { name: 'ws', fileStem: 'a.se' }, out: root });
+  const moved = await labelRecord(await writeRun('b.jsonl'), { label: 'x', store: 'se', variant: { name: 'ws', fileStem: 'a.se' }, out: root, site: 'https://shop.example.se/p?t=1' });
   expect(moved).toBe(join(root, 'a.se.ws.jsonl'));
-  expect(JSON.parse((await readFile(moved, 'utf8')).split('\n')[0]!)).toMatchObject({ label: 'x', store: 'se', variant: 'ws' });
+  expect(JSON.parse((await readFile(moved, 'utf8')).split('\n')[0]!)).toMatchObject({ label: 'x', store: 'se', variant: 'ws', site: 'https://shop.example.se' });
 
   const plain = await writeRun('c.jsonl');
   const before = await readFile(plain, 'utf8');
-  expect(await labelRecord(plain, { out: root })).toBe(plain);
+  expect(await labelRecord(plain, { out: root, site: 'https://x.example.com' })).toBe(plain);
   expect(await readFile(plain, 'utf8')).toBe(before);
 });
 
@@ -978,12 +978,13 @@ test('a --stores cell record holds the store name and none of the store site, pa
   const run = async (spec: RunSpec): Promise<RunOutcome> => {
     await mkdir(out, { recursive: true });
     const path = join(out, `raw-${written.length}.jsonl`);
-    await writeFile(path, `${JSON.stringify({ type: 'run', id: 'run_1', scenario: spec.scenarioName })}\n`);
+    await writeFile(path, `${JSON.stringify({ type: 'run', id: 'run_1', scenario: spec.scenarioName, site: spec.site })}\n`);
     written.push(await readFile(await labelRecord(path, spec), 'utf8'));
     return pass;
   };
   expect(await suiteCommand(args(dir, out, { site: undefined, stores }), capture().io, { run })).toBe(0);
   const runLine = JSON.parse(written[0]!.split('\n')[0]!) as Record<string, unknown>;
   expect(runLine.store).toBe('se');
-  for (const leak of ['token=abc', 'private', 'pw-secret-value', 'shop.example.se']) expect(written[0]).not.toContain(leak);
+  expect(runLine.site).toBe('https://shop.example.se');
+  for (const leak of ['token=abc', 'private', 'pw-secret-value']) expect(written[0]).not.toContain(leak);
 });

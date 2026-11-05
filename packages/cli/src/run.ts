@@ -193,15 +193,20 @@ export function warnTestGtmOrigin(io: Io): void {
   if (origin) io.stderr(`Warning: ${TEST_GTM_ORIGIN_ENV} is set. gtm.js is fetched from ${origin}. This is for tests only.\n`);
 }
 
-export async function labelRecord(path: string, spec: Pick<RunSpec, 'label' | 'store' | 'variant' | 'out'>): Promise<string> {
-  const { label, store, variant, out } = spec;
+/** A store cell record keeps the origin only: a store site may carry a path or query with a token. */
+function storeCellSite(site: string): string {
+  return new URL(site).origin;
+}
+
+export async function labelRecord(path: string, spec: Pick<RunSpec, 'label' | 'store' | 'variant' | 'out' | 'site'>): Promise<string> {
+  const { label, store, variant, out, site } = spec;
   if (label === undefined && store === undefined && !variant) return path;
   const text = await readFile(path, 'utf8');
   const newline = text.indexOf('\n');
   const run = {
     ...(JSON.parse(text.slice(0, newline)) as Run),
     ...(label !== undefined && { label }),
-    ...(store !== undefined && { store }),
+    ...(store !== undefined && { store, site: storeCellSite(site) }),
     ...(variant && { variant: variant.name }),
   };
   await writeFile(path, `${JSON.stringify(run)}${text.slice(newline)}`);
@@ -284,7 +289,10 @@ export async function executeRun(spec: RunSpec, rawIo: Io): Promise<RunOutcome> 
 
   path = await labelRecord(path, spec);
   if (spec.label !== undefined) records.run.label = spec.label;
-  if (spec.store !== undefined) records.run.store = spec.store;
+  if (spec.store !== undefined) {
+    records.run.store = spec.store;
+    records.run.site = storeCellSite(spec.site);
+  }
   if (variant) records.run.variant = variant.name;
   let results: Result[] = evaluate(allRecords(records), parsed);
   if (scrubber) results = scrubber.deep(results);
