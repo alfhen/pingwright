@@ -25,6 +25,8 @@ const CONFIG_OPTION_KEYS = ['allowUnknownDestination', 'builtins', 'firstPartyHo
 /** Refused at the top level and in `options`: each widens what a run may do or holds a secret. */
 const REFUSED_KEYS = ['network', 'serverContainer', 'serverContainerConfig', 'allowTestPayment', 'gtmOverride'];
 
+const CONTROL_BYTE = /[\u0000-\u001f\u007f]/;
+
 function isMap(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
@@ -76,6 +78,10 @@ export function parseProjectConfig(text: string, file: string): ProjectConfig {
   visit(doc, {
     Pair(_, pair) {
       const key = pair.key;
+      if (isScalar(key) && typeof key.value === 'string' && key.type === Scalar.PLAIN && CONTROL_BYTE.test(key.value)) {
+        report(lineAt(key as Node), '', 'a key holds a control character');
+        return visit.BREAK;
+      }
       if (!isScalar(key) || typeof key.value !== 'string' || key.type !== Scalar.PLAIN || key.value === '<<') return refuse(isScalar(key) || isAlias(key) ? key : (key as Node));
     },
     Node(_, node) {

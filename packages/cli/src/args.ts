@@ -395,6 +395,7 @@ function parseCommand(argv: string[]): Command {
   if (values.help && command !== undefined && (COMMANDS as readonly string[]).includes(command)) {
     return { command: 'help', topic: command as HelpTopic };
   }
+  if (command === undefined && !values.help && Object.keys(values).length) throw new UsageError('Give a command before the options.');
   if (values.help || command === undefined) return { command: 'help' };
   if (values['across-frames'] && command !== 'diff') throw new UsageError('--across-frames is only for diff.');
   if (values['event-map'] !== undefined && command !== 'diff') throw new UsageError('--event-map is only for diff.');
@@ -405,7 +406,9 @@ function parseCommand(argv: string[]): Command {
     return { command: 'init', json: values.json ?? false };
   }
   if (command === 'template') {
-    if (rest[0] !== 'web' || rest.length !== 1) throw new UsageError('template needs a name: web');
+    if (rest.length === 0) throw new UsageError('template needs a name: web');
+    if (rest[0] !== 'web') throw new UsageError('Unknown template name. web is the only name.');
+    if (rest.length !== 1) throw new UsageError('template web takes no further arguments.');
     const other = Object.keys(values).find((key) => key !== 'json');
     if (other) throw new UsageError(`template does not take --${other}.`);
     return { command: 'template', name: 'web', json: values.json ?? false };

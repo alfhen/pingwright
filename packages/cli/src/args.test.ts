@@ -54,12 +54,20 @@ test('other commands', () => {
   expect(parseCli(['template', 'web'])).toEqual({ command: 'template', name: 'web', json: false });
   expect(parseCli(['template', 'web', '--json'])).toEqual({ command: 'template', name: 'web', json: true });
   expect(() => parseCli(['template'])).toThrow('template needs a name');
-  expect(() => parseCli(['template', 'server'])).toThrow('template needs a name');
-  expect(() => parseCli(['template', 'web', 'x'])).toThrow('template needs a name');
+  expect(() => parseCli(['template', 'server'])).toThrow('Unknown template name. web is the only name.');
+  expect(() => parseCli(['template', 'FAKE-NAME'])).toThrow(/^(?!.*FAKE-NAME)/);
+  expect(() => parseCli(['template', 'web', 'x'])).toThrow('template web takes no further arguments.');
   expect(() => parseCli(['template', 'web', '--site', 'https://x.example'])).toThrow('template does not take --site');
   expect(parseCli([])).toEqual({ command: 'help' });
   expect(parseCli(['run', '--help'])).toEqual({ command: 'help', topic: 'run' });
   expect(parseCli(['--help'])).toEqual({ command: 'help' });
+  expect(parseCli(['-h'])).toEqual({ command: 'help' });
+  expect(parseCli(['--help', '--json'])).toEqual({ command: 'help' });
+});
+
+test('an option with no command exits 2', () => {
+  expect(() => parseCli(['--event-map', 'x.json'])).toThrow('Give a command before the options.');
+  expect(() => parseCli(['--json'])).toThrow('Give a command before the options.');
 });
 
 test('server-container build', () => {

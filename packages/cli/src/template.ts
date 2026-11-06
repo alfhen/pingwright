@@ -25,6 +25,7 @@ const WEB_STEPS = [
   'Add one tag of that type with the trigger in "setup.trigger" (a custom event trigger on the event name ".*" with regex matching on) and the consent setting in "setup.consent".',
   'Turn on "Include tag name" with the key "name" in the Additional Tag Metadata of each tag you want named, or list the names in expectedTags.',
   'Never publish the version.',
+  'The --gtm-override file holds gtmAuth, a secret. Do not print it, and do not keep it in your transcript.',
   'Run Tagreeve with --gtm-override.',
   'Check that tags[<container>].reports in the --json output is greater than 0. An entry with reports 0 and a hint means the install failed.',
 ];

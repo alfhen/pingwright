@@ -458,7 +458,7 @@ Sets up the folders in the current directory. It makes `tagreeve/scenarios/` and
 
 ### `tagreeve template web`
 
-Prints the GTM template of the web tag reporter to stdout, byte for byte, and exits 0. It needs no network, and Tagreeve never calls the GTM API. You import the template in a GTM workspace yourself, or an agent does it with its own GTM access. An unknown name, no name, or any option other than `--json` exits 2 with usage.
+Prints the GTM template of the web tag reporter to stdout, byte for byte, and exits 0. It needs no network, and Tagreeve never calls the GTM API. You import the template in a GTM workspace yourself, or an agent does it with its own GTM access. An unknown name (the message does not repeat it; `web` is the only name), no name, an extra argument, or any option other than `--json` exits 2 with usage. `--help` and `-h` exit 0, and a bare `--` ends the options.
 
 `--json` prints one object for an agent:
 
@@ -478,7 +478,7 @@ Prints the GTM template of the web tag reporter to stdout, byte for byte, and ex
 }
 ```
 
-`steps` are short imperative sentences in order: import the template in a workspace, add one tag of that type with the trigger and consent above, turn on "Include tag name" with the key `name` in each tag's Additional Tag Metadata (or list the names in `expectedTags`), never publish the version, run with `--gtm-override`, and check that `tags[<container>].reports` in the `--json` output is greater than 0. An entry with `reports: 0` and a `hint` means the install failed. `publish` is always `false`. The object holds no container ID and no value from a run.
+`steps` are short imperative sentences in order: import the template in a workspace, add one tag of that type with the trigger and consent above, turn on "Include tag name" with the key `name` in each tag's Additional Tag Metadata (or list the names in `expectedTags`), never publish the version, run with `--gtm-override`, and check that `tags[<container>].reports` in the `--json` output is greater than 0. An entry with `reports: 0` and a `hint` means the install failed. One step says the `--gtm-override` file holds `gtmAuth`, a secret the agent must not print or keep in its transcript. `templateVersion` is the version of the shape of this object. The `setup` labels (`customEvent`, `noAdditionalConsentRequired`) describe the setup and are not GTM API values. `publish` is always `false`. Outside `template`, the object holds no GTM container ID, no `gtmAuth` value and no run or record ID. In `template`, the only GTM ID is the fake `GTM-PWTEST1`.
 
 ### `tagreeve install-browser`
 
@@ -514,7 +514,7 @@ The config never overrides a scenario. A scenario's own option wins, and a list 
 
 `serverHosts` says which hosts are your server. It does not turn server mode on. Server mode still comes from `--network server` or a scenario's `network: server`. A scenario with `network: server` and no `serverHosts` takes the hosts from the config.
 
-The config is plain YAML. An anchor, an alias, a tag (such as `!!str`), a merge key (`<<`) or a key that is not a plain string (a quoted or block-scalar key is not) exits 2 with `<file>: line <n>: anchors, aliases, tags and merge keys are not allowed in the project config`. A YAML syntax error, or a second YAML document, exits 2 with `<file>: line <n>: not valid YAML`. Neither message holds any text from the file.
+The config is plain YAML. An anchor, an alias, a tag (such as `!!str`), a merge key (`<<`) or a key that is not a plain string (a quoted or block-scalar key is not) exits 2 with `<file>: line <n>: anchors, aliases, tags and merge keys are not allowed in the project config`. A plain key with a control character exits 2 with `<file>: line <n>: a key holds a control character`, and the key is not printed. A YAML syntax error, or a second YAML document, exits 2 with `<file>: line <n>: not valid YAML`. Neither message holds any text from the file.
 
 The config cannot widen what a run may do, and it never holds a secret. These keys exit 2, at the top level and in `options`: `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment` and `gtmOverride`. So does any key that is not in the table. The error names the file, the key and the line, and never the value:
 
@@ -534,7 +534,7 @@ When the file comes from the default path, the text summary lists it on the `Def
 | 1 | At least one expectation or built-in check failed, or `--baseline` found drift, in `run` or in a `suite` cell. |
 | 2 | Usage error, invalid scenario, a missing or invalid `--baseline` file (for `suite`, any cell's file), `baseline save` with one path on a suite record of schema version 3 or lower, a `payment` step without `--allow-test-payment <host>` for the `--site` host or without that host in the allowlist file, an invalid stores file, `--site` together with `--stores`, a store variable that no scenario declares, `server-container build` with a `TAGREEVE_SERVER_CONTAINER_BASE` that is not a digest reference (on any arch), or on arm64 without Docker or with a failed build, a missing server container image for `run` or `suite` with `--server-container`, or the run failed (for example the banner was not shown, or a card field was filled on a non-loopback host). If Chromium is missing, the message says to run `tagreeve install-browser`. |
 
-A usage error prints its message and one line, `Run tagreeve <command> --help for the options.`, on stderr. It does not print the full help. `--help` prints it. The line names the command when the arguments name one, also when an option comes before the command. An unknown option prints one short message, for example `Unknown option --bogus.`. Every command takes `--help` and prints its own options, for example `tagreeve diff --help`.
+A usage error prints its message and one line, `Run tagreeve <command> --help for the options.`, on stderr. It does not print the full help. `--help` prints it. The line names the command when the arguments name one, also when an option comes before the command. An unknown option prints one short message, for example `Unknown option --bogus.`. An option with no command exits 2 with `Give a command before the options.`; `--help` alone still prints the help. Every command takes `--help` and prints its own options, for example `tagreeve diff --help`.
 
 The JSONL file is still written when a step fails, up to the failing step.
 

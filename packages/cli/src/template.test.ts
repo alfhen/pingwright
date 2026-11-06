@@ -47,3 +47,27 @@ test.each([[['template']], [['template', 'server']], [['template', 'web', '--htm
   expect(out).toBe('');
   expect(err).toContain('--help');
 });
+
+test('template web --json tells the agent that the override file is a secret', async () => {
+  const { out } = await run(['template', 'web', '--json']);
+  const json = JSON.parse(out) as { steps: string[] };
+  expect(json.steps.some((step) => /gtmAuth/.test(step) && /secret/.test(step) && /transcript/.test(step))).toBe(true);
+});
+
+test('template web --json holds no GTM ID, auth value or record ID outside the template', async () => {
+  const { out } = await run(['template', 'web', '--json']);
+  const { template, ...rest } = JSON.parse(out) as Record<string, unknown>;
+  const text = JSON.stringify(rest);
+  expect(template).toBe(file);
+  expect(text).not.toMatch(/GTM-/);
+  expect(text).not.toMatch(/gtm_auth=|gtmAuth["']?\s*:/);
+  expect(text).not.toMatch(/\b(run|rec|tag|hit|step)_[0-9a-z]+/);
+  expect([...file.matchAll(/GTM-[A-Z0-9]+/g)].every((m) => m[0] === 'GTM-PWTEST1')).toBe(true);
+});
+
+test('template with an unknown name does not echo it', async () => {
+  const { code, err } = await run(['template', 'FAKE-NAME']);
+  expect(code).toBe(2);
+  expect(err).toContain('web is the only name');
+  expect(err).not.toContain('FAKE-NAME');
+});
