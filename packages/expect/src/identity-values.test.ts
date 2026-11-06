@@ -265,6 +265,14 @@ test.each([
   expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
 });
 
+test.each([
+  ['percent-encoded', 'note=joann%40shop.example\nann%40shop.example'],
+  ['JSON-escaped', '{"a":"joann\\u0040shop.example","b":"ann\\u0040shop.example"}'],
+])('possibleRealData counts a shorter value that has its own occurrence, %s', (_n, body) => {
+  const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
+  expect(leak!.detail).toContain('carries 2 email value(s)');
+});
+
 test('possibleRealData does not read the digits of a JSON path as a phone number', () => {
   const body = JSON.stringify({ sizes: { 100: { 250: { 1000: { q: 1 } } } } });
   expect(body).toContain('"1000"');

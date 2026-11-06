@@ -39,7 +39,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- M30 -->
 
-<!-- M31 -->
+- `possibleRealData` counts a shorter email or phone value that has its own place in a body, such as `ann%40shop.example` next to `joann%40shop.example`, in every form it reads (#848). The `dataLayerNotHooked` flag names every missed layer, up to five, and says how many more there are (#1239).
 
 <!-- M32 -->
 

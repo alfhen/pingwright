@@ -1445,15 +1445,40 @@ function bodyTexts(headers: Record<string, string>, body: string): ScanText[] {
 function isEdgeShift(a: string, b: string, bodies: string[]): boolean {
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (!long.includes(short)) return false;
-  return bodies.every((raw) => {
-    const text = raw.replace(/\[\]|%5B%5D/gi, '');
-    const covered: [number, number][] = [];
-    for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
-    for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
-      if (!covered.some(([from, to]) => i >= from && i + short.length <= to)) return false;
-    }
-    return true;
-  });
+  return bodies.every((raw) =>
+    readingForms(raw.replace(/\[\]|%5B%5D/gi, '')).every((text) => {
+      if (!text.includes(long)) return true;
+      const covered: [number, number][] = [];
+      for (let i = text.indexOf(long); i >= 0; i = text.indexOf(long, i + 1)) covered.push([i, i + long.length]);
+      for (let i = text.indexOf(short); i >= 0; i = text.indexOf(short, i + 1)) {
+        if (!covered.some(([from, to]) => i >= from && i + short.length <= to)) return false;
+      }
+      return true;
+    }),
+  );
+}
+
+const JSON_ESCAPES: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '"': '"', '\\': '\\', '/': '/' };
+
+// The long value's own reading decides which forms count: a form that does not hold it says nothing about the shift.
+// The forms scan() reads: as is, percent-decoded, JSON-unescaped, and each base64 token decoded.
+function readingForms(text: string): string[] {
+  const forms = new Set([text]);
+  forms.add(
+    text.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        return run;
+      }
+    }),
+  );
+  forms.add(text.replace(/\\(?:u([0-9a-f]{4})|(.))/gi, (m, hex?: string, ch?: string) => (hex ? String.fromCharCode(parseInt(hex, 16)) : (JSON_ESCAPES[ch!] ?? m))));
+  for (const token of text.match(/[A-Za-z0-9+/_-]{12,}={0,2}/g) ?? []) {
+    const decoded = Buffer.from(token, 'base64').toString('utf8');
+    if (!decoded.includes('�')) forms.add(decoded);
+  }
+  return [...forms];
 }
 
 function mergeEdgeReadings(found: Map<string, { kind: string; where: Map<string, number> }>, bodies: string[]): void {
