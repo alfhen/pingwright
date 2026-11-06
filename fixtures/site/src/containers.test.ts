@@ -75,6 +75,10 @@ describe('the opt-in tag reporter', () => {
     }
   });
 
+  test('every fixture tag ID is a number, as in real GTM', () => {
+    for (const tag of [...fixtureTags.published, ...fixtureTags.workspace]) expect(typeof tag.id).toBe('number');
+  });
+
   test('each build carries its tag list and container version', () => {
     const published = body();
     const workspace = body(fakeWorkspace);
@@ -86,15 +90,15 @@ describe('the opt-in tag reporter', () => {
 
   test('the published list is 11 and 12, the workspace list drops 12 and adds 13, 14, 77, 88 and 89, and 45 is in neither', () => {
     expect(fixtureTags.published).toEqual([
-      { id: '11', name: 'GA4 - Config', status: 'success', executionTime: 4 },
-      { id: '12', status: 'failure', executionTime: 2 },
+      { id: 11, name: 'GA4 - Config', status: 'success', executionTime: 4 },
+      { id: 12, status: 'failure', executionTime: 2 },
     ]);
     const workspace = fixtureTags.workspace;
-    expect(workspace.map((t) => [t.id, t.status])).toEqual([['11', 'success'], ['13', 'failure'], ['14', 'success'], ['77', 'success'], ['88', 'success'], ['89', 'success']]);
-    expect(workspace.filter((t) => t.name === undefined).map((t) => t.id)).toEqual(['13', '14']);
-    expect(workspace.find((t) => t.id === '77')!.name).toBe('GA4 - Workspace Only');
-    expect(workspace.find((t) => t.id === '88')!.name).toContain(fakeEmail);
-    expect(workspace.find((t) => t.id === '89')!.name).toContain(fakeWorkspace.gtm_auth);
-    expect([...fixtureTags.published, ...workspace].some((t) => t.id === '45')).toBe(false);
+    expect(workspace.map((t) => [t.id, t.status])).toEqual([[11, 'success'], [13, 'failure'], [14, 'success'], [77, 'success'], [88, 'success'], [89, 'success']]);
+    expect(workspace.filter((t) => t.name === undefined).map((t) => t.id)).toEqual([13, 14]);
+    expect(workspace.find((t) => t.id === 77)!.name).toBe('GA4 - Workspace Only');
+    expect(workspace.find((t) => t.id === 88)!.name).toContain(fakeEmail);
+    expect(workspace.find((t) => t.id === 89)!.name).toContain(fakeWorkspace.gtm_auth);
+    expect([...fixtureTags.published, ...workspace].some((t) => t.id === 45)).toBe(false);
   });
 });

@@ -14,20 +14,20 @@ export const fakeEmail = 'pw-fixture@example.com';
 // Tag 45 never fires in either build. The workspace build drops 12 and adds 13, 14, 77, 88 and 89.
 export const fixtureTags: Record<'published' | 'workspace', FixtureTag[]> = {
   published: [
-    { id: '11', name: 'GA4 - Config', status: 'success', executionTime: 4 },
-    { id: '12', status: 'failure', executionTime: 2 },
+    { id: 11, name: 'GA4 - Config', status: 'success', executionTime: 4 },
+    { id: 12, status: 'failure', executionTime: 2 },
   ],
   workspace: [
-    { id: '11', name: 'GA4 - Config', status: 'success', executionTime: 4 },
-    { id: '13', status: 'failure', executionTime: 2 },
-    { id: '14', status: 'success', executionTime: 3 },
-    { id: '77', name: 'GA4 - Workspace Only', status: 'success', executionTime: 5 },
-    { id: '88', name: `Lead - ${fakeEmail}`, status: 'success', executionTime: 1 },
-    { id: '89', name: `Auth - ${fakeWorkspace.gtm_auth}`, status: 'success', executionTime: 1 },
+    { id: 11, name: 'GA4 - Config', status: 'success', executionTime: 4 },
+    { id: 13, status: 'failure', executionTime: 2 },
+    { id: 14, status: 'success', executionTime: 3 },
+    { id: 77, name: 'GA4 - Workspace Only', status: 'success', executionTime: 5 },
+    { id: 88, name: `Lead - ${fakeEmail}`, status: 'success', executionTime: 1 },
+    { id: 89, name: `Auth - ${fakeWorkspace.gtm_auth}`, status: 'success', executionTime: 1 },
   ],
 };
 
-export const containerVersion: Record<BuildName, string> = { published: '3', workspace: '4' };
+export const containerVersion: Record<BuildName, string> = { published: '3', workspace: 'QUICK_PREVIEW' };
 
 export type BuildName = 'published' | 'workspace';
 

@@ -71,8 +71,8 @@ describe('the container shim running the shipped template', () => {
     expect([first!.event, second!.event]).toEqual(['gtm.js', 'container_event']);
     expect(first!.container).toBe(containerId);
     expect(first!.gtmUniqueEventId).not.toBe(second!.gtmUniqueEventId);
-    expect(first!.version).toBe(build === 'published' ? '3' : '4');
-    expect(first!.tags.map((t) => t.id)).toEqual(fixtureTags[build].map((t) => t.id));
+    expect(first!.version).toBe(build === 'published' ? '3' : 'QUICK_PREVIEW');
+    expect(first!.tags.map((t) => t.id)).toEqual(fixtureTags[build].map((t) => String(t.id)));
     expect(first!.tags.find((t) => t.id === (build === 'published' ? '12' : '13'))!.name).toBeNull();
     expect(page.logged).toHaveLength(2);
     expect(JSON.parse(page.logged[0]!)).toEqual(JSON.parse(JSON.stringify(first)));
@@ -87,14 +87,14 @@ describe('the container shim running the shipped template', () => {
   });
 
   test('the tag lists are the ones the plan names', () => {
-    expect(fixtureTags.published.map((t) => t.id)).toEqual(['11', '12']);
-    expect(fixtureTags.workspace.map((t) => t.id)).toEqual(['11', '13', '14', '77', '88', '89']);
-    for (const build of ['published', 'workspace'] as const) expect(fixtureTags[build].map((t) => t.id)).not.toContain('45');
+    expect(fixtureTags.published.map((t) => t.id)).toEqual([11, 12]);
+    expect(fixtureTags.workspace.map((t) => t.id)).toEqual([11, 13, 14, 77, 88, 89]);
+    for (const build of ['published', 'workspace'] as const) expect(fixtureTags[build].map((t) => t.id)).not.toContain(45);
   });
 
   test('only the workspace build carries the fake auth, in the name of tag 89', () => {
     expect(JSON.stringify(fixtureTags.published)).not.toContain(fakeWorkspace.gtm_auth);
-    expect(fixtureTags.workspace.find((t) => t.id === '89')!.name).toContain(fakeWorkspace.gtm_auth);
-    expect(fixtureTags.workspace.find((t) => t.id === '88')!.name).toContain('pw-fixture@example.com');
+    expect(fixtureTags.workspace.find((t) => t.id === 89)!.name).toContain(fakeWorkspace.gtm_auth);
+    expect(fixtureTags.workspace.find((t) => t.id === 88)!.name).toContain('pw-fixture@example.com');
   });
 });

@@ -22,20 +22,37 @@ export type ParsedTagReport =
   | { ok: true; report: TagReport; version: string | null }
   | { ok: false; invalid: InvalidReport };
 
-type Bad = { bad: string };
+type Bad = { bad: string; got: NonNullable<InvalidReport['got']> };
 
 const isBad = (value: unknown): value is Bad => typeof value === 'object' && value !== null && 'bad' in value;
 
+function typeClass(value: unknown): NonNullable<InvalidReport['got']> {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  const type = typeof value;
+  return type === 'string' || type === 'number' || type === 'boolean' || type === 'undefined' ? type : 'object';
+}
+
+const bad = (what: string, value: unknown): Bad => ({ bad: what, got: typeClass(value) });
+
+/** GTM gives tag IDs as numbers. A digit string (the rc.2 template) is accepted too. Returns null when neither fits. */
+function digits(value: unknown): string | null {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  if (typeof value === 'string' && value.length <= MAX_TAG_ID && TAG_ID.test(value)) return value;
+  return null;
+}
+
 function parseTag(raw: unknown): TagStatus | Bad {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { bad: 'tag' };
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return bad('tag', raw);
   const tag = raw as Record<string, unknown>;
-  if (typeof tag.id !== 'string' || tag.id.length > MAX_TAG_ID || !TAG_ID.test(tag.id)) return { bad: 'tagId' };
-  if (typeof tag.status !== 'string' || tag.status.length > MAX_STATUS) return { bad: 'tagStatus' };
+  const id = digits(tag.id);
+  if (id === null) return bad('tagId', tag.id);
+  if (typeof tag.status !== 'string' || tag.status.length > MAX_STATUS) return bad('tagStatus', tag.status);
   const time = tag.executionTime ?? null;
-  if (time !== null && (typeof time !== 'number' || !Number.isFinite(time))) return { bad: 'executionTime' };
+  if (time !== null && (typeof time !== 'number' || !Number.isFinite(time))) return bad('executionTime', time);
   const name = tag.name ?? null;
-  if (name !== null && (typeof name !== 'string' || name.length > MAX_NAME)) return { bad: 'tagName' };
-  return { id: tag.id, name, status: tag.status, executionTime: time };
+  if (name !== null && (typeof name !== 'string' || name.length > MAX_NAME)) return bad('tagName', name);
+  return { id, name, status: tag.status, executionTime: time };
 }
 
 /**
@@ -43,23 +60,33 @@ function parseTag(raw: unknown): TagStatus | Bad {
  * `InvalidReport` that names the failing field and holds none of the payload.
  */
 export function parseTagReport(payload: unknown, side: TagReport['side'], ctx: TagReportContext): ParsedTagReport {
-  const fail = (what: string): ParsedTagReport => ({
+  const fail = (what: string, got: NonNullable<InvalidReport['got']>): ParsedTagReport => ({
     ok: false,
-    invalid: { type: 'invalidReport', id: newId('collectorReport'), runId: ctx.runId, t: ctx.t, error: `tagReport:${what}`, body: '' },
+    invalid: {
+      type: 'invalidReport',
+      id: newId('collectorReport'),
+      runId: ctx.runId,
+      t: ctx.t,
+      error: `tagReport:${what}`,
+      got,
+      body: '',
+    },
   });
-  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return fail('payload');
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return fail('payload', typeClass(payload));
   const p = payload as Record<string, unknown>;
-  if (typeof p.container !== 'string' || !CONTAINER.test(p.container)) return fail('container');
-  if (typeof p.event !== 'string' || p.event.length > MAX_EVENT) return fail('event');
+  if (typeof p.container !== 'string' || !CONTAINER.test(p.container)) return fail('container', typeClass(p.container));
+  if (typeof p.event !== 'string' || p.event.length > MAX_EVENT) return fail('event', typeClass(p.event));
   const uniqueId = p.gtmUniqueEventId ?? null;
-  if (uniqueId !== null && (typeof uniqueId !== 'number' || !Number.isFinite(uniqueId))) return fail('gtmUniqueEventId');
-  const version = p.version ?? null;
-  if (version !== null && (typeof version !== 'string' || version.length > MAX_VERSION)) return fail('version');
-  if (!Array.isArray(p.tags) || p.tags.length > MAX_TAGS) return fail('tags');
+  if (uniqueId !== null && (typeof uniqueId !== 'number' || !Number.isFinite(uniqueId))) return fail('gtmUniqueEventId', typeClass(uniqueId));
+  const rawVersion = p.version ?? null;
+  const version =
+    typeof rawVersion === 'number' ? digits(rawVersion) : typeof rawVersion === 'string' && rawVersion.length <= MAX_VERSION ? rawVersion : null;
+  if (rawVersion !== null && version === null) return fail('version', typeClass(rawVersion));
+  if (!Array.isArray(p.tags) || p.tags.length > MAX_TAGS) return fail('tags', typeClass(p.tags));
   const tags: TagStatus[] = [];
   for (const raw of p.tags) {
     const tag = parseTag(raw);
-    if (isBad(tag)) return fail(tag.bad);
+    if (isBad(tag)) return fail(tag.bad, tag.got);
     tags.push(tag);
   }
   const report: TagReport = {
