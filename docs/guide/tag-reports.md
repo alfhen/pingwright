@@ -79,7 +79,7 @@ Tags GTM-PWTEST1: 6 fired, 1 failed (13 Meta - PageView: failure), 1 expected di
 }
 ```
 
-`count` is the number of report entries for the tag, and `statuses` counts them by status. `nameFrom` says where the name came from: `report`, `expectedTags` or `null` when no name is known. A name that holds an email address or a phone number reads `(other)`. The full field list is in the [CLI reference](../cli.md#tagreeve-run-scenarioyml---site-url).
+`count` is the number of report entries for the tag, and `statuses` counts them by status. `nameFrom` says where the name came from: `report`, `expectedTags` or `null` when no name is known. A name that holds an email address, a phone number or a value-like token reads `(other)`. The full field list is in the [CLI reference](../cli.md#tagreeve-run-scenarioyml---site-url).
 
 ### Expected tags
 
@@ -108,7 +108,7 @@ expect:
     - { tag: { name: "Meta *", status: [failure, exception, timeout] } }
 ```
 
-A rule with no report for its container cannot be evaluated. It fails with `noTagReports` and never passes. A name pattern on a tag with no name fails with `tagNameUnknown`. See [Rules on tags](../cli.md#rules-on-tags) for the keys.
+A rule with no report for its container cannot be evaluated. It fails with `noTagReports` and never passes. A name pattern on a tag with no name fails with `tagNameUnknown`. The HTML report shows both as CANNOT EVALUATE. See [Rules on tags](../cli.md#rules-on-tags) for the keys.
 
 ## What the reports cannot tell you
 

@@ -1,5 +1,6 @@
 import { newId, type ConsentEpoch, type ConsentState, type Hit, type Request, type Result, type RunRecords } from '@tagreeve/core';
 import { decodeRequest } from '@tagreeve/decoders';
+import { TAG_REPORTER_HINT } from '@tagreeve/expect';
 import { describe, expect, test } from 'vitest';
 import { buildReportModel, type ReportModel } from './model.ts';
 
@@ -510,7 +511,9 @@ describe('server container hits', () => {
     const noReports = result('tag: GA4', false, { severity: 'warn', note: 'noTagReports' });
     const noName = result('tag: GA4', false, { severity: 'warn', note: 'tagNameUnknown' });
     const model = buildReportModel(records({ results: [noReports, noName] }));
-    expect(model.expectations[0]!.note).toBe('cannot evaluate: no tag report from this container. Install the reporter: tagreeve template web --json');
+    expect(model.expectations[0]!.note).toBe('cannot evaluate: no tag report from this container. For web tags, install the reporter and run with --gtm-override: tagreeve template web --json');
+    expect(model.expectations[0]!.note).toContain(TAG_REPORTER_HINT);
+    expect(model.expectations.map((e) => e.status)).toEqual(['CANNOT EVALUATE', 'CANNOT EVALUATE']);
     expect(model.expectations[1]!.note).toBe('cannot evaluate: the tag has no name in its report or in expectedTags');
   });
 

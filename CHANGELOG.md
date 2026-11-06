@@ -17,7 +17,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 - **The Result line counts baseline warnings.** `Result: pass with 3 warnings` now adds the `Warning:` lines of the `Baseline` block to the warnings of the expectations. `ok`, `pass` and the exit code do not change.
 
-<!-- M23 -->
+- Fix: the HTML report shows a `tag` rule with no tag report, or with no tag name, as CANNOT EVALUATE, not FAIL or WARN. The no-report note says to install the reporter and run with `--gtm-override`. A tag name with a hex token joined to a word by `.`, `_`, `+`, a bracket or a quote now reads `(other)`.
 
 - A push that starts with a string reads `gtag <command>` only for a known `gtag` command (`config`, `consent`, `event`, `get`, `js`, `set`). Any other string reads `gtag (other)`, so a pushed string is never printed (#1174). The docs name the push labels and the path caps (#1175, #1170).
 
@@ -159,7 +159,7 @@ A test card fill is now bound to the card frame document that was checked. If th
 
 - New command `tagreeve init`: it makes `tagreeve/scenarios/` and `tagreeve/baselines/` and adds `/tagreeve/runs/` to `.gitignore`. `run` and `suite` now print a warning when the record folder is in a git work tree and not ignored (#811).
 
-- New file `tagreeve/config.yml`, and `--config <file>` to read another one. The file must start with `configSchemaVersion: 1`. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. The file is plain YAML: anchors, aliases, tags and merge keys are refused. No error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
+- New file `tagreeve/config.yml`, and `--config <file>` to read another one. The file holds `configSchemaVersion: 1`. It holds `site`, `out` and the scenario options `allowUnknownDestination`, `builtins`, `firstPartyHosts`, `platformHosts`, `serverHosts`, `unloadGapIgnore` and `identifierFields`. `run` no longer needs `--site` when the config has one. A scenario's own option wins. The config refuses `network`, `serverContainer`, `serverContainerConfig`, `allowTestPayment`, `gtmOverride` and unknown keys. The file is plain YAML: anchors, aliases, tags and merge keys are refused. No error shows a value. `--allow-test-payment` still needs `--site` on the command line (#811).
 
 - `baseline save <record>` with one path writes `tagreeve/baselines/<scenario>[.<store>][.<variant>].json` and makes the folder. `run --baseline` with no file reads `tagreeve/baselines/<scenario>.json`; put the bare flag last. New `suite --baseline [<folder>]` checks every cell against its own baseline file. It reads all the files before a browser starts and exits 2 when one is missing. A drifting cell is `FAIL (baseline drift)`, the suite exits 1, and `suite.json` cells get `baseline: { file, drift, added, removed, countChanges }` (#811).
 
