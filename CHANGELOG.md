@@ -12,7 +12,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- Z08 -->
 
-<!-- B08 -->
+- **The Result line counts baseline warnings.** `Result: pass with 3 warnings` now adds the `Warning:` lines of the `Baseline` block to the warnings of the expectations. `ok`, `pass` and the exit code do not change.
 
 <!-- M23 -->
 
