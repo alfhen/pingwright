@@ -71,9 +71,10 @@ describe('checkReply', () => {
 
   test('throws on a real hit that is not the evidence of a failed rule', async () => {
     const reject = await records('reject');
-    const passing = 'hit_01M6QMZJDKBWCJVXHEQBVXN79E';
-    expect(reject.hits.map((h) => h.id)).toContain(passing);
-    expect(() => checkReply('Evidence: hit_…N79E.', reject, 1, 'reject.reply.md')).toThrow(/hit_…N79E is not the evidence of a failed rule/);
+    const evidenceIds = new Set(reject.results.flatMap((r) => r.evidence));
+    const passing = reject.hits.map((h) => h.id).find((id) => !evidenceIds.has(id))!;
+    const tail = passing.slice(-4);
+    expect(() => checkReply(`Evidence: hit_…${tail}.`, reject, 1, 'reject.reply.md')).toThrow(new RegExp(`hit_…${tail} is not the evidence of a failed rule`));
     expect(() => checkReply(`Evidence: ${passing}.`, reject, 1, 'reject.reply.md')).toThrow(passing);
     const warned = reject.results.find((r) => !r.pass && !failedResults(reject).includes(r))!.evidence[0]!;
     expect(() => checkReply(`Evidence: ${warned}.`, reject, 1, 'reject.reply.md')).toThrow(warned);

@@ -1,6 +1,6 @@
 import { newId, type Request } from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { decodeRequest, decoders, gcdSignals, isCollectionEndpoint, isSandboxPageUrl } from './index.ts';
+import { decodeRequest, decoders, gcdLetters, gcdSignals, isCollectionEndpoint, isSandboxPageUrl } from './index.ts';
 
 const PAGE = 'http://localhost:3000/products/fake-tee';
 const SANDBOX = 'http://localhost:3000/web-pixels@0.0.0-fixture/sandbox/modern/';
@@ -234,4 +234,11 @@ test('gcdSignals pins each letter class', () => {
 test('gcdSignals is undefined for a missing or short gcd', () => {
   expect(gcdSignals(undefined)).toBeUndefined();
   expect(gcdSignals('13r3')).toBeUndefined();
+});
+
+test('gcdLetters reads the four letters, shows ? for an unknown one and is undefined when gcdSignals is', () => {
+  expect(gcdLetters('13l3r3r3r5')).toEqual(['l', 'r', 'r', 'r']);
+  expect(gcdLetters('13z3r3r3x5')).toEqual(['?', 'r', 'r', '?']);
+  expect(gcdLetters('13r3r3r3')).toBeUndefined();
+  expect(gcdLetters(undefined)).toBeUndefined();
 });
