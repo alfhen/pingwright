@@ -87,7 +87,7 @@ export function consentModeSetup(hits: readonly Hit[], dataLayer: readonly DataL
 
   const pushed = dataLayer.some((e) => e.isConsentCommand && e.args[0] === 'consent' && e.args[1] === 'default');
   if (showsDefault && !pushed) {
-    return { pass: true, evidence: [], message: `Consent Mode signals are set on every Google hit; default set outside the dataLayer (template API, TCF or other) (gcd letters: ${lettersNote(letterSets)}).${missingNote}` };
+    return { pass: true, evidence: [], message: `Consent Mode signals are set on every Google hit${noGcd > 0 ? ' that carried gcd' : ''}; default set outside the dataLayer (template API, TCF or other) (gcd letters: ${lettersNote(letterSets)}).${missingNote}` };
   }
   return { pass: true, evidence: [], message: `Expected Consent Mode signals to be set on Google hits, found every signal set (gcd letters: ${lettersNote(letterSets)}).${missingNote}` };
 }

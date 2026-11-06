@@ -147,6 +147,10 @@ test('hits without gcd are counted, and none at all says the setup could not be 
   const some = consentModeSetup([hit(FULL), hit(undefined)], []);
   expect(some.pass).toBe(true);
   expect(some.message).toContain('1 Google hit carried no gcd');
+  const outside = consentModeSetup([hit(FULL), hit(undefined)], []);
+  expect(outside.message).toContain('default set outside the dataLayer');
+  expect(outside.message).toContain('1 Google hit carried no gcd');
+  expect(outside.message).not.toContain('set on every Google hit;');
   const failing = consentModeSetup([hit('13l3r3r3r5'), hit(undefined), hit(undefined)], []);
   expect(failing.pass).toBe(false);
   expect(failing.message).toContain('2 Google hits carried no gcd');
