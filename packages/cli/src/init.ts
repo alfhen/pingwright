@@ -38,7 +38,7 @@ async function ensureIgnoreLine(cwd: string): Promise<Item> {
     current = undefined;
   }
   if (current?.split(/\r?\n/).some((line) => line.trim() === IGNORE_LINE)) return { path: '.gitignore', action: 'skipped', text: `Skipped .gitignore: it already has ${IGNORE_LINE}` };
-  if ((await gitIgnoreStatus(join(cwd, 'tagreeve/runs'))) === 'ignored') return { path: '.gitignore', action: 'skipped', text: 'Skipped .gitignore: git already ignores tagreeve/runs/' };
+  if ((await gitIgnoreStatus(join(cwd, 'tagreeve/runs'), { probe: 'folder' })) === 'ignored') return { path: '.gitignore', action: 'skipped', text: 'Skipped .gitignore: git already ignores tagreeve/runs/' };
   const prefix = current === undefined || current === '' || current.endsWith('\n') ? '' : '\n';
   await appendFile(file, `${prefix}${IGNORE_LINE}\n`);
   return current === undefined
@@ -47,7 +47,9 @@ async function ensureIgnoreLine(cwd: string): Promise<Item> {
 }
 
 async function ensureFolder(cwd: string, folder: string): Promise<Item> {
-  if (await exists(join(cwd, folder))) return { path: `${folder}/`, action: 'skipped', text: `Skipped ${folder}/: it exists` };
+  const found = await stat(join(cwd, folder)).catch(() => undefined);
+  if (found && !found.isDirectory()) throw Object.assign(new Error('not a folder'), { code: 'NOTFOLDER' });
+  if (found) return { path: `${folder}/`, action: 'skipped', text: `Skipped ${folder}/: it exists` };
   await mkdir(join(cwd, folder), { recursive: true });
   return { path: `${folder}/`, action: 'created', text: `Created ${folder}/` };
 }
@@ -61,6 +63,7 @@ async function ensureConfig(cwd: string): Promise<Item> {
 
 function failureText(path: string, error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
+  if (code === 'NOTFOLDER') return `${path.replace(/\/$/, '')} is not a folder\n`;
   const reason = code === 'EACCES' || code === 'EPERM' ? 'permission denied' : code === 'EEXIST' ? 'it exists' : code === 'ENOTDIR' || code === 'EISDIR' ? 'a file or folder is in the way' : 'the write failed';
   return `Could not write ${path}: ${reason}\n`;
 }
@@ -78,6 +81,7 @@ export async function initCommand(io: Io, json = false, cwd: string = process.cw
       items.push(item);
       if (!json) io.stdout(`${item.text}\n`);
     } catch (error) {
+      if (json) io.stdout(`${JSON.stringify({ items: items.map(({ path, action }) => ({ path, action })) })}\n`);
       io.stderr(failureText(path, error));
       return 2;
     }

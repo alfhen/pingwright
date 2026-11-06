@@ -70,3 +70,18 @@ test.each(['records/**', 'records/*', '*.jsonl'])('the rule "%s" ignores the rec
   await warnIfNotIgnored(join(dir, 'records'), (t) => lines.push(t));
   expect(lines).toEqual([]);
 });
+
+test('a run_*.jsonl rule counts as ignoring run records', async () => {
+  await initRepo();
+  await writeFile(join(dir, '.gitignore'), 'run_*.jsonl\n');
+  expect(await gitIgnoreStatus(join(dir, 'records'))).toBe('ignored');
+});
+
+test('the folder probe asks about the folder itself', async () => {
+  await initRepo();
+  await writeFile(join(dir, '.gitignore'), '*.jsonl\n');
+  expect(await gitIgnoreStatus(join(dir, 'records'))).toBe('ignored');
+  expect(await gitIgnoreStatus(join(dir, 'records'), { probe: 'folder' })).toBe('unignored');
+  await writeFile(join(dir, '.gitignore'), 'records/\n');
+  expect(await gitIgnoreStatus(join(dir, 'records'), { probe: 'folder' })).toBe('ignored');
+});
