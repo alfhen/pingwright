@@ -99,7 +99,7 @@ export function parseBaseline(text: string, label: string): BaselineFile {
     throw new BaselineError(`${label} is not a valid baseline file`, 'invalid');
   }
   if (json.dataLayer !== undefined && !(Array.isArray(json.dataLayer) && json.dataLayer.every(validPushGroup))) {
-    throw new BaselineError(`${label} is not a valid baseline file`, 'invalid');
+    throw new BaselineError(`${label} has an invalid dataLayer section`, 'invalid');
   }
   return json as unknown as BaselineFile;
 }
@@ -153,19 +153,18 @@ export function defaultBaselineName(run: RunRecords['run']): string {
   }
   const unsafe = (part: string) => /[/\\\0]/.test(part) || part.includes('..') || part.startsWith('.');
   const name = scenarioName(run.scenario);
-  if (
-    !name || unsafe(name) || unsafe(run.store ?? '') || unsafe(run.variant ?? '') ||
-    (run.store !== undefined && !STORE_NAME.test(run.store)) ||
-    (run.variant !== undefined && !VARIANT_NAME.test(run.variant))
-  ) {
-    throw new BaselineError('The scenario, store or variant in this record cannot name a baseline file. Give the baseline path.', 'usage');
-  }
+  const bad =
+    !name || unsafe(name) ? 'scenario'
+    : unsafe(run.store ?? '') || (run.store !== undefined && !STORE_NAME.test(run.store)) ? 'store'
+    : unsafe(run.variant ?? '') || (run.variant !== undefined && !VARIANT_NAME.test(run.variant)) ? 'variant'
+    : undefined;
+  if (bad) throw new BaselineError(`The ${bad} in this record cannot name a baseline file. Give the baseline path.`, 'usage');
   return baselineFileName(run.scenario, run.store, run.variant);
 }
 
 const VARIANT_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
-function insideBaselines(path: string): boolean {
+export function insideBaselines(path: string): boolean {
   const rel = relative(resolve(DEFAULT_BASELINES), resolve(path));
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
 }
@@ -197,6 +196,8 @@ export function compareBaseline(baseline: BaselineFile, records: RunRecords): Ba
   };
 }
 
+const errnoCode = (error: unknown) => (error as NodeJS.ErrnoException).code ?? 'unknown error';
+
 export async function baselineCommand(args: BaselineArgs, io: Io): Promise<number> {
   let records: RunRecords;
   try {
@@ -211,18 +212,25 @@ export async function baselineCommand(args: BaselineArgs, io: Io): Promise<numbe
   const baseline = buildBaseline(records, args.byPage);
   let output = args.output;
   if (output === undefined) {
-    output = join(DEFAULT_BASELINES, defaultBaselineName(records.run));
-    if (!insideBaselines(output)) throw new BaselineError('The baseline path leaves tagreeve/baselines. Give the baseline path.', 'usage');
-    await mkdir(DEFAULT_BASELINES, { recursive: true });
-  }
-  if (args.output !== undefined) {
     try {
-      await mkdir(dirname(output), { recursive: true });
+      output = join(DEFAULT_BASELINES, defaultBaselineName(records.run));
     } catch (error) {
-      throw new BaselineError(`Cannot make the folder for ${args.output}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`, 'usage');
+      if (error instanceof BaselineError) throw new BaselineError(`${args.input}: ${error.message}`, error.code);
+      throw error;
     }
+    if (!insideBaselines(output)) throw new BaselineError(`${args.input}: the baseline path leaves tagreeve/baselines. Give the baseline path.`, 'usage');
   }
-  await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`);
+  const shown = args.output ?? output;
+  try {
+    await mkdir(dirname(output), { recursive: true });
+  } catch (error) {
+    throw new BaselineError(`Cannot make the folder for ${shown}: ${errnoCode(error)}`, 'usage');
+  }
+  try {
+    await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`);
+  } catch (error) {
+    throw new BaselineError(`Cannot write ${shown}: ${errnoCode(error)}`, 'usage');
+  }
   const hits = baseline.keys.reduce((n, k) => n + k.tuples.reduce((m, t) => m + t.count, 0), 0);
   io.stdout(`Baseline ${output}: ${baseline.keys.length} keys, ${hits} hits\n`);
   return 0;

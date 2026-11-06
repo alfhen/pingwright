@@ -21,7 +21,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 - A push that starts with a string reads `gtag <command>` only for a known `gtag` command (`config`, `consent`, `event`, `get`, `js`, `set`). Any other string reads `gtag (other)`, so a pushed string is never printed (#1174). The docs name the push labels and the path caps (#1175, #1170).
 
-<!-- M25 -->
+- `baseline save` errors name the file and the key. A name that cannot make a baseline file names the scenario, store or variant and the record path. A bad `dataLayer` section reads `<file> has an invalid dataLayer section`. A folder or file that cannot be written gives the path and the errno code, never a raw Node error (#1145, #1207, #1194, #1143).
 
 - A `tag` rule with a `status` outside `success`, `failure`, `exception` and `timeout` exits 2 (#1226).
 - `diff --event-map`: `paths` also match the recorded and the renamed event name, a user entry for a Shopify name wins over the built-in pairing, and a bad event name error gives the key position (#1249, #1253, #1254).
