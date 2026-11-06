@@ -1020,9 +1020,14 @@ export class Recorder {
 
   private async flushUnloadQueues(): Promise<void> {
     const script = `window.${UNLOAD_FLUSH}?.()`;
-    for (const page of this.context.pages()) {
-      await page.evaluate(script).catch(() => undefined);
-    }
+    // A page whose main thread is stuck never answers, so the wait is bounded.
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, TALLY_DEADLINE_MS);
+    });
+    const flushing = Promise.all(this.context.pages().map((page) => page.evaluate(script).catch(() => undefined)));
+    await Promise.race([flushing, deadline]);
+    clearTimeout(timer);
     await this.wait(50);
   }
 

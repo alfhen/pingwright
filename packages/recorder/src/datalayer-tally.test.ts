@@ -112,6 +112,16 @@ test('a capped key gives no flag and a counted key still compares', () => {
   expect(postedAhead([tallies[0]!], all)).toBe(false);
 });
 
+test('a document that lost no key at the cap still gets a flag', () => {
+  const all = new PayloadCounts();
+  for (let i = 0; i < MAX_TALLY_KEYS; i += 1) addTo(all, i, 'tok', undefined, 1, 1);
+  addTo(all, 999, 'tok', undefined, 1, 1);
+  const flags = buildTallyFlags(runId, [tally(500, 'tok', [{ layer: 'dataLayer', a: 1, length: 8, posted: 0 }])], all);
+  expect(flags).toHaveLength(1);
+  const unhooked = buildTallyFlags(runId, [tally(501, 'tok', [{ layer: 'dataLayer', a: null, length: 3, posted: 0 }])], all);
+  expect(unhooked).toHaveLength(1);
+});
+
 test('postedAhead is true while fewer payloads arrived than the hook posted', () => {
   const tallies = [tally(0, 'tok', [{ layer: 'dataLayer', a: 1, length: 3, posted: 3 }])];
   const all = counts(0, 'tok', undefined, 1, 2);

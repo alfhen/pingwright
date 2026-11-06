@@ -18,10 +18,14 @@ export interface FrameTally {
 /** Counts of the push payloads the binding received, by frame number, document token, layer and array number. */
 export class PayloadCounts {
   private readonly counts = new Map<string, number>();
-  private overflowed = false;
+  private readonly cappedDocuments = new Set<string>();
 
   static key(frame: number, d: string, layer: string, a: number | null): string {
     return `${frame}\u0000${d}\u0000${layer}\u0000${a ?? ''}`;
+  }
+
+  private static documentKey(frame: number, d: string): string {
+    return `${frame}\u0000${d}`;
   }
 
   add(payload: { d?: unknown; a?: unknown; layer?: unknown }, frame: number, names: readonly string[]): void {
@@ -33,14 +37,14 @@ export class PayloadCounts {
     const seen = this.counts.get(key);
     if (seen !== undefined) this.counts.set(key, seen + 1);
     else if (this.counts.size < MAX_TALLY_KEYS) this.counts.set(key, 1);
-    else this.overflowed = true;
+    else this.cappedDocuments.add(PayloadCounts.documentKey(frame, d));
   }
 
-  /** `undefined` for a key that may have been dropped at the cap. */
+  /** `undefined` for a document that had a key refused at the cap. */
   received(frame: number, d: string, layer: string, a: number | null): number | undefined {
     const seen = this.counts.get(PayloadCounts.key(frame, d, layer, a));
     if (seen !== undefined) return seen;
-    return this.overflowed ? undefined : 0;
+    return this.cappedDocuments.has(PayloadCounts.documentKey(frame, d)) ? undefined : 0;
   }
 }
 

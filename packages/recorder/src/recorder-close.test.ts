@@ -169,3 +169,22 @@ describe('Recorder.close and the dataLayer tally', () => {
     await expect(inner.tallyDataLayers()).resolves.toEqual([]);
   });
 });
+
+describe('Recorder.close with a page that never answers', () => {
+  it('stops waiting for the unload flush after the deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const page = { evaluate: () => new Promise(() => undefined), frames: () => [] };
+      const context = { pages: () => [page] };
+      const browser = { close: vi.fn().mockRejectedValue(new Error('stop here')) };
+      const Ctor = Recorder as unknown as new (...args: unknown[]) => Recorder;
+      const recorder = new Ctor({ networkMode: 'stub' }, browser, context, undefined, undefined, undefined, undefined);
+      const closing = recorder.close().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(browser.close).toHaveBeenCalledTimes(1);
+      await closing;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
