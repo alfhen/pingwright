@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DataLayer theme</title>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var mode = q.get('mode') || 'plain';
+  var n = parseInt(q.get('n') || '', 10);
+  if (!(n >= 1 && n <= 20)) n = mode === 'theme' ? 8 : 3;
+  var planted = { note: 'pw-planted-value-1', url: 'https://planted.example.test/x' };
+  window.pwOwnPushes = 0;
+  function item(i) {
+    return { event: 'pw_item_' + i, note: planted.note, url: planted.url };
+  }
+  function gtag() { window.dataLayer.push(arguments); }
+
+  if (mode === 'redefine') {
+    Object.defineProperty(window, 'dataLayer', { value: [], writable: true, configurable: true, enumerable: true });
+  } else {
+    window.dataLayer = window.dataLayer || [];
+  }
+  window.pwRaw = window.dataLayer;
+
+  if (mode === 'theme') {
+    var raw = window.dataLayer;
+    raw.push = function (entry) {
+      var args = arguments;
+      if (entry === 'consent' && args[1] === 'update') {
+        setTimeout(function () { Array.prototype.push.apply(raw, args); }, 50);
+        return raw.length;
+      }
+      return Array.prototype.push.apply(raw, args);
+    };
+    gtag('consent', 'default', { ad_storage: 'denied', analytics_storage: 'denied', note: planted.note, url: planted.url });
+    window.pwOwnPushes += 1;
+    for (var i = 1; i < n - 1; i += 1) { window.dataLayer.push(item(i)); window.pwOwnPushes += 1; }
+    if (n > 1) {
+      gtag('consent', 'update', { ad_storage: 'granted', analytics_storage: 'granted', note: planted.note, url: planted.url });
+      window.pwOwnPushes += 1;
+    }
+  } else if (mode === 'unshift') {
+    window.dataLayer.push(item(0));
+    window.pwOwnPushes += 1;
+    for (var j = 1; j <= n; j += 1) { Array.prototype.unshift.call(window.dataLayer, item(j)); window.pwOwnPushes += 1; }
+  } else {
+    var count = mode === 'redefine' ? 3 : n;
+    for (var k = 0; k < count; k += 1) { window.dataLayer.push(item(k)); window.pwOwnPushes += 1; }
+  }
+})();
+</script>
+</head>
+<body>
+<h1>DataLayer theme</h1>
+<p>Pushes to <code>dataLayer</code> in the mode that <code>?mode=</code> names: <code>plain</code>, <code>theme</code>, <code>redefine</code> or <code>unshift</code>. The count is in <code>window.pwOwnPushes</code>.</p>
+</body>
+</html>

@@ -8,7 +8,8 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 - An invalid tag report now has `got`, the type of the rejected value. It never holds the value. The record stays at version 5.
 - The template's `read_data_layer` permission now lists `allowedKeys: specific`, so an import cannot widen it to every key.
 
-<!-- C08 -->
+- A run now gets a `dataLayerIncomplete` flag for a frame whose `dataLayer` holds more items than the run recorded, for example when a theme replaces `push` (#1281). The flag names the frame number, the layer and both counts. It checks only the document each frame holds when the run closes.
+- `close` now ends the late tag report wait before the unload flush and the session stop (#1187).
 
 <!-- E08 -->
 

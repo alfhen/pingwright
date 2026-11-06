@@ -49,7 +49,8 @@ import {
 } from 'playwright';
 import { routeCollector, type CollectorHandler, type ParsedReport } from './collector.ts';
 import { COLLECTOR_ORIGIN, SELFTEST_ORIGIN } from './origins.ts';
-import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript, type DataLayerPayload } from './datalayer.ts';
+import { DATALAYER_BINDING, DATALAYER_TALLY, dataLayerEventFromPayload, dataLayerInitScript, hookedLayerNames, type DataLayerPayload } from './datalayer.ts';
+import { buildTallyFlags, PayloadCounts, postedAhead, validateTally, type FrameTally } from './datalayer-tally.ts';
 import { buildDataLayerNotHookedFlag, loaderLayerName } from './datalayer-names.ts';
 import { parseTagReport, TAG_REPORT_BINDING } from './tag-report.ts';
 import { buildFlags, buildUnloadGapFlags, type FrameRef } from './flags.ts';
@@ -83,6 +84,8 @@ import { loopbackIsHostedForTests } from './guard.ts';
 
 export const TAGREEVE_VERSION = readVersion();
 const REDACTED_VALUE = '[redacted]';
+const TALLY_DEADLINE_MS = 2000;
+const TALLY_POSTED_WAIT_MS = 1000;
 const TAG_REPORT_QUIET_MS = 500;
 const TAG_REPORT_MAX_WAIT_MS = 2500;
 
@@ -211,6 +214,7 @@ export class Recorder {
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
+  private readonly payloadCounts = new PayloadCounts();
   private readonly eventFrames = new Map<string, FrameRef>();
   private readonly frameNumbers = new WeakMap<Frame, number>();
   private readonly frameNavigations = new WeakMap<Frame, number>();
@@ -346,6 +350,7 @@ export class Recorder {
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const isMain = source.frame === source.page.mainFrame();
+      this.payloadCounts.add(payload ?? {}, this.frameNumber(source.frame), hookedLayerNames(this.options.dataLayerNames));
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumber(source.frame) });
       if (!event) return;
       this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
@@ -1015,10 +1020,50 @@ export class Recorder {
 
   private async flushUnloadQueues(): Promise<void> {
     const script = `window.${UNLOAD_FLUSH}?.()`;
-    for (const page of this.context.pages()) {
-      await page.evaluate(script).catch(() => undefined);
-    }
+    // A page whose main thread is stuck never answers, so the wait is bounded.
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, TALLY_DEADLINE_MS);
+    });
+    const flushing = Promise.all(this.context.pages().map((page) => page.evaluate(script).catch(() => undefined)));
+    await Promise.race([flushing, deadline]);
+    clearTimeout(timer);
     await this.wait(50);
+  }
+
+  /** Asks each open frame how many items its hooked arrays hold, so a gap against the records can be flagged. */
+  private async collectTallies(): Promise<FrameTally[]> {
+    const names = hookedLayerNames(this.options.dataLayerNames);
+    const tallies: FrameTally[] = [];
+    let frames: Frame[] = [];
+    try {
+      frames = this.context.pages().flatMap((page) => page.frames());
+    } catch {
+      return tallies;
+    }
+    const script = `window.${DATALAYER_TALLY}?.()`;
+    const asking = frames.map(async (frame) => {
+      try {
+        const tally = validateTally(this.frameNumber(frame), await frame.evaluate(script), names);
+        if (tally) tallies.push(tally);
+      } catch {
+        // a frame that fails or detaches gets no flag
+      }
+    });
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, TALLY_DEADLINE_MS);
+    });
+    await Promise.race([Promise.all(asking), deadline]);
+    clearTimeout(timer);
+    return [...tallies];
+  }
+
+  private async tallyDataLayers(): Promise<Flag[]> {
+    const tallies = await this.collectTallies();
+    const start = Date.now();
+    while (postedAhead(tallies, this.payloadCounts) && Date.now() - start < TALLY_POSTED_WAIT_MS) await this.wait(20);
+    return buildTallyFlags(this.runId, tallies, this.payloadCounts);
   }
 
   private noteContainerExit(): void {
@@ -1037,14 +1082,15 @@ export class Recorder {
   async close(): Promise<RunResult> {
     const closeStartedAt = nodeNow();
     this.noteContainerExit();
+    await this.waitForLateTagReports();
     if (this.options.networkMode !== 'live') await this.flushUnloadQueues();
+    const tallyFlags = await this.tallyDataLayers();
     if (this.session) {
       const session = this.session;
       await waitForQuiet(() => session.lastCallAt());
       session.stopRecording();
       this.noteContainerExit();
     }
-    await this.waitForLateTagReports();
     this.closed = true;
     try {
       await this.browser.close();
@@ -1089,6 +1135,7 @@ export class Recorder {
     }
     const notHooked = buildDataLayerNotHookedFlag({ runId: this.runId, loaders: this.loaderLayers, hooked: this.options.dataLayerNames ?? [] });
     if (notHooked) flags.push(notHooked);
+    flags.push(...tallyFlags);
     this.recordServerContainer(requests, hits, containerCounts, flags);
     const consentEpochs = this.buildConsentEpochs();
     let records: RunRecords = {
