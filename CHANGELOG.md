@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.6.0-rc.3
+
+Not released yet. The newest release is 0.6.0-rc.2, below.
+
+<!-- T08 -->
+
+<!-- C08 -->
+
+<!-- E08 -->
+
+<!-- Z08 -->
+
+<!-- B08 -->
+
+<!-- M23 -->
+
+<!-- M24 -->
+
+<!-- M25 -->
+
+<!-- M26 -->
+
+<!-- J08 -->
+
+<!-- W08 -->
+
+<!-- K08 -->
+
+<!-- M28 -->
+
+<!-- M29 -->
+
+<!-- M30 -->
+
+<!-- M31 -->
+
+<!-- M32 -->
+
+<!-- R13 -->
+
 ## 0.6.0-rc.2
 
 Release candidate. Install it with `npm i -g tagreeve@next`.
