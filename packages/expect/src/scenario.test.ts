@@ -431,6 +431,19 @@ describe('tag rules', () => {
     expect(parse('{ tag: { id: "45" }, count: 2 }').count).toEqual({ op: '=', n: 2 });
   });
 
+  test('a status outside the four GTM values is refused and not echoed', () => {
+    let message = '';
+    try {
+      parse('{ tag: { id: "1", status: [success, sucess] } }');
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toContain('status');
+    expect(message).toContain('success, failure, exception, timeout');
+    expect(message).not.toContain('sucess');
+    for (const status of ['success', 'failure', 'exception', 'timeout']) expect(parse(`{ tag: { id: "1", status: ${status} } }`, 'mustNot').tag?.status).toEqual([status]);
+  });
+
   test('exactly one of id and name', () => {
     expect(() => parse('{ tag: {} }')).toThrow(/exactly one of id or name/);
     expect(() => parse('{ tag: { id: "1", name: "x" } }')).toThrow(/exactly one of id or name/);
