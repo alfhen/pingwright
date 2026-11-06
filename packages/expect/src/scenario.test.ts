@@ -292,8 +292,18 @@ test('handoff mapping errors', () => {
 test('wait takes a url as a glob or a regular expression', () => {
   const s = parseScenario('start: /\nsteps:\n  - wait: { url: "/thank-you*" }\n  - wait: { url: { matches: "ty$" } }\n');
   expect(s.steps.map((x) => (x.kind === 'wait' ? x.value : null))).toEqual([{ url: { glob: '/thank-you*' } }, { url: { matches: 'ty$' } }]);
-  expect(errorOf('start: /\nsteps:\n  - wait: { url: "/x", role: link }\n')).toContain('url cannot be combined');
+  expect(errorOf('start: /\nsteps:\n  - wait: { url: "/x", role: link }\n')).toContain('url only takes timeout');
   expect(errorOf('start: /\nsteps:\n  - wait: { url: 3 }\n')).toContain('wait.url: must be a path glob');
+});
+
+test('wait with a url takes a timeout', () => {
+  const s = parseScenario('start: /\nsteps:\n  - wait: { url: "/x", timeout: 90s }\n  - wait: { url: "/y", timeout: 2m }\n');
+  expect(s.steps.map((x) => (x.kind === 'wait' ? x.value : null))).toEqual([
+    { url: { glob: '/x' }, timeout: 90_000 },
+    { url: { glob: '/y' }, timeout: 120_000 },
+  ]);
+  expect(errorOf('start: /\nsteps:\n  - wait: { url: "/x", timeout: soon }\n')).toContain('wait.timeout: must be a duration');
+  expect(errorOf('start: /\nsteps:\n  - wait: { selector: "#a", timeout: 2s }\n')).toBeTruthy();
 });
 
 test('a real German mobile number in identity.phone is warned about with a reason and the DE range', () => {

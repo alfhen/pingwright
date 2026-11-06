@@ -1,0 +1,4 @@
+start: /products/fake-tee
+steps:
+  - wait: { url: "/never*", timeout: 2s }
+options: { seed: 1, allowUnknownDestination: true }

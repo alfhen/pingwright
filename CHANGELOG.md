@@ -29,7 +29,8 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- J08 -->
 
-<!-- W08 -->
+- `wait` with a `url` takes an optional `timeout`, such as `wait: { url: "/thank-you*", timeout: 90s }`. Any other key next to `url` is refused with "url only takes timeout" (#1283).
+- The `wait` URL docs say how a blocking control is printed (#1205).
 
 <!-- K08 -->
 
