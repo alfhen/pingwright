@@ -265,12 +265,23 @@ test.each([
   expect(leak!.detail).toContain(`carries 2 ${kind} value(s)`);
 });
 
+const b64 = (v: string) => Buffer.from(v).toString('base64');
+
 test.each([
   ['percent-encoded', 'note=joann%40shop.example\nann%40shop.example'],
-  ['JSON-escaped', '{"a":"joann\\u0040shop.example","b":"ann\\u0040shop.example"}'],
+  ['percent-encoded twice', 'note=joann%2540shop.example\nann%2540shop.example'],
+  ['base64 tokens', `note=${b64('joann@shop.example')}\n${b64('x ann@shop.example')}`],
 ])('possibleRealData counts a shorter value that has its own occurrence, %s', (_n, body) => {
   const [leak] = findForeignData([rawRequest(REPLAY, body)], [], identity);
   expect(leak!.detail).toContain('carries 2 email value(s)');
+});
+
+test('possibleRealData keeps a body value apart from a longer value that is only in a hit parameter', () => {
+  const { hit } = sgtmHit({});
+  const req = rawRequest(REPLAY, 'ann@shop.example');
+  const [leak] = findForeignData([req], [{ ...hit, requestId: req.id, params: { em: 'joann@shop.example' } }], identity);
+  expect(leak!.detail).toContain('carries 2 email value(s)');
+  expect(leak!.detail).toMatch(/in em, the body$/);
 });
 
 test('possibleRealData does not read the digits of a JSON path as a phone number', () => {
