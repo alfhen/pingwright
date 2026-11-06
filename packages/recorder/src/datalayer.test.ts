@@ -1,7 +1,7 @@
 import { runInNewContext } from 'node:vm';
 import { newId } from '@tagreeve/core';
 import { expect, test } from 'vitest';
-import { DATALAYER_BINDING, dataLayerEventFromPayload, dataLayerInitScript } from './datalayer.ts';
+import { DATALAYER_BINDING, DATALAYER_TALLY, dataLayerEventFromPayload, dataLayerInitScript } from './datalayer.ts';
 
 const MAIN = { main: true, n: 0 };
 
@@ -9,6 +9,8 @@ interface Sent {
   t: number;
   args: string;
   layer?: string;
+  d?: string;
+  a?: number;
 }
 
 function pageWith(setup: string, names: string[] = []): { sent: Sent[]; run: (code: string) => unknown } {
@@ -162,4 +164,48 @@ test('Shopify and location are not trapped while absent', () => {
   expect(page.run(`Object.getOwnPropertyDescriptor(window, 'location')`)).toBeUndefined();
   page.run(`window.Shopify = { theme: 1 };`);
   expect(page.run(`Object.getOwnPropertyDescriptor(window, 'Shopify').value.theme`)).toBe(1);
+});
+
+type Tally = { d: string; arrays: { layer: string; a: number | null; length: number; posted: number }[] };
+
+test('the tally returns the token, array number, length and posted count', () => {
+  const page = pageWith('', ['myLayer']);
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }, { event: 'b' }); window.myLayer = [{ event: 'c' }];`);
+  const tally = page.run(`${DATALAYER_TALLY}()`) as Tally;
+  expect(typeof tally.d).toBe('string');
+  expect(tally.arrays).toEqual([
+    { layer: 'dataLayer', a: 1, length: 2, posted: 2 },
+    { layer: 'myLayer', a: 1, length: 1, posted: 1 },
+  ]);
+  expect(page.sent.map((s) => [s.d, s.a])).toEqual([[tally.d, 1], [tally.d, 1], [tally.d, 1]]);
+});
+
+test('a replaced array gets the next array number and an unhooked array reports a null', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' }); window.dataLayer = []; dataLayer.push({ event: 'b' });`);
+  expect((page.run(`${DATALAYER_TALLY}()`) as Tally).arrays).toEqual([{ layer: 'dataLayer', a: 2, length: 1, posted: 1 }]);
+  page.run(`Object.defineProperty(window, 'dataLayer', { value: [1, 2, 3], configurable: true });`);
+  expect((page.run(`${DATALAYER_TALLY}()`) as Tally).arrays).toEqual([{ layer: 'dataLayer', a: null, length: 3, posted: 0 }]);
+});
+
+test('two documents get different tokens', () => {
+  const first = pageWith('').run(`${DATALAYER_TALLY}()`) as Tally;
+  const second = pageWith('').run(`${DATALAYER_TALLY}()`) as Tally;
+  expect(first.d).not.toBe(second.d);
+  expect(first.d.length).toBeLessThanOrEqual(64);
+});
+
+test('the tally posts nothing and never throws into the page', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; dataLayer.push({ event: 'a' });`);
+  page.run(`${DATALAYER_TALLY}(); ${DATALAYER_TALLY}()`);
+  expect(page.sent).toHaveLength(1);
+  page.run(`Object.defineProperty(window, 'dataLayer', { get() { throw new Error('x'); }, configurable: true });`);
+  expect(() => page.run(`${DATALAYER_TALLY}()`)).not.toThrow();
+});
+
+test('a push that skips the wrapper shows as a longer array than posted', () => {
+  const page = pageWith('');
+  page.run(`window.dataLayer = []; Array.prototype.push.call(dataLayer, { event: 'a' });`);
+  expect((page.run(`${DATALAYER_TALLY}()`) as Tally).arrays).toEqual([{ layer: 'dataLayer', a: 1, length: 1, posted: 0 }]);
 });
