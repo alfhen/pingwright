@@ -487,6 +487,23 @@ describe('handoff text streams', () => {
     expect(chunks.join('')).toContain('Press Enter when done.');
   });
 
+  test('stdinResolver prompts on stderr by default, not stdout', async () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const out = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      const controller = new AbortController();
+      const done = stdinResolver('text', controller.signal);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      controller.abort();
+      await done;
+      expect(err.mock.calls.map((c) => String(c[0])).join('')).toContain('Press Enter when done.');
+      expect(out).not.toHaveBeenCalled();
+    } finally {
+      err.mockRestore();
+      out.mockRestore();
+    }
+  });
+
   test('the default print writes to stderr, not stdout', () => {
     const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const out = vi.spyOn(process.stdout, 'write').mockReturnValue(true);

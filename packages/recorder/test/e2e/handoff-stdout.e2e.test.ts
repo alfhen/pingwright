@@ -56,5 +56,9 @@ test('with no print, the handoff text goes to stderr and none of it to stdout', 
   const stderrText = err.join('');
   expect(stderrText).toContain('Handoff: Pay the test order');
   expect(stderrText).toContain('Handoff ended: reached /thank-you-late');
-  expect(out.join('')).not.toContain('Handoff');
+  expect(stderrText).toContain('Press Enter when done.');
+  const stdoutText = out.join('');
+  expect(stdoutText).not.toContain('Handoff');
+  expect(stdoutText).not.toContain('Press Enter');
+  expect(stdoutText).not.toContain('Recording continues');
 }, 90_000);
