@@ -47,6 +47,8 @@ interface Setup {
   inputs?: FakeInput[];
   /** The first fill tries fail with a Playwright timeout; the frames move to this URL after the first of them. */
   slowFill?: { tries: number; moveTo?: string };
+  /** Every fill try times out. The try that is cut short by the deadline waits for it, then the frame goes to this URL (the same URL is a reload). */
+  moveAtDeadline?: string;
   /** The frame navigates to this URL while the first fill is under way, whether the fill is a handle fill or a locator fill. */
   navigateDuringFill?: string;
   /** The frame navigates to this URL while the visible inputs are being read for the count reason. */
@@ -90,6 +92,17 @@ function fake(setup: Setup = {}) {
         if (setup.slowFill.moveTo) for (const f of frames) navigate(f, setup.slowFill.moveTo);
         throw Object.assign(new Error(`${kind}.fill: Timeout 500ms exceeded.`), { name: 'TimeoutError' });
       }
+      if (setup.moveAtDeadline !== undefined) {
+        const last = (options?.timeout ?? 0) < 500;
+        if (last) await new Promise((resolve) => setTimeout(resolve, (options?.timeout ?? 0) + 5));
+        if (last) {
+          for (const f of frames) {
+            if (f.url === setup.moveAtDeadline) navigate(f, f.url);
+            else f.url = setup.moveAtDeadline;
+          }
+        }
+        throw Object.assign(new Error(`${kind}.fill: Timeout ${options?.timeout}ms exceeded.`), { name: 'TimeoutError' });
+      }
       log.push(`fill ${selector} ${input} ${value} @${frame.name}`);
       if (failFill && fills++ === failFillAt) throw new Error(setup.fillMessage?.(value) ?? `locator.fill: Timeout. fill("${value}")`);
     };
@@ -124,7 +137,7 @@ function fake(setup: Setup = {}) {
                       try {
                         await typeInto(input, value, options, 'elementHandle');
                       } catch (error) {
-                        if (frame.generation !== bound) throw detached();
+                        if (frame.generation !== bound && !setup.moveAtDeadline) throw detached();
                         throw error;
                       }
                     },
@@ -330,6 +343,31 @@ describe('duplicate frames and inputs', () => {
     const { error, log, record } = await play({ navigateDuringFill: 'http://127.0.0.1:4000/card-frame-extra-input' });
     expect(fills(log)).toEqual([]);
     expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(record.payment).toBeUndefined();
+  });
+
+  test.each([
+    ['another accepted card document', 'http://127.0.0.1:4000/card-frame-extra-input'],
+    ['another path', 'http://127.0.0.1:4000/elsewhere.html'],
+    ['the same URL, a reload', GOOD_FRAME],
+  ])('a frame that goes to %s at the deadline gives the gone-frame reason', async (_name, moveAtDeadline) => {
+    const { error, log, record } = await play({ moveAtDeadline, timeout: 700 });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(fills(log)).toEqual([]);
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a frame that moves to another accepted card document while the input handle resolves gets nothing typed', async () => {
+    const { error, log, record } = await play({ navigateDuringResolve: 'http://127.0.0.1:4000/card-frame-extra-input' });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(fills(log)).toEqual([]);
+    expect(record.payment).toBeUndefined();
+  });
+
+  test('a frame that reloads the same URL during the fill gives the gone-frame reason and types nothing', async () => {
+    const { error, log, record } = await play({ navigateDuringFill: GOOD_FRAME });
+    expect(error?.message).toBe('card field number could not be filled: the card frame is gone or not served from the card host');
+    expect(fills(log)).toEqual([]);
     expect(record.payment).toBeUndefined();
   });
 
