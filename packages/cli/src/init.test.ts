@@ -94,3 +94,37 @@ test('a failed write names the relative path, keeps earlier lines and exits 2', 
   expect(err).toMatch(/^Could not write \.gitignore: /);
   expect(err).not.toContain(dir);
 });
+
+test.each(['tagreeve/scenarios', 'tagreeve/baselines'])('a file at %s exits 2 and says it is not a folder', async (path) => {
+  await mkdir(join(dir, 'tagreeve'), { recursive: true });
+  await writeFile(join(dir, path), 'x');
+  let out = '';
+  let err = '';
+  const code = await initCommand({ stdout: (t) => (out += t), stderr: (t) => (err += t) }, false, dir);
+  expect(code).toBe(2);
+  expect(err).toBe(`${path} is not a folder\n`);
+  expect(out).not.toContain('Skipped');
+});
+
+test('--json with a failed step prints the items done so far', async () => {
+  await mkdir(join(dir, '.gitignore'));
+  let out = '';
+  let err = '';
+  const code = await initCommand({ stdout: (t) => (out += t), stderr: (t) => (err += t) }, true, dir);
+  expect(code).toBe(2);
+  expect(JSON.parse(out)).toEqual({
+    items: [
+      { path: 'tagreeve/scenarios/', action: 'created' },
+      { path: 'tagreeve/baselines/', action: 'created' },
+      { path: 'tagreeve/config.yml', action: 'created' },
+    ],
+  });
+  expect(err).toMatch(/^Could not write \.gitignore: /);
+});
+
+test('a .gitignore with only *.jsonl still gets the runs line', async () => {
+  await exec('git', ['init', '-q', dir]);
+  await writeFile(join(dir, '.gitignore'), '*.jsonl\n');
+  expect(await init()).toContain('Added /tagreeve/runs/ to .gitignore');
+  expect(await read('.gitignore')).toBe('*.jsonl\n/tagreeve/runs/\n');
+});

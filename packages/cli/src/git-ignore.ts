@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 const GIT_TIMEOUT_MS = 5000;
-const PROBE_FILE = 'probe.jsonl';
+const PROBE_FILE = 'run_probe.jsonl';
 
 async function nearestExistingDir(path: string): Promise<string> {
   let dir = resolve(path);
@@ -32,11 +32,12 @@ function checkIgnoreExit(cwd: string, path: string): Promise<number | undefined>
 export type IgnoreStatus = 'ignored' | 'unignored' | 'unknown';
 
 /** `unknown` covers no git, no work tree and any other failure. */
-export async function gitIgnoreStatus(path: string): Promise<IgnoreStatus> {
+export async function gitIgnoreStatus(path: string, options: { probe?: 'file' | 'folder' } = {}): Promise<IgnoreStatus> {
   const absolute = resolve(path);
   const existing = await nearestExistingDir(absolute);
-  // Probe a file inside the folder: "dir/**" and "*.jsonl" rules match the files, not the folder, and a "dir/" rule matches a folder that does not exist yet.
-  const code = await checkIgnoreExit(existing, join(absolute, PROBE_FILE));
+  // A file probe: "dir/**" and "*.jsonl" rules match the files, not the folder, and a "dir/" rule matches a folder that does not exist yet. A folder probe asks about the folder itself, for a caller that writes a rule for the folder.
+  const target = options.probe === 'folder' ? `${absolute}/` : join(absolute, PROBE_FILE);
+  const code = await checkIgnoreExit(existing, target);
   return code === 0 ? 'ignored' : code === 1 ? 'unignored' : 'unknown';
 }
 

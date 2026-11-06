@@ -33,7 +33,10 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- K08 -->
 
-<!-- M28 -->
+- `init` exits 2 and says the path is not a folder when a file is at `tagreeve/scenarios` or `tagreeve/baselines` (#1052).
+- `init --json` prints the items done so far when a step fails, then exits 2 (#1133).
+- The git-ignore probe file is `run_probe.jsonl`, so a `run_*.jsonl` rule counts as ignoring run records (#1139).
+- `init` asks git about the `tagreeve/runs/` folder itself, so a `.gitignore` with only `*.jsonl` still gets the `/tagreeve/runs/` line (#1140).
 
 <!-- M29 -->
 
