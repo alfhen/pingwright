@@ -433,7 +433,7 @@ async function runStep(
       return;
     case 'wait':
       if (typeof step.value === 'number') await recorder.wait(step.value);
-      else if ('url' in step.value) await waitForUrl(recorder, step.value.url, timeout);
+      else if ('url' in step.value) await waitForUrl(recorder, step.value.url, step.value.timeout ?? timeout);
       else {
         const deadline = Date.now() + timeout;
         const target = await locate(page, recorder, step.value.selector, record, timeout);

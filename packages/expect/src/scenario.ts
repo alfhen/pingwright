@@ -80,7 +80,7 @@ export type StepBody =
   | { kind: 'fill'; value: Record<string, string>; optional?: string[] }
   | { kind: 'select'; value: Record<string, string> }
   | { kind: 'consent'; value: 'accept' | 'reject' | 'none' | 'withdraw' }
-  | { kind: 'wait'; value: number | { selector: Locator } | { url: UrlMatcher } }
+  | { kind: 'wait'; value: number | { selector: Locator } | { url: UrlMatcher; timeout?: number } }
   | { kind: 'addToCart'; value: string }
   | { kind: 'evaluate'; value: string }
   | { kind: 'checkpoint'; value: string }
@@ -623,10 +623,15 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
         else if (typeof value === 'string' && /^\s*\d/.test(value)) fail([...path, kind], `"${value}" is not a duration such as 4s, 500ms or 2m`);
         else if (typeof value === 'string' && value.trim()) add({ kind, value: { selector: value } });
         else if (isMap(value) && 'url' in value) {
-          if (Object.keys(value).length > 1) fail([...path, kind], 'url cannot be combined with other keys');
+          if (Object.keys(value).some((k) => k !== 'url' && k !== 'timeout')) fail([...path, kind], 'url only takes timeout');
           else {
             const url = urlMatcher(value.url, [...path, kind, 'url']);
-            if (url) add({ kind, value: { url } });
+            let timeout: number | undefined;
+            if ('timeout' in value) {
+              timeout = parseDuration(value.timeout);
+              if (timeout === undefined) fail([...path, kind, 'timeout'], 'must be a duration such as 90s or 2m');
+            }
+            if (url && (!('timeout' in value) || timeout !== undefined)) add({ kind, value: timeout === undefined ? { url } : { url, timeout } });
           }
         } else if (isMap(value)) {
           const v = locator();
