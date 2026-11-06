@@ -106,7 +106,7 @@ test('with --gtm-override the workspace tags are reported, and the auth in a tag
     expect(statusOf(t, '12')).toBeUndefined();
     expect(statusOf(t, '45')).toBeUndefined();
   }
-  expect(run.containerVersions['GTM-PWTEST1']).toBe('4');
+  expect(run.containerVersions['GTM-PWTEST1']).toBe('QUICK_PREVIEW');
 
   // Positive control from outside the scrubbed record: the fixture's own log shows the page sent the auth in tag 89's name.
   const logged = site.tagReportLog.map((body) => JSON.parse(body) as { tags: { id: string; name: string | null }[] });

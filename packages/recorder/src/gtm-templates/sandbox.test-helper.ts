@@ -10,6 +10,9 @@ const API_PERMISSION: Record<string, string> = {
   getContainerVersion: 'read_container_data',
 };
 
+// APIs that need no permission in GTM.
+const OPEN_APIS = new Set(['makeString']);
+
 export type SandboxHost = {
   data: Record<string, unknown>;
   dataLayer?: Record<string, unknown>;
@@ -60,11 +63,13 @@ export function runSandbox(
       return host.dataLayer?.[key as string];
     },
     getContainerVersion: () => host.containerVersion ?? {},
+    makeString: (value) => (value === null || value === undefined ? '' : String(value)),
   };
 
   const require = (name: string): Fn => {
     run.required.push(name);
     const api = apis[name];
+    if (api && OPEN_APIS.has(name)) return api;
     const permission = API_PERMISSION[name];
     if (!api || !permission || !granted.has(permission)) {
       throw new Error(`require('${name}'): API not granted by the permissions`);

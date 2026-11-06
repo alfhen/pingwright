@@ -4,7 +4,9 @@
 
 Not released yet. The newest release is 0.6.0-rc.2, below.
 
-<!-- T08 -->
+- Fixed: the web tag reporter works in real GTM, which gives tag IDs as numbers. In 0.6.0-rc.2 every report from a published container was recorded as an invalid report (`tagReport:tagId`). The template now sends IDs as strings, and the parser also accepts numbers, so a 0.6.0-rc.2 template keeps working.
+- An invalid tag report now has `got`, the type of the rejected value. It never holds the value. The record stays at version 5.
+- The template's `read_data_layer` permission now lists `allowedKeys: specific`, so an import cannot widen it to every key.
 
 <!-- C08 -->
 

@@ -21,6 +21,9 @@ describe('web tag reporter template', () => {
       { id: 'read_data_layer', keys: ['event', 'gtm.uniqueEventId'] },
       { id: 'read_container_data', keys: [] },
     ]);
+    const layer = JSON.parse(template.sections['WEB_PERMISSIONS']!)[2].instance.param;
+    expect(layer.map((p: { key: string }) => p.key)).toEqual(['allowedKeys', 'keyPatterns']);
+    expect(layer[0].value.string).toBe('specific');
     const entry = JSON.parse(template.sections['WEB_PERMISSIONS']!)[1].instance.param[0].value
       .listItem[0];
     const flags = entry.mapValue.map((v: { boolean?: boolean }) => v.boolean);
@@ -47,6 +50,7 @@ describe('web tag reporter template', () => {
       'callInWindow',
       'copyFromDataLayer',
       'getContainerVersion',
+      'makeString',
     ]);
   });
 
@@ -83,6 +87,23 @@ describe('web tag reporter template', () => {
       },
     ]);
     expect(JSON.stringify(call.args)).not.toContain('group');
+  });
+
+  it('sends a number tag ID and a number version as strings', () => {
+    const run = runSandbox(template.sandboxedJs, template.permissions, {
+      ...host,
+      containerVersion: { version: 12 },
+    });
+    run.fireEvent('GTM-PWTEST1', { tags: [{ id: 11, status: 'success', executionTime: 1 }] });
+    const report = run.windowCalls[0]!.args[0] as { version: string; tags: { id: string }[] };
+    expect(report.tags[0]!.id).toBe('11');
+    expect(report.version).toBe('12');
+  });
+
+  it('leaves an undefined version undefined', () => {
+    const run = runSandbox(template.sandboxedJs, template.permissions, { ...host, containerVersion: {} });
+    run.fireEvent('GTM-PWTEST1', {});
+    expect((run.windowCalls[0]!.args[0] as { version: unknown }).version).toBeUndefined();
   });
 
   it('reads the name from the nameKey field', () => {

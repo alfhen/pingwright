@@ -97,4 +97,63 @@ describe('parseTagReport', () => {
       expect(JSON.stringify(bad)).not.toContain('secret');
     }
   });
+
+  test('a number tag id becomes a decimal string', () => {
+    const r = parseTagReport({ ...good(), tags: [{ id: 11, status: 'success' }] }, 'web', ctx);
+    expect(r.ok && r.report.tags[0]!.id).toBe('11');
+    const zero = parseTagReport({ ...good(), tags: [{ id: 0, status: 'success' }] }, 'web', ctx);
+    expect(zero.ok && zero.report.tags[0]!.id).toBe('0');
+  });
+
+  test('a number version becomes a decimal string', () => {
+    const r = parseTagReport({ ...good(), version: 12 }, 'web', ctx);
+    expect(r.ok && r.version).toBe('12');
+  });
+
+  test.each([
+    ['a float', 11.5],
+    ['a negative number', -1],
+    ['NaN', Number.NaN],
+    ['a string with other characters', '1a'],
+  ])('%s as a tag id is invalid', (_name, id) => {
+    const bad = invalid({ ...good(), tags: [{ id, status: 'success' }] });
+    expect(bad.error).toBe('tagReport:tagId');
+  });
+
+  test.each([
+    ['a float', 1.5],
+    ['a negative number', -3],
+    ['a boolean', true],
+    ['an object', {}],
+  ])('%s as a version is invalid', (_name, version) => {
+    expect(invalid({ ...good(), version }).error).toBe('tagReport:version');
+  });
+
+  test.each([
+    ['payload', null, 'null'],
+    ['payload', [1], 'array'],
+    ['payload', 5, 'number'],
+    ['container', { container: 5 }, 'number'],
+    ['container', { container: 'nope' }, 'string'],
+    ['tags', { tags: {} }, 'object'],
+    ['tags', { tags: null }, 'null'],
+    ['tagId', { tags: [{ id: true, status: 'success' }] }, 'boolean'],
+    ['tagId', { tags: [{ id: 11.5, status: 'success' }] }, 'number'],
+    ['tagId', { tags: [{ id: '1a', status: 'success' }] }, 'string'],
+    ['tagId', { tags: [{ id: [1], status: 'success' }] }, 'array'],
+    ['tagId', { tags: [{ status: 'success' }] }, 'undefined'],
+    ['tag', { tags: [null] }, 'null'],
+  ])('%s: got is the type class %s', (what, patch, got) => {
+    const payload = what === 'payload' ? patch : { ...good(), ...(patch as object) };
+    const bad = invalid(payload);
+    expect(bad.error).toBe(`tagReport:${what}`);
+    expect(bad.got).toBe(got);
+    expect(Object.keys(bad).sort()).toEqual(['body', 'error', 'got', 'id', 'runId', 't', 'type']);
+  });
+
+  test('a rejected value is not kept in the invalid report', () => {
+    const bad = invalid({ ...good(), container: 'planted-fake-value' });
+    expect(JSON.stringify(bad)).not.toContain('planted-fake-value');
+    expect(bad.got).toBe('string');
+  });
 });
