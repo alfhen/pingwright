@@ -90,3 +90,14 @@ test('types merge across pushes of one group', () => {
   const [group] = first(push({ event: 'x', v: 1 }), push({ event: 'x', v: 'a' }));
   expect(group!.paths.find((p) => p.path === 'v')!.types).toEqual(['number', 'string']);
 });
+
+test('a pushed string never prints, and a known gtag command keeps its label', () => {
+  const secret = 'ord_abc';
+  const strings = push(null, { args: [secret] });
+  expect(JSON.stringify(strings.args)).toContain(secret);
+  const result = shapes(strings, push(null, { args: [`${secret}_2`, { a: 1 }] }));
+  expect(result.steps[0]!.events.map((g) => g.event)).toEqual(['gtag (other)']);
+  expect(JSON.stringify(result)).not.toContain(secret);
+  const known = ['config', 'consent', 'event', 'get', 'js', 'set'].map((c) => push(null, { args: [c, 'x'] }));
+  expect(first(...known).map((g) => g.event)).toEqual(['gtag config', 'gtag consent', 'gtag event', 'gtag get', 'gtag js', 'gtag set']);
+});

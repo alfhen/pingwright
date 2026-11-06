@@ -172,6 +172,7 @@ const VENDOR_KEYS = new Set(['vendor', 'event', 'page', 'transport', 'host', 'ou
 const GROUP_KEYS = ['consent', 'ids', 'params', 'identity', 'body'] as const;
 const COOKIE_RULE_KEYS = ['cookie', 'before', 'in', 'after', 'from'];
 const TAG_RULE_KEYS = ['tag', 'count', 'after', 'from'];
+const TAG_STATUSES = ['success', 'failure', 'exception', 'timeout'];
 const TAG_SELECTOR_KEYS = ['id', 'name', 'container', 'event', 'status', 'side'];
 const MAX_TAG_TEXT = 200;
 const BODY_KEYS = ['has', 'only', 'ignore'] as const;
@@ -681,6 +682,7 @@ export function parseScenario(text: string, extraVendorKeys: readonly string[] =
       } else if (key === 'status') {
         const items = Array.isArray(raw) ? raw : [raw];
         if (items.length === 0 || !items.every((x) => typeof x === 'string' && x && x.length <= MAX_FIELD_NAME)) fail(p, 'must be a status or a list of statuses');
+        else if (!items.every((x) => TAG_STATUSES.includes(x as string))) fail(p, `must be one of ${TAG_STATUSES.join(', ')}`);
         else tag.status = items as string[];
       } else if (key === 'side') {
         if (raw === 'web' || raw === 'server') tag.side = raw;

@@ -4,7 +4,7 @@ import { readTemplateSections } from '../../../packages/recorder/src/gtm-templat
 const templatePath = new URL('../../../packages/recorder/src/gtm-templates/web-tag-reporter.tpl', import.meta.url);
 
 export interface FixtureTag {
-  id: string;
+  id: number;
   status: string;
   executionTime: number;
   /** Absent for a tag whose Additional Tag Metadata does not include its name. */
@@ -21,22 +21,25 @@ export interface ShimConfig {
 
 // The browser stand-ins for the sandboxed APIs the shipped template requires. Each one is granted only what the
 // template's permissions list, as GTM does, so a template that asks for more than it declares fails here too.
+// The OPEN_APIS need no permission, as in GTM.
 const API_PERMISSION = {
   addEventCallback: 'read_event_metadata',
   callInWindow: 'access_globals',
   copyFromDataLayer: 'read_data_layer',
   getContainerVersion: 'read_container_data',
 };
+const OPEN_APIS = ['makeString'];
 
 /** JavaScript that adds `pwContainer.reportTags(events)`. It runs the shipped template's sandboxed code once per event. */
 export function templateShim(config: ShimConfig): string {
   const { sandboxedJs, permissions } = readTemplateSections(readFileSync(templatePath, 'utf8'));
   const granted = Object.fromEntries(permissions.map((p) => [p.id, p.keys]));
-  const setup = { ...config, templateJs: sandboxedJs, granted, apiPermission: API_PERMISSION };
+  const setup = { ...config, templateJs: sandboxedJs, granted, apiPermission: API_PERMISSION, openApis: OPEN_APIS };
   return `(function () {
   var cfg = ${JSON.stringify(setup)};
   var uniqueId = 0;
   function allowed(api, key) {
+    if (cfg.openApis.indexOf(api) >= 0) return;
     var keys = cfg.granted[cfg.apiPermission[api]];
     if (!keys) throw new Error(api + ' is not granted by the template permissions');
     if (key !== undefined && keys.indexOf(key) < 0) throw new Error(api + ' has no permission for ' + key);
@@ -64,6 +67,9 @@ export function templateShim(config: ShimConfig): string {
       },
       getContainerVersion: function () {
         return { version: cfg.version };
+      },
+      makeString: function (value) {
+        return value === null || value === undefined ? '' : String(value);
       }
     };
     var require = function (name) {

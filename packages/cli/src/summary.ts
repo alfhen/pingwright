@@ -341,7 +341,7 @@ export function formatSummary(summary: Summary): string {
     for (const c of b.changes) lines.push(`  ${c}`);
   }
   const failed = summary.results.filter((r) => !passesGate(r)).length;
-  const warned = summary.results.filter((r) => !r.pass && passesGate(r)).length;
+  const warned = summary.results.filter((r) => !r.pass && passesGate(r)).length + (summary.baseline?.warnings.length ?? 0);
   const warnings = warned > 0 ? ` with ${warned} warning${warned === 1 ? '' : 's'}` : '';
   if (failed === 0 && summary.baseline?.drift) lines.push(`Result: fail (baseline drift)${warnings}`);
   else lines.push(failed === 0 ? `Result: pass${warnings}` :`Result: fail (${failed} of ${summary.results.length})${warnings}`);

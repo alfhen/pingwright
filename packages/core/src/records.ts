@@ -31,6 +31,9 @@ export interface CaptureCoverage {
  * `DataLayerEvent.frame`, and a `Hit.via` with `by: 'clientId'` may be `exact`. Version 5 adds `TagReport.t`,
  * `TagReport.frame` and `TagReport.client`, `Hit.linkMiss`, `DataLayerEvent.layer`, `Request.frame`, the notes
  * `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`.
+ * 0.6.0-rc.3 adds, within version 5, the flag kind `dataLayerIncomplete` and the optional field `InvalidReport.got`.
+ * A new flag kind or a new optional field that an older reader of the same version reads correctly does not bump
+ * the version. A new required field, or a changed meaning, does.
  * A record with no version is version 0.
  */
 export const RECORD_SCHEMA_VERSION = 5;
@@ -255,16 +258,14 @@ export interface DataLayerEvent {
   stepId: Id<'stp'> | null;
   t: number;
   event: string | null;
+  /** Read after the push returns, because GTM assigns it while handling the push. */
   gtmUniqueEventId: number | null;
   /** The pushed arguments, JSON-safe. A gtag() call is its argument list; any other push is `[item]`. */
   args: unknown[];
   isConsentCommand: boolean;
   /** The frame that made the push. `n` is the run's number for that frame. Absent on a version 3 event, which reads as unknown. */
   frame?: DataLayerFrame;
-  /**
-   * The name of the hooked global when it is not `dataLayer`. Absent for `dataLayer`.
-   * `gtmUniqueEventId` is read after the push returns, because GTM assigns it while handling the push.
-   */
+  /** The name of the hooked global when it is not `dataLayer`. Absent for `dataLayer`. */
   layer?: string;
 }
 
@@ -369,8 +370,10 @@ export type FlagKind =
   | 'unloadGap'
   | 'netLogUnreadable'
   | 'serverContainerFailed'
+  // `dataLayerReassigned` is written by the per-name init script hook (J08).
   | 'dataLayerReassigned'
   | 'dataLayerNotHooked'
+  | 'dataLayerIncomplete'
   | (string & {});
 
 export interface Flag {
@@ -399,6 +402,10 @@ export interface InvalidReport {
   runId: Id<'run'>;
   t: number;
   error: string;
+  /**
+   * For a tag report that failed on the type or shape of a field: the type class of the rejected value. Never the value.
+   */
+  got?: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null' | 'undefined';
   body: string;
 }
 

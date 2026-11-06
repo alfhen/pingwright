@@ -42,11 +42,13 @@ const addEventCallback = require('addEventCallback');
 const callInWindow = require('callInWindow');
 const copyFromDataLayer = require('copyFromDataLayer');
 const getContainerVersion = require('getContainerVersion');
+const makeString = require('makeString');
 
 const nameKey = data.nameKey || 'name';
 const event = copyFromDataLayer('event');
 const gtmUniqueEventId = copyFromDataLayer('gtm.uniqueEventId');
-const version = getContainerVersion().version;
+const rawVersion = getContainerVersion().version;
+const version = rawVersion === undefined ? undefined : makeString(rawVersion);
 
 addEventCallback(function(ctid, eventData) {
   const tags = (eventData && eventData.tags) || [];
@@ -59,7 +61,7 @@ addEventCallback(function(ctid, eventData) {
     tags: tags.map(function(tag) {
       const name = tag[nameKey];
       return {
-        id: tag.id,
+        id: makeString(tag.id),
         status: tag.status,
         executionTime: tag.executionTime,
         name: typeof name === 'string' ? name : null
@@ -117,6 +119,10 @@ ___WEB_PERMISSIONS___
     "instance": {
       "key": {"publicId": "read_data_layer", "versionId": "1"},
       "param": [
+        {
+          "key": "allowedKeys",
+          "value": {"type": 1, "string": "specific"}
+        },
         {
           "key": "keyPatterns",
           "value": {

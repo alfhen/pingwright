@@ -192,6 +192,21 @@ test('a failed warn result prints a WARN line, its message and a warning count',
   expect(mixed).toContain('Result: fail (1 of 2) with 1 warning');
 });
 
+test('the Result line counts baseline warnings with the result warnings', () => {
+  const warn = { expectation: 'b', pass: false, severity: 'warn' as const, message: 'y', evidence: [] };
+  const withBaseline = (warnings: string[], drift = false, results: Summary['results'] = []) => {
+    const s: Summary = { ...base, results };
+    applyBaseline(s, { ...noDrift, drift, warnings });
+    return formatSummary(s);
+  };
+  expect(withBaseline(['dataLayer a', 'dataLayer b', 'dataLayer c'])).toContain('Result: pass with 3 warnings');
+  expect(withBaseline(['dataLayer a'])).toContain('Result: pass with 1 warning\n');
+  expect(withBaseline(['dataLayer a', 'dataLayer b'], false, [warn])).toContain('Result: pass with 3 warnings');
+  expect(withBaseline(['dataLayer a', 'dataLayer b'], true)).toContain('Result: fail (baseline drift) with 2 warnings');
+  expect(withBaseline([], false, [warn])).toContain('Result: pass with 1 warning');
+  expect(formatSummary(base)).toMatch(/Result: pass\n/);
+});
+
 test('possibleRealData flags collapse into one counted line', () => {
   const flags = Array.from({ length: 4 }, (_, i) => ({ kind: 'possibleRealData', detail: `request req_${i} carries 1 email value(s)` }));
   const text = formatSummary({ ...base, flags });

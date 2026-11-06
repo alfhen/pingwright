@@ -31,6 +31,8 @@ const NO_STEP = '(no step)';
 const EVENT_CHARS = /^[A-Za-z0-9_.:-]+$/;
 const MAX_DEPTH = 8;
 const MAX_PATHS = 200;
+const GTAG_COMMANDS = new Set(['config', 'consent', 'event', 'get', 'js', 'set']);
+const GTAG_OTHER = 'gtag (other)';
 
 function safeName(name: string): string {
   return EVENT_CHARS.test(name) && !isValueSegment(name) && guardFieldName(name) === name ? name : OTHER_NAME;
@@ -65,7 +67,8 @@ function isGtagCommand(args: unknown[]): args is [string, ...unknown[]] {
 function eventLabel(e: DataLayerEvent): string {
   if (e.isConsentCommand) return `consent ${String(e.args[1])}`;
   if (e.event !== null) return safeName(e.event);
-  return isGtagCommand(e.args) ? `gtag ${safeName(e.args[0])}` : NO_EVENT;
+  if (!isGtagCommand(e.args)) return NO_EVENT;
+  return GTAG_COMMANDS.has(e.args[0]) ? `gtag ${e.args[0]}` : GTAG_OTHER;
 }
 
 function frameKind(e: DataLayerEvent): PushFrameKind {

@@ -4,23 +4,28 @@
 
 Not released yet. The newest release is 0.6.0-rc.2, below.
 
-<!-- T08 -->
+- Fixed: the web tag reporter works in real GTM, which gives tag IDs as numbers. In 0.6.0-rc.2 every report from a published container was recorded as an invalid report (`tagReport:tagId`). The template now sends IDs as strings, and the parser also accepts numbers, so a 0.6.0-rc.2 template keeps working.
+- An invalid tag report now has `got`, the type of the rejected value. It never holds the value. The record stays at version 5.
+- The template's `read_data_layer` permission now lists `allowedKeys: specific`, so an import cannot widen it to every key.
 
-<!-- C08 -->
+- A run now gets a `dataLayerIncomplete` flag for a frame whose `dataLayer` holds more items than the run recorded, for example when a theme replaces `push` (#1281). The flag names the frame number, the layer and both counts. It checks only the document each frame holds when the run closes.
+- `close` now ends the late tag report wait before the unload flush and the session stop (#1187).
 
-<!-- E08 -->
+- The handoff instructions, the Enter prompt, the reminder and the end message go to stderr. Under `run --json` and `suite --json`, stdout holds only the JSON.
 
-<!-- Z08 -->
+- `consentModeSetup` names the `gcd` letters per Google tag ID, such as `gcd letters: rrll`. It names a Google Ads hit by its `AW-` ID, does not take a page parameter `tid` for a tag ID, and says when no Google hit carried `gcd`. The decoders export `gcdLetters`.
 
-<!-- B08 -->
+- **The Result line counts baseline warnings.** `Result: pass with 3 warnings` now adds the `Warning:` lines of the `Baseline` block to the warnings of the expectations. `ok`, `pass` and the exit code do not change.
 
 <!-- M23 -->
 
-<!-- M24 -->
+- A push that starts with a string reads `gtag <command>` only for a known `gtag` command (`config`, `consent`, `event`, `get`, `js`, `set`). Any other string reads `gtag (other)`, so a pushed string is never printed (#1174). The docs name the push labels and the path caps (#1175, #1170).
 
 - `baseline save` errors name the file and the key. A name that cannot make a baseline file names the scenario, store or variant and the record path. A bad `dataLayer` section reads `<file> has an invalid dataLayer section`. A folder or file that cannot be written gives the path and the errno code, never a raw Node error (#1145, #1207, #1194, #1143).
 
-<!-- M26 -->
+- A `tag` rule with a `status` outside `success`, `failure`, `exception` and `timeout` exits 2 (#1226).
+- `diff --event-map`: `paths` also match the recorded and the renamed event name, a user entry for a Shopify name wins over the built-in pairing, and a bad event name error gives the key position (#1249, #1253, #1254).
+- The docs say a number `id` in a tag rule, such as `id: 13`, is read as its decimal string and matches tag `13` (#1227).
 
 <!-- J08 -->
 
