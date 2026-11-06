@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { newId, readRun, type Hit, type RunRecords } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { parseCli, UsageError } from './args.ts';
-import { baselineCommand, buildBaseline, compareBaseline, defaultBaselineName, parseBaseline } from './baseline.ts';
+import { baselineCommand, buildBaseline, compareBaseline, defaultBaselineName, insideBaselines, parseBaseline } from './baseline.ts';
 import { main } from './main.ts';
 import { formatSummary, type Summary } from './summary.ts';
 
@@ -388,5 +388,62 @@ test('a baseline from 0.6.0-rc.1 has no push shapes, loads and says pushes are n
 
 test('a baseline with a malformed dataLayer section is invalid and the message does not quote it', () => {
   const file = { ...buildBaseline(makeRun(['page_view']), false), dataLayer: [{ epoch: 'x', event: 'pw-secret-value', frame: 'sideways', paths: [] }] };
-  expect(() => parseBaseline(JSON.stringify(file), 'b.json')).toThrow(/not a valid baseline file$/);
+  expect(() => parseBaseline(JSON.stringify(file), 'b.json')).toThrow('b.json has an invalid dataLayer section');
+});
+
+test('defaultBaselineName names the key that cannot make a file name, and no value', () => {
+  const secret = 'pw-secret-value';
+  expect(() => defaultBaselineName(named({ scenario: `a/${secret}` }))).toThrow('The scenario in this record');
+  expect(() => defaultBaselineName(named({ store: `../${secret}` }))).toThrow('The store in this record');
+  expect(() => defaultBaselineName(named({ variant: `Bad${secret}` }))).toThrow('The variant in this record');
+  try {
+    defaultBaselineName(named({ store: `../${secret}` }));
+    expect.unreachable();
+  } catch (error) {
+    expect((error as Error).message).not.toContain(secret);
+  }
+});
+
+test('baseline save with one path puts the record path in front of a refusal', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const record = join(root, 'run.jsonl');
+  const records = makeRun(['page_view']);
+  records.run.store = '../x';
+  await writeFile(record, [records.run, ...records.consentEpochs, ...records.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const err: string[] = [];
+  expect(await main(['baseline', 'save', record], { stdout: () => {}, stderr: (t) => err.push(t) })).toBe(2);
+  expect(err.join('')).toContain(`${record}: The store in this record`);
+});
+
+test('insideBaselines accepts a file in tagreeve/baselines only', () => {
+  expect(insideBaselines('tagreeve/baselines/x.json')).toBe(true);
+  expect(insideBaselines('tagreeve/baselines')).toBe(false);
+  expect(insideBaselines('tagreeve/x.json')).toBe(false);
+  expect(insideBaselines('tagreeve/baselines/../x.json')).toBe(false);
+  expect(insideBaselines('/etc/x.json')).toBe(false);
+});
+
+test('baseline save with one path wraps a failing folder or write', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
+  const record = join(root, 'run.jsonl');
+  const records = makeRun(['page_view']);
+  await writeFile(record, [records.run, ...records.consentEpochs, ...records.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const before = process.cwd();
+  process.chdir(root);
+  try {
+    await mkdir('tagreeve');
+    await writeFile('tagreeve/baselines', '');
+    const err: string[] = [];
+    expect(await main(['baseline', 'save', record], { stdout: () => {}, stderr: (t) => err.push(t) })).toBe(2);
+    expect(err.join('')).toContain('Cannot make the folder for tagreeve/baselines/s.json: ');
+    expect(err.join('')).not.toContain('EEXIST:');
+    const dirOut = join(root, 'out');
+    await mkdir(dirOut);
+    err.length = 0;
+    expect(await main(['baseline', 'save', record, dirOut], { stdout: () => {}, stderr: (t) => err.push(t) })).toBe(2);
+    expect(err.join('')).toContain(`Cannot write ${dirOut}: EISDIR`);
+    expect(err.join('')).not.toContain('EISDIR:');
+  } finally {
+    process.chdir(before);
+  }
 });

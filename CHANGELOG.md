@@ -18,7 +18,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- M24 -->
 
-<!-- M25 -->
+- `baseline save` errors name the file and the key. A name that cannot make a baseline file names the scenario, store or variant and the record path. A bad `dataLayer` section reads `<file> has an invalid dataLayer section`. A folder or file that cannot be written gives the path and the errno code, never a raw Node error (#1145, #1207, #1194, #1143).
 
 <!-- M26 -->
 
