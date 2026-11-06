@@ -274,9 +274,9 @@ expect:
 
 - `tag` holds exactly one of `id` or `name`. `name` is a tag name or a glob. Optional keys: `container` (a container ID), `event` (the `dataLayer` event name, or a glob), `status` (one status or a list) and `side` (`web` or `server`; default both). Without `status`, any status matches, so a tag that sent data and then failed still counts.
 - The entry takes `count`, `after` and `from`, and nothing else. `before` and `in` are scenario errors: consent scopes on tag rules are not built.
-- A rule with no report for its container and side cannot be evaluated. It fails with `note: noTagReports` and never passes. That includes a page without the reporter and a run from before record version 5.
-- A name pattern needs a name. A tag's name is the one in the report, else the one in the override file's `expectedTags` for that container. If a tag has neither and the verdict depends on it, the rule cannot be evaluated and fails with `note: tagNameUnknown`.
-- Names are shown through the value guard: an email or phone in a tag name reads `(other)`.
+- A rule with no report for its container and side cannot be evaluated. It fails with `note: noTagReports` and never passes. That includes a page without the reporter and a run from before record version 5. The text note says to install the reporter and run with `--gtm-override`, for web tags. The HTML report shows this result as CANNOT EVALUATE, not FAIL.
+- A name pattern needs a name. A tag's name is the one in the report, else the one in the override file's `expectedTags` for that container. If a tag has neither and the verdict depends on it, the rule cannot be evaluated and fails with `note: tagNameUnknown`. The HTML report shows it as CANNOT EVALUATE too.
+- Names are shown through the value guard: an email or phone in a tag name reads `(other)`. So does a name with a hex or digest token, also when `.`, `_`, `+`, a bracket or a quote joins it to a word (`thanks_<32 hex>`). A plain name such as `GA4 page_view` is shown as it is.
 - "Did not fire" does not fail a run. `notFired` in `tags` lists the expected tags with no entry in a web report. Use a `must` rule to fail on one tag. A full tag list holds tags that a given scenario never triggers, and a report lost at a navigation looks the same as a tag that did not fire.
 
 ### GTM override
