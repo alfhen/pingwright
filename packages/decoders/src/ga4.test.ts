@@ -239,6 +239,7 @@ test('gcdSignals is undefined for a missing or short gcd', () => {
 test('gcdLetters reads the four letters, shows ? for an unknown one and is undefined when gcdSignals is', () => {
   expect(gcdLetters('13l3r3r3r5')).toEqual(['l', 'r', 'r', 'r']);
   expect(gcdLetters('13z3r3r3x5')).toEqual(['?', 'r', 'r', '?']);
+  expect(gcdLetters('13r9r8l7l6l1~424242')).toEqual(['r', 'r', 'l', 'l']);
   expect(gcdLetters('13r3r3r3')).toBeUndefined();
   expect(gcdLetters(undefined)).toBeUndefined();
 });

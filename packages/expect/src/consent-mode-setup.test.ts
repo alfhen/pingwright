@@ -111,6 +111,16 @@ test('messages name the gcd letters per tag ID, never the whole gcd', () => {
   expect(pass.message).toContain('found every signal set (gcd letters: G-PWTEST0001 rrrr; AW-000000001 rrrr)');
 });
 
+test('a planted digit run and a trailing part never reach the message', () => {
+  const gcd = '13r9r8l7l6l1~424242';
+  const h = hit(gcd);
+  expect(h.consent.raw.gcd).toContain('9r8l7l6');
+  expect(h.consent.raw.gcd).toContain('~424242');
+  const m = consentModeSetup([h], []).message;
+  expect(m).toContain('(gcd letters: rrll)');
+  for (const leaked of ['9r8l7l6', '424242', 'l1~', gcd]) expect(m).not.toContain(leaked);
+});
+
 test('at most three letter sets per tag ID and five tag IDs are named', () => {
   const sets = ['13l3r3r3r5', '13r3l3r3r5', '13r3r3l3r5', '13r3r3r3l5'].map((g) => hit(g));
   expect(consentModeSetup(sets, []).message).toContain('(gcd letters: lrrr, rlrr, rrlr)');
