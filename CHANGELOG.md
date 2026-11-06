@@ -2,11 +2,19 @@
 
 ## 0.6.0-rc.2
 
-Not released yet. The newest release is 0.6.0-rc.1, below.
+Release candidate. Install it with `npm i -g tagreeve@next`.
 
-- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. A version 4 record reads as before.
+### Upgrading from 0.6.0-rc.1
 
-<!-- J07 -->
+- **Record schema version 5.** A 0.6.0-rc.1 reader warns on a version 5 record. A version 4 record reads as before.
+- **A new `consentModeSetup` line in every summary.** It is a warning by default. `options.builtins.consentModeSetup: fail` makes it fail the run.
+- **`tagreeve init` writes `tagreeve/config.yml`** and refuses unknown options.
+- **The text summary has a `dataLayer:` line** with the push and event counts.
+- **A blocking form control is named only by its `aria-label`, `name` or `id` attribute, never by page text** (#1004 stays open).
+
+### What 0.6.0-rc.2 adds
+
+- Record schema version 5. It adds `TagReport.t`, `TagReport.frame` and `TagReport.client`, `Request.frame`, `DataLayerEvent.layer` and `Hit.linkMiss`, the notes `noTagReports` and `tagNameUnknown`, and the flag kinds `dataLayerReassigned` and `dataLayerNotHooked`. `dataLayerReassigned` is reserved and not written yet (#1266). A version 4 record reads as before.
 
 - Added the built-in check `consentModeSetup`. It warns when a Google hit shows a Consent Mode signal that was never set (`gcd` letter `l`), for example a default without `ad_user_data` and `ad_personalization`. It is `warn` by default and `options.builtins.consentModeSetup: fail` makes it fail the run.
 
@@ -31,37 +39,40 @@ Not released yet. The newest release is 0.6.0-rc.1, below.
 
 - The `--json` summary has `dataLayer`: the shape of each push per step, event and frame, with key paths and types, array indexes as `[*]` and no values. A key or event name that looks like a value reads `(other)`. The text summary has one `dataLayer:` line with the push and event counts (#928).
 
-<!-- M12 -->
-
 - `baseline save <record> x/y.json` makes the folder `x/` (#1076). `suite --baseline` hints at the ordering when the scenario folder is missing (#1075), gives a hint that fits an invalid file (#1074), no longer finds a missing file by matching `ENOENT` in the message (#1073), and exits 2 when two cells map to one baseline file name (#1068). The `suite --baseline` docs describe the drift text as it is (#1077).
 
 - Added `tag` rules, in `must` and `mustNot`: `tag: { id: "77" }` or `tag: { name: "GA4 - *" }`, with optional `container`, `event`, `status` and `side`, and `count`, `after` and `from`. They read the web tag reports. A rule with no report cannot be evaluated (`noTagReports`), and a name pattern on a tag with no name does the same (`tagNameUnknown`). The summary has a `Tags` line and a `tags` field with the fired tags and, from `expectedTags` in the GTM override file, the expected tags that did not fire. That never fails a run (#922).
 
 - `diff` and `baseline` compare the masked `dataLayer` push shapes (#940). `diff` lists a gone or new event, a missing or new key path and a type change, and `diff --across-frames` treats an event that moved between frames as the same event. A baseline gets an optional `dataLayer` section. Push changes are warnings and never change the exit code. A baseline saved by 0.6.0-rc.1 still loads and warns "pushes not compared". `baselineSchemaVersion` stays 1.
 
-<!-- X07 -->
-
 - Updated `node-forge` to 1.4.2 (#719). It builds and signs the server container certificates only.
 
 - The dataLayer frame number comes from one helper, with no side-effect call (#1033). The main and embedded filters read the recorded `frame.main` (#1036). The frame e2e navigates the embedded frame between two pushes and checks `args` and the written file (#1034, #1035).
 
-<!-- M22 -->
-
-<!-- L07 -->
-
 - A server container call that is not `exact` records why (#1084). Each such hit has `linkMiss`, with a class name for rule 1 (`eventId`: `none`, `noMatch`, `several`) and rule 2 (`clientId`: `noClientId`, `noSameKeyHit`, `severalSameKeyHits`, `answeredBefore`). `--json` `serverContainer.notExact` holds the counts, with no IDs and no values. The linking rule is unchanged. The server container guide says to send a unique event ID with each event for an exact link, and that the client ID rule rarely fires on a multi-page run.
-
-<!-- N07 -->
 
 - Add `options.dataLayerNames` to hook a `dataLayer` under a custom name (an `l=` name). Pushes to it are recorded with `layer`. A Google loader that names a layer that is not hooked gives a `dataLayerNotHooked` flag (#927).
 
 - `diff` and `baseline` treat a Shopify standard event and its GA4 name as the same `dataLayer` event, for example `checkout_completed` and `purchase` (#930). The table is `SHOPIFY_TO_GA4` in `@tagreeve/decoders`, shared with the `unloadGap` check. `diff --event-map <file>` renames events and key paths of the first run to those of the second. A map file error names the file and the key, never a value.
 
-<!-- M16 -->
-
 - Fix config and summary text. A quoted or block-scalar key in the project config exits 2, and so does a second YAML document (#1063, #1062). A relative sandbox page with a space is masked like an absolute one (#920). A flag detail that is not a URL keeps its advice text when an event name holds `: /` (#918).
 
-<!-- R12 -->
+### Known in 0.6.0-rc.2
+
+Issues still open that you can meet:
+
+- The web tag reporter was not run in real GTM before the field test. The `callInWindow` name, the reporter's own entry in `tags[]`, the version string in preview and the timeout status are field checks.
+- A report sent while the page navigates is lost, so `notFired` can list a tag that fired.
+- Any page script can call the binding, so a tag report is what the page said, not proof.
+- The server tag reporter is not built (OPEN 1).
+- The `dataLayer` hook after real `gtm.js`, `gtm.uniqueEventId` on real pushes, and pushes from Shopify app pixels are field checks (#922).
+- A loader that re-wraps `dataLayer.push` can hide later pushes from the hook (#926).
+- `consentModeSetup` reads the `gcd` letters, whose format is documented only by the community.
+- Hits and pushes are not joined per frame (#931, #932).
+- An exact client ID link can go to the wrong browser hit (#1029), and rule 2 rarely fires on a multi-page run (#1084).
+- A blocking control with no `aria-label`, `name` or `id` has no name in a `wait` timeout message (#1004).
+
+Deferred out of this release: the `dataLayer` hook that survives a re-wrap (#926).
 
 ## 0.6.0-rc.1
 
