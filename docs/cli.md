@@ -458,7 +458,7 @@ Sets up the folders in the current directory. It makes `tagreeve/scenarios/` and
 
 ### `tagreeve template web`
 
-Prints the GTM template of the web tag reporter to stdout, byte for byte, and exits 0. It needs no network, and Tagreeve never calls the GTM API. You import the template in a GTM workspace yourself, or an agent does it with its own GTM access. An unknown name, no name, or any option other than `--json` exits 2 with usage.
+Prints the GTM template of the web tag reporter to stdout, byte for byte, and exits 0. It needs no network, and Tagreeve never calls the GTM API. You import the template in a GTM workspace yourself, or an agent does it with its own GTM access. An unknown name (the message does not repeat it; `web` is the only name), no name, an extra argument, or any option other than `--json` exits 2 with usage. `--help` and `-h` exit 0, and a bare `--` ends the options.
 
 `--json` prints one object for an agent:
 
@@ -478,7 +478,7 @@ Prints the GTM template of the web tag reporter to stdout, byte for byte, and ex
 }
 ```
 
-`steps` are short imperative sentences in order: import the template in a workspace, add one tag of that type with the trigger and consent above, turn on "Include tag name" with the key `name` in each tag's Additional Tag Metadata (or list the names in `expectedTags`), never publish the version, run with `--gtm-override`, and check that `tags[<container>].reports` in the `--json` output is greater than 0. An entry with `reports: 0` and a `hint` means the install failed. `publish` is always `false`. The object holds no container ID and no value from a run.
+`steps` are short imperative sentences in order: import the template in a workspace, add one tag of that type with the trigger and consent above, turn on "Include tag name" with the key `name` in each tag's Additional Tag Metadata (or list the names in `expectedTags`), never publish the version, run with `--gtm-override`, and check that `tags[<container>].reports` in the `--json` output is greater than 0. An entry with `reports: 0` and a `hint` means the install failed. One step says the `--gtm-override` file holds `gtmAuth`, a secret the agent must not print or keep in its transcript. `templateVersion` is the version of the shape of this object. The `setup` labels (`customEvent`, `noAdditionalConsentRequired`) describe the setup and are not GTM API values. `publish` is always `false`. Outside `template`, the object holds no GTM container ID, no `gtmAuth` value and no run or record ID. In `template`, the only GTM ID is the fake `GTM-PWTEST1`.
 
 ### `tagreeve install-browser`
 

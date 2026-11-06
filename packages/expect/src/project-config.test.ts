@@ -127,6 +127,12 @@ describe('refused keys', () => {
     warn.mockRestore();
   });
 
+  test.each([['ESC', '\u001b'], ['NUL', '\u0000'], ['DEL', '\u007f'], ['tab', '\t']])('a plain key with a %s byte is refused without printing it', (_, byte) => {
+    const out = errorOf(`${head}FAKE${byte}KEY: 1\n`);
+    expect(out).toBe(`${FILE}: line 2: a key holds a control character`);
+    expect(out).not.toMatch(/FAKE|[\u0000-\u001f\u007f]/);
+  });
+
   test('a second YAML document exits 2 without its text', () => {
     const out = errorOf(`${head}---\nnetwork: live\nFAKE: [\n`);
     expect(out).toMatch(/^tagreeve\/config\.yml: line \d+: not valid YAML$/);
