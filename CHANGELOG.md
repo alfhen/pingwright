@@ -16,7 +16,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- M23 -->
 
-<!-- M24 -->
+- A push that starts with a string reads `gtag <command>` only for a known `gtag` command (`config`, `consent`, `event`, `get`, `js`, `set`). Any other string reads `gtag (other)`, so a pushed string is never printed (#1174). The docs name the push labels and the path caps (#1175, #1170).
 
 <!-- M25 -->
 
