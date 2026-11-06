@@ -388,19 +388,26 @@ test('a baseline from 0.6.0-rc.1 has no push shapes, loads and says pushes are n
 
 test('a baseline with a malformed dataLayer section is invalid and the message does not quote it', () => {
   const file = { ...buildBaseline(makeRun(['page_view']), false), dataLayer: [{ epoch: 'x', event: 'pw-secret-value', frame: 'sideways', paths: [] }] };
-  expect(() => parseBaseline(JSON.stringify(file), 'b.json')).toThrow('b.json has an invalid dataLayer section');
+  expect(JSON.stringify(file)).toContain('pw-secret-value');
+  expect(() => parseBaseline(JSON.stringify(file), 'b.json')).toThrow(/^b\.json has an invalid dataLayer section$/);
 });
 
 test('defaultBaselineName names the key that cannot make a file name, and no value', () => {
   const secret = 'pw-secret-value';
-  expect(() => defaultBaselineName(named({ scenario: `a/${secret}` }))).toThrow('The scenario in this record');
-  expect(() => defaultBaselineName(named({ store: `../${secret}` }))).toThrow('The store in this record');
-  expect(() => defaultBaselineName(named({ variant: `Bad${secret}` }))).toThrow('The variant in this record');
-  try {
-    defaultBaselineName(named({ store: `../${secret}` }));
-    expect.unreachable();
-  } catch (error) {
-    expect((error as Error).message).not.toContain(secret);
+  const cases: [string, Record<string, string>][] = [
+    ['scenario', { scenario: `a/${secret}` }],
+    ['store', { store: `../${secret}` }],
+    ['variant', { variant: `Bad${secret}` }],
+  ];
+  for (const [key, fields] of cases) {
+    let message = '';
+    try {
+      defaultBaselineName(named(fields));
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain(`The ${key} in this record`);
+    expect(message).not.toContain(secret);
   }
 });
 
@@ -408,11 +415,12 @@ test('baseline save with one path puts the record path in front of a refusal', a
   const root = await mkdtemp(join(tmpdir(), 'pw-baseline-'));
   const record = join(root, 'run.jsonl');
   const records = makeRun(['page_view']);
-  records.run.store = '../x';
+  records.run.store = '../pw-secret-value';
   await writeFile(record, [records.run, ...records.consentEpochs, ...records.hits].map((r) => JSON.stringify(r)).join('\n') + '\n');
   const err: string[] = [];
   expect(await main(['baseline', 'save', record], { stdout: () => {}, stderr: (t) => err.push(t) })).toBe(2);
   expect(err.join('')).toContain(`${record}: The store in this record`);
+  expect(err.join('')).not.toContain('pw-secret-value');
 });
 
 test('insideBaselines accepts a file in tagreeve/baselines only', () => {
