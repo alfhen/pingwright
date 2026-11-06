@@ -83,3 +83,12 @@ test('the success check fails when the agent steps say "not empty"', () => {
 test('the guide says Tagreeve never calls the GTM API', () => {
   expect(guide).toContain('Tagreeve never calls the GTM API');
 });
+
+test('the guide gives the field facts, the file mode and the override file name', () => {
+  expect(guide).toContain('QUICK_PREVIEW');
+  expect(guide).not.toMatch(/Field checks have not confirmed this yet/);
+  expect(guide).toContain('workspace-override.json');
+  expect(guide).not.toContain('/override.json');
+  expect(guide.match(/mode 0600/g)?.length).toBeGreaterThanOrEqual(2);
+  expect(guide).toContain('./project-layout.md#what-stays-outside-the-repo');
+});

@@ -29,7 +29,7 @@ These steps are for a coding agent that has its own access to your GTM account, 
 3. Add one tag of the new type. Give it the trigger from `setup.trigger`: a Custom Event trigger whose event name is `.*`, with "Use regex matching" on. Set consent to "No additional consent required" (`setup.consent`). With any other consent setting, the reports for the time before consent go missing.
 4. In each tag's Additional Tag Metadata, turn on "Include tag name" with the key `name` (`setup.tagMetadata`). Without it, a report has tag IDs and no names. You can also list names in `expectedTags`, see below.
 5. Do not publish the workspace version, and do not create a published version for this. `setup.publish` is always `false`. The reporter belongs in a workspace or an environment.
-6. Get the workspace's preview values: the preview environment ID and its auth token. Write them to a file outside the repository, with the container ID, in the format of [`--gtm-override`](../cli.md#gtm-override). Do not print the auth value, and do not commit the file.
+6. Ask your own GTM client for a preview environment that carries the unpublished workspace version. Its environment ID and its authorization code are the preview values. The values come from your own GTM client. Tagreeve never calls the GTM API. Write them to a file outside the repository, with the container ID, in the format of [`--gtm-override`](../cli.md#gtm-override). Name it `workspace-override.json` and give it mode 0600, as in [project layout](./project-layout.md#what-stays-outside-the-repo). Do not print the auth value, and do not commit the file.
 
    ```json
    {"container": "GTM-PWTEST1", "gtmAuth": "<auth>", "gtmPreview": "<env id>"}
@@ -38,7 +38,7 @@ These steps are for a coding agent that has its own access to your GTM account, 
 7. Run your scenario against the workspace, with `--json`:
 
    ```bash
-   tagreeve run tagreeve/scenarios/checkout.yml --site https://test.example.com --gtm-override ~/.config/tagreeve/override.json --json
+   tagreeve run tagreeve/scenarios/checkout.yml --site https://test.example.com --gtm-override ~/.config/tagreeve/workspace-override.json --json
    ```
 
 8. Check the install. Read `tags["GTM-PWTEST1"].reports` in the output. It must be greater than 0. The install failed when the entry is `{ "reports": 0, "hint": "tagreeve template web --json" }`, or when the text summary has a `Tags: no reports from GTM-PWTEST1` line. An entry with `reports: 0` is still an entry, so a check that only asks whether `tags` has content passes a failed install.
@@ -54,7 +54,7 @@ The same steps work in the GTM web interface.
 3. Open Tags and add a tag of the new type. For the trigger, make a Custom Event trigger with the event name `.*` and tick "Use regex matching". Under Advanced Settings, Consent Settings, choose "No additional consent required".
 4. In each tag you want to see by name, open Advanced Settings, Additional Tag Metadata, tick "Include tag name" and keep the key `name`.
 5. Do not publish. Keep the change in the workspace, or put it in a GTM environment that only you test with.
-6. Open Preview or the environment's "Get the link" dialog to find the environment ID and the auth value. Put them in an override file as in the agent steps.
+6. Find the environment ID and the auth value in the dialog that shows both for your workspace's preview environment. The exact dialog and its wording are unverified, so check them in your own GTM. Put the values in `workspace-override.json` as in the agent steps, outside the repository and with mode 0600 (see [project layout](./project-layout.md#what-stays-outside-the-repo)).
 7. Run with `--gtm-override` and read the `Tags` line of the summary.
 
 ## Read the result
@@ -113,8 +113,10 @@ A rule with no report for its container cannot be evaluated. It fails with `noTa
 ## What the reports cannot tell you
 
 - A report can be lost at a navigation. The page may unload before the reporter hands over the list for the last event. A tag that is missing from the reports and a report that was lost look the same, so a full `expectedTags` list can hold tags that a scenario never triggers or whose report was lost.
-- The reporter is a tag too. Its own entry can appear in the list for an event. Field checks have not confirmed this yet.
+- The reporter is a tag too. In the 0.6.0-rc.2 field test on one store, its own entry showed in `tags[]` once for each event. It has no name unless its own Additional Tag Metadata sets one. Tagreeve does not filter it out, because a filter by name would also hide a user tag with that name.
 - A report is whatever the page function receives. Any script on the page can call `tagreeveTagReport` in the test browser, so a hostile page could forge a report. Use reports to check your own container, not to audit a site you do not control.
 - Only tags that fired appear. A tag that GTM blocked by trigger or consent leaves no entry.
 - Reports from the server container are not built. A preview-environment config for the server container is covered in [Run your server container locally](./server-container.md).
 - Real GTM has not run the reporter in the Tagreeve tests. Tests use a stand-in. Check the first run against your container with the `reports` count above.
+- What one run on one store showed. In a workspace preview, the container version string was `QUICK_PREVIEW`, so `Run.containerVersions` held `QUICK_PREVIEW`. Every tag had the status `success`, so the `timeout` status is still unverified. On one purchase run, the purchase tag's report survived the thank-you navigation. One run does not prove that, so the navigation limit above stays.
+- GTM gives `tags[].id` as a number. Since 0.6.0-rc.3, Tagreeve reads a report from a 0.6.0-rc.2 template. A report that is rejected is kept as an `invalidReport`, for example with the error `tagReport:tagId` and a `got` field that names the type of the rejected value.

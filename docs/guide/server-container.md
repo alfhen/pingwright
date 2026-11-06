@@ -26,7 +26,7 @@ The container is opt-in. A run without `--server-container` never looks for Dock
    (umask 077; cat > ~/.config/tagreeve/sgtm-config.txt)
    ```
 
-   Paste the config, press Enter, then press Ctrl-D. On macOS, `(umask 077; pbpaste > ~/.config/tagreeve/sgtm-config.txt)` copies it from the clipboard. You can also save it from an editor and run `chmod 600 ~/.config/tagreeve/sgtm-config.txt`.
+   Paste the config, press Enter, then press Ctrl-D. On macOS, `(umask 077; pbpaste > ~/.config/tagreeve/sgtm-config.txt)` copies it from the clipboard. If the file already exists, run `chmod 600 ~/.config/tagreeve/sgtm-config.txt`. Do not open the file in an editor, which can leave swap or backup files that keep the config.
 
    Do not put the config in a command line, and do not run `export TAGREEVE_SERVER_CONTAINER_CONFIG=...`. Your shell keeps both in its history. Tagreeve refuses a config file that other users can read. If you use the environment variable `TAGREEVE_SERVER_CONTAINER_CONFIG`, set it from a source that your shell history does not keep.
 5. In the scenario, use server mode and name your container's domain in `serverHosts`:
@@ -113,6 +113,8 @@ The report gives each server vendor its own row, for example `Google Ads (google
 
 A rule that should judge only the browser, or only the container, takes `sentBy: browser` or `sentBy: server`. A browser-only `mustNot` on a Google host then ignores the container's own calls. See [Rules by sender](../cli.md#rules-by-sender).
 
+With `--json`, the call counts are in the `serverContainer` field. If the container fails to start or stops during the run, the record is still written and the run exits with code 2. See the [CLI reference](../cli.md) for the details, and [Reading a run's results](./reading-results.md) for the rest of the summary.
+
 ### Make a link exact
 
 Send a unique event ID with each event, for example the GA4 parameter `event_id`, and have the container's tags pass it on. A call whose event ID and event name match exactly one browser hit links by event ID, and that link is `exact`. This is the way to make a leak through the container fail a run. Whether the GA4 tag in sGTM passes `event_id` on is something to check in your own container, in a field test.
@@ -133,9 +135,7 @@ The client ID link is narrower. It is `exact` only when exactly one browser hit 
 | | | `severalSameKeyHits` | Two or more do. |
 | | | `answeredBefore` | One does, but the call came after its answer, or it has no answer time. The container answers before its tags send. |
 
-A high `eventId.none` count means the container does not pass the event ID on. A high `clientId.answeredBefore` count means it answers first. These counts only explain a link that is not exact. They do not show that an exact link went to the right browser hit.
-
-With `--json`, the same counts are in the `serverContainer` field. If the container fails to start or stops during the run, the record is still written and the run exits with code 2. See the [CLI reference](../cli.md) for the details, and [Reading a run's results](./reading-results.md) for the rest of the summary.
+`none` means the call had no event ID or no event name. A Google Ads conversion call often carries no event ID, so it often counts as `none`. A high `eventId.none` count often means the page sends no event ID or the container does not pass it on. To tell which, send a unique `event_id` from the page and read `linkMiss` on the hit. A high `clientId.answeredBefore` count means the container answers first. These counts only explain a link that is not exact. They do not show that an exact link went to the right browser hit.
 
 ## What it does not show
 
