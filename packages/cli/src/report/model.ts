@@ -1,6 +1,6 @@
 import type { ConsentEpoch, ConsentState, Hit, Result, ResultNote, RunRecords } from '@tagreeve/core';
 import { guardFieldName, identifierClass, identifierSignal } from '@tagreeve/decoders';
-import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit, isServerHit, judgeIndex, judgedAt } from '@tagreeve/expect';
+import { DEFAULT_GRACE_MS, effectiveConsentAt, epochForHit, isServerHit, judgeIndex, judgedAt, TAG_REPORTER_HINT } from '@tagreeve/expect';
 
 export type Mark = 'full' | 'ping' | 'nothing' | 'leak' | 'unchecked' | 'mixed' | 'early';
 export type EpochLabel = ConsentEpoch['label'] | 'unlinked';
@@ -81,9 +81,11 @@ export const NOTE_TEXT: Record<ResultNote, string> = {
   nestedNameOnly: 'a plain name matches a top-level field only; use **.name to match at any depth',
   serverSendProbableLink: 'a server container hit is placed by a probable link to a browser hit, which cannot fail a run',
   serverSendUnlinked: 'cannot evaluate: a server container hit has no link to a browser hit, so no consent state applies',
-  noTagReports: 'cannot evaluate: no tag report from this container. Install the reporter: tagreeve template web --json',
+  noTagReports: `cannot evaluate: no tag report from this container. For web tags, install the reporter and run with --gtm-override: ${TAG_REPORTER_HINT}`,
   tagNameUnknown: 'cannot evaluate: the tag has no name in its report or in expectedTags',
 };
+
+const CANNOT_EVALUATE_NOTES: readonly ResultNote[] = ['cannotEvaluateBody', 'fieldsNotRecorded', 'serverSendUnlinked', 'noTagReports', 'tagNameUnknown'];
 
 const WORST_FIRST: Mark[] = ['leak', 'unchecked', 'mixed', 'early', 'full', 'ping'];
 const CONSENT_FIELDS: (keyof ConsentState)[] = ['analytics', 'ads', 'adUserData', 'adPersonalization'];
@@ -159,7 +161,7 @@ function expectationView(result: Result): ExpectationView {
     kind = 'builtin';
     text = result.expectation;
   }
-  const cannot = !result.pass && (result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded' || result.note === 'serverSendUnlinked');
+  const cannot = !result.pass && result.note !== undefined && CANNOT_EVALUATE_NOTES.includes(result.note);
   const status: ExpectationStatus = cannot ? 'CANNOT EVALUATE' : result.pass ? 'PASS' : severity === 'warn' ? 'WARN' : 'FAIL';
   return {
     status,
@@ -184,7 +186,7 @@ export const IDENTIFIER_EARLY = 'identifiers sent before an answer';
 function namedLeaks(results: readonly Result[]): Map<string, string> {
   const named = new Map<string, string>();
   for (const result of results) {
-    if (result.pass || result.note === 'cannotEvaluateBody' || result.note === 'fieldsNotRecorded' || result.note === 'serverSendUnlinked') continue;
+    if (result.pass || (result.note !== undefined && CANNOT_EVALUATE_NOTES.includes(result.note))) continue;
     let label: string;
     if (result.expectation === 'builtin: deniedIdentifiers') label = IDENTIFIER_LEAK;
     else if (result.expectation === 'builtin: earlyIdentifiers') label = IDENTIFIER_EARLY;

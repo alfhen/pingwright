@@ -17,7 +17,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 - **The Result line counts baseline warnings.** `Result: pass with 3 warnings` now adds the `Warning:` lines of the `Baseline` block to the warnings of the expectations. `ok`, `pass` and the exit code do not change.
 
-<!-- M23 -->
+- Fix: the HTML report shows a `tag` rule with no tag report, or with no tag name, as CANNOT EVALUATE, not FAIL or WARN. The no-report note says to install the reporter and run with `--gtm-override`. A tag name with a hex token joined to a word by `.`, `_`, `+`, a bracket or a quote now reads `(other)`.
 
 - A push that starts with a string reads `gtag <command>` only for a known `gtag` command (`config`, `consent`, `event`, `get`, `js`, `set`). Any other string reads `gtag (other)`, so a pushed string is never printed (#1174). The docs name the push labels and the path caps (#1175, #1170).
 

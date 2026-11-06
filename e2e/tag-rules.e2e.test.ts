@@ -133,7 +133,7 @@ test('a page without the reporter gives noTagReports, and an override run says t
   expect(rules(json.summary!).every((r) => !r.pass)).toBe(true);
   expect(json.summary!.tags).toEqual({ 'GTM-PWTEST1': { reports: 0, hint: 'tagreeve template web --json' } });
   expect(text.stdout).toContain('Tags: no reports from GTM-PWTEST1. Install the reporter: tagreeve template web --json');
-  expect(text.stdout).toContain('note: cannot evaluate: no tag report from this container. Install the reporter: tagreeve template web --json');
+  expect(text.stdout).toContain('note: cannot evaluate: no tag report from this container. For web tags, install the reporter and run with --gtm-override: tagreeve template web --json');
 
   const plain = await runCli(path, ['--json']);
   expect(rules(plain.summary!).map((r) => r.note)).toEqual(['noTagReports', 'noTagReports']);

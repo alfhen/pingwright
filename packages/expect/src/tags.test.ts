@@ -2,6 +2,7 @@ import { newId, type TagReport } from '@tagreeve/core';
 import { expect, test } from 'vitest';
 import { evaluate } from './evaluate.ts';
 import { parseScenario } from './scenario.ts';
+import { isValueSegment } from '@tagreeve/decoders';
 import { maskTagName, summarizeTags } from './tags.ts';
 
 const runId = newId('run');
@@ -133,8 +134,37 @@ const LEAK_NAMES = [
   'Order gid://shopify/Order/5551234567890',
 ];
 
+const TOKEN = '0f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b';
+const JOINED_NAMES = [`Thanks.${TOKEN}`, `thanks_${TOKEN}`, `(${TOKEN})`];
+
+test.each(JOINED_NAMES)('maskTagName masks a token joined to a word: %s', (name) => {
+  expect(name).toContain(TOKEN);
+  expect(maskTagName(name)).toBe('(other)');
+});
+
 test.each(LEAK_NAMES)('maskTagName masks a checkout token or a GID: %s', (name) => {
   expect(maskTagName(name)).toBe('(other)');
+});
+
+const SPLIT_NAMES = [
+  'Order 12345.67890',
+  'Ref 123.456.789',
+  'x 12345_67890',
+  'Ord 123.45678',
+  'c 1234.5678.9012',
+  'Ord (12345)67890',
+  'Order aB3dE5fG7hJ_kL9mN1pQ3rS',
+  'Token abcDEF123_ghiJKL456_mnoPQR789',
+];
+
+test.each(SPLIT_NAMES)('maskTagName still masks a value that a finer split would cut up: %s', (name) => {
+  expect(name.split(/[\s/=:?&#|,;]+/).some((part) => isValueSegment(part))).toBe(true);
+  expect(maskTagName(name)).toBe('(other)');
+});
+
+test('maskTagName keeps a name with an underscore or a dot', () => {
+  expect(maskTagName('GA4 page_view')).toBe('GA4 page_view');
+  expect(maskTagName('GA4 v2.1')).toBe('GA4 v2.1');
 });
 
 test('maskTagName keeps an ordinary name', () => {
