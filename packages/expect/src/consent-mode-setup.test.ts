@@ -101,3 +101,57 @@ test('the built-in warns by default and fails when the scenario says so', () => 
   expect(warned.severity).toBe('warn');
   expect(find('start: /\noptions: { builtins: { consentModeSetup: fail } }').severity).toBe('fail');
 });
+
+test('messages name the gcd letters per tag ID, never the whole gcd', () => {
+  const fail = consentModeSetup([hit('13r3r3l3l5')], []);
+  expect(fail.message).toContain('Google tag G-PWTEST0001 never set ad_user_data and ad_personalization');
+  expect(fail.message).toContain('(gcd letters: rrll)');
+  expect(fail.message).not.toContain('13r3r3l3l5');
+  const pass = consentModeSetup([hit(FULL), hit(FULL, { vendor: 'google-ads', params: { conversionId: '000000001' } })], [push('consent', 'default', {})]);
+  expect(pass.message).toContain('found every signal set (gcd letters: G-PWTEST0001 rrrr; AW-000000001 rrrr)');
+});
+
+test('a planted digit run and a trailing part never reach the message', () => {
+  const gcd = '13r9r8l7l6l1~424242';
+  const h = hit(gcd);
+  expect(h.consent.raw.gcd).toContain('9r8l7l6');
+  expect(h.consent.raw.gcd).toContain('~424242');
+  const m = consentModeSetup([h], []).message;
+  expect(m).toContain('(gcd letters: rrll)');
+  for (const leaked of ['9r8l7l6', '424242', 'l1~', gcd]) expect(m).not.toContain(leaked);
+});
+
+test('at most three letter sets per tag ID and five tag IDs are named', () => {
+  const sets = ['13l3r3r3r5', '13r3l3r3r5', '13r3r3l3r5', '13r3r3r3l5'].map((g) => hit(g));
+  expect(consentModeSetup(sets, []).message).toContain('(gcd letters: lrrr, rlrr, rrlr)');
+  const tags = Array.from({ length: 6 }, (_, i) => hit('13l3r3r3r5', { params: { tid: `G-PWTEST000${i}` } }));
+  const m = consentModeSetup(tags, []).message;
+  expect(m).toContain('and 1 more');
+  expect(m).not.toContain('G-PWTEST0005');
+});
+
+test('a page parameter tid does not name a Google Ads hit, and a non-digit conversion ID is no tag ID', () => {
+  const ads = hit('13l3r3r3r5', { vendor: 'google-ads', params: { tid: 'G-PWTEST0009', conversionId: '000000001' } });
+  expect(consentModeSetup([ads], []).message).toContain('Google tag AW-000000001 never set');
+  const odd = hit('13l3r3r3r5', { vendor: 'google-ads', params: { conversionId: 'AB1234' } });
+  expect(consentModeSetup([odd], []).message).toContain('Google tag (no tag ID) never set');
+  const two = consentModeSetup([ads, hit('13l3r3r3r5', { vendor: 'google-ads', params: { conversionId: '000000002' } })], []);
+  expect(two.message).toContain('AW-000000001');
+  expect(two.message).toContain('AW-000000002');
+});
+
+test('hits without gcd are counted, and none at all says the setup could not be read', () => {
+  const none = consentModeSetup([hit(undefined), hit(undefined)], []);
+  expect(none.pass).toBe(true);
+  expect(none.message).toContain('no Google hit carried gcd, so the setup could not be read');
+  const some = consentModeSetup([hit(FULL), hit(undefined)], []);
+  expect(some.pass).toBe(true);
+  expect(some.message).toContain('1 Google hit carried no gcd');
+  const outside = consentModeSetup([hit(FULL), hit(undefined)], []);
+  expect(outside.message).toContain('default set outside the dataLayer');
+  expect(outside.message).toContain('1 Google hit carried no gcd');
+  expect(outside.message).not.toContain('set on every Google hit;');
+  const failing = consentModeSetup([hit('13l3r3r3r5'), hit(undefined), hit(undefined)], []);
+  expect(failing.pass).toBe(false);
+  expect(failing.message).toContain('2 Google hits carried no gcd');
+});

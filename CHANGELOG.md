@@ -13,7 +13,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- E08 -->
 
-<!-- Z08 -->
+- `consentModeSetup` names the `gcd` letters per Google tag ID, such as `gcd letters: rrll`. It names a Google Ads hit by its `AW-` ID, does not take a page parameter `tid` for a tag ID, and says when no Google hit carried `gcd`. The decoders export `gcdLetters`.
 
 - **The Result line counts baseline warnings.** `Result: pass with 3 warnings` now adds the `Warning:` lines of the `Baseline` block to the warnings of the expectations. `ok`, `pass` and the exit code do not change.
 

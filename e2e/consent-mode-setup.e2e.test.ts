@@ -21,6 +21,7 @@ test('a hit with l for ad_user_data warns with the hit ID and exits 0', async ()
   expect(result!.severity).toBe('warn');
   expect(result!.evidence).toEqual([hit!.id]);
   expect(result!.message).toContain('Google tag G-PWTEST0001 never set ad_user_data');
+  expect(result!.message).toContain('(gcd letters: rrlr)');
   expect(result!.message).not.toContain('13r3r3l3r5');
   const text = await runText('consent-mode-setup');
   expect(text.stdout).toMatch(/WARN builtin: consentModeSetup/);
@@ -41,6 +42,7 @@ test('a full default pushed to the dataLayer passes', async () => {
   expect(code).toBe(0);
   expect(result!.pass).toBe(true);
   expect(result!.message).not.toContain('outside the dataLayer');
+  expect(result!.message).toContain('found every signal set (gcd letters: G-PWTEST0001 rrrr');
 }, 90_000);
 
 test('a full default with no dataLayer push passes and says it was set outside the dataLayer', async () => {
@@ -49,4 +51,5 @@ test('a full default with no dataLayer push passes and says it was set outside t
   expect(code).toBe(0);
   expect(result!.pass).toBe(true);
   expect(result!.message).toContain('default set outside the dataLayer');
+  expect(result!.message).toContain('(gcd letters: G-PWTEST0001 rrrr');
 }, 90_000);

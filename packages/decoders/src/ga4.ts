@@ -40,7 +40,7 @@ const GCD_LETTERS: Record<string, GcdSignal> = {
   l: { notSet: true },
 };
 
-/** The single `gcd` letter table. Letters sit at positions 2, 4, 6 and 8 of the string. Undefined when `gcd` is absent or too short. */
+/** The single `gcd` letter table. The letters sit at indexes 2, 4, 6 and 8, counting from 0. Undefined when `gcd` is absent or too short. */
 export function gcdSignals(gcd: string | undefined): Record<GcdSignalName, GcdSignal> | undefined {
   if (!gcd || gcd.length < 9) return undefined;
   const out = {} as Record<GcdSignalName, GcdSignal>;
@@ -48,6 +48,12 @@ export function gcdSignals(gcd: string | undefined): Record<GcdSignalName, GcdSi
     out[name] = GCD_LETTERS[gcd[2 + 2 * i]!] ?? { notSet: false, default: 'unknown', update: 'unknown' };
   });
   return out;
+}
+
+/** The four signal letters in `GCD_SIGNALS` order, `?` for a letter outside the table. Undefined when `gcdSignals` is. */
+export function gcdLetters(gcd: string | undefined): string[] | undefined {
+  if (!gcdSignals(gcd)) return undefined;
+  return GCD_SIGNALS.map((_, i) => (gcd![2 + 2 * i]! in GCD_LETTERS ? gcd![2 + 2 * i]! : '?'));
 }
 
 function gcdValue(signal: GcdSignal): ConsentValue {
