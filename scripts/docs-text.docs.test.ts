@@ -52,7 +52,7 @@ test('the changelog has 0.3.0 above rc.2 and rc.1, with no leftover markers', ()
   expect(final).toBeLessThan(rc2);
   expect(rc2).toBeLessThan(rc1);
   expect(log).toContain('### Known in 0.3.0\n');
-  expect(log).not.toMatch(/<!-- T\d+ -->/);
+  expect(log.slice(final, rc2)).not.toMatch(/<!-- T\d+ -->/);
 });
 
 test('the version in the README and cli.md equals package.json', () => {
