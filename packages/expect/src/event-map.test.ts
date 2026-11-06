@@ -38,6 +38,13 @@ describe('parseEventMap', () => {
     }
   });
 
+  test('a bad event name is named by position and never by text', () => {
+    expect(() => parseEventMap('{"events":{"ok":"x","bad/name":"x"}}', 'm.json')).toThrow('"events" key 2 is not an event name');
+    expect(() => parseEventMap('{"events":{"bad/name":"x"}}', 'm.json')).not.toThrow(/bad\/name/);
+    expect(() => parseEventMap('{"paths":{"bad/name":{}}}', 'm.json')).toThrow('"paths" key 1 is not an event name');
+    expect(() => parseEventMap('{"paths":{"bad/name":{}}}', 'm.json')).not.toThrow(/bad\/name/);
+  });
+
   test('a prototype key does not reach the result', () => {
     const map = parseEventMap('{"events":{"__proto__":"x"}}', 'm.json');
     expect(Object.keys(map.events)).toEqual(['__proto__']);
@@ -60,6 +67,20 @@ describe('normalizePushGroups', () => {
   test('a user map matches the recorded name first, then maps the result through the table', () => {
     const map = parseEventMap('{"events":{"checkout_completed":"custom","legacy":"checkout_completed"}}', 'm.json');
     expect(normalizePushGroups([group('checkout_completed'), group('legacy')], map).map((g) => g.event)).toEqual(['custom', 'purchase']);
+  });
+
+  test('paths apply under the recorded name, the renamed name and the final name', () => {
+    for (const key of ['checkout_completed', 'purchase', 'custom']) {
+      const events = key === 'custom' ? '"events":{"checkout_completed":"custom"},' : '';
+      const map = parseEventMap(`{${events}"paths":{"${key}":{"ecommerce":"data"}}}`, 'm.json');
+      const [mapped] = normalizePushGroups([group('checkout_completed', ['ecommerce.value'])], map);
+      expect(mapped!.paths.map((p) => p.path), key).toEqual(['data.value']);
+    }
+  });
+
+  test('a user entry for a Shopify name wins over the built-in pairing', () => {
+    const map = parseEventMap('{"events":{"checkout_completed":"custom"}}', 'm.json');
+    expect(normalizePushGroups([group('checkout_completed')], map)[0]!.event).toBe('custom');
   });
 
   test('a path rename covers the path, its children and array items, and only in the named event', () => {
