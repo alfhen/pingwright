@@ -22,7 +22,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 - A `tag` rule with a `status` outside `success`, `failure`, `exception` and `timeout` exits 2 (#1226).
 - `diff --event-map`: `paths` also match the recorded and the renamed event name, a user entry for a Shopify name wins over the built-in pairing, and a bad event name error gives the key position (#1249, #1253, #1254).
-- The docs say a number tag `id` is read as its decimal string (#1227).
+- The docs say a number `id` in a tag rule, such as `id: 13`, is read as its decimal string and matches tag `13` (#1227).
 
 <!-- J08 -->
 

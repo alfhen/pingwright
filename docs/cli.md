@@ -272,7 +272,7 @@ expect:
     - { tag: { name: "Meta *", status: [failure, exception, timeout] } }
 ```
 
-- `tag` holds exactly one of `id` or `name`. `name` is a tag name or a glob. Optional keys: `container` (a container ID), `event` (the `dataLayer` event name, or a glob), `status` (one status or a list of `success`, `failure`, `exception` or `timeout`; any other value exits 2) and `side` (`web` or `server`; default both). Without `status`, any status matches, so a tag that sent data and then failed still counts. A number `id` in a report is read as its decimal string.
+- `tag` holds exactly one of `id` or `name`. `name` is a tag name or a glob. Optional keys: `container` (a container ID), `event` (the `dataLayer` event name, or a glob), `status` (one status or a list of `success`, `failure`, `exception` or `timeout`; any other value exits 2) and `side` (`web` or `server`; default both). Without `status`, any status matches, so a tag that sent data and then failed still counts. A number `id` in the rule, such as `id: 13`, is read as its decimal string and matches tag `13`.
 - The entry takes `count`, `after` and `from`, and nothing else. `before` and `in` are scenario errors: consent scopes on tag rules are not built.
 - A rule with no report for its container and side cannot be evaluated. It fails with `note: noTagReports` and never passes. That includes a page without the reporter and a run from before record version 5.
 - A name pattern needs a name. A tag's name is the one in the report, else the one in the override file's `expectedTags` for that container. If a tag has neither and the verdict depends on it, the rule cannot be evaluated and fails with `note: tagNameUnknown`.
