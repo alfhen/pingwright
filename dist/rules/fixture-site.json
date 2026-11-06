@@ -1,0 +1,12 @@
+{
+  "autoconsent": [
+    {
+      "name": "tagreeve-fixture",
+      "vendorUrl": "https://example.com/tagreeve-fixture",
+      "detectCmp": [{ "exists": "#pw-consent-banner" }],
+      "detectPopup": [{ "visible": "#pw-consent-banner" }],
+      "optIn": [{ "waitForThenClick": "#pw-accept" }],
+      "optOut": [{ "waitForThenClick": "#pw-reject" }]
+    }
+  ]
+}
