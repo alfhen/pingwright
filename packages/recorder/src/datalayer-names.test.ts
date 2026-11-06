@@ -61,3 +61,14 @@ test.each([
   expect(flag?.detail).toContain('(other)');
   expect(flag?.detail).not.toContain(value);
 });
+
+test('one flag names every missed layer, at most five, and counts the rest', () => {
+  const at = (l: string) => req(`https://www.googletagmanager.com/gtm.js?id=GTM-PWTEST1&l=${l}`);
+  const two = buildDataLayerNotHookedFlag({ runId, loaders: loaders([at('a'), at('b'), at('a')]), hooked: [] });
+  expect(two?.detail).toContain('"a", "b"');
+  expect(two?.recordIds).toHaveLength(3);
+  const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  const many = buildDataLayerNotHookedFlag({ runId, loaders: loaders(names.map(at)), hooked: [] });
+  expect(many?.detail).toContain('"a", "b", "c", "d", "e" and 2 more');
+  expect(many?.detail).not.toContain('"f"');
+});
