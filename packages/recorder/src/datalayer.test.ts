@@ -347,3 +347,44 @@ test('the tally reading the name queues no second check', async () => {
   await page.flush();
   expect(page.sent).toHaveLength(1);
 });
+
+function realm(sent: Sent[], tag: string) {
+  const sandbox: Record<string, unknown> = {
+    performance: { timeOrigin: 1000, now: () => 5 },
+    Node: class {},
+    queueMicrotask,
+    addEventListener: () => {},
+    [DATALAYER_BINDING]: (payload: Sent) => {
+      sent.push({ ...payload, layer: tag });
+      return Promise.resolve();
+    },
+  };
+  sandbox.window = sandbox;
+  runInNewContext(dataLayerInitScript(), sandbox);
+  return sandbox;
+}
+
+test('a second frame that takes the same array leaves push alone and records nothing twice', async () => {
+  const sent: Sent[] = [];
+  const parent = realm(sent, 'parent');
+  const child = realm(sent, 'child');
+  runInNewContext(
+    `window.dataLayer = []; globalThis.runs = 0; const base = dataLayer.push; globalThis.gtmWrap = function (...a) { runs++; return base.apply(this, a); }; dataLayer.push = gtmWrap; dataLayer.push({ event: 'a' });`,
+    parent,
+  );
+  child.parentLayer = parent.dataLayer;
+  runInNewContext(`window.dataLayer = parentLayer;`, child);
+  runInNewContext(`dataLayer.push({ event: 'b' });`, parent);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(runInNewContext(`dataLayer.push === gtmWrap`, parent)).toBe(true);
+  expect(runInNewContext(`runs`, parent)).toBe(2);
+  expect(sent.map((s) => `${s.layer}:${(JSON.parse(s.args) as { event: string }[])[0]?.event}`)).toEqual(['parent:a', 'parent:b']);
+});
+
+test('a push accessor the page defined is kept', async () => {
+  const page = pageWith('');
+  page.run(`globalThis.calls = 0; const l = []; Object.defineProperty(l, 'push', { configurable: true, get() { return function (...a) { calls++; return Array.prototype.push.apply(this, a); }; } }); window.dataLayer = l; dataLayer.push({ event: 'x' });`);
+  await page.flush();
+  expect(page.run(`calls`)).toBe(1);
+  expect(argsOf(page.sent)).toEqual([[{ event: 'x' }]]);
+});

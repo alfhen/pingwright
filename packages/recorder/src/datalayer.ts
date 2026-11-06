@@ -92,6 +92,11 @@ export function dataLayerInitScript(names: readonly string[] = []): string {
     if (!Array.isArray(layer)) return;
     const existing = hooks.get(layer);
     if (existing) return existing;
+    // Another frame's hook owns this array; a second one would replace the page's push and record twice.
+    if (Object.prototype.hasOwnProperty.call(layer, '__tagreeveHooked')) return;
+    try {
+      Object.defineProperty(layer, '__tagreeveHooked', { value: true });
+    } catch {}
     const info = { a: (seq[layerName] = (seq[layerName] || 0) + 1), posted: 0 };
     let known = 0;
     let prefix = [];
@@ -184,8 +189,10 @@ export function dataLayerInitScript(names: readonly string[] = []): string {
     let assigned = own && 'value' in own ? own.value : record;
     const state = { info, sync, schedule };
     hooks.set(layer, state);
+    // A push accessor the page defined stays in place; the growth check still records.
+    const foreign = own && !('value' in own);
     try {
-      Object.defineProperty(layer, 'push', {
+      if (!foreign) Object.defineProperty(layer, 'push', {
         configurable: true,
         enumerable: false,
         get: guarded(() => {
