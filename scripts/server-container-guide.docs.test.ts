@@ -138,6 +138,13 @@ test('the guide explains the workspace preview config with placeholders only', (
   for (const id of guide.match(/\bGTM-[A-Z0-9]+/g) ?? []) expect(id).toBe('GTM-PWTEST1');
 });
 
+test('the live config is not saved from an editor, and the counts paragraph comes before "Make a link exact"', () => {
+  expect(guide).not.toMatch(/save it from an editor/);
+  const counts = guide.indexOf('With `--json`, the call counts are in the `serverContainer` field');
+  expect(counts).toBeGreaterThan(-1);
+  expect(counts).toBeLessThan(guide.indexOf('### Make a link exact'));
+});
+
 test('the sidebar links to the built page', () => {
   const config = readFileSync(join(root, 'site/astro.config.mjs'), 'utf8');
   expect(config).toContain("link: '/docs/guide/server-container'");

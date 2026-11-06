@@ -260,6 +260,7 @@ A custom tag template that ships in the Tagreeve repo, not in the Community Temp
 - **Permissions.** `read_event_metadata` for `addEventCallback`, `access_globals` with execute access for `tagreeveTagReport` only, and `read_container_data` for the container version string. No sending permission. Template tests check the permission list.
 - **What it sends.** The container ID, the event name, `gtmUniqueEventId`, the container version string and, for each tag, its ID, status, execution time and name. Never event data. The recorder drops any other key.
 - **Exposure.** A published template ships to all visitors, and the binding does not exist for them, so the template does nothing. Keep the reporter in workspace or environment versions where possible.
+- **Field facts.** One run of the 0.6.0-rc.2 template on one store showed: in a workspace preview `getContainerVersion().version` is `QUICK_PREVIEW`; the reporter's own tag is in `tags[]` once for each event, with no name unless its own metadata sets one (kept, not filtered, because the template cannot read its own tag ID and a name filter would hide a user tag); every tag was `success`, so `timeout` is unverified; and the purchase tag's report survived the thank-you navigation once, which does not lift the navigation limit. GTM gives `tags[].id` as a number, which rc.2 rejected as `tagReport:tagId`.
 
 ### 8.2 Testing an unpublished workspace
 
@@ -432,7 +433,7 @@ The docs and the handoff prompt tell people to use test accounts and test cards.
 3. **Dedicated worker capture.** Verified in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.2). The startup self-test still reports coverage per run.
 4. **Stubbing side effects.** Verified for GA4 in Chromium 156.0.8078.4 with Playwright 1.64.1 (§5.3). Other vendors are untested in 0.1.
 5. **Server template signature APIs.** Not needed: the server reporter is signed by nothing and reports to the local proxy (§8.3).
-6. **Web template transport.** The web reporter calls a page binding through `callInWindow` (§8.1). Whether real GTM runs the template as the shim does is checked in the field test.
+6. **Web template transport.** The web reporter calls a page binding through `callInWindow` (§8.1). The 0.6.0-rc.2 field test ran it in real GTM on one store with the facts in §8.1; the `timeout` status and the navigation limit are still unverified.
 7. **Custom loaders.** Swapping the container script loses loader-specific behaviour (§8.2).
 8. **Banner bot detection** changes over time. Guard: the "banner shown" check.
 9. **Scope.** Many vendors and banners exist. Decoders are plugins, and banner handling is delegated to autoconsent.
