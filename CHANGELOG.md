@@ -8,7 +8,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- C08 -->
 
-<!-- E08 -->
+- The handoff instructions, the Enter prompt, the reminder and the end message go to stderr. Under `run --json` and `suite --json`, stdout holds only the JSON.
 
 <!-- Z08 -->
 

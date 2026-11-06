@@ -1,8 +1,19 @@
 import { createIdentity, type Request } from '@tagreeve/core';
 import { parseScenario } from '@tagreeve/expect';
-import { afterEach, describe, expect, test } from 'vitest';
+import { PassThrough } from 'node:stream';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { TEST_LOOPBACK_IS_HOSTED_ENV, isGuardExemptHost, isLoopbackHost, isSensitiveField } from './guard.ts';
-import { createCartCheck, fillValue, hasHandoff, playScenario, recordScenario, resolveSitePath, ServerContainerFailure } from './steps.ts';
+import {
+  createCartCheck,
+  fillValue,
+  hasHandoff,
+  playScenario,
+  recordScenario,
+  resolveSitePath,
+  ServerContainerFailure,
+  stderrPrint,
+  stdinResolver,
+} from './steps.ts';
 
 const field = (over: Partial<Parameters<typeof isSensitiveField>[0]> = {}) => ({
   autocomplete: null,
@@ -461,5 +472,31 @@ describe('a server container that did not run', () => {
 
   test('a run whose container stayed up returns the result', async () => {
     await expect(recordScenario(options(fake(undefined)))).resolves.toBe(written);
+  });
+});
+
+describe('handoff text streams', () => {
+  test('stdinResolver writes its prompt to the stream it is given', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const chunks: string[] = [];
+    output.on('data', (c) => chunks.push(String(c)));
+    const done = stdinResolver('text', new AbortController().signal, { input, output });
+    input.write('\n');
+    await done;
+    expect(chunks.join('')).toContain('Press Enter when done.');
+  });
+
+  test('the default print writes to stderr, not stdout', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const out = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      stderrPrint('Handoff: x');
+      expect(err).toHaveBeenCalledWith('Handoff: x\n');
+      expect(out).not.toHaveBeenCalled();
+    } finally {
+      err.mockRestore();
+      out.mockRestore();
+    }
   });
 });

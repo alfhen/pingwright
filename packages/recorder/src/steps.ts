@@ -74,7 +74,7 @@ export interface PlayOptions {
   consent?: ConsentHandler;
   /** Resolves when the person is done with a handoff. Default: waits for Enter on stdin. The Done control can end the wait first, and then the signal aborts. */
   handoffResolver?: (message: string, signal: AbortSignal) => Promise<void>;
-  /** Where handoff instructions go. Default: stdout. */
+  /** Where handoff instructions go. Default: stderr, so `--json` stdout stays clean. */
   print?: (text: string) => void;
   /** Where run warnings go. Default: nowhere. */
   warn?: (text: string) => void;
@@ -147,8 +147,16 @@ export function resolveSitePath(path: string, site: string, vars: Record<string,
   return url.href;
 }
 
-async function stdinResolver(_message: string, signal: AbortSignal): Promise<void> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+export const stderrPrint = (text: string): void => {
+  process.stderr.write(`${text}\n`);
+};
+
+export async function stdinResolver(
+  _message: string,
+  signal: AbortSignal,
+  streams: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream } = { input: process.stdin, output: process.stderr },
+): Promise<void> {
+  const rl = createInterface(streams);
   try {
     await rl.question('Press Enter when done. ', { signal });
   } catch (error) {
@@ -445,7 +453,7 @@ async function runStep(
       await runPayment(page, recorder, step.value, identity, options.testPayment, record, timeout, new URL(recorder.site).hostname);
       return;
     case 'handoff': {
-      const print = options.print ?? ((text: string) => process.stdout.write(`${text}\n`));
+      const print = options.print ?? stderrPrint;
       print(`\nHandoff: ${step.value}\n${HANDOFF_REMINDER}\nRecording continues until you are done.`);
       recorder.setHandoff(true);
       const watching = new AbortController();
