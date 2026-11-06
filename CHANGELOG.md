@@ -27,7 +27,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 - `diff --event-map`: `paths` also match the recorded and the renamed event name, a user entry for a Shopify name wins over the built-in pairing, and a bad event name error gives the key position (#1249, #1253, #1254).
 - The docs say a number `id` in a tag rule, such as `id: 13`, is read as its decimal string and matches tag `13` (#1227).
 
-<!-- J08 -->
+- **The `dataLayer` hook survives a replaced `push`.** `push` on a hooked array stays exactly the function the page assigned, so a theme or loader that wraps it, or assigns `Array.prototype.push`, no longer hides pushes. A push that reaches the array is recorded once, and `gtmUniqueEventId` is read after the push returns. A push that a page wrapper drops without calling through is not recorded, because it never reached the array. Only items added at the end are recorded: an `unshift`, a `splice`, a sort or a length write records nothing. A page that replaces `window.dataLayer` after a Google loader request gets a `dataLayerReassigned` flag, and pushes to the new array are still recorded (#926, #1281).
 
 <!-- W08 -->
 

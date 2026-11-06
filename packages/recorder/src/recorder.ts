@@ -214,6 +214,7 @@ export class Recorder {
   private readonly selfRecorded = new WeakSet<PwRequest>();
   private readonly responses: Response[] = [];
   private readonly dataLayerEvents: DataLayerEvent[] = [];
+  private readonly dataLayerReassigns: Array<{ n: number; t: number; doc: string }> = [];
   private readonly payloadCounts = new PayloadCounts();
   private readonly eventFrames = new Map<string, FrameRef>();
   private readonly frameNumbers = new WeakMap<Frame, number>();
@@ -350,10 +351,17 @@ export class Recorder {
     };
     await context.exposeBinding(DATALAYER_BINDING, (source, payload: DataLayerPayload) => {
       const isMain = source.frame === source.page.mainFrame();
+      if (payload?.reassigned) {
+        if (typeof payload.t === 'number') this.dataLayerReassigns.push({ n: this.frameNumber(source.frame), doc: this.frameDocumentId(source.frame), t: pageTimeToEpoch(payload.t, this.clockOffset) });
+        return;
+      }
       this.payloadCounts.add(payload ?? {}, this.frameNumber(source.frame), hookedLayerNames(this.options.dataLayerNames));
       const event = dataLayerEventFromPayload(payload, this.runId, this.clockOffset, { main: isMain, n: this.frameNumber(source.frame) });
       if (!event) return;
-      this.dataLayerEvents.push({ ...event, stepId: this.currentStepId });
+      // A nested push posts before the push that was running around it.
+      let at = this.dataLayerEvents.length;
+      while (at > 0 && this.dataLayerEvents[at - 1]!.t > event.t) at--;
+      this.dataLayerEvents.splice(at, 0, { ...event, stepId: this.currentStepId });
       if (!isMain) this.eventFrames.set(event.id, { id: this.frameDocumentId(source.frame), url: source.frame.url() });
     });
     await context.addInitScript(dataLayerInitScript(this.options.dataLayerNames));
@@ -1066,6 +1074,24 @@ export class Recorder {
     return buildTallyFlags(this.runId, tallies, this.payloadCounts);
   }
 
+  private dataLayerReassignedFlags(requests: Request[]): Flag[] {
+    const loaders = requests.filter((r) => isGoogleLoaderUrl(r.url));
+    if (loaders.length === 0) return [];
+    const frames = new Set(
+      this.dataLayerReassigns.filter((r) => loaders.some((l) => this.requestFrameIds.get(l.id) === r.doc && l.t <= r.t)).map((r) => r.n),
+    );
+    return [...frames]
+      .sort((a, b) => a - b)
+      .map((n) => ({
+        type: 'flag' as const,
+        id: newId('flag'),
+        runId: this.runId,
+        kind: 'dataLayerReassigned',
+        recordIds: [],
+        detail: `Frame ${n} replaced window.dataLayer with a new array after a Google loader request. Pushes to the new array are still recorded.`,
+      }));
+  }
+
   private noteContainerExit(): void {
     if (this.session?.containerExited() && !this.containerFailure) {
       this.containerFailure = { errorClass: 'exited', message: 'The server container ended during the run.' };
@@ -1133,6 +1159,7 @@ export class Recorder {
     } else if (!netLog) {
       flags.push({ type: 'flag', id: newId('flag'), runId: this.runId, kind: 'netLogUnreadable', recordIds: [], detail: 'The net log could not be read, so requests sent while a frame unloads may be missing.' });
     }
+    flags.push(...this.dataLayerReassignedFlags(requests));
     const notHooked = buildDataLayerNotHookedFlag({ runId: this.runId, loaders: this.loaderLayers, hooked: this.options.dataLayerNames ?? [] });
     if (notHooked) flags.push(notHooked);
     flags.push(...tallyFlags);
@@ -1215,6 +1242,15 @@ function abortCode(error: unknown): string {
 
 // Fetch spec and Chromium: a redirect that changes the method to GET drops the body, its headers and Origin.
 const BODY_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'content-language', 'content-location', 'origin']);
+
+function isGoogleLoaderUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === 'www.googletagmanager.com' && (u.pathname === '/gtm.js' || u.pathname === '/gtag/js');
+  } catch {
+    return false;
+  }
+}
 
 function withoutMethodChangeHeaders(headers: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !BODY_HEADERS.has(name.toLowerCase())));
