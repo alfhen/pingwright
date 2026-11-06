@@ -237,15 +237,13 @@ async function fillVerified(element: ElementHandle, field: CardField, cardHost: 
         await handle.fill(value, { timeout: tryMs() });
         return;
       } catch (error) {
-        if (!(error instanceof Error && error.name === 'TimeoutError')) {
-          if (error instanceof OwnReason) throw error;
-          const moved = (await frameStillServed(element, cardHost, field)).url() !== checkedUrl;
-          const attached = handle ? await handle.evaluate((e) => e.isConnected).catch(() => false) : true;
-          if (moved || !attached) throw new OwnReason(GONE_FRAME);
-          throw error;
-        }
-        if (Date.now() >= deadline) throw error;
-        continue;
+        const timedOut = error instanceof Error && error.name === 'TimeoutError';
+        if (error instanceof OwnReason) throw error;
+        if (timedOut && Date.now() < deadline) continue;
+        const moved = (await frameStillServed(element, cardHost, field)).url() !== checkedUrl;
+        const attached = handle ? await handle.evaluate((e) => e.isConnected).catch(() => false) : true;
+        if (moved || !attached) throw new OwnReason(GONE_FRAME);
+        throw error;
       }
     }
     if (Date.now() >= deadline) {
