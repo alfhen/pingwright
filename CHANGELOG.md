@@ -14,7 +14,7 @@ Not released yet. The newest release is 0.6.0-rc.2, below.
 
 <!-- B08 -->
 
-<!-- M23 -->
+- Fix: the HTML report shows a `tag` rule with no tag report, or with no tag name, as CANNOT EVALUATE, not FAIL or WARN. The no-report note says to install the reporter and run with `--gtm-override`. A tag name with a hex token joined to a word by `.`, `_`, `+`, a bracket or a quote now reads `(other)`.
 
 <!-- M24 -->
 

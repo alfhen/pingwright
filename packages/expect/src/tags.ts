@@ -27,7 +27,7 @@ export interface TagRuleInput {
   window?: { at: number; text: string };
 }
 
-const NAME_SEPARATORS = /[\s/=:?&#|,;]+/;
+const NAME_SEPARATORS = /[\s/=:?&#|,;._+()[\]{}<>'"`]+/;
 
 /** A tag name may hold spaces and path or query text, so it is checked part by part. A name that holds an email, a phone or a value-like part reads `(other)`. */
 export function maskTagName(name: string): string {

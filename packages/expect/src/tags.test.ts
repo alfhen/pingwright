@@ -133,8 +133,21 @@ const LEAK_NAMES = [
   'Order gid://shopify/Order/5551234567890',
 ];
 
+const TOKEN = '0f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b';
+const JOINED_NAMES = [`Thanks.${TOKEN}`, `thanks_${TOKEN}`, `(${TOKEN})`];
+
+test.each(JOINED_NAMES)('maskTagName masks a token joined to a word: %s', (name) => {
+  expect(name).toContain(TOKEN);
+  expect(maskTagName(name)).toBe('(other)');
+});
+
 test.each(LEAK_NAMES)('maskTagName masks a checkout token or a GID: %s', (name) => {
   expect(maskTagName(name)).toBe('(other)');
+});
+
+test('maskTagName keeps a name with an underscore or a dot', () => {
+  expect(maskTagName('GA4 page_view')).toBe('GA4 page_view');
+  expect(maskTagName('GA4 v2.1')).toBe('GA4 v2.1');
 });
 
 test('maskTagName keeps an ordinary name', () => {
