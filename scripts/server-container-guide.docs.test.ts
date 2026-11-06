@@ -155,3 +155,9 @@ test('a continuation joins only after an odd number of backslashes', () => {
   expect(tagreeveCommands('```bash\ntagreeve run \\\n  --site x\n```')).toEqual(['tagreeve run    --site x']);
   expect(tagreeveCommands('```bash\ntagreeve run \\\\\n  --site x\n```')).toEqual(['tagreeve run \\\\']);
 });
+
+test('the guide does not claim Google Ads calls never carry an event ID', () => {
+  const guide = readFileSync(join(root, 'docs/guide/server-container.md'), 'utf8');
+  expect(guide).not.toContain('never carry one');
+  expect(guide).toContain('often carries no event ID');
+});

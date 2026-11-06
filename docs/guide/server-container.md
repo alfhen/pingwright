@@ -135,7 +135,7 @@ The client ID link is narrower. It is `exact` only when exactly one browser hit 
 | | | `severalSameKeyHits` | Two or more do. |
 | | | `answeredBefore` | One does, but the call came after its answer, or it has no answer time. The container answers before its tags send. |
 
-`none` means the call had no event ID or no event name. Google Ads conversion calls never carry one, so they always count as `none`. A high `eventId.none` count often means the page sends no event ID or the container does not pass it on. To tell which, send a unique `event_id` from the page and read `linkMiss` on the hit. A high `clientId.answeredBefore` count means the container answers first. These counts only explain a link that is not exact. They do not show that an exact link went to the right browser hit.
+`none` means the call had no event ID or no event name. A Google Ads conversion call often carries no event ID, so it often counts as `none`. A high `eventId.none` count often means the page sends no event ID or the container does not pass it on. To tell which, send a unique `event_id` from the page and read `linkMiss` on the hit. A high `clientId.answeredBefore` count means the container answers first. These counts only explain a link that is not exact. They do not show that an exact link went to the right browser hit.
 
 ## What it does not show
 
